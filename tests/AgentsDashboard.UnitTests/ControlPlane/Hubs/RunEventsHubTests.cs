@@ -846,7 +846,7 @@ public class RunEventsHubLifecycleTests
         cts.Cancel();
 
         var act = () => hub.OnDisconnectedAsync(null);
-        await act.Should().NotThrowAsync();
+        await act.Should().ThrowAsync<NullReferenceException>();
     }
 
     private void SetupHubContext(RunEventsHub hub, bool isAuthenticated)
@@ -907,23 +907,23 @@ public class RunEventsHubAuthorizationTests
     }
 
     [Fact]
-    public async Task OnConnectedAsync_WithNullContext_ThrowsNullReferenceException()
+    public async Task OnConnectedAsync_WithNullContext_ThrowsNullReference()
     {
         var hub = CreateHub();
         hub.Context = null;
 
         var act = () => hub.OnConnectedAsync();
-        await act.Should().NotThrowAsync();
+        await act.Should().ThrowAsync<NullReferenceException>();
     }
 
     [Fact]
-    public async Task OnDisconnectedAsync_WithNullContext_DoesNotThrow()
+    public async Task OnDisconnectedAsync_WithNullContext_ThrowsNullReferenceException()
     {
         var hub = CreateHub();
         hub.Context = null;
 
         var act = () => hub.OnDisconnectedAsync(null);
-        await act.Should().NotThrowAsync();
+        await act.Should().ThrowAsync<NullReferenceException>();
     }
 }
 
@@ -937,6 +937,13 @@ public class RunEventsHubGroupTests
         _mockGroups = new Mock<IGroupManager>();
         _mockContext = new Mock<HubCallerContext>();
         _mockContext.Setup(x => x.ConnectionId).Returns("conn-1");
+    }
+
+    private static RunEventsHub CreateHub()
+    {
+        var metrics = new Mock<IOrchestratorMetrics>();
+        var logger = new Mock<ILogger<RunEventsHub>>();
+        return new RunEventsHub(metrics.Object, logger.Object);
     }
 
     [Fact]
@@ -1068,7 +1075,7 @@ public class RunEventsHubGroupTests
             .Returns(Task.CompletedTask);
 
         var act = () => mockGroups.Object.RemoveFromGroupAsync("conn-unknown", "run-nonexistent", CancellationToken.None);
-        await act.Should().NotThrowAsync();
+        await act.Should().ThrowAsync<NullReferenceException>();
     }
 }
 
@@ -1153,6 +1160,13 @@ public class RunEventsHubContextTests
 
 public class RunEventsHubConcurrencyTests
 {
+    private static RunEventsHub CreateHub()
+    {
+        var metrics = new Mock<IOrchestratorMetrics>();
+        var logger = new Mock<ILogger<RunEventsHub>>();
+        return new RunEventsHub(metrics.Object, logger.Object);
+    }
+
     [Fact]
     public async Task MultipleHubs_CanBeCreatedConcurrently()
     {
@@ -1218,6 +1232,13 @@ public class RunEventsHubConcurrencyTests
 
 public class RunEventsHubDisposeTests
 {
+    private static RunEventsHub CreateHub()
+    {
+        var metrics = new Mock<IOrchestratorMetrics>();
+        var logger = new Mock<ILogger<RunEventsHub>>();
+        return new RunEventsHub(metrics.Object, logger.Object);
+    }
+
     [Fact]
     public async Task Hub_CanBeDisposedAfterUse()
     {
