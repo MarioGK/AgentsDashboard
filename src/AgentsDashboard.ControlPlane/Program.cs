@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using MudBlazor.Services;
+using Swashbuckle.AspNetCore.SwaggerUI;
 using Yarp.ReverseProxy.Configuration;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
@@ -66,6 +67,7 @@ builder.Services.AddSingleton<RunDispatcher>();
 builder.Services.AddSingleton<ISecretCryptoService, SecretCryptoService>();
 builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddSingleton<IRunEventPublisher, SignalRRunEventPublisher>();
+builder.Services.AddSingleton<IOrchestratorMetrics, OrchestratorMetrics>();
 builder.Services.AddHostedService<MongoInitializationService>();
 builder.Services.AddHostedService<RecoveryService>();
 builder.Services.AddHostedService<CronSchedulerService>();
@@ -107,6 +109,45 @@ builder.Services.AddSignalR();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "AI Orchestrator API",
+        Version = "v1",
+        Description = "Self-hosted AI orchestration platform for harness execution (Codex, OpenCode, Claude Code, Zai)",
+        Contact = new Microsoft.OpenApi.Models.OpenApiContact
+        {
+            Name = "AI Orchestrator",
+            Email = "support@example.com"
+        }
+    });
+    
+    options.AddSecurityDefinition("cookie", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = Microsoft.OpenApi.Models.ParameterLocation.Cookie,
+        Name = ".AspNetCore.Cookies",
+        Description = "Cookie-based authentication"
+    });
+    
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "cookie"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
@@ -114,6 +155,17 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
+
+app.UseSwagger(options =>
+{
+    options.RouteTemplate = "api/docs/{documentName}/swagger.json";
+});
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/api/docs/v1/swagger.json", "AI Orchestrator API v1");
+    options.RoutePrefix = "api/docs";
+    options.DocumentTitle = "AI Orchestrator API Documentation";
+});
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();

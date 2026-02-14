@@ -5,6 +5,7 @@ using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -83,7 +84,7 @@ public sealed class ApiTestFixture : IAsyncLifetime
                     return new RunDispatcher(
                         new MockWorkerClient(),
                         store,
-                        sp.GetService<SecretCryptoService>()!,
+                        sp.GetService<ISecretCryptoService>()!,
                         publisher,
                         options,
                         logger);
@@ -95,11 +96,16 @@ public sealed class ApiTestFixture : IAsyncLifetime
 
                 services.AddSingleton<IContainerReaper, MockContainerReaper>();
 
-                var cryptoDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ISecretCryptoService));
+                var cryptoDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(SecretCryptoService));
                 if (cryptoDescriptor != null)
                     services.Remove(cryptoDescriptor);
 
-                services.AddSingleton<ISecretCryptoService, MockSecretCryptoService>();
+                var cryptoInterfaceDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ISecretCryptoService));
+                if (cryptoInterfaceDescriptor != null)
+                    services.Remove(cryptoInterfaceDescriptor);
+
+                var mockCrypto = new MockSecretCryptoService();
+                services.AddSingleton<ISecretCryptoService>(mockCrypto);
             });
 
             builder.UseEnvironment("Testing");
@@ -189,9 +195,26 @@ public sealed class MockContainerReaper : IContainerReaper
 
 public sealed class MockSecretCryptoService : ISecretCryptoService
 {
-    public Task<string> EncryptAsync(string plainText, CancellationToken cancellationToken)
-        => Task.FromResult(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plainText)));
+    public string Encrypt(string plaintext)
+        => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plaintext));
 
-    public Task<string> DecryptAsync(string cipherText, CancellationToken cancellationToken)
-        => Task.FromResult(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cipherText)));
+    public string Decrypt(string ciphertext)
+        => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(ciphertext));
+}
+
+public sealed class MockDataProtectionProvider : IDataProtectionProvider
+{
+    public IDataProtector CreateProtector(string purpose)
+        => new MockDataProtector();
+}
+
+public sealed class MockDataProtector : IDataProtector
+{
+    public IDataProtector CreateProtector(string purpose) => this;
+
+    public byte[] Protect(byte[] plaintext)
+        => plaintext;
+
+    public byte[] Unprotect(byte[] protectedData)
+        => protectedData;
 }

@@ -3,7 +3,10 @@
 @rendermode InteractiveServer
 @using BlazorMonaco.Editor
 @using AgentsDashboard.ControlPlane.Services
+@using AgentsDashboard.ControlPlane.Data
 @inject ImageBuilderService ImageBuilderService
+@inject IOrchestratorStore Store
+@inject ISecretCryptoService SecretCrypto
 @inject ISnackbar Snackbar
 
 <PageTitle>Container Image Builder</PageTitle>
@@ -14,9 +17,13 @@
         Build custom Docker images for use with harness execution. Images are built on the local Docker daemon.
     </MudText>
 
-    <MudExpansionPanels>
-        <MudExpansionPanel Text="AI-Assisted Dockerfile Generation" Icon="@Icons.Material.Filled.AutoAwesome" InitiallyExpanded="false">
-            <MudGrid Class="mt-2">
+        <MudExpansionPanels>
+            <MudExpansionPanel Text="Dockerfile Generator" Icon="@Icons.Material.Filled.AutoAwesome" InitiallyExpanded="false">
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    <strong>Template:</strong> Generates Dockerfile using predefined rules based on your selections.<br/>
+                    <strong>AI Generate:</strong> Uses GLM-5 to create a custom Dockerfile from your natural language description (requires Z.ai API key).
+                </MudText>
+                <MudGrid Class="mt-2">
                 <MudItem xs="12">
                     <MudTextField @bind-Value="_aiDescription"
                                   Label="Describe your container requirements"
@@ -65,14 +72,32 @@
                     <MudSwitch @bind-Value="_aiIncludeDockerCli" Label="Include Docker CLI" Color="Color.Primary" />
                 </MudItem>
                 <MudItem xs="12" md="4">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Code"
+                               OnClick="GenerateDockerfileAsync"
+                               Disabled="string.IsNullOrWhiteSpace(_aiDescription)"
+                               Class="mr-2">
+                        Template
+                    </MudButton>
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Secondary"
                                StartIcon="@Icons.Material.Filled.AutoAwesome"
-                               OnClick="GenerateDockerfileAsync"
-                               Disabled="string.IsNullOrWhiteSpace(_aiDescription)">
-                        Generate Dockerfile
+                               OnClick="GenerateDockerfileWithAiAsync"
+                               Disabled="@(_isAiGenerating || string.IsNullOrWhiteSpace(_aiDescription))">
+                        @if (_isAiGenerating)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        AI Generate
                     </MudButton>
                 </MudItem>
+                @if (_aiError != null)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Warning" Dense="true">@_aiError</MudAlert>
+                    </MudItem>
+                }
             </MudGrid>
         </MudExpansionPanel>
     </MudExpansionPanels>
@@ -225,6 +250,8 @@
     private List<string> _aiHarnesses = new();
     private List<string> _aiTools = new();
     private bool _aiIncludeDockerCli = false;
+    private bool _isAiGenerating = false;
+    private string? _aiError;
 
     private readonly Dictionary<string, string> _templates = new()
     {
@@ -435,7 +462,8 @@ CMD [""/bin/bash""]"
 
             _dockerfileContent = ImageBuilderService.GenerateDockerfile(request);
             _selectedTemplate = string.Empty;
-            Snackbar.Add("Dockerfile generated successfully! Review and customize as needed.", Severity.Success);
+            _aiError = null;
+            Snackbar.Add("Dockerfile generated from template! Review and customize as needed.", Severity.Info);
             StateHasChanged();
         }
         catch (Exception ex)
@@ -443,6 +471,54 @@ CMD [""/bin/bash""]"
             Snackbar.Add($"Failed to generate Dockerfile: {ex.Message}", Severity.Error);
         }
         return Task.CompletedTask;
+    }
+
+    private async Task GenerateDockerfileWithAiAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_aiDescription))
+        {
+            Snackbar.Add("Please describe your container requirements", Severity.Warning);
+            return;
+        }
+
+        _isAiGenerating = true;
+        _aiError = null;
+        StateHasChanged();
+
+        try
+        {
+            var zaiSecret = await Store.GetProviderSecretAsync("global", "zai", CancellationToken.None);
+            string? apiKey = null;
+            
+            if (zaiSecret != null && !string.IsNullOrWhiteSpace(zaiSecret.EncryptedValue))
+            {
+                apiKey = SecretCrypto.Decrypt(zaiSecret.EncryptedValue);
+            }
+
+            var result = await ImageBuilderService.GenerateDockerfileWithAiAsync(_aiDescription, apiKey, CancellationToken.None);
+
+            if (result.Success)
+            {
+                _dockerfileContent = result.Dockerfile;
+                _selectedTemplate = string.Empty;
+                Snackbar.Add("Dockerfile generated by AI! Review and customize as needed.", Severity.Success);
+            }
+            else
+            {
+                _aiError = result.Error;
+                Snackbar.Add(result.Error ?? "AI generation failed", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _aiError = ex.Message;
+            Snackbar.Add($"AI generation error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isAiGenerating = false;
+            StateHasChanged();
+        }
     }
 
     private static string FormatBytes(long bytes)

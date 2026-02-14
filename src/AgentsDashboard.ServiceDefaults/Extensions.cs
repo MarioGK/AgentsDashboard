@@ -58,7 +58,10 @@ public static class Extensions
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    .AddMeter("AgentsDashboard.Orchestrator")
+                    .AddMeter("AgentsDashboard.ControlPlane.Recovery")
+                    .AddMeter("AgentsDashboard.WorkerGateway.OrphanReconciliation");
             })
             .WithTracing(tracing =>
             {
