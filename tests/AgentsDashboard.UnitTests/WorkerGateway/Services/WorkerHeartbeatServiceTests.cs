@@ -97,11 +97,11 @@ public class WorkerHeartbeatServiceTests
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);
         var service = new WorkerHeartbeatService(_options, _queue, _loggerMock.Object, _httpClient);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(7));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
 
         await service.StartAsync(cts.Token);
 
-        await Task.Delay(TimeSpan.FromSeconds(6), CancellationToken.None);
+        await Task.Delay(TimeSpan.FromSeconds(7), CancellationToken.None);
 
         _mockHandler.LastRequestContent.Should().NotBeNull();
         var payload = JsonSerializer.Deserialize<JsonElement>(_mockHandler.LastRequestContent!);

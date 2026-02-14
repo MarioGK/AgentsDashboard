@@ -87,7 +87,8 @@ Centralized build configuration using:
 - REST endpoints under `/api/`
 - No versioning prefix (v1)
 - Use domain documents directly (DTOs planned)
-- CreateTaskRequest/UpdateTaskRequest include: ApprovalProfile, ConcurrencyLimit, InstructionFiles
+- CreateTaskRequest/UpdateTaskRequest include: ApprovalProfile, ConcurrencyLimit, InstructionFiles, ArtifactPatterns, LinkedFailureRuns
+- CreateTaskFromFindingRequest includes: LinkedFailureRuns (defaults to source finding run)
 
 ### Database
 - MongoDB with typed collections (18 collections)
@@ -199,6 +200,10 @@ dotnet test
 | MongoDB backup/recovery | Complete |
 | PodDisruptionBudget | Complete |
 | cert-manager TLS | Complete |
+| Task artifact patterns | Complete |
+| Linked failure runs for regression replay | Complete |
+| Webhook event type enum | Complete |
+| Template to task field mapping | Complete |
 
 ## Test Coverage Summary
 
@@ -228,7 +233,7 @@ dotnet test
 ## Architecture Summary
 
 ### ControlPlane
-- **83+ API endpoints** with authentication/authorization
+- **92 API endpoints** with authentication/authorization
 - **22 Blazor pages** with MudBlazor UI
 - **18 services** for business logic
 - **SignalR hub** with 5 event types
