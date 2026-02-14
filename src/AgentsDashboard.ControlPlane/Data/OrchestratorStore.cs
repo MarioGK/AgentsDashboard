@@ -204,7 +204,7 @@ public class OrchestratorStore
         return project;
     }
 
-    public Task<List<ProjectDocument>> ListProjectsAsync(CancellationToken cancellationToken)
+    public virtual Task<List<ProjectDocument>> ListProjectsAsync(CancellationToken cancellationToken)
         => _projects.Find(FilterDefinition<ProjectDocument>.Empty).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
 
     public virtual async Task<ProjectDocument?> GetProjectAsync(string projectId, CancellationToken cancellationToken)
@@ -245,7 +245,7 @@ public class OrchestratorStore
         return repository;
     }
 
-    public Task<List<RepositoryDocument>> ListRepositoriesAsync(string projectId, CancellationToken cancellationToken)
+    public virtual Task<List<RepositoryDocument>> ListRepositoriesAsync(string projectId, CancellationToken cancellationToken)
         => _repositories.Find(x => x.ProjectId == projectId).SortBy(x => x.Name).ToListAsync(cancellationToken);
 
     public virtual async Task<RepositoryDocument?> GetRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
@@ -407,10 +407,10 @@ public class OrchestratorStore
         return task;
     }
 
-    public Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken)
+    public virtual Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken)
         => _tasks.Find(x => x.RepositoryId == repositoryId).SortBy(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
 
-    public Task<List<TaskDocument>> ListEventDrivenTasksAsync(string repositoryId, CancellationToken cancellationToken)
+    public virtual Task<List<TaskDocument>> ListEventDrivenTasksAsync(string repositoryId, CancellationToken cancellationToken)
         => _tasks.Find(x => x.RepositoryId == repositoryId && x.Enabled && x.Kind == TaskKind.EventDriven)
             .SortBy(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
@@ -418,7 +418,7 @@ public class OrchestratorStore
     public virtual async Task<TaskDocument?> GetTaskAsync(string taskId, CancellationToken cancellationToken)
         => await _tasks.Find(x => x.Id == taskId).FirstOrDefaultAsync(cancellationToken);
 
-    public Task<List<TaskDocument>> ListScheduledTasksAsync(CancellationToken cancellationToken)
+    public virtual Task<List<TaskDocument>> ListScheduledTasksAsync(CancellationToken cancellationToken)
         => _tasks.Find(x => x.Enabled && x.Kind == TaskKind.Cron)
             .SortBy(x => x.NextRunAtUtc)
             .ToListAsync(cancellationToken);
@@ -436,13 +436,13 @@ public class OrchestratorStore
         return await _tasks.Find(filter).Limit(limit).ToListAsync(cancellationToken);
     }
 
-    public Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken)
+    public virtual Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken)
         => _tasks.UpdateOneAsync(
             x => x.Id == taskId,
             Builders<TaskDocument>.Update.Set(x => x.Enabled, false),
             cancellationToken: cancellationToken);
 
-    public Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken)
+    public virtual Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken)
         => _tasks.UpdateOneAsync(
             x => x.Id == taskId,
             Builders<TaskDocument>.Update.Set(x => x.NextRunAtUtc, nextRunAtUtc),
@@ -507,13 +507,13 @@ public class OrchestratorStore
         return run;
     }
 
-    public Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
+    public virtual Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
         => _runs.Find(x => x.RepositoryId == repositoryId).SortByDescending(x => x.CreatedAtUtc).Limit(200).ToListAsync(cancellationToken);
 
-    public Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken)
+    public virtual Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken)
         => _runs.Find(FilterDefinition<RunDocument>.Empty).SortByDescending(x => x.CreatedAtUtc).Limit(100).ToListAsync(cancellationToken);
 
-    public Task<List<RunDocument>> ListRecentRunsByProjectAsync(string projectId, CancellationToken cancellationToken)
+    public virtual Task<List<RunDocument>> ListRecentRunsByProjectAsync(string projectId, CancellationToken cancellationToken)
         => _runs.Find(x => x.ProjectId == projectId).SortByDescending(x => x.CreatedAtUtc).Limit(100).ToListAsync(cancellationToken);
 
     public virtual async Task<ReliabilityMetrics> GetReliabilityMetricsByProjectAsync(string projectId, CancellationToken cancellationToken)
@@ -701,7 +701,7 @@ public class OrchestratorStore
         await stream.CopyToAsync(fileStream, cancellationToken);
     }
 
-    public Task<List<string>> ListArtifactsAsync(string runId, CancellationToken cancellationToken)
+    public virtual Task<List<string>> ListArtifactsAsync(string runId, CancellationToken cancellationToken)
     {
         var artifactDir = Path.Combine("/data/artifacts", runId);
         if (!Directory.Exists(artifactDir))
@@ -716,7 +716,7 @@ public class OrchestratorStore
         return Task.FromResult(files);
     }
 
-    public Task<FileStream?> GetArtifactAsync(string runId, string fileName, CancellationToken cancellationToken)
+    public virtual Task<FileStream?> GetArtifactAsync(string runId, string fileName, CancellationToken cancellationToken)
     {
         var artifactDir = Path.Combine("/data/artifacts", runId);
         var filePath = Path.Combine(artifactDir, fileName);
@@ -729,18 +729,18 @@ public class OrchestratorStore
 
     // --- Run Logs ---
 
-    public Task AddRunLogAsync(RunLogEvent logEvent, CancellationToken cancellationToken)
+    public virtual Task AddRunLogAsync(RunLogEvent logEvent, CancellationToken cancellationToken)
         => _runEvents.InsertOneAsync(logEvent, cancellationToken: cancellationToken);
 
-    public Task<List<RunLogEvent>> ListRunLogsAsync(string runId, CancellationToken cancellationToken)
+    public virtual Task<List<RunLogEvent>> ListRunLogsAsync(string runId, CancellationToken cancellationToken)
         => _runEvents.Find(x => x.RunId == runId).SortBy(x => x.TimestampUtc).ToListAsync(cancellationToken);
 
     // --- Findings ---
 
-    public Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken)
+    public virtual Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken)
         => _findings.Find(x => x.RepositoryId == repositoryId).SortByDescending(x => x.CreatedAtUtc).Limit(200).ToListAsync(cancellationToken);
 
-    public Task<List<FindingDocument>> ListAllFindingsAsync(CancellationToken cancellationToken)
+    public virtual Task<List<FindingDocument>> ListAllFindingsAsync(CancellationToken cancellationToken)
         => _findings.Find(FilterDefinition<FindingDocument>.Empty).SortByDescending(x => x.CreatedAtUtc).Limit(500).ToListAsync(cancellationToken);
 
     public virtual async Task<FindingDocument?> GetFindingAsync(string findingId, CancellationToken cancellationToken)
@@ -798,7 +798,7 @@ public class OrchestratorStore
             cancellationToken);
     }
 
-    public Task<List<ProviderSecretDocument>> ListProviderSecretsAsync(string repositoryId, CancellationToken cancellationToken)
+    public virtual Task<List<ProviderSecretDocument>> ListProviderSecretsAsync(string repositoryId, CancellationToken cancellationToken)
         => _providerSecrets.Find(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
 
     public virtual async Task<ProviderSecretDocument?> GetProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
@@ -807,7 +807,7 @@ public class OrchestratorStore
 
     // --- Workers ---
 
-    public Task<List<WorkerRegistration>> ListWorkersAsync(CancellationToken cancellationToken)
+    public virtual Task<List<WorkerRegistration>> ListWorkersAsync(CancellationToken cancellationToken)
         => _workers.Find(FilterDefinition<WorkerRegistration>.Empty).SortBy(x => x.WorkerId).ToListAsync(cancellationToken);
 
     public virtual async Task UpsertWorkerHeartbeatAsync(string workerId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken)
@@ -873,7 +873,7 @@ public class OrchestratorStore
     public virtual Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken)
         => _proxyAudits.InsertOneAsync(audit, cancellationToken: cancellationToken);
 
-    public Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken)
+    public virtual Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken)
         => _proxyAudits.Find(x => x.RunId == runId).SortByDescending(x => x.TimestampUtc).Limit(200).ToListAsync(cancellationToken);
 
     public virtual async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(
@@ -933,10 +933,10 @@ public class OrchestratorStore
         return workflow;
     }
 
-    public Task<List<WorkflowDocument>> ListWorkflowsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
+    public virtual Task<List<WorkflowDocument>> ListWorkflowsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
         => _workflows.Find(x => x.RepositoryId == repositoryId).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
 
-    public Task<List<WorkflowDocument>> ListAllWorkflowsAsync(CancellationToken cancellationToken)
+    public virtual Task<List<WorkflowDocument>> ListAllWorkflowsAsync(CancellationToken cancellationToken)
         => _workflows.Find(FilterDefinition<WorkflowDocument>.Empty).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
 
     public virtual async Task<WorkflowDocument?> GetWorkflowAsync(string workflowId, CancellationToken cancellationToken)
@@ -962,7 +962,7 @@ public class OrchestratorStore
         return execution;
     }
 
-    public Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsAsync(string workflowId, CancellationToken cancellationToken)
+    public virtual Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsAsync(string workflowId, CancellationToken cancellationToken)
         => _workflowExecutions.Find(x => x.WorkflowId == workflowId).SortByDescending(x => x.CreatedAtUtc).Limit(100).ToListAsync(cancellationToken);
 
     public virtual Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsByStateAsync(WorkflowExecutionState state, CancellationToken cancellationToken)

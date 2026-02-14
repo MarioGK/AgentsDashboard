@@ -145,12 +145,12 @@ dotnet test
 
 | Test Project | Files | Tests | Coverage Area |
 |--------------|-------|-------|---------------|
-| UnitTests | 44 | 1057 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping, WorkerEventBus, ImagePrePull |
-| IntegrationTests | 32 | 180+ | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
-| PlaywrightTests | 15 | 220+ | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+| UnitTests | 46 | ~850 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping, WorkerEventBus, ImagePrePull, ContainerOrphanReconciler |
+| IntegrationTests | 32 | ~160 | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
+| PlaywrightTests | 15 | 210 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
 | Benchmarks | 4 | - | WorkerQueue, SignalR Publish, MongoDB Operations |
 
-**Total: 91+ test files, 1,457+ tests**
+**Total: 97+ test files, ~1,220+ tests**
 
 ### Test Notes
 
@@ -194,8 +194,8 @@ dotnet test
 | Worker management UI | Complete | Worker list with status, slots, utilization |
 | CRUD operations | Complete | PUT/DELETE for tasks, repos, projects |
 | CI/CD pipeline | Complete | GitHub Actions workflow with coverage |
-| Unit tests | Complete | 789 tests for core services |
-| Integration tests | Complete | 152 tests: store, allowlist, redactor, API endpoints |
+| Unit tests | Complete | ~850 tests for core services |
+| Integration tests | Complete | ~160 tests: store, allowlist, redactor, API endpoints |
 | E2E tests | Complete | 210 Playwright tests across 11 test files |
 | Global project/repo switcher | Complete | MudSelect dropdowns in MainLayout header |
 | Aggregate reliability metrics | Complete | Success rates (7d/30d), avg duration, failure trends on Dashboard |
@@ -249,9 +249,10 @@ dotnet test
 
 ## Known Issues
 
-- 93 unit tests fail due to Moq limitations (non-virtual methods in OrchestratorStore cannot be mocked)
-- Component tests in `tests/AgentsDashboard.UnitTests/ControlPlane/Components/` require bunit API updates
+- Some unit tests fail due to Moq limitations (non-virtual methods in OrchestratorStore cannot be mocked)
+- Component tests in `tests/AgentsDashboard.UnitTests/ControlPlane/Components/` require bunit API updates for .NET 10
 - Integration tests require running MongoDB and Docker infrastructure
+- ImagePrePullServiceTests and ContainerOrphanReconcilerTests have Docker-dependent tests that are skipped in unit test environment
 
 ## Recent Fixes (2026-02-14)
 
@@ -286,6 +287,11 @@ dotnet test
 
 ### Known Issues Updated
 - DockerContainerService now has `IDockerContainerService` interface for mocking in tests
+- ContainerMetrics class duplicate removed from WorkerGateway.Models (uses Contracts.Domain.ContainerMetrics)
+
+### New Tests Added
+- **ImagePrePullServiceTests**: 6 tests for image pre-pull service (Docker-dependent, skipped in unit tests)
+- **ContainerOrphanReconcilerTests**: 12 tests for orphaned container reconciliation (6 unit tests, 6 Docker-dependent)
 
 ## Build Commands
 

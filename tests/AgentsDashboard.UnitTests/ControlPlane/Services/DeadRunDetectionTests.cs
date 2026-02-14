@@ -12,7 +12,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class DeadRunDetectionTests
 {
-    [Fact(Skip = "Dead run detection runs in timer callback after StartAsync completes - requires integration test")]
+    [Fact]
     public async Task DetectStaleRun_TerminatesRunExceedingThreshold()
     {
         var staleRun = new RunDocument
@@ -35,12 +35,6 @@ public class DeadRunDetectionTests
         var store = CreateMockStore();
         store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument> { staleRun });
-        store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.MarkRunCompletedAsync(
                 "stale-1", false, "Stale run detected - no activity within threshold", "{}",
                 It.IsAny<CancellationToken>(), "StaleRun"))
@@ -48,23 +42,22 @@ public class DeadRunDetectionTests
         store.Setup(s => s.CreateFindingFromFailureAsync(
                 failedRun, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FindingDocument());
-        store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<string> { "stale-1" });
 
         var publisher = new Mock<IRunEventPublisher>();
         var reaper = new Mock<IContainerReaper>();
         var options = CreateOptions(staleRunThresholdMinutes: 30);
         var service = new RecoveryService(store.Object, publisher.Object, reaper.Object, options, NullLogger<RecoveryService>.Instance);
 
-        await service.StartAsync(CancellationToken.None);
+        var result = await service.DetectAndTerminateStaleRunsAsync();
 
+        result.Should().Be(1);
         store.Verify(s => s.MarkRunCompletedAsync(
             "stale-1", false, "Stale run detected - no activity within threshold", "{}",
             It.IsAny<CancellationToken>(), "StaleRun"), Times.Once);
         service.Dispose();
     }
 
-    [Fact(Skip = "Dead run detection runs in timer callback after StartAsync completes - requires integration test")]
+    [Fact]
     public async Task DetectZombieRun_ForceTerminatesRunExceedingZombieThreshold()
     {
         var zombieRun = new RunDocument
@@ -87,12 +80,6 @@ public class DeadRunDetectionTests
         var store = CreateMockStore();
         store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument> { zombieRun });
-        store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.MarkRunCompletedAsync(
                 "zombie-1", false, "Zombie run detected - exceeded maximum runtime", "{}",
                 It.IsAny<CancellationToken>(), "ZombieRun"))
@@ -100,8 +87,6 @@ public class DeadRunDetectionTests
         store.Setup(s => s.CreateFindingFromFailureAsync(
                 failedRun, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FindingDocument());
-        store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<string> { "zombie-1" });
 
         var publisher = new Mock<IRunEventPublisher>();
         var reaper = new Mock<IContainerReaper>();
@@ -110,8 +95,9 @@ public class DeadRunDetectionTests
         var options = CreateOptions(zombieRunThresholdMinutes: 60, forceKillOnTimeout: true);
         var service = new RecoveryService(store.Object, publisher.Object, reaper.Object, options, NullLogger<RecoveryService>.Instance);
 
-        await service.StartAsync(CancellationToken.None);
+        var result = await service.DetectAndTerminateZombieRunsAsync();
 
+        result.Should().Be(1);
         reaper.Verify(r => r.KillContainerAsync("zombie-1", It.IsAny<string>(), true, It.IsAny<CancellationToken>()), Times.Once);
         store.Verify(s => s.MarkRunCompletedAsync(
             "zombie-1", false, "Zombie run detected - exceeded maximum runtime", "{}",
@@ -119,7 +105,7 @@ public class DeadRunDetectionTests
         service.Dispose();
     }
 
-    [Fact(Skip = "Dead run detection runs in timer callback after StartAsync completes - requires integration test")]
+    [Fact]
     public async Task DetectOverdueRun_TerminatesRunExceedingMaxAge()
     {
         var overdueRun = new RunDocument
@@ -142,12 +128,6 @@ public class DeadRunDetectionTests
         var store = CreateMockStore();
         store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument> { overdueRun });
-        store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.MarkRunCompletedAsync(
                 "overdue-1", false, "Run exceeded maximum allowed age", "{}",
                 It.IsAny<CancellationToken>(), "OverdueRun"))
@@ -155,8 +135,6 @@ public class DeadRunDetectionTests
         store.Setup(s => s.CreateFindingFromFailureAsync(
                 failedRun, It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new FindingDocument());
-        store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<string> { "overdue-1" });
 
         var publisher = new Mock<IRunEventPublisher>();
         var reaper = new Mock<IContainerReaper>();
@@ -165,15 +143,16 @@ public class DeadRunDetectionTests
         var options = CreateOptions(maxRunAgeHours: 24, forceKillOnTimeout: true);
         var service = new RecoveryService(store.Object, publisher.Object, reaper.Object, options, NullLogger<RecoveryService>.Instance);
 
-        await service.StartAsync(CancellationToken.None);
+        var result = await service.DetectAndTerminateOverdueRunsAsync();
 
+        result.Should().Be(1);
         store.Verify(s => s.MarkRunCompletedAsync(
             "overdue-1", false, "Run exceeded maximum allowed age", "{}",
             It.IsAny<CancellationToken>(), "OverdueRun"), Times.Once);
         service.Dispose();
     }
 
-    [Fact(Skip = "Dead run detection runs in timer callback after StartAsync completes - requires integration test")]
+    [Fact]
     public async Task RecentRun_NotTerminated()
     {
         var recentRun = new RunDocument
@@ -189,22 +168,15 @@ public class DeadRunDetectionTests
         var store = CreateMockStore();
         store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument> { recentRun });
-        store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<WorkflowExecutionDocument>());
-        store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<string> { "recent-1" });
 
         var publisher = new Mock<IRunEventPublisher>();
         var reaper = new Mock<IContainerReaper>();
         var options = CreateOptions(staleRunThresholdMinutes: 30);
         var service = new RecoveryService(store.Object, publisher.Object, reaper.Object, options, NullLogger<RecoveryService>.Instance);
 
-        await service.StartAsync(CancellationToken.None);
+        var result = await service.DetectAndTerminateStaleRunsAsync();
 
+        result.Should().Be(0);
         store.Verify(s => s.MarkRunCompletedAsync(
             It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<CancellationToken>(), It.IsAny<string>()), Times.Never);
@@ -214,24 +186,30 @@ public class DeadRunDetectionTests
     [Fact]
     public async Task ForceKillOnTimeoutDisabled_DoesNotCallReaper()
     {
+        var zombieRun = new RunDocument
+        {
+            Id = "zombie-1",
+            TaskId = "task-1",
+            RepositoryId = "repo-1",
+            State = RunState.Running,
+            StartedAtUtc = DateTime.UtcNow.AddHours(-5),
+            CreatedAtUtc = DateTime.UtcNow.AddHours(-5)
+        };
+
         var store = CreateMockStore();
         store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<WorkflowExecutionDocument>());
-        store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<string>());
+            .ReturnsAsync(new List<RunDocument> { zombieRun });
+        store.Setup(s => s.MarkRunCompletedAsync(
+                It.IsAny<string>(), false, It.IsAny<string>(), "{}",
+                It.IsAny<CancellationToken>(), "ZombieRun"))
+            .ReturnsAsync(new RunDocument { Id = "zombie-1", State = RunState.Failed });
 
         var publisher = new Mock<IRunEventPublisher>();
         var reaper = new Mock<IContainerReaper>();
         var options = CreateOptions(zombieRunThresholdMinutes: 60, forceKillOnTimeout: false);
         var service = new RecoveryService(store.Object, publisher.Object, reaper.Object, options, NullLogger<RecoveryService>.Instance);
 
-        await service.StartAsync(CancellationToken.None);
+        await service.DetectAndTerminateZombieRunsAsync();
 
         reaper.Verify(r => r.KillContainerAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -243,37 +221,63 @@ public class DeadRunDetectionTests
     {
         var runs = new List<RunDocument>
         {
-            new() { Id = "run-1", TaskId = "task-1", RepositoryId = "repo-1", State = RunState.Running },
-            new() { Id = "run-2", TaskId = "task-2", RepositoryId = "repo-1", State = RunState.Running },
-            new() { Id = "run-3", TaskId = "task-3", RepositoryId = "repo-1", State = RunState.Running }
+            new() { Id = "run-1", TaskId = "task-1", RepositoryId = "repo-1", State = RunState.Running, StartedAtUtc = DateTime.UtcNow.AddHours(-2) },
+            new() { Id = "run-2", TaskId = "task-2", RepositoryId = "repo-1", State = RunState.Running, StartedAtUtc = DateTime.UtcNow.AddHours(-2) },
+            new() { Id = "run-3", TaskId = "task-3", RepositoryId = "repo-1", State = RunState.Running, StartedAtUtc = DateTime.UtcNow.AddHours(-2) }
         };
 
         var store = CreateMockStore();
         store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
             .ReturnsAsync(runs);
-        store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RunDocument>());
-        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.MarkRunCompletedAsync(
                 It.IsAny<string>(), false, It.IsAny<string>(), "{}",
                 It.IsAny<CancellationToken>(), It.IsAny<string>()))
             .ReturnsAsync((RunDocument?)null);
-        store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(runs.Select(r => r.Id).ToList());
 
         var publisher = new Mock<IRunEventPublisher>();
         var reaper = new Mock<IContainerReaper>();
         var options = CreateOptions(staleRunThresholdMinutes: 30, zombieRunThresholdMinutes: 120);
         var service = new RecoveryService(store.Object, publisher.Object, reaper.Object, options, NullLogger<RecoveryService>.Instance);
 
-        await service.StartAsync(CancellationToken.None);
+        var result = await service.DetectAndTerminateStaleRunsAsync();
 
+        result.Should().Be(3);
         store.Verify(s => s.MarkRunCompletedAsync(
             It.IsAny<string>(), false, It.IsAny<string>(), "{}",
             It.IsAny<CancellationToken>(), It.IsAny<string>()), Times.Exactly(3));
+        service.Dispose();
+    }
+
+    [Fact]
+    public async Task MonitorForDeadRunsAsync_ReturnsCorrectCounts()
+    {
+        var runs = new List<RunDocument>
+        {
+            new() { Id = "stale-1", TaskId = "task-1", RepositoryId = "repo-1", State = RunState.Running, StartedAtUtc = DateTime.UtcNow.AddHours(-2) },
+            new() { Id = "zombie-1", TaskId = "task-2", RepositoryId = "repo-1", State = RunState.Running, StartedAtUtc = DateTime.UtcNow.AddHours(-5) },
+            new() { Id = "overdue-1", TaskId = "task-3", RepositoryId = "repo-1", State = RunState.Running, StartedAtUtc = DateTime.UtcNow.AddHours(-30) }
+        };
+
+        var store = CreateMockStore();
+        store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(runs);
+        store.Setup(s => s.MarkRunCompletedAsync(
+                It.IsAny<string>(), false, It.IsAny<string>(), "{}",
+                It.IsAny<CancellationToken>(), It.IsAny<string>()))
+            .ReturnsAsync((RunDocument?)null);
+
+        var publisher = new Mock<IRunEventPublisher>();
+        var reaper = new Mock<IContainerReaper>();
+        reaper.Setup(r => r.KillContainerAsync(It.IsAny<string>(), It.IsAny<string>(), true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ContainerKillResult { Killed = true, ContainerId = "container-1" });
+        var options = CreateOptions(staleRunThresholdMinutes: 30, zombieRunThresholdMinutes: 240, maxRunAgeHours: 24, forceKillOnTimeout: true);
+        var service = new RecoveryService(store.Object, publisher.Object, reaper.Object, options, NullLogger<RecoveryService>.Instance);
+
+        var result = await service.MonitorForDeadRunsAsync();
+
+        result.StaleRunsTerminated.Should().Be(3);
+        result.ZombieRunsTerminated.Should().Be(2);
+        result.OverdueRunsTerminated.Should().Be(1);
         service.Dispose();
     }
 
