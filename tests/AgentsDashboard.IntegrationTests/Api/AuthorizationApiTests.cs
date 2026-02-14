@@ -69,6 +69,7 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
                     null!,
                     null!,
                     null!,
+                    null!,
                     Options.Create(new OrchestratorOptions()),
                     null!));
 

@@ -10,6 +10,7 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
     private readonly ConcurrentDictionary<string, RouteConfig> _routes = new();
     private readonly ConcurrentDictionary<string, ClusterConfig> _clusters = new();
     private readonly ConcurrentDictionary<string, DateTime> _routeTtls = new();
+    private readonly ConcurrentDictionary<string, RouteOwnership> _routeOwnership = new();
     private readonly Timer _cleanupTimer;
 
     public InMemoryYarpConfigProvider()
@@ -20,8 +21,23 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
 
     public IProxyConfig GetConfig() => _config;
 
-    public void UpsertRoute(string routeId, string pathPattern, string destination, TimeSpan? ttl = null)
+    public void UpsertRoute(
+        string routeId, 
+        string pathPattern, 
+        string destination, 
+        TimeSpan? ttl = null,
+        string? projectId = null,
+        string? repoId = null,
+        string? taskId = null,
+        string? runId = null)
     {
+        if (!string.IsNullOrEmpty(runId))
+        {
+            var expectedPrefix = $"run-{runId}";
+            if (!routeId.StartsWith(expectedPrefix) && routeId != expectedPrefix)
+                throw new InvalidOperationException($"Route ID '{routeId}' must match run ownership pattern 'run-{{runId}}'");
+        }
+
         var clusterId = $"cluster-{routeId}";
         _clusters[clusterId] = new ClusterConfig
         {
@@ -44,7 +60,24 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
         else
             _routeTtls.TryRemove(routeId, out _);
 
+        if (!string.IsNullOrEmpty(projectId) || !string.IsNullOrEmpty(repoId) || 
+            !string.IsNullOrEmpty(taskId) || !string.IsNullOrEmpty(runId))
+        {
+            _routeOwnership[routeId] = new RouteOwnership
+            {
+                ProjectId = projectId ?? string.Empty,
+                RepoId = repoId ?? string.Empty,
+                TaskId = taskId ?? string.Empty,
+                RunId = runId ?? string.Empty
+            };
+        }
+
         Refresh();
+    }
+
+    public RouteOwnership? GetRouteOwnership(string routeId)
+    {
+        return _routeOwnership.TryGetValue(routeId, out var ownership) ? ownership : null;
     }
 
     public void RemoveRoute(string routeId)
@@ -52,6 +85,7 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
         _routes.TryRemove(routeId, out _);
         _clusters.TryRemove($"cluster-{routeId}", out _);
         _routeTtls.TryRemove(routeId, out _);
+        _routeOwnership.TryRemove(routeId, out _);
         Refresh();
     }
 
@@ -67,6 +101,7 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
             _routes.TryRemove(routeId, out _);
             _clusters.TryRemove($"cluster-{routeId}", out _);
             _routeTtls.TryRemove(routeId, out _);
+            _routeOwnership.TryRemove(routeId, out _);
         }
 
         Refresh();
@@ -94,4 +129,12 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
 
         public void SignalChange() => _cts.Cancel();
     }
+}
+
+public sealed class RouteOwnership
+{
+    public string ProjectId { get; init; } = string.Empty;
+    public string RepoId { get; init; } = string.Empty;
+    public string TaskId { get; init; } = string.Empty;
+    public string RunId { get; init; } = string.Empty;
 }

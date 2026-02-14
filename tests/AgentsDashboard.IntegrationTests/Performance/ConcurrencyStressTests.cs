@@ -74,11 +74,13 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         });
 
         var mockCrypto = CreateMockCryptoService();
+        var yarpProvider = new AgentsDashboard.ControlPlane.Proxy.InMemoryYarpConfigProvider();
         var dispatcher = new RunDispatcher(
             mockWorkerClient,
             _store,
             mockCrypto,
             mockPublisher,
+            yarpProvider,
             options,
             new NullLogger<RunDispatcher>());
 

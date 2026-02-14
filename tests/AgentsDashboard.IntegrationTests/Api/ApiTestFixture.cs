@@ -81,11 +81,13 @@ public sealed class ApiTestFixture : IAsyncLifetime
                     var options = sp.GetRequiredService<IOptions<OrchestratorOptions>>();
                     var logger = sp.GetService<ILogger<RunDispatcher>>() ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RunDispatcher>.Instance;
                     var publisher = sp.GetService<IRunEventPublisher>() ?? new NullRunEventPublisher();
+                    var yarpProvider = sp.GetService<AgentsDashboard.ControlPlane.Proxy.InMemoryYarpConfigProvider>() ?? new AgentsDashboard.ControlPlane.Proxy.InMemoryYarpConfigProvider();
                     return new RunDispatcher(
                         new MockWorkerClient(),
                         store,
                         sp.GetService<ISecretCryptoService>()!,
                         publisher,
+                        yarpProvider,
                         options,
                         logger);
                 });
