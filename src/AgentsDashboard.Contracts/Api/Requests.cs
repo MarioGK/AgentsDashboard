@@ -68,6 +68,7 @@ public sealed record WorkflowStageConfigRequest(
     int? DelaySeconds = null,
     List<string>? ParallelStageIds = null,
     string? ApproverRole = null,
+    int? TimeoutMinutes = null,
     int Order = 0);
 public sealed record BuildImageRequest(string DockerfileContent, string Tag);
 public sealed record CreateAlertRuleRequest(
@@ -135,7 +136,9 @@ public sealed record CreateTaskTemplateRequest(
     RetryPolicyConfig? RetryPolicy = null,
     TimeoutConfig? Timeouts = null,
     SandboxProfileConfig? SandboxProfile = null,
-    ArtifactPolicyConfig? ArtifactPolicy = null);
+    ArtifactPolicyConfig? ArtifactPolicy = null,
+    List<string>? ArtifactPatterns = null,
+    List<string>? LinkedFailureRuns = null);
 
 public sealed record UpdateTaskTemplateRequest(
     string Name,
@@ -149,4 +152,6 @@ public sealed record UpdateTaskTemplateRequest(
     RetryPolicyConfig? RetryPolicy = null,
     TimeoutConfig? Timeouts = null,
     SandboxProfileConfig? SandboxProfile = null,
-    ArtifactPolicyConfig? ArtifactPolicy = null);
+    ArtifactPolicyConfig? ArtifactPolicy = null,
+    List<string>? ArtifactPatterns = null,
+    List<string>? LinkedFailureRuns = null);
