@@ -43,7 +43,7 @@ public class JobProcessorService(
 
             if (jobsToWait.Count > 0)
             {
-                logger.LogInformation("Waiting for {Count} running jobs to complete (timeout: {Timeout}s)...", 
+                logger.LogInformation("Waiting for {Count} running jobs to complete (timeout: {Timeout}s)...",
                     jobsToWait.Count, _shutdownTimeout.TotalSeconds);
 
                 var timeoutTask = Task.Delay(_shutdownTimeout, CancellationToken.None);

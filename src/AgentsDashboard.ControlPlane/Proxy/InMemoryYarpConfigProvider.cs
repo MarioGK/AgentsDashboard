@@ -22,9 +22,9 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
     public IProxyConfig GetConfig() => _config;
 
     public void UpsertRoute(
-        string routeId, 
-        string pathPattern, 
-        string destination, 
+        string routeId,
+        string pathPattern,
+        string destination,
         TimeSpan? ttl = null,
         string? projectId = null,
         string? repoId = null,
@@ -60,7 +60,7 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
         else
             _routeTtls.TryRemove(routeId, out _);
 
-        if (!string.IsNullOrEmpty(projectId) || !string.IsNullOrEmpty(repoId) || 
+        if (!string.IsNullOrEmpty(projectId) || !string.IsNullOrEmpty(repoId) ||
             !string.IsNullOrEmpty(taskId) || !string.IsNullOrEmpty(runId))
         {
             _routeOwnership[routeId] = new RouteOwnership

@@ -33,7 +33,7 @@ builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSectio
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    
+
     options.AddPolicy("AuthPolicy", httpContext =>
     {
         var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
@@ -48,7 +48,7 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
-    
+
     options.AddPolicy("WebhookPolicy", httpContext =>
     {
         var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
@@ -63,16 +63,16 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
-    
+
     options.AddPolicy("GlobalPolicy", httpContext =>
     {
         var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
         var user = httpContext.User;
         var isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
-        var partitionKey = isAuthenticated 
+        var partitionKey = isAuthenticated
             ? user!.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user!.Identity?.Name ?? "authenticated"
             : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
-        
+
         return RateLimitPartition.GetSlidingWindowLimiter(
             partitionKey: partitionKey,
             factory: _ => new SlidingWindowRateLimiterOptions
@@ -84,16 +84,16 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
-    
+
     options.AddPolicy("BurstPolicy", httpContext =>
     {
         var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
         var user = httpContext.User;
         var isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
-        var partitionKey = isAuthenticated 
+        var partitionKey = isAuthenticated
             ? user!.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user!.Identity?.Name ?? "authenticated"
             : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
-        
+
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: partitionKey,
             factory: _ => new FixedWindowRateLimiterOptions
@@ -104,17 +104,17 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
-    
+
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.HttpContext.Response.Headers["Retry-After"] = "60";
-        
+
         if (context.Lease.TryGetMetadata("RateLimit-Reset", out var reset))
         {
             context.HttpContext.Response.Headers["Retry-After"] = reset?.ToString();
         }
-        
+
         await context.HttpContext.Response.WriteAsJsonAsync(new
         {
             error = "Too Many Requests",
@@ -224,7 +224,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
                 Email = "support@example.com"
             }
         });
-        
+
         options.AddSecurityDefinition("cookie", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
         {
             Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
@@ -232,7 +232,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
             Name = ".AspNetCore.Cookies",
             Description = "Cookie-based authentication"
         });
-        
+
         options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
         {
             {

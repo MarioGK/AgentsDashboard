@@ -65,7 +65,7 @@ public sealed class ContainerReaper(
                 logger.LogWarning("Removed {Count} orphaned containers", response.OrphanedCount);
                 foreach (var container in response.RemovedContainers)
                 {
-                    logger.LogInformation("Removed orphaned container {ContainerId} for run {RunId}", 
+                    logger.LogInformation("Removed orphaned container {ContainerId} for run {RunId}",
                         container.ContainerId, container.RunId);
                 }
             }

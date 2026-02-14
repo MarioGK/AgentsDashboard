@@ -54,10 +54,10 @@ public class WorkerE2ETests : PageTest
         await Page.GotoAsync($"{BaseUrl}/workers");
         var emptyAlert = Page.Locator("text=No workers have registered yet");
         var table = Page.Locator(".mud-table");
-        
+
         var hasEmptyState = await emptyAlert.IsVisibleAsync();
         var hasTable = await table.IsVisibleAsync();
-        
+
         Assert.That(hasEmptyState || hasTable, Is.True, "Page should show either empty state or table");
     }
 

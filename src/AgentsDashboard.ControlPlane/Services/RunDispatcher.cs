@@ -143,7 +143,7 @@ public sealed class RunDispatcher(
         if (started is not null)
         {
             await publisher.PublishStatusAsync(started, cancellationToken);
-            
+
             var routePath = $"/proxy/runs/{run.Id}/{{**catchall}}";
             var destination = orchestratorOptions.Value.WorkerGrpcAddress.Replace("grpc://", "http://").Replace(":5001", ":8080");
             yarpProvider.UpsertRoute(

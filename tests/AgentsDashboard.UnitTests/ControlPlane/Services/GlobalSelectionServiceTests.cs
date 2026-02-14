@@ -44,7 +44,7 @@ public class GlobalSelectionServiceTests
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string projectId, CancellationToken _) => 
+            .ReturnsAsync((string projectId, CancellationToken _) =>
                 _testRepositories.Where(r => r.ProjectId == projectId).ToList());
     }
 
@@ -441,7 +441,7 @@ public class GlobalSelectionServiceTests
     {
         var callCount = 0;
         var tcs = new TaskCompletionSource();
-        
+
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
             .Callback(async () =>
             {

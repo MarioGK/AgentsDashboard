@@ -254,18 +254,18 @@ Output ONLY the Dockerfile content, no explanations or markdown formatting.";
             }
 
             var jsonResponse = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
-            
-            if (jsonResponse.TryGetProperty("choices", out var choices) && 
+
+            if (jsonResponse.TryGetProperty("choices", out var choices) &&
                 choices.GetArrayLength() > 0 &&
                 choices[0].TryGetProperty("message", out var message) &&
                 message.TryGetProperty("content", out var content))
             {
                 var dockerfile = content.GetString() ?? string.Empty;
-                
+
                 dockerfile = System.Text.RegularExpressions.Regex.Replace(
-                    dockerfile, 
-                    @"^```dockerfile?\s*\n|\n```$", 
-                    "", 
+                    dockerfile,
+                    @"^```dockerfile?\s*\n|\n```$",
+                    "",
                     System.Text.RegularExpressions.RegexOptions.Multiline);
                 dockerfile = dockerfile.Trim();
 

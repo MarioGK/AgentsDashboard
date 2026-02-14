@@ -18,7 +18,7 @@ public class ArtifactExtractorTests : IDisposable
         _loggerMock = new Mock<ILogger<ArtifactExtractor>>();
         _testWorkspacePath = Path.Combine(Path.GetTempPath(), $"workspace_{Guid.NewGuid()}");
         _testArtifactPath = Path.Combine(Path.GetTempPath(), $"artifacts_{Guid.NewGuid()}");
-        
+
         Directory.CreateDirectory(_testWorkspacePath);
         Directory.CreateDirectory(_testArtifactPath);
 
@@ -26,7 +26,7 @@ public class ArtifactExtractorTests : IDisposable
         {
             ArtifactStoragePath = _testArtifactPath
         });
-        
+
         _extractor = new ArtifactExtractor(_loggerMock.Object, options);
     }
 

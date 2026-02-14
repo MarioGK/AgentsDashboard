@@ -512,7 +512,7 @@ public static class ApiEndpoints
 
             var tasks = await store.ListEventDrivenTasksAsync(repositoryId, ct);
             var filteredTasks = tasks.Where(t => matchedTaskIds.Contains(t.Id)).ToList();
-            
+
             if (filteredTasks.Count == 0)
                 return Results.Ok(new { message = "No matching event-driven tasks for event type", eventType, dispatched = 0 });
 

@@ -27,7 +27,7 @@ public class WorkerEventBusTests
 
         var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
         var messages = new List<JobEventReply>();
-        
+
         await foreach (var msg in bus.ReadAllAsync(cts.Token))
         {
             messages.Add(msg);
@@ -78,7 +78,7 @@ public class WorkerEventBusTests
 
         var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1000));
         var received = new List<JobEventReply>();
-        
+
         await foreach (var msg in bus.ReadAllAsync(cts.Token))
         {
             received.Add(msg);

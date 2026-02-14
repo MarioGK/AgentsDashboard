@@ -82,10 +82,10 @@ public class ProviderSettingsE2ETests : PageTest
         await Page.GotoAsync($"{BaseUrl}/providers");
         var emptyAlert = Page.Locator("text=No repositories found");
         var repoSelect = Page.Locator(".mud-select");
-        
+
         var hasEmptyState = await emptyAlert.IsVisibleAsync();
         var hasSelect = await repoSelect.IsVisibleAsync();
-        
+
         Assert.That(hasEmptyState || hasSelect, Is.True, "Page should show either empty state or repository selector");
     }
 

@@ -54,10 +54,10 @@ public class ScheduleE2ETests : PageTest
         await Page.GotoAsync($"{BaseUrl}/schedules");
         var emptyAlert = Page.Locator("text=No cron-scheduled tasks found");
         var table = Page.Locator(".mud-table");
-        
+
         var hasEmptyState = await emptyAlert.IsVisibleAsync();
         var hasTable = await table.IsVisibleAsync();
-        
+
         Assert.That(hasEmptyState || hasTable, Is.True, "Page should show either empty state or table");
     }
 

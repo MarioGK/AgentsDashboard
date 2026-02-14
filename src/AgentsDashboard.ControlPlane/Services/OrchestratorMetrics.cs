@@ -29,7 +29,7 @@ public interface IOrchestratorMetrics
 public class OrchestratorMetrics : IOrchestratorMetrics
 {
     private static readonly Meter s_meter = new("AgentsDashboard.Orchestrator", "1.0.0");
-    
+
     private readonly Counter<long> _runsTotal;
     private readonly Counter<long> _jobsTotal;
     private readonly Counter<long> _errorsTotal;
@@ -39,22 +39,22 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     private readonly Counter<long> _webhookDeliveriesTotal;
     private readonly Counter<long> _findingsTotal;
     private readonly Counter<long> _artifactsTotal;
-    
+
     private readonly UpDownCounter<int> _pendingJobs;
     private readonly UpDownCounter<int> _activeJobs;
     private readonly UpDownCounter<int> _queuedRuns;
     private readonly UpDownCounter<int> _activeRuns;
     private readonly UpDownCounter<int> _signalRConnections;
-    
+
     private readonly Histogram<double> _runDuration;
     private readonly Histogram<double> _queueWaitTime;
     private readonly Histogram<double> _statusUpdateDuration;
     private readonly Histogram<double> _proxyDuration;
     private readonly Histogram<double> _grpcDuration;
-    
+
     private readonly ObservableGauge<int> _workerActiveSlots;
     private readonly ObservableGauge<int> _workerMaxSlots;
-    
+
     private readonly Dictionary<string, (int Active, int Max)> _workerSlots = new();
 
     public OrchestratorMetrics()
@@ -68,19 +68,19 @@ public class OrchestratorMetrics : IOrchestratorMetrics
         _webhookDeliveriesTotal = s_meter.CreateCounter<long>("orchestrator_webhook_deliveries_total", "deliveries", "Total webhook deliveries");
         _findingsTotal = s_meter.CreateCounter<long>("orchestrator_findings_total", "findings", "Total findings created");
         _artifactsTotal = s_meter.CreateCounter<long>("orchestrator_artifacts_total", "artifacts", "Total artifacts generated");
-        
+
         _pendingJobs = s_meter.CreateUpDownCounter<int>("orchestrator_pending_jobs", "jobs", "Current number of pending jobs");
         _activeJobs = s_meter.CreateUpDownCounter<int>("orchestrator_active_jobs", "jobs", "Current number of active jobs");
         _queuedRuns = s_meter.CreateUpDownCounter<int>("orchestrator_queued_runs", "runs", "Current number of queued runs");
         _activeRuns = s_meter.CreateUpDownCounter<int>("orchestrator_active_runs", "runs", "Current number of active runs");
         _signalRConnections = s_meter.CreateUpDownCounter<int>("orchestrator_signalr_connections_active", "connections", "Active SignalR connections");
-        
+
         _runDuration = s_meter.CreateHistogram<double>("orchestrator_run_duration_seconds", "s", "Run execution duration");
         _queueWaitTime = s_meter.CreateHistogram<double>("orchestrator_queue_wait_seconds", "s", "Time jobs spend in queue");
         _statusUpdateDuration = s_meter.CreateHistogram<double>("orchestrator_status_update_duration_seconds", "s", "Status update processing duration");
         _proxyDuration = s_meter.CreateHistogram<double>("orchestrator_proxy_duration_seconds", "s", "Proxy request duration");
         _grpcDuration = s_meter.CreateHistogram<double>("orchestrator_grpc_duration_seconds", "s", "gRPC call duration");
-        
+
         _workerActiveSlots = s_meter.CreateObservableGauge<int>("orchestrator_worker_active_slots", () => GetWorkerSlots("active"), "slots", "Active worker slots");
         _workerMaxSlots = s_meter.CreateObservableGauge<int>("orchestrator_worker_max_slots", () => GetWorkerSlots("max"), "slots", "Maximum worker slots");
     }
@@ -177,7 +177,7 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     {
         _proxyRequestsTotal.Add(1, new KeyValuePair<string, object?>("status", status));
         _proxyDuration.Record(durationSeconds, new KeyValuePair<string, object?>("status", status));
-        
+
         if (status != "success")
         {
             _proxyErrorsTotal.Add(1, new KeyValuePair<string, object?>("status", status));

@@ -252,7 +252,7 @@ public class HarnessExecutorTests
     public void BuildExpectedBranchPrefix_ValidInputs_ReturnsCorrectFormat(string repository, string taskId, string expected)
     {
         var result = HarnessExecutor.BuildExpectedBranchPrefix(repository, taskId);
-        
+
         result.Should().Be(expected);
     }
 
@@ -265,7 +265,7 @@ public class HarnessExecutorTests
         string branch, string expectedPrefix, string runId, bool expectedValid, string expectedErrorContains)
     {
         var result = HarnessExecutor.ValidateBranchName(branch, expectedPrefix, runId, out var error);
-        
+
         result.Should().Be(expectedValid);
         if (!expectedValid)
         {
@@ -320,7 +320,7 @@ public class HarnessExecutorTests
     public void BuildExpectedBranchPrefix_TruncatesTaskId()
     {
         var result = HarnessExecutor.BuildExpectedBranchPrefix("my-repo", "very-long-task-id-12345");
-        
+
         result.Should().Be("agent/my-repo/very-lon");
     }
 }

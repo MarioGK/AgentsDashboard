@@ -273,7 +273,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         try
         {
             var containers = await ListOrchestratorContainersAsync(cancellationToken);
-            var container = containers.FirstOrDefault(c => 
+            var container = containers.FirstOrDefault(c =>
                 string.Equals(c.RunId, runId, StringComparison.OrdinalIgnoreCase));
 
             if (container is null)

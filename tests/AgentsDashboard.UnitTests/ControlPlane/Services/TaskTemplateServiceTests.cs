@@ -18,7 +18,7 @@ public class TaskTemplateServiceTests
     {
         var templates = TaskTemplateService.GetTemplates();
         var template = templates.FirstOrDefault(t => t.Id == "qa-browser-sweep");
-        
+
         template.Should().NotBeNull();
         template!.Name.Should().Be("QA Browser Sweep");
         template.Description.Should().Contain("Playwright");
@@ -32,7 +32,7 @@ public class TaskTemplateServiceTests
     {
         var templates = TaskTemplateService.GetTemplates();
         var template = templates.FirstOrDefault(t => t.Id == "unit-test-guard");
-        
+
         template.Should().NotBeNull();
         template!.Name.Should().Be("Unit Test Guard");
         template.Description.Should().Contain("auto-fix");
@@ -46,7 +46,7 @@ public class TaskTemplateServiceTests
     {
         var templates = TaskTemplateService.GetTemplates();
         var template = templates.FirstOrDefault(t => t.Id == "dep-health-check");
-        
+
         template.Should().NotBeNull();
         template!.Name.Should().Be("Dependency Health Check");
         template.Description.Should().Contain("security vulnerabilities");
@@ -60,7 +60,7 @@ public class TaskTemplateServiceTests
     {
         var templates = TaskTemplateService.GetTemplates();
         var template = templates.FirstOrDefault(t => t.Id == "regression-replay");
-        
+
         template.Should().NotBeNull();
         template!.Name.Should().Be("Regression Replay");
         template.Description.Should().Contain("verify fixes");
@@ -85,7 +85,7 @@ public class TaskTemplateServiceTests
     {
         var validHarnesses = new[] { "codex", "opencode", "claude-code", "zai" };
         var templates = TaskTemplateService.GetTemplates();
-        
+
         foreach (var template in templates)
         {
             validHarnesses.Should().Contain(template.Harness);

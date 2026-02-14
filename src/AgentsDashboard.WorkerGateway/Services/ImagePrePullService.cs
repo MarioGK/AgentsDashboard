@@ -24,7 +24,7 @@ public sealed class ImagePrePullService : IHostedService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         var images = GetUniqueImages();
-        
+
         if (images.Count == 0)
         {
             _logger.LogInformation("No harness images configured for pre-pull");

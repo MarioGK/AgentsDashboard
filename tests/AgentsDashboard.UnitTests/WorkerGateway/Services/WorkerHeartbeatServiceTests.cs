@@ -163,7 +163,7 @@ public class WorkerHeartbeatServiceTests
         await Task.Delay(TimeSpan.FromSeconds(6), CancellationToken.None);
         var countBeforeStop = _mockHandler.RequestCount;
         countBeforeStop.Should().BeGreaterThanOrEqualTo(1);
-        
+
         await service.StopAsync(CancellationToken.None);
 
         await Task.Delay(TimeSpan.FromSeconds(2), CancellationToken.None);

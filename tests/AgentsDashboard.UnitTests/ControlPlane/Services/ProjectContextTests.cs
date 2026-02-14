@@ -92,7 +92,7 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-2", It.IsAny<CancellationToken>()))
             .ReturnsAsync(proj2Repos);
-        
+
         SetupJsGetItemSequence("proj-2", null);
 
         var context = CreateContext();
@@ -110,7 +110,7 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        
+
         SetupJsGetItemSequence("non-existent-proj", null);
 
         var context = CreateContext();
@@ -127,7 +127,7 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        
+
         SetupJsGetItemSequence("proj-1", "repo-2");
 
         var context = CreateContext();
@@ -145,7 +145,7 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        
+
         SetupJsGetItemSequence("proj-1", "non-existent-repo");
 
         var context = CreateContext();
@@ -238,9 +238,9 @@ public class ProjectContextTests
     private void SetupJsGetItemSequence(params string?[] returnValues)
     {
         var sequence = _jsRuntimeMock.SetupSequence(j => j.InvokeAsync<string?>(
-            "localStorage.getItem", 
+            "localStorage.getItem",
             It.IsAny<object?[]>()));
-        
+
         foreach (var value in returnValues)
         {
             sequence.ReturnsAsync(value);
