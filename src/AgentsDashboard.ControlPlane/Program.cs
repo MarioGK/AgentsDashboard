@@ -110,43 +110,46 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
+if (!builder.Environment.IsEnvironment("Testing"))
 {
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    builder.Services.AddSwaggerGen(options =>
     {
-        Title = "AI Orchestrator API",
-        Version = "v1",
-        Description = "Self-hosted AI orchestration platform for harness execution (Codex, OpenCode, Claude Code, Zai)",
-        Contact = new Microsoft.OpenApi.Models.OpenApiContact
+        options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
         {
-            Name = "AI Orchestrator",
-            Email = "support@example.com"
-        }
-    });
-    
-    options.AddSecurityDefinition("cookie", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-    {
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        In = Microsoft.OpenApi.Models.ParameterLocation.Cookie,
-        Name = ".AspNetCore.Cookies",
-        Description = "Cookie-based authentication"
-    });
-    
-    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
-        {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            Title = "AI Orchestrator API",
+            Version = "v1",
+            Description = "Self-hosted AI orchestration platform for harness execution (Codex, OpenCode, Claude Code, Zai)",
+            Contact = new Microsoft.OpenApi.Models.OpenApiContact
             {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                Name = "AI Orchestrator",
+                Email = "support@example.com"
+            }
+        });
+        
+        options.AddSecurityDefinition("cookie", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        {
+            Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+            In = Microsoft.OpenApi.Models.ParameterLocation.Cookie,
+            Name = ".AspNetCore.Cookies",
+            Description = "Cookie-based authentication"
+        });
+        
+        options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+        {
+            {
+                new Microsoft.OpenApi.Models.OpenApiSecurityScheme
                 {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "cookie"
-                }
-            },
-            Array.Empty<string>()
-        }
+                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                    {
+                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                        Id = "cookie"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
     });
-});
+}
 
 var app = builder.Build();
 

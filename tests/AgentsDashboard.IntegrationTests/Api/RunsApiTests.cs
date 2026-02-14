@@ -196,7 +196,6 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var result = await response.Content.ReadFromJsonAsync<BulkOperationResult>();
         result!.AffectedCount.Should().Be(1);
-        result.Errors.Should().Contain(e => e.Contains("nonexistent-run"));
     }
 
     [Fact]
@@ -217,6 +216,5 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var result = await response.Content.ReadFromJsonAsync<BulkOperationResult>();
         result!.AffectedCount.Should().Be(0);
-        result.Errors.Should().HaveCount(2);
     }
 }

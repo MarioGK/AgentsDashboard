@@ -258,6 +258,12 @@ else
     private bool _taskAutoPr;
     private bool _taskEnabled = true;
     private string? _editingTaskId = null;
+    private int _taskRetryMaxAttempts = 1;
+    private int _taskExecutionTimeout = 600;
+    private int _taskOverallTimeout = 1800;
+    private double _taskCpuLimit = 1.5;
+    private string _taskMemoryLimit = "2g";
+    private int _taskMaxArtifacts = 50;
     private string _githubToken = string.Empty;
     private string _codexToken = string.Empty;
     private string _opencodeToken = string.Empty;
@@ -326,6 +332,13 @@ else
         _taskPrompt = template.Prompt;
         _taskCron = template.CronExpression;
         _taskEnabled = true;
+        _taskAutoPr = template.AutoCreatePullRequest;
+        _taskRetryMaxAttempts = template.RetryPolicy.MaxAttempts;
+        _taskExecutionTimeout = template.Timeouts.ExecutionSeconds;
+        _taskOverallTimeout = template.Timeouts.OverallSeconds;
+        _taskCpuLimit = template.SandboxProfile.CpuLimit;
+        _taskMemoryLimit = template.SandboxProfile.MemoryLimit;
+        _taskMaxArtifacts = template.ArtifactPolicy.MaxArtifacts;
         _editingTaskId = null;
         StateHasChanged();
     }
@@ -341,6 +354,12 @@ else
         _taskCron = task.CronExpression;
         _taskEnabled = task.Enabled;
         _taskAutoPr = task.AutoCreatePullRequest;
+        _taskRetryMaxAttempts = task.RetryPolicy.MaxAttempts;
+        _taskExecutionTimeout = task.Timeouts.ExecutionSeconds;
+        _taskOverallTimeout = task.Timeouts.OverallSeconds;
+        _taskCpuLimit = task.SandboxProfile.CpuLimit;
+        _taskMemoryLimit = task.SandboxProfile.MemoryLimit;
+        _taskMaxArtifacts = task.ArtifactPolicy.MaxArtifacts;
         StateHasChanged();
     }
 
@@ -353,6 +372,12 @@ else
         _taskEnabled = true;
         _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
         _taskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
+        _taskRetryMaxAttempts = 1;
+        _taskExecutionTimeout = 600;
+        _taskOverallTimeout = 1800;
+        _taskCpuLimit = 1.5;
+        _taskMemoryLimit = "2g";
+        _taskMaxArtifacts = 50;
         StateHasChanged();
     }
 
@@ -362,6 +387,11 @@ else
         {
             return;
         }
+
+        var retryPolicy = new RetryPolicyConfig(_taskRetryMaxAttempts);
+        var timeouts = new TimeoutConfig(_taskExecutionTimeout, _taskOverallTimeout);
+        var sandboxProfile = new SandboxProfileConfig(_taskCpuLimit, _taskMemoryLimit);
+        var artifactPolicy = new ArtifactPolicyConfig(_taskMaxArtifacts);
 
         if (_editingTaskId is not null)
         {
@@ -373,7 +403,11 @@ else
                 _taskCommand,
                 _taskAutoPr,
                 _taskCron,
-                _taskEnabled);
+                _taskEnabled,
+                retryPolicy,
+                timeouts,
+                sandboxProfile,
+                artifactPolicy);
             await Store.UpdateTaskAsync(_editingTaskId, updateRequest, CancellationToken.None);
             _editingTaskId = null;
         }
@@ -388,7 +422,11 @@ else
                 _taskCommand,
                 _taskAutoPr,
                 _taskCron,
-                _taskEnabled);
+                _taskEnabled,
+                retryPolicy,
+                timeouts,
+                sandboxProfile,
+                artifactPolicy);
 
             await Store.CreateTaskAsync(request, CancellationToken.None);
         }

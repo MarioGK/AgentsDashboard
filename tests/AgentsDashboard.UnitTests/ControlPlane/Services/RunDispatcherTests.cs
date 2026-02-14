@@ -824,11 +824,12 @@ public class TestableRunDispatcher
 
     private async Task<string> BuildLayeredPromptAsync(RepositoryDocument repository, TaskDocument task, CancellationToken cancellationToken)
     {
-        var repoInstructions = await _store.GetInstructionsAsync(repository.Id, cancellationToken);
-        var enabledRepoInstructions = repoInstructions.Where(i => i.Enabled).OrderBy(i => i.Priority).ToList();
+        var repoInstructionsFromCollection = await _store.GetInstructionsAsync(repository.Id, cancellationToken);
+        var enabledRepoInstructions = repoInstructionsFromCollection.Where(i => i.Enabled).OrderBy(i => i.Priority).ToList();
+        var embeddedRepoInstructions = repository.InstructionFiles?.OrderBy(f => f.Order).ToList() ?? [];
         var hasTaskInstructions = task.InstructionFiles.Count > 0;
 
-        if (enabledRepoInstructions.Count == 0 && !hasTaskInstructions)
+        if (enabledRepoInstructions.Count == 0 && embeddedRepoInstructions.Count == 0 && !hasTaskInstructions)
             return task.Prompt;
 
         var sb = new System.Text.StringBuilder();
@@ -836,6 +837,16 @@ public class TestableRunDispatcher
         if (enabledRepoInstructions.Count > 0)
         {
             foreach (var file in enabledRepoInstructions)
+            {
+                sb.AppendLine($"--- [Repository Collection] {file.Name} ---");
+                sb.AppendLine(file.Content);
+                sb.AppendLine();
+            }
+        }
+
+        if (embeddedRepoInstructions.Count > 0)
+        {
+            foreach (var file in embeddedRepoInstructions)
             {
                 sb.AppendLine($"--- [Repository] {file.Name} ---");
                 sb.AppendLine(file.Content);

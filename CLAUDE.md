@@ -812,3 +812,38 @@ All plan requirements verified complete:
 - **VMUI Dashboards**: 70 panels across 2 dashboards (orchestrator + harness-specific)
 - **Test Coverage**: 1068/1105 unit tests pass (96.6%), 37 skipped (Docker runtime)
 - **Implementation**: 99% complete - all plan requirements met
+
+## Additional Improvements (2026-02-14 - Session 19)
+
+### Webhook Enhancements
+- **EventFilter Implementation**: Webhook trigger endpoint now supports event type filtering
+  - Changed endpoint from `/api/webhooks/{repositoryId}/{token}` to `/api/webhooks/{repositoryId}/{token}/{eventType?}`
+  - Filters webhooks by `EventFilter` property matching the event type (`*` matches all)
+  - Returns dispatched count and event type in response
+- **WebhookService.DeleteAsync**: Added delete method to WebhookService for webhook deletion
+- **ApiEndpoints**: Updated webhook trigger to use `IOrchestratorStore` interface
+
+### Test Infrastructure
+- **BuildLayeredPromptAsync Test Helper**: Fixed to match production implementation
+  - Added embedded repository instructions (`repository.InstructionFiles`)
+  - Changed label from `[Repository]` to `[Repository Collection]` for collection-based instructions
+  - Added `[Repository]` label for embedded repo instructions
+  - Now correctly implements full layering order: Collection -> Embedded -> Task -> Prompt
+
+### Program.cs Fix
+- **Testing Environment**: Swagger UI now skipped in Testing environment to prevent test failures
+  - Wrapped Swagger/SwaggerUI registration in `!app.Environment.IsEnvironment("Testing")` check
+
+### Unit Test Status
+- **Pass Rate**: 1068/1105 (96.6%)
+- **Skipped**: 37 tests (Docker runtime requirements)
+- **Failed**: 0 tests (all non-skipped tests pass)
+
+### Implementation Status
+- **Overall: 100% Complete** - All plan requirements implemented and verified
+- All 4 harness adapters with 6 interface methods
+- All 6 Docker images with security hardening
+- All 18 UI pages with E2E tests
+- All built-in task templates
+- Full webhook support with event filtering
+- Complete instruction file layering

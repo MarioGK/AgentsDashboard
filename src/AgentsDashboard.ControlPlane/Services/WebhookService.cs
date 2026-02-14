@@ -16,4 +16,10 @@ public sealed class WebhookService(IOrchestratorStore store, ILogger<WebhookServ
     {
         return await store.ListWebhooksAsync(repositoryId, cancellationToken);
     }
+
+    public async Task<bool> DeleteAsync(string webhookId, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("Deleting webhook {WebhookId}", webhookId);
+        return await store.DeleteWebhookAsync(webhookId, cancellationToken);
+    }
 }

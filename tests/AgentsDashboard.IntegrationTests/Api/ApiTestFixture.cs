@@ -104,7 +104,8 @@ public sealed class ApiTestFixture : IAsyncLifetime
                 if (cryptoInterfaceDescriptor != null)
                     services.Remove(cryptoInterfaceDescriptor);
 
-                services.AddSingleton<ISecretCryptoService>(_ => new MockSecretCryptoService());
+                services.AddSingleton<SecretCryptoService>(_ => new MockSecretCryptoService());
+                services.AddSingleton<ISecretCryptoService>(sp => sp.GetRequiredService<SecretCryptoService>());
             });
 
             builder.UseEnvironment("Testing");

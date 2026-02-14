@@ -477,11 +477,12 @@ public static class ApiEndpoints
             return Results.Ok(new { token });
         });
 
-        app.MapPost("/api/webhooks/{repositoryId}/{token}", async (
+        app.MapPost("/api/webhooks/{repositoryId}/{token}/{eventType?}", async (
             string repositoryId,
             string token,
+            string? eventType,
             HttpContext httpContext,
-            OrchestratorStore store,
+            IOrchestratorStore store,
             RunDispatcher dispatcher,
             SecretCryptoService crypto,
             CancellationToken ct) =>
@@ -502,19 +503,27 @@ public static class ApiEndpoints
             if (project is null)
                 return Results.NotFound(new { message = "Project not found" });
 
+            var webhooks = await store.ListWebhooksAsync(repositoryId, ct);
+            var matchedTaskIds = webhooks
+                .Where(w => w.Enabled && (w.EventFilter == "*" || w.EventFilter == eventType || string.IsNullOrEmpty(eventType)))
+                .Select(w => w.TaskId)
+                .ToHashSet();
+
             var tasks = await store.ListEventDrivenTasksAsync(repositoryId, ct);
-            if (tasks.Count == 0)
-                return Results.Ok(new { message = "No enabled event-driven tasks" });
+            var filteredTasks = tasks.Where(t => matchedTaskIds.Contains(t.Id)).ToList();
+            
+            if (filteredTasks.Count == 0)
+                return Results.Ok(new { message = "No matching event-driven tasks for event type", eventType, dispatched = 0 });
 
             var dispatched = 0;
-            foreach (var task in tasks)
+            foreach (var task in filteredTasks)
             {
                 var run = await store.CreateRunAsync(task, project.Id, ct);
                 if (await dispatcher.DispatchAsync(project, repository, task, run, ct))
                     dispatched++;
             }
 
-            return Results.Ok(new { dispatched });
+            return Results.Ok(new { dispatched, eventType });
         }).AllowAnonymous().DisableAntiforgery();
 
         // --- Finding Assignment & Task Creation ---
