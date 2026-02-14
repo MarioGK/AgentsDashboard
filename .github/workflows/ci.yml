@@ -250,6 +250,8 @@ jobs:
 
       - name: Start ControlPlane
         run: |
+          mkdir -p /tmp/agentsdashboard-e2e
+          export Orchestrator__SqliteConnectionString="Data Source=/tmp/agentsdashboard-e2e/orchestrator.db"
           dotnet run --project src/AgentsDashboard.ControlPlane --configuration Release --urls=http://localhost:8080 &
           echo "Waiting for ControlPlane to start..."
           for i in {1..30}; do

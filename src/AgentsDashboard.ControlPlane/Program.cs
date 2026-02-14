@@ -128,9 +128,40 @@ builder.Services.AddTransient<RateLimitHeadersMiddleware>();
 
 if (builder.Environment.IsEnvironment("Testing"))
 {
-    builder.Services.AddAuthentication("Test")
+    builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultScheme = "Dynamic";
+            options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        })
+        .AddPolicyScheme("Dynamic", "Dynamic", options =>
+        {
+            options.ForwardDefaultSelector = context =>
+            {
+                if (context.Request.Headers.ContainsKey("X-Test-Auth"))
+                    return "Test";
+                return CookieAuthenticationDefaults.AuthenticationScheme;
+            };
+        })
         .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { })
-        .AddCookie();
+        .AddCookie(options =>
+        {
+            options.LoginPath = "/login";
+            options.Events = new CookieAuthenticationEvents
+            {
+                OnRedirectToLogin = context =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/hubs") ||
+                        context.Request.Path.StartsWithSegments("/api"))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        return Task.CompletedTask;
+                    }
+
+                    context.Response.Redirect(context.RedirectUri);
+                    return Task.CompletedTask;
+                }
+            };
+        });
 
     builder.Services.AddAuthorization(options =>
     {
@@ -166,6 +197,7 @@ builder.Services.AddSingleton<OrchestratorStore>(sp => (OrchestratorStore)sp.Get
 builder.Services.AddSingleton<RunDispatcher>();
 builder.Services.AddSingleton<IWorkerLifecycleManager, DockerWorkerLifecycleManager>();
 builder.Services.AddSingleton<ISecretCryptoService, SecretCryptoService>();
+builder.Services.AddSingleton<SecretCryptoService>(sp => (SecretCryptoService)sp.GetRequiredService<ISecretCryptoService>());
 builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddSingleton<IRunEventPublisher, SignalRRunEventPublisher>();
 builder.Services.AddSingleton<IOrchestratorMetrics, OrchestratorMetrics>();

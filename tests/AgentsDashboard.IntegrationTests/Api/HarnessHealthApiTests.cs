@@ -13,14 +13,14 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
     [Fact]
     public async Task GetHarnessHealth_ReturnsOk()
     {
-        var response = await _client.GetAsync("/health/harnesses");
+        var response = await _client.GetAsync("/api/health/harnesses");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
     public async Task GetHarnessHealth_ReturnsHarnessHealthDictionary()
     {
-        var response = await _client.GetAsync("/health/harnesses");
+        var response = await _client.GetAsync("/api/health/harnesses");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var health = await response.Content.ReadFromJsonAsync<Dictionary<string, HarnessHealthResponse>>();
@@ -30,7 +30,7 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
     [Fact]
     public async Task GetHarnessHealth_ReturnsExpectedHarnessNames()
     {
-        var response = await _client.GetAsync("/health/harnesses");
+        var response = await _client.GetAsync("/api/health/harnesses");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var health = await response.Content.ReadFromJsonAsync<Dictionary<string, HarnessHealthResponse>>();
@@ -44,7 +44,7 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
     [Fact]
     public async Task GetHarnessHealth_ReturnsValidStatus()
     {
-        var response = await _client.GetAsync("/health/harnesses");
+        var response = await _client.GetAsync("/api/health/harnesses");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var health = await response.Content.ReadFromJsonAsync<Dictionary<string, HarnessHealthResponse>>();
@@ -59,7 +59,7 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
     [Fact]
     public async Task GetHarnessHealth_ReturnsCorrectHarnessCount()
     {
-        var response = await _client.GetAsync("/health/harnesses");
+        var response = await _client.GetAsync("/api/health/harnesses");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var health = await response.Content.ReadFromJsonAsync<Dictionary<string, HarnessHealthResponse>>();
@@ -70,7 +70,7 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
     [Fact]
     public async Task GetHarnessHealth_EachHarnessHasName()
     {
-        var response = await _client.GetAsync("/health/harnesses");
+        var response = await _client.GetAsync("/api/health/harnesses");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var health = await response.Content.ReadFromJsonAsync<Dictionary<string, HarnessHealthResponse>>();

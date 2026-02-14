@@ -7,9 +7,11 @@ using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
+using AgentsDashboard.ControlPlane.Proxy;
 using AgentsDashboard.ControlPlane.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -41,15 +43,33 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
                 if (dispatcherDescriptor != null)
                     services.Remove(dispatcherDescriptor);
 
+                var store = services.BuildServiceProvider().GetRequiredService<IOrchestratorStore>();
+                var publisher = new NullRunEventPublisher();
+                var yarpProvider = new InMemoryYarpConfigProvider();
+
                 services.AddSingleton<RunDispatcher>(_ => new RunDispatcher(
                     new MockWorkerClient(),
-                    null!,
+                    store,
                     new MockWorkerLifecycleManager(),
-                    null!,
-                    null!,
-                    null!,
+                    new MockSecretCryptoService(),
+                    publisher,
+                    yarpProvider,
                     Options.Create(new OrchestratorOptions()),
-                    null!));
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<RunDispatcher>.Instance));
+
+                var cryptoDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(SecretCryptoService));
+                if (cryptoDescriptor != null)
+                    services.Remove(cryptoDescriptor);
+                var cryptoInterfaceDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ISecretCryptoService));
+                if (cryptoInterfaceDescriptor != null)
+                    services.Remove(cryptoInterfaceDescriptor);
+                services.AddSingleton<SecretCryptoService>(_ => new MockSecretCryptoService());
+                services.AddSingleton<ISecretCryptoService>(sp => sp.GetRequiredService<SecretCryptoService>());
+
+                var reaperDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IContainerReaper));
+                if (reaperDescriptor != null)
+                    services.Remove(reaperDescriptor);
+                services.AddSingleton<IContainerReaper, MockContainerReaper>();
 
                 services.AddAuthentication("Test")
                     .AddScheme<AuthenticationSchemeOptions, RoleTestAuthHandler>("Test", _ => { });
@@ -278,6 +298,20 @@ public class AuthorizationApiTests(AuthorizationTestFixture fixture) : IClassFix
                 var hostedServices = services.Where(d => d.ServiceType == typeof(IHostedService)).ToList();
                 foreach (var service in hostedServices)
                     services.Remove(service);
+
+                var cryptoDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(SecretCryptoService));
+                if (cryptoDescriptor != null)
+                    services.Remove(cryptoDescriptor);
+                var cryptoInterfaceDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ISecretCryptoService));
+                if (cryptoInterfaceDescriptor != null)
+                    services.Remove(cryptoInterfaceDescriptor);
+                services.AddSingleton<SecretCryptoService>(_ => new MockSecretCryptoService());
+                services.AddSingleton<ISecretCryptoService>(sp => sp.GetRequiredService<SecretCryptoService>());
+
+                var reaperDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IContainerReaper));
+                if (reaperDescriptor != null)
+                    services.Remove(reaperDescriptor);
+                services.AddSingleton<IContainerReaper, MockContainerReaper>();
             });
             builder.UseEnvironment("Testing");
         });

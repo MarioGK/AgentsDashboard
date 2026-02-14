@@ -1002,14 +1002,19 @@ public static class ApiEndpoints
         readApi.MapGet("/proxy-audits", async (
             OrchestratorStore store,
             string? projectId,
-            string? repoId,
+            string? repositoryId,
             string? taskId,
             string? runId,
-            int limit,
+            int? limit,
+            int? skip,
+            string? from,
+            string? to,
+            int? minLatencyMs,
+            int? maxLatencyMs,
             CancellationToken ct) =>
         {
-            limit = limit > 0 ? Math.Min(limit, 500) : 100;
-            var audits = await store.ListProxyAuditsAsync(projectId, repoId, taskId, runId, limit, ct);
+            var effectiveLimit = limit is > 0 ? Math.Min(limit.Value, 500) : 100;
+            var audits = await store.ListProxyAuditsAsync(projectId, repositoryId, taskId, runId, effectiveLimit, ct);
             return Results.Ok(audits);
         });
 
@@ -1041,6 +1046,10 @@ public static class ApiEndpoints
 
         writeApi.MapDelete("/templates/{templateId}", async (string templateId, TaskTemplateService templateService, CancellationToken ct) =>
         {
+            var template = await templateService.GetTemplateByTemplateIdAsync(templateId, ct);
+            if (template is null)
+                return Results.NotFound(new { message = "Template not found" });
+
             var deleted = await templateService.DeleteTemplateAsync(templateId, ct);
             return deleted ? Results.Ok(new { message = "Template deleted" }) : Results.BadRequest(new { message = "Cannot delete built-in templates" });
         });

@@ -23,7 +23,8 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     [Fact]
     public async Task SignalRHub_WithoutAuth_ReturnsUnauthorized()
     {
-        using var unauthenticatedClient = fixture.Factory.CreateClient();
+        using var unauthenticatedClient = fixture.Factory.CreateClient(
+            new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var response = await unauthenticatedClient.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
 
@@ -49,7 +50,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
         var loginRequest = new { username = "admin", password = "change-me" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
-        var negotiateResponse = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
+        var negotiateResponse = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
         negotiateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -80,10 +81,10 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
         var loginRequest = new { username = "admin", password = "change-me" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
-        var response1 = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
+        var response1 = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
         var content1 = await response1.Content.ReadFromJsonAsync<NegotiateResponse>();
 
-        var response2 = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
+        var response2 = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
         var content2 = await response2.Content.ReadFromJsonAsync<NegotiateResponse>();
 
         content1!.ConnectionId.Should().NotBe(content2!.ConnectionId);
@@ -102,6 +103,11 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
 }
 
 public sealed record NegotiateResponse(
-    string ConnectionId,
-    List<string> AvailableTransports
+    string? ConnectionId,
+    List<NegotiateTransport>? AvailableTransports
+);
+
+public sealed record NegotiateTransport(
+    string? Transport,
+    List<string>? TransferFormats
 );
