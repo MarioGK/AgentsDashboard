@@ -3,6 +3,7 @@ using System.Text.Json;
 using AgentsDashboard.ControlPlane.Auth;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Endpoints;
@@ -66,7 +67,7 @@ public static class AuthEndpoints
                 return Results.Redirect(redirect);
             }
             return Results.Ok(new { redirect });
-        }).AllowAnonymous().DisableAntiforgery();
+        }).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("AuthPolicy");
 
         app.MapPost("/auth/logout", async (HttpContext context) =>
         {

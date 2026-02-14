@@ -262,3 +262,89 @@ jobs:
             tests/AgentsDashboard.PlaywrightTests/playwright-trace
             tests/AgentsDashboard.PlaywrightTests/TestResults
           retention-days: 7
+
+  trivy-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: base
+            dockerfile: deploy/harness-images/Dockerfile.harness-base
+            context: .
+            image: ai-harness-base
+          - name: codex
+            dockerfile: deploy/harness-images/Dockerfile.harness-codex
+            context: .
+            image: harness-codex
+          - name: opencode
+            dockerfile: deploy/harness-images/Dockerfile.harness-opencode
+            context: .
+            image: harness-opencode
+          - name: claudecode
+            dockerfile: deploy/harness-images/Dockerfile.harness-claudecode
+            context: .
+            image: harness-claudecode
+          - name: zai
+            dockerfile: deploy/harness-images/Dockerfile.harness-zai
+            context: .
+            image: harness-zai
+          - name: all-in-one
+            dockerfile: deploy/harness-image/Dockerfile
+            context: .
+            image: ai-harness
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (${{ matrix.name }})
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          tags: ${{ matrix.image }}:${{ github.sha }}
+          push: false
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ matrix.image }}:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          output: trivy-results-${{ matrix.name }}.txt
+
+      - name: Run Trivy vulnerability scanner (SARIF)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ matrix.image }}:${{ github.sha }}
+          format: sarif
+          output: trivy-results-${{ matrix.name }}.sarif
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results-${{ matrix.name }}
+          path: |
+            trivy-results-${{ matrix.name }}.txt
+            trivy-results-${{ matrix.name }}.sarif
+          retention-days: 30
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results-${{ matrix.name }}.sarif
+          category: trivy-${{ matrix.name }}

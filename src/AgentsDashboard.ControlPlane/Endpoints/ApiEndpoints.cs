@@ -3,6 +3,7 @@ using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AgentsDashboard.ControlPlane.Endpoints;
 
@@ -10,8 +11,8 @@ public static class ApiEndpoints
 {
     public static IEndpointRouteBuilder MapOrchestratorApi(this IEndpointRouteBuilder app)
     {
-        var readApi = app.MapGroup("/api").RequireAuthorization("viewer");
-        var writeApi = app.MapGroup("/api").RequireAuthorization("operator");
+        var readApi = app.MapGroup("/api").RequireAuthorization("viewer").RequireRateLimiting("GlobalPolicy");
+        var writeApi = app.MapGroup("/api").RequireAuthorization("operator").RequireRateLimiting("GlobalPolicy");
 
         // --- Projects ---
 

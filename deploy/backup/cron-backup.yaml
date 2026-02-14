@@ -1,0 +1,208 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mongodb-backup
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-backup-secrets
+  namespace: mongodb-backup
+type: Opaque
+stringData:
+  MONGODB_URI: "mongodb://mongodb:27017"
+  AWS_ACCESS_KEY_ID: ""
+  AWS_SECRET_ACCESS_KEY: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-backup-config
+  namespace: mongodb-backup
+data:
+  DATABASE_NAME: "agentsdashboard"
+  RETENTION_COUNT: "7"
+  S3_ENABLED: "false"
+  S3_BUCKET: ""
+  S3_PREFIX: "mongodb-backups"
+  AWS_REGION: "us-east-1"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-backup-storage
+  namespace: mongodb-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  namespace: mongodb-backup
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app: mongodb-backup
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: backup
+              image: mongo:8.0
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+                  
+                  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+                  BACKUP_NAME="${DATABASE_NAME}_${TIMESTAMP}"
+                  BACKUP_PATH="${BACKUP_DIR}/${BACKUP_NAME}"
+                  ARCHIVE_PATH="${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
+                  
+                  echo "Starting backup: ${BACKUP_NAME}"
+                  
+                  mkdir -p "${BACKUP_PATH}"
+                  
+                  mongodump --uri="${MONGODB_URI}" \
+                            --db="${DATABASE_NAME}" \
+                            --out="${BACKUP_PATH}" \
+                            --quiet
+                  
+                  tar -czf "${ARCHIVE_PATH}" -C "${BACKUP_DIR}" "${BACKUP_NAME}"
+                  
+                  rm -rf "${BACKUP_PATH}"
+                  
+                  SIZE=$(du -h "${ARCHIVE_PATH}" | cut -f1)
+                  echo "Backup created: ${ARCHIVE_PATH} (${SIZE})"
+                  
+                  if [[ "${S3_ENABLED}" == "true" && -n "${S3_BUCKET}" ]]; then
+                    S3_URI="s3://${S3_BUCKET}/${S3_PREFIX}/${BACKUP_NAME}.tar.gz"
+                    echo "Uploading to S3: ${S3_URI}"
+                    aws s3 cp "${ARCHIVE_PATH}" "${S3_URI}" --region "${AWS_REGION}"
+                  fi
+                  
+                  echo "Cleaning up old backups (retention: ${RETENTION_COUNT})"
+                  cd "${BACKUP_DIR}"
+                  ls -t ${DATABASE_NAME}_*.tar.gz 2>/dev/null | tail -n +$((RETENTION_COUNT + 1)) | xargs -r rm -f
+                  
+                  echo "Backup completed successfully"
+              envFrom:
+                - secretRef:
+                    name: mongodb-backup-secrets
+                - configMapRef:
+                    name: mongodb-backup-config
+              env:
+                - name: BACKUP_DIR
+                  value: /backups
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: mongodb-backup-storage
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-backup-manual
+  namespace: mongodb-backup
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: mongodb-backup
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: backup
+          image: mongo:8.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              
+              TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+              BACKUP_NAME="${DATABASE_NAME}_${TIMESTAMP}"
+              BACKUP_PATH="${BACKUP_DIR}/${BACKUP_NAME}"
+              ARCHIVE_PATH="${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
+              
+              echo "Starting manual backup: ${BACKUP_NAME}"
+              
+              mkdir -p "${BACKUP_PATH}"
+              
+              mongodump --uri="${MONGODB_URI}" \
+                        --db="${DATABASE_NAME}" \
+                        --out="${BACKUP_PATH}" \
+                        --quiet
+              
+              tar -czf "${ARCHIVE_PATH}" -C "${BACKUP_DIR}" "${BACKUP_NAME}"
+              
+              rm -rf "${BACKUP_PATH}"
+              
+              SIZE=$(du -h "${ARCHIVE_PATH}" | cut -f1)
+              echo "Backup created: ${ARCHIVE_PATH} (${SIZE})"
+              
+              if [[ "${S3_ENABLED}" == "true" && -n "${S3_BUCKET}" ]]; then
+                S3_URI="s3://${S3_BUCKET}/${S3_PREFIX}/${BACKUP_NAME}.tar.gz"
+                echo "Uploading to S3: ${S3_URI}"
+                aws s3 cp "${ARCHIVE_PATH}" "${S3_URI}" --region "${AWS_REGION}"
+              fi
+              
+              echo "Backup completed successfully"
+          envFrom:
+            - secretRef:
+                name: mongodb-backup-secrets
+            - configMapRef:
+                name: mongodb-backup-config
+          env:
+            - name: BACKUP_DIR
+              value: /backups
+          volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: backup-storage
+          persistentVolumeClaim:
+            claimName: mongodb-backup-storage

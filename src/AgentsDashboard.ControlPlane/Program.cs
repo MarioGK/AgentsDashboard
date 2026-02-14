@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using System.Threading.RateLimiting;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Auth;
 using AgentsDashboard.ControlPlane.Components;
@@ -7,10 +8,12 @@ using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Endpoints;
 using AgentsDashboard.ControlPlane.Hubs;
+using AgentsDashboard.ControlPlane.Middleware;
 using AgentsDashboard.ControlPlane.Proxy;
 using AgentsDashboard.ControlPlane.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using MudBlazor.Services;
@@ -26,6 +29,102 @@ builder.Services.AddOptions<OrchestratorOptions>()
     .Bind(builder.Configuration.GetSection(OrchestratorOptions.SectionName))
     .ValidateOnStart();
 builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSection(DashboardAuthOptions.SectionName));
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    
+    options.AddPolicy("AuthPolicy", httpContext =>
+    {
+        var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = config.AuthPermitLimit,
+                Window = TimeSpan.FromSeconds(config.AuthWindowSeconds),
+                SegmentsPerWindow = 4,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+    
+    options.AddPolicy("WebhookPolicy", httpContext =>
+    {
+        var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = config.WebhookPermitLimit,
+                Window = TimeSpan.FromSeconds(config.WebhookWindowSeconds),
+                SegmentsPerWindow = 4,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+    
+    options.AddPolicy("GlobalPolicy", httpContext =>
+    {
+        var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
+        var user = httpContext.User;
+        var isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
+        var partitionKey = isAuthenticated 
+            ? user!.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user!.Identity?.Name ?? "authenticated"
+            : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = config.GlobalPermitLimit,
+                Window = TimeSpan.FromSeconds(config.GlobalWindowSeconds),
+                SegmentsPerWindow = 4,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+    
+    options.AddPolicy("BurstPolicy", httpContext =>
+    {
+        var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
+        var user = httpContext.User;
+        var isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
+        var partitionKey = isAuthenticated 
+            ? user!.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user!.Identity?.Name ?? "authenticated"
+            : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = config.BurstPermitLimit,
+                Window = TimeSpan.FromSeconds(config.BurstWindowSeconds),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+    
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.Headers["Retry-After"] = "60";
+        
+        if (context.Lease.TryGetMetadata("RateLimit-Reset", out var reset))
+        {
+            context.HttpContext.Response.Headers["Retry-After"] = reset?.ToString();
+        }
+        
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = "Too Many Requests",
+            message = "Rate limit exceeded. Please retry later.",
+            statusCode = 429
+        }, cancellationToken);
+    };
+});
+
+builder.Services.AddTransient<RateLimitHeadersMiddleware>();
 
 if (builder.Environment.IsEnvironment("Testing"))
 {
@@ -177,6 +276,8 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
+app.UseMiddleware<RateLimitHeadersMiddleware>();
 app.UseAntiforgery();
 
 app.MapStaticAssets();

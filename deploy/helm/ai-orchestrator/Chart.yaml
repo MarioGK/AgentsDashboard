@@ -1,0 +1,18 @@
+apiVersion: v2
+name: ai-orchestrator
+description: A Helm chart for AI Orchestrator - Production-focused, self-hosted AI orchestration platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - ai
+  - orchestration
+  - llm
+  - automation
+  - dotnet
+home: https://github.com/anomalyco/ai-orchestrator
+sources:
+  - https://github.com/anomalyco/ai-orchestrator
+maintainers:
+  - name: AI Orchestrator Team
+    email: team@ai-orchestrator.io

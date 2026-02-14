@@ -1,0 +1,178 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: worker-artifacts
+  namespace: ai-orchestrator
+  labels:
+    app.kubernetes.io/name: worker-gateway
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker-gateway
+  namespace: ai-orchestrator
+  labels:
+    app.kubernetes.io/name: worker-gateway
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 5201
+      targetPort: 5201
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: worker-gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-gateway
+  namespace: ai-orchestrator
+  labels:
+    app.kubernetes.io/name: worker-gateway
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker-gateway
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: worker-gateway
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: worker-gateway
+          image: ai-orchestrator/worker-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 5201
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: ASPNETCORE_ENVIRONMENT
+            - name: MongoDB__ConnectionString
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: MongoDB__ConnectionString
+            - name: MongoDB__Database
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: MongoDB__Database
+            - name: Grpc__Port
+              value: "5201"
+            - name: VictoriaMetrics__Url
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: VictoriaMetrics__Url
+            - name: Docker__ImagePullPolicy
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: Docker__ImagePullPolicy
+            - name: Docker__DefaultCpuLimit
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: Docker__DefaultCpuLimit
+            - name: Docker__DefaultMemoryLimit
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: Docker__DefaultMemoryLimit
+            - name: Docker__NetworkEnabled
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: Docker__NetworkEnabled
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: GITHUB_TOKEN
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: ANTHROPIC_API_KEY
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: OPENAI_API_KEY
+            - name: Z_AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: Z_AI_API_KEY
+            - name: DATA_PROTECTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: DATA_PROTECTION_KEY
+          livenessProbe:
+            exec:
+              command:
+                - /usr/local/bin/grpc_health_probe
+                - -addr=:5201
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /usr/local/bin/grpc_health_probe
+                - -addr=:5201
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+            - name: worker-artifacts
+              mountPath: /artifacts
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        - name: worker-artifacts
+          persistentVolumeClaim:
+            claimName: worker-artifacts
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker-gateway
+  namespace: ai-orchestrator
+  labels:
+    app.kubernetes.io/name: worker-gateway

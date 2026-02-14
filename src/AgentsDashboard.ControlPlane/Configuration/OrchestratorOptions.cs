@@ -17,6 +17,7 @@ public sealed class OrchestratorOptions : IValidatableObject
     public TtlDaysConfig TtlDays { get; set; } = new();
     public DeadRunDetectionConfig DeadRunDetection { get; set; } = new();
     public StageTimeoutConfig StageTimeout { get; set; } = new();
+    public RateLimitConfig RateLimit { get; set; } = new();
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -78,4 +79,16 @@ public sealed class StageTimeoutConfig
     public int DefaultApprovalStageTimeoutHours { get; set; } = 24;
     public int DefaultParallelStageTimeoutMinutes { get; set; } = 90;
     public int MaxStageTimeoutHours { get; set; } = 48;
+}
+
+public sealed class RateLimitConfig
+{
+    public int AuthPermitLimit { get; set; } = 10;
+    public int AuthWindowSeconds { get; set; } = 60;
+    public int WebhookPermitLimit { get; set; } = 30;
+    public int WebhookWindowSeconds { get; set; } = 60;
+    public int GlobalPermitLimit { get; set; } = 100;
+    public int GlobalWindowSeconds { get; set; } = 60;
+    public int BurstPermitLimit { get; set; } = 20;
+    public int BurstWindowSeconds { get; set; } = 1;
 }

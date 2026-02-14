@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-orchestrator.worker-gateway.fullname" . }}
+  namespace: {{ include "ai-orchestrator.namespace" . }}
+  labels:
+    {{- include "ai-orchestrator.worker-gateway.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.workerGateway.type }}
+  ports:
+    - port: {{ .Values.service.workerGateway.port }}
+      targetPort: {{ .Values.service.workerGateway.targetPort }}
+      protocol: TCP
+      name: http
+    - port: 50051
+      targetPort: 50051
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "ai-orchestrator.worker-gateway.selectorLabels" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-orchestrator.worker-gateway.fullname" . }}
+  namespace: {{ include "ai-orchestrator.namespace" . }}
+  labels:
+    {{- include "ai-orchestrator.worker-gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount.workerGateway }}
+  selector:
+    matchLabels:
+      {{- include "ai-orchestrator.worker-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ai-orchestrator.worker-gateway.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "ai-orchestrator.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker-gateway
+          securityContext:
+            {{- merge (dict "allowPrivilegeEscalation" true "readOnlyRootFilesystem" false) .Values.securityContext | toYaml | nindent 12 }}
+          image: "{{ .Values.image.workerGateway.repository }}:{{ .Values.image.workerGateway.tag }}"
+          imagePullPolicy: {{ .Values.image.workerGateway.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.workerGateway.targetPort }}
+              protocol: TCP
+              name: http
+            - containerPort: 50051
+              protocol: TCP
+              name: grpc
+          envFrom:
+            - configMapRef:
+                name: {{ include "ai-orchestrator.worker-gateway.fullname" . }}-config
+            - configMapRef:
+                name: {{ include "ai-orchestrator.fullname" . }}-config
+            - secretRef:
+                name: {{ include "ai-orchestrator.fullname" . }}-mongodb
+            - secretRef:
+                name: {{ include "ai-orchestrator.fullname" . }}-api-keys
+            - secretRef:
+                name: {{ include "ai-orchestrator.fullname" . }}-docker
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.livenessProbe.workerGateway.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.workerGateway.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.workerGateway.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.workerGateway.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.workerGateway.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.workerGateway.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.workerGateway.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.workerGateway.failureThreshold }}
+          resources:
+            {{- toYaml .Values.resources.workerGateway | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.workerGateway.docker.mountSocket }}
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+            {{- end }}
+            - name: artifacts
+              mountPath: {{ .Values.workerGateway.artifactStorage.path }}
+      volumes:
+        {{- if .Values.workerGateway.docker.mountSocket }}
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        {{- end }}
+        - name: artifacts
+        {{- if .Values.persistence.artifacts.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "ai-orchestrator.fullname" . }}-artifacts
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
