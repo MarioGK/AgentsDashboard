@@ -145,12 +145,12 @@ dotnet test
 
 | Test Project | Files | Tests | Coverage Area |
 |--------------|-------|-------|---------------|
-| UnitTests | 44 | 1057 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping, ContainerReaper, WorkerEventBus, ImagePrePull |
-| IntegrationTests | 30 | 180 | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
-| PlaywrightTests | 12 | 220 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+| UnitTests | 44 | 1057 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping, WorkerEventBus, ImagePrePull |
+| IntegrationTests | 32 | 180+ | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
+| PlaywrightTests | 15 | 220+ | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
 | Benchmarks | 4 | - | WorkerQueue, SignalR Publish, MongoDB Operations |
 
-**Total: 90 test files, 1,457+ tests**
+**Total: 91+ test files, 1,457+ tests**
 
 ### Test Notes
 
@@ -243,15 +243,15 @@ dotnet test
 
 ## Missing Test Coverage
 
-- Some API endpoint tests require proper mock setup for OrchestratorStore virtual methods
+- Some API endpoint tests require OrchestratorStore methods to be made virtual for Moq
 - Component tests require bunit package updates for .NET 10 compatibility
-- DockerContainerService is sealed and cannot be mocked with Moq - needs interface extraction
+- MongoInitializationService, ProjectContext, ContainerOrphanReconciler lack dedicated tests
 
 ## Known Issues
 
-- Some unit tests fail due to Moq limitations (sealed classes like DockerContainerService cannot be mocked)
+- 93 unit tests fail due to Moq limitations (non-virtual methods in OrchestratorStore cannot be mocked)
 - Component tests in `tests/AgentsDashboard.UnitTests/ControlPlane/Components/` require bunit API updates
-- Integration tests require running MongoDB and proper DI configuration
+- Integration tests require running MongoDB and Docker infrastructure
 
 ## Recent Fixes (2026-02-14)
 

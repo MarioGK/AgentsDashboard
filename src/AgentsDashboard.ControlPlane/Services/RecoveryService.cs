@@ -7,6 +7,13 @@ using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
+public sealed record DeadRunDetectionResult
+{
+    public int StaleRunsTerminated { get; set; }
+    public int ZombieRunsTerminated { get; set; }
+    public int OverdueRunsTerminated { get; set; }
+}
+
 public sealed class RecoveryService(
     OrchestratorStore store,
     IRunEventPublisher publisher,
@@ -85,21 +92,23 @@ public sealed class RecoveryService(
         }
     }
 
-    private async Task MonitorForDeadRunsAsync()
+    internal async Task<DeadRunDetectionResult> MonitorForDeadRunsAsync()
     {
+        var result = new DeadRunDetectionResult();
         try
         {
-            await DetectAndTerminateStaleRunsAsync();
-            await DetectAndTerminateZombieRunsAsync();
-            await DetectAndTerminateOverdueRunsAsync();
+            result.StaleRunsTerminated = await DetectAndTerminateStaleRunsAsync();
+            result.ZombieRunsTerminated = await DetectAndTerminateZombieRunsAsync();
+            result.OverdueRunsTerminated = await DetectAndTerminateOverdueRunsAsync();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error during dead-run monitoring cycle");
         }
+        return result;
     }
 
-    private async Task DetectAndTerminateStaleRunsAsync()
+    internal async Task<int> DetectAndTerminateStaleRunsAsync()
     {
         var runningRuns = await store.ListRunsByStateAsync(RunState.Running, CancellationToken.None);
         var staleThreshold = DateTime.UtcNow - TimeSpan.FromMinutes(_config.StaleRunThresholdMinutes);
@@ -120,9 +129,11 @@ public sealed class RecoveryService(
 
         if (terminatedCount > 0)
             logger.LogInformation("Terminated {Count} stale runs", terminatedCount);
+
+        return terminatedCount;
     }
 
-    private async Task DetectAndTerminateZombieRunsAsync()
+    internal async Task<int> DetectAndTerminateZombieRunsAsync()
     {
         var runningRuns = await store.ListRunsByStateAsync(RunState.Running, CancellationToken.None);
         var zombieThreshold = DateTime.UtcNow - TimeSpan.FromMinutes(_config.ZombieRunThresholdMinutes);
@@ -143,9 +154,11 @@ public sealed class RecoveryService(
 
         if (terminatedCount > 0)
             logger.LogInformation("Force terminated {Count} zombie runs", terminatedCount);
+
+        return terminatedCount;
     }
 
-    private async Task DetectAndTerminateOverdueRunsAsync()
+    internal async Task<int> DetectAndTerminateOverdueRunsAsync()
     {
         var runningRuns = await store.ListRunsByStateAsync(RunState.Running, CancellationToken.None);
         var maxAgeThreshold = DateTime.UtcNow - TimeSpan.FromHours(_config.MaxRunAgeHours);
@@ -166,6 +179,8 @@ public sealed class RecoveryService(
 
         if (terminatedCount > 0)
             logger.LogInformation("Terminated {Count} overdue runs", terminatedCount);
+
+        return terminatedCount;
     }
 
     private async Task TerminateRunAsync(RunDocument run, string reason, string failureClass, bool force = false)
