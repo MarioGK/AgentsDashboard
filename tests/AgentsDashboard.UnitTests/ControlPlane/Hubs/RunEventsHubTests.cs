@@ -846,7 +846,7 @@ public class RunEventsHubLifecycleTests
         cts.Cancel();
 
         var act = () => hub.OnDisconnectedAsync(null);
-        await act.Should().ThrowAsync<NullReferenceException>();
+        await act.Should().NotThrowAsync();
     }
 
     private void SetupHubContext(RunEventsHub hub, bool isAuthenticated)
@@ -907,23 +907,23 @@ public class RunEventsHubAuthorizationTests
     }
 
     [Fact]
-    public async Task OnConnectedAsync_WithNullContext_ThrowsNullReference()
+    public async Task OnConnectedAsync_WithNullContext_DoesNotThrow()
     {
         var hub = CreateHub();
         hub.Context = null;
 
         var act = () => hub.OnConnectedAsync();
-        await act.Should().ThrowAsync<NullReferenceException>();
+        await act.Should().NotThrowAsync();
     }
 
     [Fact]
-    public async Task OnDisconnectedAsync_WithNullContext_ThrowsNullReferenceException()
+    public async Task OnDisconnectedAsync_WithNullContext_DoesNotThrow()
     {
         var hub = CreateHub();
         hub.Context = null;
 
         var act = () => hub.OnDisconnectedAsync(null);
-        await act.Should().ThrowAsync<NullReferenceException>();
+        await act.Should().NotThrowAsync();
     }
 }
 
@@ -1075,7 +1075,7 @@ public class RunEventsHubGroupTests
             .Returns(Task.CompletedTask);
 
         var act = () => mockGroups.Object.RemoveFromGroupAsync("conn-unknown", "run-nonexistent", CancellationToken.None);
-        await act.Should().ThrowAsync<NullReferenceException>();
+        await act.Should().NotThrowAsync();
     }
 }
 

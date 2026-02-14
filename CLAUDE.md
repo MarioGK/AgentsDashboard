@@ -229,10 +229,17 @@ dotnet test
 
 ### ControlPlane
 - **83+ API endpoints** with authentication/authorization
-- **21 Blazor pages** with MudBlazor UI
+- **22 Blazor pages** with MudBlazor UI
 - **18 services** for business logic
 - **SignalR hub** with 5 event types
 - **YARP proxy** with dynamic routes and audit
+
+### SignalR Event DTOs (5)
+- `RunStatusChangedEvent`: runId, state, summary, startedAt, endedAt
+- `RunLogChunkEvent`: runId, level, message, timestamp
+- `FindingUpdatedEvent`: findingId, repositoryId, state, severity, title
+- `WorkerHeartbeatEvent`: workerId, hostName, activeSlots, maxSlots, timestamp
+- `RouteAvailableEvent`: runId, routePath, timestamp
 
 ### WorkerGateway
 - **6 gRPC RPCs**: DispatchJob, CancelJob, SubscribeEvents, Heartbeat, KillContainer, ReconcileOrphanedContainers
@@ -252,7 +259,7 @@ projects, repositories, tasks, runs, run_events, findings, artifacts, workers, w
 - Orchestrator Dashboard: 32 panels - throughput, latency, errors, queue, workers, runs, findings, proxy
 - Harness Metrics Dashboard: 40 panels - per-harness execution, duration, success rate, failures, container metrics
 
-## UI Pages (21)
+## UI Pages (22)
 
 | Page | Route |
 |------|-------|
@@ -270,6 +277,7 @@ projects, repositories, tasks, runs, run_events, findings, artifacts, workers, w
 | Workers | `/workers` |
 | Workflows | `/workflows` |
 | Workflow Editor | `/workflows/{id}` |
+| Templates | `/templates` |
 | Image Builder | `/image-builder` |
 | Provider Settings | `/providers` |
 | Alert Settings | `/alerts` |
@@ -291,7 +299,7 @@ dotnet format
 - No Blazor component tests (bunit compatibility with .NET 10 pending)
 - Docker-dependent tests skipped (36 tests) due to Docker.DotNet version mismatch and BackgroundService testability
 - Integration tests require running MongoDB infrastructure
-- Unit test pass rate: 1,103/1,139 (97.0%) - All non-skipped tests pass
+- Unit test pass rate: 1,103/1,139 (100% of non-skipped tests pass)
 
 ## Deployment Options
 
@@ -380,7 +388,7 @@ dotnet format
 | Unit Tests | Passed | 1,103/1,139 passed (36 skipped, 0 failed) |
 | API Endpoints | Complete | 83 endpoints across 23 groups |
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
-| Blazor Pages | Complete | 21 pages with full functionality |
+| Blazor Pages | Complete | 22 pages with full functionality |
 | Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
 | Deployment | Complete | Docker Compose, Helm (14 templates), K8s |
 | gRPC Services | Complete | 6 RPCs implemented |
