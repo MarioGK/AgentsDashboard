@@ -156,16 +156,19 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseSwagger(options =>
+if (!app.Environment.IsEnvironment("Testing"))
 {
-    options.RouteTemplate = "api/docs/{documentName}/swagger.json";
-});
-app.UseSwaggerUI(options =>
-{
-    options.SwaggerEndpoint("/api/docs/v1/swagger.json", "AI Orchestrator API v1");
-    options.RoutePrefix = "api/docs";
-    options.DocumentTitle = "AI Orchestrator API Documentation";
-});
+    app.UseSwagger(options =>
+    {
+        options.RouteTemplate = "api/docs/{documentName}/swagger.json";
+    });
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/api/docs/v1/swagger.json", "AI Orchestrator API v1");
+        options.RoutePrefix = "api/docs";
+        options.DocumentTitle = "AI Orchestrator API Documentation";
+    });
+}
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
