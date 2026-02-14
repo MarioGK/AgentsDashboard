@@ -45,7 +45,7 @@ deploy/
 - **Blazor Server** with MudBlazor 8.x UI and BlazorMonaco 3.x editors
 - **MongoDB 8.0** as system of record
 - **gRPC** for control-plane <-> worker communication
-- **YARP 2.x** for reverse proxy (dynamic routes for runs)
+- **YARP 2.3.x** for reverse proxy (dynamic routes for runs)
 - **SignalR** for real-time run status/log updates
 - **Aspire** for local orchestration and OpenTelemetry
 - **VictoriaMetrics + VMUI** for metrics/observability
@@ -53,6 +53,14 @@ deploy/
 - **Docker.DotNet** for image builder service
 - **CliWrap 3.8.2** for CLI process execution in harness adapters
 - **Swashbuckle.AspNetCore** for OpenAPI/Swagger documentation
+
+## Build Configuration
+
+Centralized build configuration using:
+- **Directory.Build.props** - Common MSBuild properties (target framework, nullable, analysis level)
+- **Directory.Packages.props** - Central Package Management (CPM) for consistent versions
+- **global.json** - SDK version pinning (net10.0, rollForward: latestMinor)
+- **.editorconfig** - Coding style and formatting conventions
 
 ## Product Model
 
@@ -195,11 +203,24 @@ dotnet test
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
 | UnitTests | 43 | 1,139 | 97.0% (36 skipped, all pass) |
-| IntegrationTests | 24 | 167 | Requires MongoDB |
-| PlaywrightTests | 15 | 250 | Requires Running App |
+| IntegrationTests | 25 | 173 | Requires MongoDB |
+| PlaywrightTests | 17 | 274 | Requires Running App |
 | Benchmarks | 7 | - | Performance |
 
-**Total: 89 test files, 1,556+ tests**
+**Total: 92 test files, 1,586+ tests**
+
+### Test Coverage by Area
+
+| Area | Unit | Integration | E2E |
+|------|------|-------------|-----|
+| ControlPlane Services | 332 | - | - |
+| WorkerGateway Services | 83 | - | - |
+| Harness Adapters (4) | 109 | - | - |
+| API Endpoints | 92 | 173 | - |
+| UI Pages (21) | - | - | 274 |
+| Proxy/YARP | 67 | - | - |
+| SignalR Hub | 40 | - | - |
+| Contracts | 40 | - | - |
 
 ## Architecture Summary
 
