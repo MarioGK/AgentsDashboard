@@ -116,3 +116,30 @@ public sealed record ProjectReliabilityMetrics(
     int SuccessfulRuns,
     int FailedRuns,
     double SuccessRate);
+
+public sealed record CreateTaskTemplateRequest(
+    string TemplateId,
+    string Name,
+    TaskKind Kind,
+    string Harness,
+    string Prompt,
+    List<string> Commands,
+    string CronExpression,
+    bool AutoCreatePullRequest,
+    RetryPolicyConfig? RetryPolicy = null,
+    TimeoutConfig? Timeouts = null,
+    SandboxProfileConfig? SandboxProfile = null,
+    ArtifactPolicyConfig? ArtifactPolicy = null);
+
+public sealed record UpdateTaskTemplateRequest(
+    string Name,
+    TaskKind Kind,
+    string Harness,
+    string Prompt,
+    List<string> Commands,
+    string CronExpression,
+    bool AutoCreatePullRequest,
+    RetryPolicyConfig? RetryPolicy = null,
+    TimeoutConfig? Timeouts = null,
+    SandboxProfileConfig? SandboxProfile = null,
+    ArtifactPolicyConfig? ArtifactPolicy = null);

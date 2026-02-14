@@ -463,80 +463,85 @@
             __builder.AddAttribute(16, "md", 6);
 
             __builder.OpenComponent<MudSelect<string>>(17);
-            __builder.AddAttribute(18, "T", typeof(string));
-            __builder.AddAttribute(19, "Label", "Model");
-            __builder.AddAttribute(20, "Variant", Variant.Outlined);
-            __builder.AddAttribute(21, "HelperText", "Select the AI model to use");
-            __builder.AddAttribute(22, "Class", "mud-width-full");
-            __builder.AddAttribute(23, "Value", state.Model);
-            __builder.AddAttribute(24, "ValueChanged", EventCallback.Factory.Create<string>(this, v => state.Model = v));
+            __builder.AddAttribute(18, "Label", "Model");
+            __builder.AddAttribute(19, "Variant", Variant.Outlined);
+            __builder.AddAttribute(20, "HelperText", "Select the AI model to use");
+            __builder.AddAttribute(21, "Class", "mud-width-full");
+            __builder.AddAttribute(22, "Value", state.Model);
+            __builder.AddAttribute(23, "ValueChanged", EventCallback.Factory.Create<string>(this, v => state.Model = v));
 
             foreach (var model in models)
             {
-                __builder.OpenComponent<MudSelectItem<string>>(25);
-                __builder.AddAttribute(26, "T", typeof(string));
-                __builder.AddAttribute(27, "Value", model);
+                __builder.OpenComponent<MudSelectItem<string>>(24);
+                __builder.AddAttribute(25, "Value", model);
                 __builder.CloseComponent();
             }
 
             __builder.CloseComponent();
             __builder.CloseComponent();
 
-            __builder.OpenComponent<MudItem>(28);
-            __builder.AddAttribute(29, "xs", 12);
-            __builder.AddAttribute(30, "md", 6);
+            __builder.OpenComponent<MudItem>(26);
+            __builder.AddAttribute(27, "xs", 12);
+            __builder.AddAttribute(28, "md", 6);
 
-            __builder.OpenComponent<MudNumericField<int>>(31);
-            __builder.AddAttribute(32, "T", typeof(int));
-            __builder.AddAttribute(33, "Label", "Max Tokens");
-            __builder.AddAttribute(34, "Variant", Variant.Outlined);
-            __builder.AddAttribute(35, "Min", 256);
-            __builder.AddAttribute(36, "Max", 128000);
-            __builder.AddAttribute(37, "HelperText", "Maximum tokens in response");
-            __builder.AddAttribute(38, "Class", "mud-width-full");
-            __builder.AddAttribute(39, "Value", state.MaxTokens);
-            __builder.AddAttribute(40, "ValueChanged", EventCallback.Factory.Create<int>(this, v => state.MaxTokens = v));
+            __builder.OpenComponent<MudNumericField<int>>(29);
+            __builder.AddAttribute(30, "Label", "Max Tokens");
+            __builder.AddAttribute(31, "Variant", Variant.Outlined);
+            __builder.AddAttribute(32, "Min", 256);
+            __builder.AddAttribute(33, "Max", 128000);
+            __builder.AddAttribute(34, "HelperText", "Maximum tokens in response");
+            __builder.AddAttribute(35, "Class", "mud-width-full");
+            __builder.AddAttribute(36, "Value", state.MaxTokens);
+            __builder.AddAttribute(37, "ValueChanged", EventCallback.Factory.Create<int>(this, v => state.MaxTokens = v));
             __builder.CloseComponent();
 
             __builder.CloseComponent();
 
-            __builder.OpenComponent<MudItem>(41);
-            __builder.AddAttribute(42, "xs", 12);
+            __builder.OpenComponent<MudItem>(38);
+            __builder.AddAttribute(39, "xs", 12);
 
-            __builder.OpenComponent<MudSlider<double>>(43);
-            __builder.AddAttribute(44, "T", typeof(double));
-            __builder.AddAttribute(45, "Label", $"Temperature: {state.Temperature:F2}");
+            __builder.OpenComponent<MudStack>(40);
+            __builder.AddAttribute(41, "Spacing", 1);
+            
+            __builder.OpenComponent<MudText>(42);
+            __builder.AddAttribute(43, "Typo", Typo.body2);
+            __builder.AddContent(44, $"Temperature: {state.Temperature:F2}");
+            __builder.CloseComponent();
+            
+            __builder.OpenComponent<MudSlider<double>>(45);
             __builder.AddAttribute(46, "Min", 0.0);
             __builder.AddAttribute(47, "Max", 2.0);
             __builder.AddAttribute(48, "Step", 0.1);
-            __builder.AddAttribute(47, "Class", "mud-width-full");
-            __builder.AddAttribute(48, "Value", state.Temperature);
-            __builder.AddAttribute(49, "ValueChanged", EventCallback.Factory.Create<double>(this, v => state.Temperature = v));
+            __builder.AddAttribute(49, "Class", "mud-width-full");
+            __builder.AddAttribute(50, "Value", state.Temperature);
+            __builder.AddAttribute(51, "ValueChanged", EventCallback.Factory.Create<double>(this, v => state.Temperature = v));
+            __builder.CloseComponent();
+            
             __builder.CloseComponent();
 
             __builder.CloseComponent();
 
-            __builder.OpenComponent<MudItem>(50);
-            __builder.AddAttribute(51, "xs", 12);
+            __builder.OpenComponent<MudItem>(52);
+            __builder.AddAttribute(53, "xs", 12);
 
-            __builder.OpenComponent<MudButton>(52);
-            __builder.AddAttribute(53, "Variant", Variant.Filled);
-            __builder.AddAttribute(54, "Color", Color.Primary);
-            __builder.AddAttribute(55, "StartIcon", Icons.Material.Filled.Save);
-            __builder.AddAttribute(56, "Disabled", state.IsSaving);
-            __builder.AddAttribute(57, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, () => SaveHarnessSettingsAsync(harness)));
+            __builder.OpenComponent<MudButton>(54);
+            __builder.AddAttribute(55, "Variant", Variant.Filled);
+            __builder.AddAttribute(56, "Color", Color.Primary);
+            __builder.AddAttribute(57, "StartIcon", Icons.Material.Filled.Save);
+            __builder.AddAttribute(58, "Disabled", state.IsSaving);
+            __builder.AddAttribute(59, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, () => SaveHarnessSettingsAsync(harness)));
 
             if (state.IsSaving)
             {
-                __builder.OpenComponent<MudProgressCircular>(58);
-                __builder.AddAttribute(59, "Size", Size.Small);
-                __builder.AddAttribute(60, "Indeterminate", true);
+                __builder.OpenComponent<MudProgressCircular>(60);
+                __builder.AddAttribute(61, "Size", Size.Small);
+                __builder.AddAttribute(62, "Indeterminate", true);
                 __builder.CloseComponent();
-                __builder.AddContent(61, " Saving...");
+                __builder.AddContent(63, " Saving...");
             }
             else
             {
-                __builder.AddContent(62, "Save Settings");
+                __builder.AddContent(64, "Save Settings");
             }
 
             __builder.CloseComponent();

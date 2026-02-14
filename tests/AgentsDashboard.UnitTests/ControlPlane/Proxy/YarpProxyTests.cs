@@ -309,6 +309,17 @@ public class TestableProxyAuditMiddleware
             var repoId = ExtractRouteValue(context, "repoId") ?? string.Empty;
             var projectId = ExtractRouteValue(context, "projectId") ?? string.Empty;
 
+            var upstreamTarget = string.Empty;
+            try
+            {
+                var proxyFeature = context.Features.Get<Yarp.ReverseProxy.Model.IReverseProxyFeature>();
+                if (proxyFeature?.ProxiedDestination is { } dest)
+                {
+                    upstreamTarget = dest.DestinationId;
+                }
+            }
+            catch { }
+
             var auditDocument = new ProxyAuditDocument
             {
                 RunId = runId,
@@ -316,6 +327,7 @@ public class TestableProxyAuditMiddleware
                 RepoId = repoId,
                 ProjectId = projectId,
                 Path = context.Request.Path,
+                UpstreamTarget = upstreamTarget,
                 StatusCode = context.Response.StatusCode,
                 LatencyMs = stopwatch.Elapsed.TotalMilliseconds,
             };
@@ -641,7 +653,7 @@ public class ProxyAuditMiddlewareTests
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
-    [Fact(Skip = "DestinationState is sealed and cannot be mocked")]
+    [Fact]
     public async Task InvokeAsync_ExtractsUpstreamTarget_WhenProxyFeaturePresent()
     {
         var context = CreateHttpContextWithProxyFeature("/proxy/run-upstream", "destination-123");
@@ -772,9 +784,10 @@ public class ProxyAuditMiddlewareTests
         context.Request.Method = "GET";
         context.Response.StatusCode = 200;
 
-        var mockDestination = new Mock<Yarp.ReverseProxy.Model.DestinationState>(destinationId, "http://localhost", "");
+        var config = new Yarp.ReverseProxy.Configuration.DestinationConfig { Address = "http://localhost" };
+        var destination = new Yarp.ReverseProxy.Model.DestinationState(destinationId, new Yarp.ReverseProxy.Model.DestinationModel(config));
         var proxyFeature = new Mock<Yarp.ReverseProxy.Model.IReverseProxyFeature>();
-        proxyFeature.Setup(x => x.ProxiedDestination).Returns(mockDestination.Object);
+        proxyFeature.Setup(x => x.ProxiedDestination).Returns(destination);
 
         context.Features.Set(proxyFeature.Object);
 

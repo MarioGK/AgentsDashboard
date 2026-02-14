@@ -40,10 +40,11 @@
             <MudStack Spacing="2">
                 @foreach (var stageType in _stageTypes)
                 {
-                    <MudCard Elevation="1" Class="cursor-pointer stage-palette-item" 
-                             @onclick="() => AddStageFromPalette(stageType.Type)"
-                             @ondragstart="@((DragEventArgs e) => OnDragStart(e, stageType.Type))"
-                             Draggable="true">
+                    <div class="cursor-pointer stage-palette-item"
+                         @onclick="() => AddStageFromPalette(stageType.Type)"
+                         @ondragstart="@((DragEventArgs e) => OnDragStart(e, stageType.Type))"
+                         draggable="true">
+                        <MudCard Elevation="1">
                         <MudCardContent Class="pa-3">
                             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                                 <MudIcon Icon="@stageType.Icon" Color="@stageType.Color" Size="Size.Large" />
@@ -52,10 +53,11 @@
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">@stageType.Description</MudText>
                                 </div>
                             </MudStack>
-                        </MudCardContent>
-                    </MudCard>
-                }
-            </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </div>
+                    }
+                </MudStack>
         </MudPaper>
     </MudItem>
 
@@ -100,13 +102,13 @@
                                     <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled />
                                 </div>
                             }
-                             <MudCard Elevation="@(_selectedStageIndex == index ? 4 : 2)"
-                                     Class="@(_selectedStageIndex == index ? "stage-card selected" : "stage-card")"
-                                     @onclick="() => SelectStage(index)"
-                                     @ondragstart="@((DragEventArgs e) => OnStageDragStart(e, index))"
-                                     @ondragover:preventDefault
-                                     @ondrop="@((DragEventArgs e) => OnStageDrop(e, index))"
-                                     Draggable="true">
+                             <div class="@(_selectedStageIndex == index ? "stage-card selected" : "stage-card")"
+                                  @onclick="() => SelectStage(index)"
+                                  @ondragstart="@((DragEventArgs e) => OnStageDragStart(e, index))"
+                                  @ondragover:preventDefault
+                                  @ondrop="@((DragEventArgs e) => OnStageDrop(e, index))"
+                                  draggable="true">
+                                 <MudCard Elevation="@(_selectedStageIndex == index ? 4 : 2)">
                                 <MudCardContent>
                                     <MudStack Row AlignItems="AlignItems.Center">
                                         <MudIcon Icon="@GetStageIcon(stage.Type)" Color="@GetStageColor(stage.Type)" Class="mr-3" />
@@ -158,6 +160,7 @@
                                                    OnClick="() => RemoveStage(index)" />
                                 </MudCardActions>
                             </MudCard>
+                             </div>
                         </div>
                     }
                 }

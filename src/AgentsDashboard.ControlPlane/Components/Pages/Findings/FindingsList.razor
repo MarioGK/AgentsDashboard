@@ -72,18 +72,21 @@ else
                 <MudTd DataLabel="Actions">
                     @if (context.State == FindingState.New)
                     {
-                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
-                                       OnClick="() => UpdateStateAsync(context, FindingState.Acknowledged)"
-                                       Tooltip="Acknowledge" />
+                        <MudTooltip Text="Acknowledge" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
+                                           OnClick="() => UpdateStateAsync(context, FindingState.Acknowledged)" />
+                        </MudTooltip>
                     }
                     @if (context.State is FindingState.New or FindingState.Acknowledged)
                     {
-                        <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success"
-                                       OnClick="() => UpdateStateAsync(context, FindingState.Resolved)"
-                                       Tooltip="Resolve" />
-                        <MudIconButton Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small"
-                                       OnClick="() => UpdateStateAsync(context, FindingState.Ignored)"
-                                       Tooltip="Ignore" />
+                        <MudTooltip Text="Resolve" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success"
+                                           OnClick="() => UpdateStateAsync(context, FindingState.Resolved)" />
+                        </MudTooltip>
+                        <MudTooltip Text="Ignore" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small"
+                                           OnClick="() => UpdateStateAsync(context, FindingState.Ignored)" />
+                        </MudTooltip>
                     }
                 </MudTd>
             </RowTemplate>

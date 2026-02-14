@@ -134,11 +134,12 @@ else
                                 <tr>
                                     <td>@artifact</td>
                                     <td>
-                                        <MudIconButton Icon="@Icons.Material.Filled.Download"
-                                                       Size="Size.Small"
-                                                       Href="@($"/api/runs/{Id}/artifacts/{artifact}")"
-                                                       Target="_blank"
-                                                       Tooltip="Download artifact" />
+                                        <MudTooltip Text="Download artifact" Placement="Placement.Top">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Download"
+                                                           Size="Size.Small"
+                                                           Href="@($"/api/runs/{Id}/artifacts/{artifact}")"
+                                                           Target="_blank" />
+                                        </MudTooltip>
                                     </td>
                                 </tr>
                             }
