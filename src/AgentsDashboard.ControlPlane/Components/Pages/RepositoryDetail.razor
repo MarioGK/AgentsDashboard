@@ -334,7 +334,7 @@ else
         _taskName = template.Name;
         _taskKind = template.Kind;
         _taskHarness = template.Harness;
-        _taskCommand = template.Commands.FirstOrDefault() ?? string.Empty;
+        _taskCommand = template.Commands.Count > 0 ? string.Join(" && ", template.Commands) : string.Empty;
         _taskPrompt = template.Prompt;
         _taskCron = template.CronExpression;
         _taskEnabled = true;

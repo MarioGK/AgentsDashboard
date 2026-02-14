@@ -117,17 +117,20 @@ public sealed class WorkerEventListenerService(
     private async Task TryRetryAsync(RunDocument failedRun, CancellationToken cancellationToken)
     {
         var task = await store.GetTaskAsync(failedRun.TaskId, cancellationToken);
-        if (task is null) return;
+        if (task is null)
+            return;
 
         var maxAttempts = task.RetryPolicy.MaxAttempts;
         if (maxAttempts <= 1 || failedRun.Attempt >= maxAttempts)
             return;
 
         var repo = await store.GetRepositoryAsync(task.RepositoryId, cancellationToken);
-        if (repo is null) return;
+        if (repo is null)
+            return;
 
         var project = await store.GetProjectAsync(repo.ProjectId, cancellationToken);
-        if (project is null) return;
+        if (project is null)
+            return;
 
         var nextAttempt = failedRun.Attempt + 1;
         var delaySeconds = task.RetryPolicy.BackoffBaseSeconds * Math.Pow(task.RetryPolicy.BackoffMultiplier, failedRun.Attempt - 1);

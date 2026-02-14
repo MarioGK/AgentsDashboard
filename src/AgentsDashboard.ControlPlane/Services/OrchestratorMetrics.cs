@@ -56,6 +56,7 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     private readonly ObservableGauge<int> _workerMaxSlots;
 
     private readonly Dictionary<string, (int Active, int Max)> _workerSlots = new();
+    private int _currentSignalRConnections = 0;
 
     public OrchestratorMetrics()
     {
@@ -196,7 +197,8 @@ public class OrchestratorMetrics : IOrchestratorMetrics
 
     public void SetSignalRConnections(int count)
     {
-        _signalRConnections.Add(count - GetCurrentSignalRConnections());
+        _signalRConnections.Add(count);
+        Interlocked.Add(ref _currentSignalRConnections, count);
     }
 
     public void RecordGrpcDuration(string method, double seconds)
@@ -228,5 +230,5 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     private int GetCurrentActiveJobs() => 0;
     private int GetCurrentQueuedRuns() => 0;
     private int GetCurrentActiveRuns() => 0;
-    private int GetCurrentSignalRConnections() => 0;
+    private int GetCurrentSignalRConnections() => Volatile.Read(ref _currentSignalRConnections);
 }

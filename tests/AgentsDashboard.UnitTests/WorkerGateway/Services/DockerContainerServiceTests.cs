@@ -1,6 +1,6 @@
+using System.Reflection;
 using AgentsDashboard.WorkerGateway.Services;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Reflection;
 
 namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
 

@@ -14,7 +14,7 @@ public class AuthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
     {
         var request = new { username = "admin", password = "admin123" };
         var response = await _client.PostAsJsonAsync("/auth/login", request);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -23,7 +23,7 @@ public class AuthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
     {
         var request = new { username = "admin", password = "wrongpassword" };
         var response = await _client.PostAsJsonAsync("/auth/login", request);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -32,7 +32,7 @@ public class AuthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
     {
         var request = new { username = "admin", password = "admin123" };
         var response = await _client.PostAsJsonAsync("/auth/login", request);
-        
+
         response.Headers.Contains("Set-Cookie").Should().BeTrue();
     }
 
@@ -55,9 +55,9 @@ public class AuthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
     public async Task GetCurrentUser_ReturnsRedirect_WhenNotAuthenticated()
     {
         using var unauthenticatedClient = fixture.Factory.CreateClient();
-        
+
         var response = await unauthenticatedClient.GetAsync("/auth/me");
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.Redirect);
     }
 
@@ -78,7 +78,7 @@ public class AuthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
     public async Task LogoutGet_RedirectsToLogin()
     {
         var response = await _client.GetAsync("/auth/logout");
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.Redirect);
     }
 }

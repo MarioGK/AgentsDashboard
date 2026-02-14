@@ -988,7 +988,8 @@ public class OrchestratorStore : IOrchestratorStore
 
     public virtual async Task<int> ResolveAlertEventsAsync(List<string> eventIds, CancellationToken cancellationToken)
     {
-        if (eventIds.Count == 0) return 0;
+        if (eventIds.Count == 0)
+            return 0;
 
         var update = Builders<AlertEventDocument>.Update.Set(x => x.Resolved, true);
         var result = await _alertEvents.UpdateManyAsync(
@@ -1000,7 +1001,8 @@ public class OrchestratorStore : IOrchestratorStore
 
     public virtual async Task<int> BulkCancelRunsAsync(List<string> runIds, CancellationToken cancellationToken)
     {
-        if (runIds.Count == 0) return 0;
+        if (runIds.Count == 0)
+            return 0;
 
         var update = Builders<RunDocument>.Update
             .Set(x => x.State, RunState.Cancelled)
@@ -1179,10 +1181,12 @@ public class OrchestratorStore : IOrchestratorStore
 
     private static double CalculateSuccessRate(List<RunDocument> runs)
     {
-        if (runs.Count == 0) return 0;
+        if (runs.Count == 0)
+            return 0;
 
         var completed = runs.Where(r => r.State == RunState.Succeeded || r.State == RunState.Failed).ToList();
-        if (completed.Count == 0) return 0;
+        if (completed.Count == 0)
+            return 0;
 
         var succeeded = completed.Count(r => r.State == RunState.Succeeded);
         return Math.Round((double)succeeded / completed.Count * 100, 1);
@@ -1208,7 +1212,8 @@ public class OrchestratorStore : IOrchestratorStore
             .Where(r => r.StartedAtUtc.HasValue && r.EndedAtUtc.HasValue)
             .ToList();
 
-        if (completedRuns.Count == 0) return null;
+        if (completedRuns.Count == 0)
+            return null;
 
         var avgSeconds = completedRuns
             .Average(r => (r.EndedAtUtc!.Value - r.StartedAtUtc!.Value).TotalSeconds);

@@ -1,13 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.ControlPlane.Data;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using AgentsDashboard.ControlPlane.Data;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
@@ -39,15 +39,15 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         var (_, repo, _) = await SetupAsync();
         var token = await GenerateTokenAsync(repo.Id);
         var secret = "webhook-secret-123";
-        
+
         var payload = "{\"ref\":\"refs/heads/main\",\"commits\":[]}";
         var signature = ComputeHmacSha256(secret, payload);
-        
+
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-Hub-Signature-256", $"sha256={signature}");
-        
+
         var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -56,14 +56,14 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     {
         var (_, repo, _) = await SetupAsync();
         var token = await GenerateTokenAsync(repo.Id);
-        
+
         var payload = "{\"ref\":\"refs/heads/main\",\"before\":\"abc123\",\"after\":\"def456\",\"commits\":[],\"repository\":{\"full_name\":\"test/repo\"}}";
-        
+
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-GitHub-Event", "push");
-        
+
         var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -72,14 +72,14 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     {
         var (_, repo, _) = await SetupAsync();
         var token = await GenerateTokenAsync(repo.Id);
-        
+
         var payload = "{\"ref\":\"refs/heads/feature/test-branch\"}";
-        
+
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-GitHub-Event", "push");
-        
+
         var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -88,14 +88,14 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     {
         var (_, repo, _) = await SetupAsync();
         var token = await GenerateTokenAsync(repo.Id);
-        
+
         var payload = "{\"action\":\"opened\",\"pull_request\":{\"number\":42,\"title\":\"Test PR\"}}";
-        
+
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-GitHub-Event", "pull_request");
-        
+
         var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -104,9 +104,9 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     {
         var (_, repo, _) = await SetupAsync();
         var token = await GenerateTokenAsync(repo.Id);
-        
+
         var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", null);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -115,11 +115,11 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     {
         var (_, repo, _) = await SetupAsync();
         var token = await GenerateTokenAsync(repo.Id);
-        
+
         var payload = new { @ref = "refs/heads/main", commits = Array.Empty<object>() };
-        
+
         var response = await _client.PostAsJsonAsync($"/api/webhooks/{repo.Id}/{token}", payload);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -128,14 +128,14 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     {
         var (_, repo, _) = await SetupAsync();
         var token = await GenerateTokenAsync(repo.Id);
-        
+
         var tasks = Enumerable.Range(0, 5)
             .Select(_ => _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", null))
             .ToArray();
-        
+
         var responses = await Task.WhenAll(tasks);
-        
-        responses.Should().AllSatisfy(r => 
+
+        responses.Should().AllSatisfy(r =>
             r.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.TooManyRequests));
     }
 
@@ -144,14 +144,14 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     {
         var (_, repo, _) = await SetupAsync();
         var token = await GenerateTokenAsync(repo.Id);
-        
+
         var payload = "{\"test\":\"data\"}";
-        
+
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-Event-Type", "custom-event");
-        
+
         var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 

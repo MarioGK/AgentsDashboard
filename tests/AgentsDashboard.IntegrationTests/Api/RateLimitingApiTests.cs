@@ -16,7 +16,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response = await _client.GetAsync("/api/projects");
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -27,7 +27,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response = await _client.GetAsync("/api/projects");
-        
+
         response.Headers.Should().ContainKey("X-RateLimit-Limit");
         response.Headers.Should().ContainKey("X-RateLimit-Remaining");
     }
@@ -36,7 +36,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
     public async Task WebhookEndpoint_HasSeparateRateLimit()
     {
         var response = await _client.PostAsJsonAsync("/api/webhooks/test-repo/test-token", new { });
-        
+
         response.StatusCode.Should().NotBe(HttpStatusCode.TooManyRequests);
     }
 
@@ -51,7 +51,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
             .ToArray();
 
         var responses = await Task.WhenAll(tasks);
-        
+
         responses.Should().AllSatisfy(r => r.StatusCode.Should().Be(HttpStatusCode.OK));
     }
 
@@ -62,7 +62,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response = await _client.GetAsync("/api/settings");
-        
+
         response.Headers.Should().ContainKey("X-RateLimit-Limit");
     }
 
@@ -73,7 +73,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response = await _client.GetAsync("/api/projects");
-        
+
         var limit = response.Headers.GetValues("X-RateLimit-Limit").FirstOrDefault();
         limit.Should().NotBeNullOrEmpty();
     }
@@ -85,7 +85,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response = await _client.GetAsync("/api/projects");
-        
+
         response.Headers.Should().ContainKey("X-RateLimit-Reset");
         var resetValue = response.Headers.GetValues("X-RateLimit-Reset").FirstOrDefault();
         resetValue.Should().NotBeNullOrEmpty();
@@ -102,7 +102,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
 
         var response2 = await _client.GetAsync("/api/projects");
         var remaining2 = int.Parse(response2.Headers.GetValues("X-RateLimit-Remaining").First());
-        
+
         remaining2.Should().BeLessThanOrEqualTo(remaining1);
     }
 
@@ -110,12 +110,12 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
     public async Task HealthEndpoint_IsNotRateLimited()
     {
         var responses = new List<HttpResponseMessage>();
-        
+
         for (int i = 0; i < 5; i++)
         {
             responses.Add(await _client.GetAsync("/health"));
         }
-        
+
         responses.Should().AllSatisfy(r => r.StatusCode.Should().Be(HttpStatusCode.OK));
     }
 }

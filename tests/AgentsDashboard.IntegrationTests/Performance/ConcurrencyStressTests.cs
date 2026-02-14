@@ -510,7 +510,8 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
 
     private static TimeSpan GetPercentile(IReadOnlyList<TimeSpan> sortedValues, double percentile)
     {
-        if (sortedValues.Count == 0) return TimeSpan.Zero;
+        if (sortedValues.Count == 0)
+            return TimeSpan.Zero;
 
         var index = (int)Math.Ceiling(sortedValues.Count * percentile) - 1;
         index = Math.Max(0, Math.Min(index, sortedValues.Count - 1));

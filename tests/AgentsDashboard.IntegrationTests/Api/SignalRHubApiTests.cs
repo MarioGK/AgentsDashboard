@@ -15,8 +15,8 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
         var loginRequest = new { username = "admin", password = "admin123" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
-        var response = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
-        
+        var response = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
@@ -24,9 +24,9 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     public async Task SignalRHub_WithoutAuth_ReturnsUnauthorized()
     {
         using var unauthenticatedClient = fixture.Factory.CreateClient();
-        
-        var response = await unauthenticatedClient.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
-        
+
+        var response = await unauthenticatedClient.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
+
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -36,8 +36,8 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
         var loginRequest = new { username = "admin", password = "admin123" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
-        var response = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
-        
+        var response = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
+
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("connectionId");
@@ -59,9 +59,9 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
         var loginRequest = new { username = "admin", password = "admin123" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
-        var response = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
+        var response = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
         var content = await response.Content.ReadFromJsonAsync<NegotiateResponse>();
-        
+
         content.Should().NotBeNull();
         content!.AvailableTransports.Should().NotBeEmpty();
     }
@@ -69,8 +69,8 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     [Fact]
     public async Task RunEventPublish_RequiresAuthentication()
     {
-        var response = await _client.GetAsync("/hubs/events");
-        
+        var response = await _client.GetAsync("/hubs/runs");
+
         response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.BadRequest);
     }
 
@@ -85,7 +85,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
 
         var response2 = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
         var content2 = await response2.Content.ReadFromJsonAsync<NegotiateResponse>();
-        
+
         content1!.ConnectionId.Should().NotBe(content2!.ConnectionId);
     }
 
@@ -96,7 +96,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
         var loginResponse = await _client.PostAsJsonAsync("/auth/login", loginRequest);
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var response = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
+        var response = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

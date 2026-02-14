@@ -1,6 +1,6 @@
+using AgentsDashboard.WorkerGateway.Configuration;
 using Docker.DotNet;
 using Docker.DotNet.Models;
-using AgentsDashboard.WorkerGateway.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.WorkerGateway.Services;

@@ -85,7 +85,8 @@ public sealed class TaskTemplateService
 
     private async Task SeedBuiltInTemplatesAsync(CancellationToken cancellationToken)
     {
-        if (_seeded) return;
+        if (_seeded)
+            return;
 
         var builtInTemplates = GetBuiltInTemplateDefinitions();
 
@@ -118,8 +119,10 @@ public sealed class TaskTemplateService
     public async Task<TaskTemplateDocument?> UpdateTemplateAsync(string templateId, TaskTemplateDocument updated, CancellationToken cancellationToken)
     {
         var existing = await _templates.Find(x => x.TemplateId == templateId).FirstOrDefaultAsync(cancellationToken);
-        if (existing is null) return null;
-        if (!existing.IsEditable) return null;
+        if (existing is null)
+            return null;
+        if (!existing.IsEditable)
+            return null;
 
         updated.Id = existing.Id;
         updated.TemplateId = existing.TemplateId;
@@ -138,8 +141,10 @@ public sealed class TaskTemplateService
     public async Task<bool> DeleteTemplateAsync(string templateId, CancellationToken cancellationToken)
     {
         var existing = await _templates.Find(x => x.TemplateId == templateId).FirstOrDefaultAsync(cancellationToken);
-        if (existing is null) return false;
-        if (existing.IsBuiltIn) return false;
+        if (existing is null)
+            return false;
+        if (existing.IsBuiltIn)
+            return false;
 
         var result = await _templates.DeleteOneAsync(x => x.TemplateId == templateId, cancellationToken);
         return result.DeletedCount > 0;

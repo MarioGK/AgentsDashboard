@@ -14,9 +14,12 @@ public sealed class CronSchedulerService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var interval = TimeSpan.FromSeconds(Math.Max(2, options.Value.SchedulerIntervalSeconds));
+        var nextTick = DateTime.UtcNow;
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            nextTick = nextTick.Add(interval);
+
             try
             {
                 await TickAsync(stoppingToken);
@@ -30,7 +33,11 @@ public sealed class CronSchedulerService(
                 logger.LogError(ex, "Scheduler tick failed");
             }
 
-            await Task.Delay(interval, stoppingToken);
+            var delay = nextTick - DateTime.UtcNow;
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay, stoppingToken);
+            }
         }
     }
 

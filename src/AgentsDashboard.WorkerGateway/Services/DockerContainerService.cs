@@ -102,7 +102,8 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         while (true)
         {
             var result = await stream.ReadOutputAsync(buffer, 0, buffer.Length, cancellationToken);
-            if (result.Count == 0) break;
+            if (result.Count == 0)
+                break;
             output.Append(System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count));
         }
 

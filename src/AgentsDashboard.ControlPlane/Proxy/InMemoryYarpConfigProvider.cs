@@ -94,7 +94,8 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
         var now = DateTime.UtcNow;
         var expired = _routeTtls.Where(kvp => kvp.Value < now).Select(kvp => kvp.Key).ToList();
 
-        if (expired.Count == 0) return;
+        if (expired.Count == 0)
+            return;
 
         foreach (var routeId in expired)
         {

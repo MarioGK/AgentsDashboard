@@ -23,7 +23,8 @@ public class ProjectContext
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        if (_initialized) return;
+        if (_initialized)
+            return;
 
         Projects = await _store.ListProjectsAsync(cancellationToken);
 

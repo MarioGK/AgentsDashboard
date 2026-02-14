@@ -2,6 +2,7 @@ using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Hubs;
 using AgentsDashboard.ControlPlane.Services;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Hubs;
 
@@ -397,10 +398,17 @@ public class RunEventsHubTests
             Times.Exactly(10));
     }
 
+    private static RunEventsHub CreateHub()
+    {
+        var metrics = new Mock<IOrchestratorMetrics>();
+        var logger = new Mock<ILogger<RunEventsHub>>();
+        return new RunEventsHub(metrics.Object, logger.Object);
+    }
+
     [Fact]
     public void RunEventsHub_CanBeInstantiated()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         hub.Should().NotBeNull();
     }
 

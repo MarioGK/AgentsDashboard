@@ -50,6 +50,7 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         var request = new CreateTaskTemplateRequest(
             "custom-test",
             "Custom Test Template",
+            "Test template description",
             TaskKind.OneShot,
             "codex",
             "Test prompt",
@@ -76,6 +77,7 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         var createRequest = new CreateTaskTemplateRequest(
             "update-test",
             "Original Name",
+            "Original description",
             TaskKind.OneShot,
             "codex",
             "Original prompt",
@@ -91,6 +93,7 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
 
         var updateRequest = new UpdateTaskTemplateRequest(
             "Updated Name",
+            "Updated description",
             TaskKind.Cron,
             "opencode",
             "Updated prompt",
@@ -118,6 +121,7 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         var createRequest = new CreateTaskTemplateRequest(
             "delete-test",
             "To Delete",
+            "Template for deletion test",
             TaskKind.OneShot,
             "codex",
             "Prompt",

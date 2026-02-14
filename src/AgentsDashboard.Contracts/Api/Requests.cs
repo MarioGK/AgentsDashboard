@@ -120,6 +120,7 @@ public sealed record ProjectReliabilityMetrics(
 public sealed record CreateTaskTemplateRequest(
     string TemplateId,
     string Name,
+    string Description,
     TaskKind Kind,
     string Harness,
     string Prompt,
@@ -133,6 +134,7 @@ public sealed record CreateTaskTemplateRequest(
 
 public sealed record UpdateTaskTemplateRequest(
     string Name,
+    string Description,
     TaskKind Kind,
     string Harness,
     string Prompt,

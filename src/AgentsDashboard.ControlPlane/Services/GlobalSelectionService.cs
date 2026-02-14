@@ -90,7 +90,8 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
         await _initLock.WaitAsync(cancellationToken);
         try
         {
-            if (_initialized) return;
+            if (_initialized)
+                return;
 
             ProjectList = await _store.ListProjectsAsync(cancellationToken);
 
@@ -116,7 +117,8 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
 
     public async Task SelectProjectAsync(string? projectId, CancellationToken cancellationToken)
     {
-        if (projectId == SelectedProjectId) return;
+        if (projectId == SelectedProjectId)
+            return;
 
         if (projectId is not null)
         {
@@ -138,7 +140,8 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
 
     public async Task SelectRepositoryAsync(string? repositoryId, CancellationToken cancellationToken)
     {
-        if (repositoryId == SelectedRepositoryId) return;
+        if (repositoryId == SelectedRepositoryId)
+            return;
 
         SelectedRepositoryId = repositoryId;
         SelectedRepository = repositoryId is not null
@@ -231,7 +234,8 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
         _disposed = true;
         _initLock.Dispose();
     }
@@ -248,7 +252,8 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
             _disposed = true;
             _dispose();
         }

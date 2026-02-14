@@ -287,7 +287,9 @@ public sealed class HarnessExecutor(
             if (result.ExitCode != 0)
             {
                 logger.LogWarning("Git clone failed for {GitUrl}: {Error}", request.GitUrl, result.StandardError);
-                try { Directory.Delete(tempPath, recursive: true); } catch { }
+                try
+                { Directory.Delete(tempPath, recursive: true); }
+                catch { }
             }
         }
         catch (Exception ex)

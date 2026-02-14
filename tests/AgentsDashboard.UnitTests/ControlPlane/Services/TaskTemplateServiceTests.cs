@@ -1,5 +1,5 @@
-using AgentsDashboard.ControlPlane.Services;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.ControlPlane.Services;
 using FluentAssertions;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;

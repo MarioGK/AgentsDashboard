@@ -1,0 +1,221 @@
+@page "/templates"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Services.TaskTemplateService TemplateService
+@inject IDialogService DialogService
+@inject NavigationManager Nav
+@using AgentsDashboard.Contracts.Domain
+
+<PageTitle>Task Templates - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Task Templates</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">
+        Create Template
+    </MudButton>
+</MudStack>
+
+<MudTabs Elevation="2" Rounded Class="mb-4">
+    <MudTabPanel Text="Built-in">
+        <MudGrid>
+            @foreach (var template in _builtInTemplates)
+            {
+                <MudItem xs="12" md="6" lg="4">
+                    <MudCard Elevation="2">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">@template.Name</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info">@template.Harness</MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Secondary">@template.Kind</MudChip>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@template.Description</MudText>
+                            <MudDivider Class="my-2" />
+                            <MudStack Row Spacing="1" Class="mt-2">
+                                @if (!string.IsNullOrEmpty(template.CronExpression))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@template.CronExpression</MudChip>
+                                }
+                                @if (template.AutoCreatePullRequest)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success">Auto PR</MudChip>
+                                }
+                            </MudStack>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => ViewTemplate(template)">View</MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Custom">
+        @if (_customTemplates.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No custom templates. Create one to get started.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@_customTemplates" Hover Dense Striped>
+                <HeaderContent>
+                    <MudTh>Name</MudTh>
+                    <MudTh>Harness</MudTh>
+                    <MudTh>Kind</MudTh>
+                    <MudTh>Created</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Name">@context.Name</MudTd>
+                    <MudTd DataLabel="Harness">
+                        <MudChip T="string" Size="Size.Small">@context.Harness</MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Kind">@context.Kind</MudTd>
+                    <MudTd DataLabel="Created">@context.CreatedAtUtc.ToString("g")</MudTd>
+                    <MudTd DataLabel="Actions">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       OnClick="() => ViewTemplate(context)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="() => DeleteTemplate(context)" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudTabPanel>
+</MudTabs>
+
+@if (_viewingTemplate is not null)
+{
+    <MudDialog @bind-IsVisible="_viewDialogOpen" Options="_dialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@_viewingTemplate.Name</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.body2">@_viewingTemplate.Description</MudText>
+                
+                <MudDivider />
+                
+                <MudText Typo="Typo.subtitle2">Properties</MudText>
+                <MudGrid>
+                    <MudItem xs="6"><MudText><b>Harness:</b> @_viewingTemplate.Harness</MudText></MudItem>
+                    <MudItem xs="6"><MudText><b>Kind:</b> @_viewingTemplate.Kind</MudText></MudItem>
+                    <MudItem xs="6"><MudText><b>Auto PR:</b> @(_viewingTemplate.AutoCreatePullRequest ? "Yes" : "No")</MudText></MudItem>
+                    <MudItem xs="6">
+                        <MudText><b>Retry:</b> @_viewingTemplate.RetryPolicy.MaxAttempts attempts</MudText>
+                    </MudItem>
+                </MudGrid>
+
+                @if (!string.IsNullOrEmpty(_viewingTemplate.CronExpression))
+                {
+                    <MudAlert Severity="Severity.Info">Cron: @_viewingTemplate.CronExpression</MudAlert>
+                }
+
+                <MudDivider />
+                
+                <MudText Typo="Typo.subtitle2">Commands</MudText>
+                @foreach (var cmd in _viewingTemplate.Commands)
+                {
+                    <MudPaper Class="pa-2 ma-1" Elevation="0" Outlined>
+                        <MudText Typo="Typo.body2" Style="font-family: monospace;">@cmd</MudText>
+                    </MudPaper>
+                }
+
+                <MudDivider />
+                
+                <MudText Typo="Typo.subtitle2">Prompt</MudText>
+                <MudPaper Class="pa-2" Elevation="0" Outlined Style="max-height: 300px; overflow-y: auto;">
+                    <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@(_viewingTemplate.Prompt[..Math.Min(1000, _viewingTemplate.Prompt.Length)])@( _viewingTemplate.Prompt.Length > 1000 ? "..." : "")</MudText>
+                </MudPaper>
+
+                @if (_viewingTemplate.ArtifactPatterns.Count > 0)
+                {
+                    <MudDivider />
+                    <MudText Typo="Typo.subtitle2">Artifact Patterns</MudText>
+                    <MudStack Row Spacing="1" Style="flex-wrap: wrap;">
+                        @foreach (var pattern in _viewingTemplate.ArtifactPatterns)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@pattern</MudChip>
+                        }
+                    </MudStack>
+                }
+
+                <MudDivider />
+                
+                <MudText Typo="Typo.subtitle2">Resource Limits</MudText>
+                <MudGrid>
+                    <MudItem xs="4"><MudText>CPU: @_viewingTemplate.SandboxProfile.CpuLimit</MudText></MudItem>
+                    <MudItem xs="4"><MudText>Memory: @_viewingTemplate.SandboxProfile.MemoryLimit</MudText></MudItem>
+                    <MudItem xs="4"><MudText>Timeout: @_viewingTemplate.Timeouts.ExecutionSeconds s</MudText></MudItem>
+                </MudGrid>
+            </MudStack>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="CloseViewDialog">Close</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    private List<TaskTemplateDocument> _builtInTemplates = [];
+    private List<TaskTemplateDocument> _customTemplates = [];
+    private TaskTemplateDocument? _viewingTemplate;
+    private bool _viewDialogOpen;
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTemplatesAsync();
+    }
+
+    private async Task LoadTemplatesAsync()
+    {
+        var templates = await TemplateService.ListTemplatesAsync(CancellationToken.None);
+        _builtInTemplates = templates.Where(t => t.IsBuiltIn).OrderBy(t => t.Name).ToList();
+        _customTemplates = templates.Where(t => !t.IsBuiltIn).OrderByDescending(t => t.CreatedAtUtc).ToList();
+    }
+
+    private void ViewTemplate(TaskTemplateDocument template)
+    {
+        _viewingTemplate = template;
+        _viewDialogOpen = true;
+    }
+
+    private void CloseViewDialog()
+    {
+        _viewDialogOpen = false;
+        _viewingTemplate = null;
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters();
+        var dialog = await DialogService.ShowAsync<CreateTemplateDialog>("Create Template", parameters, _dialogOptions);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            await LoadTemplatesAsync();
+        }
+    }
+
+    private async Task DeleteTemplate(TaskTemplateDocument template)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete Template",
+            $"Are you sure you want to delete template '{template.Name}'?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await TemplateService.DeleteTemplateAsync(template.TemplateId, CancellationToken.None);
+            await LoadTemplatesAsync();
+        }
+    }
+}

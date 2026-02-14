@@ -83,7 +83,7 @@ services:
   victoria-metrics:
     image: victoriametrics/victoria-metrics:latest
     restart: unless-stopped
-    command: ["-storageDataPath=/victoria-metrics-data", "-retentionPeriod=30d"]
+    command: ["-storageDataPath=/victoria-metrics-data", "-retentionPeriod=30d", "-otlp.httpListener=:8428"]
     ports:
       - "8428:8428"
     volumes:

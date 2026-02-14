@@ -36,7 +36,7 @@ public class ProxyAuditsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
     {
         var from = DateTime.UtcNow.AddDays(-7).ToString("o");
         var to = DateTime.UtcNow.ToString("o");
-        
+
         var response = await _client.GetAsync($"/api/proxy-audits?from={Uri.EscapeDataString(from)}&to={Uri.EscapeDataString(to)}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
