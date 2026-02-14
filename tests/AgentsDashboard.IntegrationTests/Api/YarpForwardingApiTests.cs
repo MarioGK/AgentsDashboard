@@ -29,7 +29,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         var taskResponse = await _client.PostAsJsonAsync("/api/tasks", taskRequest);
         var task = (await taskResponse.Content.ReadFromJsonAsync<TaskDocument>())!;
 
-        var runResponse = await _client.PostAsJsonAsync("/api/runs", new CreateRunRequest(task.Id, "manual"));
+        var runResponse = await _client.PostAsJsonAsync("/api/runs", new CreateRunRequest(task.Id));
         var run = (await runResponse.Content.ReadFromJsonAsync<RunDocument>())!;
 
         return (project, repo, task, run);
@@ -103,7 +103,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var audits = await response.Content.ReadFromJsonAsync<List<ProxyAuditDocument>>();
         audits.Should().NotBeNull();
-        audits!.Count.Should().BeLessOrEqualTo(10);
+        audits!.Count.Should().BeLessThanOrEqualTo(10);
     }
 
     [Fact]

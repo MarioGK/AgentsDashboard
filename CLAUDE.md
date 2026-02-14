@@ -205,11 +205,11 @@ dotnet test
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
 | UnitTests | 47 | 1,103 | 100% (36 skipped, all pass) |
-| IntegrationTests | 38 | 210 | Requires MongoDB |
+| IntegrationTests | 40 | 232 | Requires MongoDB |
 | PlaywrightTests | 21 | 274 | Requires Running App |
 | Benchmarks | 7 | 4 | Performance |
 
-**Total: 113 test files, 1,591+ tests**
+**Total: 115 test files, 1,613+ tests**
 
 ### Test Coverage by Area
 
@@ -222,7 +222,7 @@ dotnet test
 | UI Pages (21) | - | - | 274 |
 | Proxy/YARP | 68 | - | - |
 | SignalR Hub | 40 | 10 | - |
-| Rate Limiting | - | 10 | - |
+| Rate Limiting | - | 22 | - |
 | Contracts | 40 | - | - |
 
 ## Architecture Summary
