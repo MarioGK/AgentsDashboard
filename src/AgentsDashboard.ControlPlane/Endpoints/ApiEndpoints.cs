@@ -683,6 +683,7 @@ public static class ApiEndpoints
                     DelaySeconds = s.DelaySeconds,
                     ParallelStageIds = s.ParallelStageIds,
                     ApproverRole = s.ApproverRole,
+                    TimeoutMinutes = s.TimeoutMinutes,
                     Order = s.Order
                 }).ToList(),
                 Enabled = true,
@@ -713,6 +714,7 @@ public static class ApiEndpoints
                 DelaySeconds = s.DelaySeconds,
                 ParallelStageIds = s.ParallelStageIds,
                 ApproverRole = s.ApproverRole,
+                TimeoutMinutes = s.TimeoutMinutes,
                 Order = s.Order
             }).ToList();
             workflow.Enabled = request.Enabled;
