@@ -525,7 +525,7 @@ public static class ApiEndpoints
             }
 
             return Results.Ok(new { dispatched, eventType });
-        }).AllowAnonymous().DisableAntiforgery();
+        }).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("WebhookPolicy");
 
         // --- Finding Assignment & Task Creation ---
 
