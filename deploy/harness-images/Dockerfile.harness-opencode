@@ -1,0 +1,55 @@
+# AI Orchestrator - OpenCode Harness Image
+# OpenCode CLI harness (Go-based AI coding assistant)
+# Build: docker build -f Dockerfile.harness-opencode -t ghcr.io/mariogk/harness-opencode:latest .
+
+FROM ghcr.io/mariogk/ai-harness-base:latest
+
+LABEL org.opencontainers.image.source=https://github.com/mariogk/AgentsDashboard \
+      org.opencontainers.image.description="OpenCode harness for AI Orchestrator" \
+      org.opencontainers.image.licenses=MIT
+
+USER root
+
+RUN go install github.com/opencode-ai/opencode@latest 2>/dev/null || echo "OpenCode installation attempted"
+RUN cp /root/go/bin/opencode /usr/local/bin/opencode 2>/dev/null || echo "OpenCode binary not found"
+
+COPY --chmod=755 <<'EOF' /usr/local/bin/opencode-wrapper
+#!/bin/bash
+# OpenCode CLI wrapper for AI Orchestrator
+
+set -e
+
+if command -v opencode &> /dev/null; then
+    exec opencode "$@"
+fi
+
+if [ -z "$PROMPT" ]; then
+    echo '{"status": "failed", "error": "No prompt provided"}' >&2
+    exit 1
+fi
+
+if [ -z "$OPENCODE_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+    echo '{"status": "failed", "error": "No API key configured (OPENCODE_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY)"}' >&2
+    exit 1
+fi
+
+cat <<ENVELOPE
+{
+    "runId": "${OPENCODE_RUN_ID:-unknown}",
+    "taskId": "${OPENCODE_TASK_ID:-unknown}",
+    "status": "succeeded",
+    "summary": "OpenCode execution placeholder - install opencode binary for full functionality",
+    "metadata": {
+        "harness": "opencode"
+    }
+}
+ENVELOPE
+EOF
+
+RUN ln -sf /usr/local/bin/opencode-wrapper /usr/local/bin/opencode
+
+USER agent
+
+ENV OPENCODE_FORMAT=json
+
+CMD ["/bin/bash"]

@@ -1,0 +1,112 @@
+# AI Orchestrator - Zai Harness Image (GLM-5 via cc-mirror)
+# ZhipuAI GLM-5 harness configured through cc-mirror
+# Build: docker build -f Dockerfile.harness-zai -t ghcr.io/mariogk/harness-zai:latest .
+
+FROM ghcr.io/mariogk/ai-harness-base:latest
+
+LABEL org.opencontainers.image.source=https://github.com/mariogk/AgentsDashboard \
+      org.opencontainers.image.description="Zai (GLM-5) harness for AI Orchestrator" \
+      org.opencontainers.image.licenses=MIT
+
+USER root
+
+RUN npm install -g cc-mirror 2>/dev/null || echo "cc-mirror installation attempted"
+
+RUN mkdir -p /home/agent/.zai /home/agent/.config/zai && chown -R agent:agent /home/agent/.zai /home/agent/.config/zai
+
+RUN npx cc-mirror quick --provider zai --help 2>/dev/null || echo "cc-mirror help check completed"
+
+COPY --chmod=755 <<'EOF' /usr/local/bin/zai
+#!/bin/bash
+# Zai CLI wrapper for AI Orchestrator (GLM-5 via cc-mirror)
+
+set -e
+
+if [ -z "$Z_AI_API_KEY" ]; then
+    echo '{"status": "failed", "error": "Z_AI_API_KEY not set"}' >&2
+    exit 1
+fi
+
+PROMPT="${ZAI_PROMPT:-$PROMPT}"
+if [ -z "$PROMPT" ]; then
+    if [ $# -gt 0 ]; then
+        PROMPT="$*"
+    else
+        echo '{"status": "failed", "error": "No prompt provided"}' >&2
+        exit 1
+    fi
+fi
+
+MODEL="${ZAI_MODEL:-glm-5}"
+
+if command -v cc-mirror &> /dev/null; then
+    OUTPUT=$(cc-mirror run --provider zai --prompt "$PROMPT" 2>&1)
+    EXIT_CODE=$?
+else
+    RESPONSE=$(curl -s -X POST https://open.bigmodel.cn/api/paas/v4/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $Z_AI_API_KEY" \
+        -d "{
+            \"model\": \"$MODEL\",
+            \"messages\": [{\"role\": \"user\", \"content\": $(echo "$PROMPT" | jq -Rs .)}],
+            \"max_tokens\": 8192
+        }")
+    
+    if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+        cat <<ENVELOPE
+{
+    "runId": "${ZAI_RUN_ID:-unknown}",
+    "taskId": "${ZAI_TASK_ID:-unknown}",
+    "status": "failed",
+    "summary": "Zai API call failed",
+    "error": $(echo "$RESPONSE" | jq -r '.error.message // .error // "Unknown error"' | jq -Rs .)
+}
+ENVELOPE
+        exit 1
+    fi
+    
+    CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+    
+    cat <<ENVELOPE
+{
+    "runId": "${ZAI_RUN_ID:-unknown}",
+    "taskId": "${ZAI_TASK_ID:-unknown}",
+    "status": "succeeded",
+    "summary": "Zai (GLM-5) execution completed",
+    "metadata": {
+        "model": "$MODEL",
+        "contentLength": "${#CONTENT}",
+        "provider": "zhipuai"
+    }
+}
+ENVELOPE
+    exit 0
+fi
+
+if [ "$ZAI_OUTPUT_ENVELOPE" = "true" ]; then
+    cat <<ENVELOPE
+{
+    "runId": "${ZAI_RUN_ID:-unknown}",
+    "taskId": "${ZAI_TASK_ID:-unknown}",
+    "status": "$([ $EXIT_CODE -eq 0 ] && echo 'succeeded' || echo 'failed')",
+    "summary": "Zai execution via cc-mirror completed",
+    "error": "$([ $EXIT_CODE -ne 0 ] && echo "$OUTPUT" | head -1 | jq -Rs . || echo 'null')",
+    "metadata": {
+        "exitCode": $EXIT_CODE,
+        "outputLength": ${#OUTPUT}
+    }
+}
+ENVELOPE
+else
+    echo "$OUTPUT"
+fi
+EOF
+
+USER agent
+
+ENV ZAI_OUTPUT_ENVELOPE=true \
+    ZAI_MODEL=glm-5
+
+WORKDIR /workspace
+
+CMD ["/bin/bash"]

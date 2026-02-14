@@ -1,0 +1,725 @@
+@page "/providers"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Providers - AgentsDashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Provider Settings</MudText>
+
+<MudStack Spacing="4">
+    <MudPaper Class="pa-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">Repository Selection</MudText>
+        @if (_repositories.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No repositories found. Create a project and repository first.</MudAlert>
+        }
+        else
+        {
+            <MudSelect T="string" @bind-Value="_selectedRepositoryId" Label="Repository" Variant="Variant.Outlined"
+                       AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter"
+                       Placeholder="Select a repository to manage provider secrets"
+                       @bind-Value:after="OnRepositorySelectedAsync">
+                @foreach (var repo in _repositories)
+                {
+                    <MudSelectItem Value="@repo.Id">@repo.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_selectedRepositoryId))
+    {
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+            <MudTabPanel Text="API Keys" Icon="@Icons.Material.Filled.Key">
+                <MudStack Spacing="3">
+                    @foreach (var provider in _providers)
+                    {
+                        <MudStack Spacing="2">
+                            <MudStack Row AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.subtitle1" Style="font-weight: 500;">@provider.DisplayName</MudText>
+                                @if (provider.HasValue)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
+                                        Configured
+                                    </MudChip>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Last updated: @provider.UpdatedAt?.ToLocalTime().ToString("g")
+                                    </MudText>
+                                }
+                            </MudStack>
+                            <MudTextField @bind-Value="provider.Value"
+                                          Label="@provider.EnvVar"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          InputType="InputType.Password"
+                                          HelperText="@provider.Description"
+                                          Placeholder="Enter API key or token" />
+                            <MudStack Row Spacing="2">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.Save"
+                                           OnClick="() => SaveProviderSecretAsync(provider)"
+                                           Disabled="@string.IsNullOrWhiteSpace(provider.Value)">
+                                    Save @provider.DisplayName Secret
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined"
+                                           Color="Color.Info"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.NetworkCheck"
+                                           OnClick="() => TestConnectionAsync(provider)"
+                                           Disabled="@(!provider.HasValue && string.IsNullOrWhiteSpace(provider.Value) || provider.Testing)">
+                                    @if (provider.Testing)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate />
+                                        <span>Testing...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Test Connection</span>
+                                    }
+                                </MudButton>
+                            </MudStack>
+                        </MudStack>
+                        <MudDivider Class="my-2" />
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Codex" Icon="@Icons.Material.Filled.Code">
+                @RenderHarnessSettings("codex", "Codex", _codexModels)
+            </MudTabPanel>
+
+            <MudTabPanel Text="OpenCode" Icon="@Icons.Material.Filled.OpenInNew">
+                @RenderHarnessSettings("opencode", "OpenCode", _openCodeModels)
+            </MudTabPanel>
+
+            <MudTabPanel Text="Claude Code" Icon="@Icons.Material.Filled.Psychology">
+                @RenderHarnessSettings("claude-code", "Claude Code", _claudeModels)
+            </MudTabPanel>
+
+            <MudTabPanel Text="Z.ai" Icon="@Icons.Material.Filled.SmartToy">
+                @RenderHarnessSettings("zai", "Z.ai (GLM-5)", _zaiModels)
+            </MudTabPanel>
+        </MudTabs>
+    }
+
+    <MudText Typo="Typo.h5" Class="mt-6 mb-3">System Settings</MudText>
+    <MudPaper Class="pa-4" Elevation="2">
+        <MudStack Spacing="3">
+            <MudStack Row AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Medium" />
+                <MudText Typo="Typo.h6">Global Configuration</MudText>
+            </MudStack>
+
+            <MudDivider />
+
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_dockerAllowedImagesInput"
+                                  Label="Docker Allowed Images"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  HelperText="Comma-separated list of allowed Docker images (e.g., ubuntu:22.04, node:20-alpine)"
+                                  Placeholder="ubuntu:22.04, node:20, python:3.11" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="int"
+                                     @bind-Value="_retentionDaysLogs"
+                                     Label="Log Retention (days)"
+                                     Variant="Variant.Outlined"
+                                     Min="1"
+                                     Max="365"
+                                     HelperText="How long to keep run logs" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="int"
+                                     @bind-Value="_retentionDaysRuns"
+                                     Label="Run Retention (days)"
+                                     Variant="Variant.Outlined"
+                                     Min="1"
+                                     Max="365"
+                                     HelperText="How long to keep run history" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_victoriaMetricsEndpoint"
+                                  Label="VictoriaMetrics Endpoint"
+                                  Variant="Variant.Outlined"
+                                  HelperText="VictoriaMetrics server URL" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_vmUiEndpoint"
+                                  Label="VMUI Endpoint"
+                                  Variant="Variant.Outlined"
+                                  HelperText="VictoriaMetrics UI URL" />
+                </MudItem>
+            </MudGrid>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="SaveSystemSettingsAsync">
+                Save System Settings
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private class ProviderConfig
+    {
+        public required string Provider { get; set; }
+        public required string DisplayName { get; set; }
+        public required string EnvVar { get; set; }
+        public required string Description { get; set; }
+        public string Value { get; set; } = string.Empty;
+        public bool HasValue { get; set; }
+        public bool Testing { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+    }
+
+    private class RepositoryInfo
+    {
+        public required string Id { get; set; }
+        public required string Name { get; set; }
+    }
+
+    private class HarnessSettingsState
+    {
+        public string Harness { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
+        public double Temperature { get; set; } = 0.7;
+        public int MaxTokens { get; set; } = 4096;
+        public bool IsLoading { get; set; }
+        public bool IsSaving { get; set; }
+    }
+
+    private readonly List<ProviderConfig> _providers = [];
+    private readonly List<RepositoryInfo> _repositories = [];
+    private string _selectedRepositoryId = string.Empty;
+
+    private readonly Dictionary<string, HarnessSettingsState> _harnessSettings = new()
+    {
+        ["codex"] = new HarnessSettingsState { Harness = "codex" },
+        ["opencode"] = new HarnessSettingsState { Harness = "opencode" },
+        ["claude-code"] = new HarnessSettingsState { Harness = "claude-code" },
+        ["zai"] = new HarnessSettingsState { Harness = "zai" }
+    };
+
+    private readonly List<string> _codexModels = ["gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo", "o1", "o1-mini", "o1-preview"];
+    private readonly List<string> _openCodeModels = ["gpt-4o", "claude-3-5-sonnet-20241022", "gemini-2.0-flash", "llama-3.1-70b"];
+    private readonly List<string> _claudeModels = ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"];
+    private readonly List<string> _zaiModels = ["glm-5", "glm-4-plus", "glm-4-air", "glm-4-flash"];
+
+    private int _retentionDaysLogs = 30;
+    private int _retentionDaysRuns = 90;
+    private string _victoriaMetricsEndpoint = "http://localhost:8428";
+    private string _vmUiEndpoint = "http://localhost:8081";
+    private string _dockerAllowedImagesInput = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRepositoriesAsync();
+        await LoadSystemSettingsAsync();
+    }
+
+    private async Task LoadRepositoriesAsync()
+    {
+        try
+        {
+            var response = await Http.GetAsync("/api/projects");
+            if (response.IsSuccessStatusCode)
+            {
+                var projects = await response.Content.ReadFromJsonAsync<List<ProjectDocument>>() ?? [];
+                foreach (var project in projects)
+                {
+                    var reposResponse = await Http.GetAsync($"/api/projects/{project.Id}/repositories");
+                    if (reposResponse.IsSuccessStatusCode)
+                    {
+                        var repos = await reposResponse.Content.ReadFromJsonAsync<List<RepositoryDocument>>() ?? [];
+                        _repositories.AddRange(repos.Select(r => new RepositoryInfo
+                        {
+                            Id = r.Id,
+                            Name = $"{project.Name} / {r.Name}"
+                        }));
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load repositories: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadSystemSettingsAsync()
+    {
+        try
+        {
+            var response = await Http.GetAsync("/api/settings");
+            if (response.IsSuccessStatusCode)
+            {
+                var settings = await response.Content.ReadFromJsonAsync<SystemSettingsDocument>();
+                if (settings is not null)
+                {
+                    _retentionDaysLogs = settings.RetentionDaysLogs;
+                    _retentionDaysRuns = settings.RetentionDaysRuns;
+                    _victoriaMetricsEndpoint = settings.VictoriaMetricsEndpoint;
+                    _vmUiEndpoint = settings.VmUiEndpoint;
+                    _dockerAllowedImagesInput = string.Join(", ", settings.DockerAllowedImages);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load system settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OnRepositorySelectedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedRepositoryId))
+            return;
+
+        _providers.Clear();
+        _providers.AddRange(new[]
+        {
+            new ProviderConfig
+            {
+                Provider = "codex",
+                DisplayName = "Codex",
+                EnvVar = "CODEX_API_KEY",
+                Description = "OpenAI Codex API key for code generation"
+            },
+            new ProviderConfig
+            {
+                Provider = "opencode",
+                DisplayName = "OpenCode",
+                EnvVar = "OPENCODE_API_KEY",
+                Description = "OpenCode API key for open-source coding agents"
+            },
+            new ProviderConfig
+            {
+                Provider = "claude-code",
+                DisplayName = "Claude Code",
+                EnvVar = "ANTHROPIC_API_KEY",
+                Description = "Anthropic API key for Claude coding assistant"
+            },
+            new ProviderConfig
+            {
+                Provider = "zai",
+                DisplayName = "Z.ai",
+                EnvVar = "Z_AI_API_KEY",
+                Description = "Z.ai API key for AI agent orchestration"
+            },
+            new ProviderConfig
+            {
+                Provider = "github",
+                DisplayName = "GitHub",
+                EnvVar = "GH_TOKEN",
+                Description = "GitHub personal access token for repository operations"
+            }
+        });
+
+        await LoadProviderSecretsAsync();
+        await LoadAllHarnessSettingsAsync();
+    }
+
+    private async Task LoadProviderSecretsAsync()
+    {
+        try
+        {
+            var response = await Http.GetAsync($"/api/repositories/{_selectedRepositoryId}/secrets");
+            if (response.IsSuccessStatusCode)
+            {
+                var secrets = await response.Content.ReadFromJsonAsync<List<ProviderSecretSummary>>() ?? [];
+                foreach (var secret in secrets)
+                {
+                    var provider = _providers.FirstOrDefault(p => p.Provider == secret.Provider);
+                    if (provider is not null)
+                    {
+                        provider.HasValue = true;
+                        provider.UpdatedAt = secret.UpdatedAtUtc;
+                        provider.Value = string.Empty;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load provider secrets: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadAllHarnessSettingsAsync()
+    {
+        var tasks = _harnessSettings.Keys.Select(LoadHarnessSettingsAsync);
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task LoadHarnessSettingsAsync(string harness)
+    {
+        var state = _harnessSettings[harness];
+        state.IsLoading = true;
+
+        try
+        {
+            var response = await Http.GetAsync($"/api/repositories/{_selectedRepositoryId}/providers/{harness}");
+            if (response.IsSuccessStatusCode)
+            {
+                var settings = await response.Content.ReadFromJsonAsync<HarnessProviderSettingsResponse>();
+                if (settings is not null)
+                {
+                    state.Model = settings.Model ?? string.Empty;
+                    state.Temperature = settings.Temperature;
+                    state.MaxTokens = settings.MaxTokens;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load {harness} settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            state.IsLoading = false;
+        }
+    }
+
+    private async Task SaveHarnessSettingsAsync(string harness)
+    {
+        var state = _harnessSettings[harness];
+        state.IsSaving = true;
+
+        try
+        {
+            var request = new
+            {
+                Model = state.Model,
+                Temperature = state.Temperature,
+                MaxTokens = state.MaxTokens
+            };
+
+            var response = await Http.PutAsJsonAsync(
+                $"/api/repositories/{_selectedRepositoryId}/providers/{harness}",
+                request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"{harness} settings saved successfully", Severity.Success);
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save {harness} settings: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving {harness} settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            state.IsSaving = false;
+        }
+    }
+
+    private RenderFragment RenderHarnessSettings(string harness, string displayName, List<string> models) => __builder =>
+    {
+        var state = _harnessSettings[harness];
+
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", "mud-width-full");
+
+        __builder.OpenComponent<MudStack>(2);
+        __builder.AddAttribute(3, "Spacing", 4);
+
+        __builder.OpenRegion(4);
+
+        if (state.IsLoading)
+        {
+            __builder.OpenComponent<MudProgressLinear>(5);
+            __builder.AddAttribute(6, "Indeterminate", true);
+            __builder.CloseComponent();
+        }
+        else
+        {
+            __builder.OpenComponent<MudText>(7);
+            __builder.AddAttribute(8, "Typo", Typo.h6);
+            __builder.AddAttribute(9, "Class", "mb-2");
+            __builder.AddContent(10, $"{displayName} Configuration");
+            __builder.CloseComponent();
+
+            __builder.OpenComponent<MudDivider>(11);
+            __builder.CloseComponent();
+
+            __builder.OpenComponent<MudGrid>(12);
+            __builder.AddAttribute(13, "Class", "mt-3");
+
+            __builder.OpenComponent<MudItem>(14);
+            __builder.AddAttribute(15, "xs", 12);
+            __builder.AddAttribute(16, "md", 6);
+
+            __builder.OpenComponent<MudSelect<string>>(17);
+            __builder.AddAttribute(18, "T", typeof(string));
+            __builder.AddAttribute(19, "Label", "Model");
+            __builder.AddAttribute(20, "Variant", Variant.Outlined);
+            __builder.AddAttribute(21, "HelperText", "Select the AI model to use");
+            __builder.AddAttribute(22, "Class", "mud-width-full");
+            __builder.AddAttribute(23, "Value", state.Model);
+            __builder.AddAttribute(24, "ValueChanged", EventCallback.Factory.Create<string>(this, v => state.Model = v));
+
+            foreach (var model in models)
+            {
+                __builder.OpenComponent<MudSelectItem<string>>(25);
+                __builder.AddAttribute(26, "T", typeof(string));
+                __builder.AddAttribute(27, "Value", model);
+                __builder.CloseComponent();
+            }
+
+            __builder.CloseComponent();
+            __builder.CloseComponent();
+
+            __builder.OpenComponent<MudItem>(28);
+            __builder.AddAttribute(29, "xs", 12);
+            __builder.AddAttribute(30, "md", 6);
+
+            __builder.OpenComponent<MudNumericField<int>>(31);
+            __builder.AddAttribute(32, "T", typeof(int));
+            __builder.AddAttribute(33, "Label", "Max Tokens");
+            __builder.AddAttribute(34, "Variant", Variant.Outlined);
+            __builder.AddAttribute(35, "Min", 256);
+            __builder.AddAttribute(36, "Max", 128000);
+            __builder.AddAttribute(37, "HelperText", "Maximum tokens in response");
+            __builder.AddAttribute(38, "Class", "mud-width-full");
+            __builder.AddAttribute(39, "Value", state.MaxTokens);
+            __builder.AddAttribute(40, "ValueChanged", EventCallback.Factory.Create<int>(this, v => state.MaxTokens = v));
+            __builder.CloseComponent();
+
+            __builder.CloseComponent();
+
+            __builder.OpenComponent<MudItem>(41);
+            __builder.AddAttribute(42, "xs", 12);
+
+            __builder.OpenComponent<MudSlider<double>>(43);
+            __builder.AddAttribute(44, "T", typeof(double));
+            __builder.AddAttribute(45, "Label", $"Temperature: {state.Temperature:F2}");
+            __builder.AddAttribute(46, "Min", 0.0);
+            __builder.AddAttribute(47, "Max", 2.0);
+            __builder.AddAttribute(48, "Step", 0.1);
+            __builder.AddAttribute(47, "Class", "mud-width-full");
+            __builder.AddAttribute(48, "Value", state.Temperature);
+            __builder.AddAttribute(49, "ValueChanged", EventCallback.Factory.Create<double>(this, v => state.Temperature = v));
+            __builder.CloseComponent();
+
+            __builder.CloseComponent();
+
+            __builder.OpenComponent<MudItem>(50);
+            __builder.AddAttribute(51, "xs", 12);
+
+            __builder.OpenComponent<MudButton>(52);
+            __builder.AddAttribute(53, "Variant", Variant.Filled);
+            __builder.AddAttribute(54, "Color", Color.Primary);
+            __builder.AddAttribute(55, "StartIcon", Icons.Material.Filled.Save);
+            __builder.AddAttribute(56, "Disabled", state.IsSaving);
+            __builder.AddAttribute(57, "OnClick", EventCallback.Factory.Create<MouseEventArgs>(this, () => SaveHarnessSettingsAsync(harness)));
+
+            if (state.IsSaving)
+            {
+                __builder.OpenComponent<MudProgressCircular>(58);
+                __builder.AddAttribute(59, "Size", Size.Small);
+                __builder.AddAttribute(60, "Indeterminate", true);
+                __builder.CloseComponent();
+                __builder.AddContent(61, " Saving...");
+            }
+            else
+            {
+                __builder.AddContent(62, "Save Settings");
+            }
+
+            __builder.CloseComponent();
+            __builder.CloseComponent();
+
+            __builder.CloseComponent();
+        }
+
+        __builder.CloseRegion();
+        __builder.CloseComponent();
+        __builder.CloseElement();
+    };
+
+    private async Task SaveProviderSecretAsync(ProviderConfig provider)
+    {
+        if (string.IsNullOrWhiteSpace(provider.Value))
+        {
+            Snackbar.Add("Secret value cannot be empty", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            var request = new { SecretValue = provider.Value };
+            var response = await Http.PutAsJsonAsync(
+                $"/api/repositories/{_selectedRepositoryId}/secrets/{provider.Provider}",
+                request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                provider.HasValue = true;
+                provider.UpdatedAt = DateTime.UtcNow;
+                provider.Value = string.Empty;
+                Snackbar.Add($"{provider.DisplayName} secret saved successfully", Severity.Success);
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save {provider.DisplayName} secret: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving {provider.DisplayName} secret: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task TestConnectionAsync(ProviderConfig provider)
+    {
+        provider.Testing = true;
+        StateHasChanged();
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(provider.Value))
+            {
+                var request = new { Provider = provider.Provider, SecretValue = provider.Value };
+                var response = await Http.PostAsJsonAsync("/api/providers/validate", request);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<ValidationResult>();
+                    if (result is not null)
+                    {
+                        Snackbar.Add(
+                            $"{provider.DisplayName}: {result.Message}",
+                            result.Success ? Severity.Success : Severity.Error);
+                    }
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Validation request failed: {error}", Severity.Error);
+                }
+            }
+            else if (provider.HasValue)
+            {
+                var response = await Http.PostAsync(
+                    $"/api/repositories/{_selectedRepositoryId}/secrets/{provider.Provider}/test",
+                    null);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<ValidationResult>();
+                    if (result is not null)
+                    {
+                        Snackbar.Add(
+                            $"{provider.DisplayName}: {result.Message}",
+                            result.Success ? Severity.Success : Severity.Error);
+                    }
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Validation request failed: {error}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error testing {provider.DisplayName}: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            provider.Testing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveSystemSettingsAsync()
+    {
+        try
+        {
+            var dockerImages = _dockerAllowedImagesInput
+                .Split(',')
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            var request = new
+            {
+                DockerAllowedImages = dockerImages,
+                RetentionDaysLogs = _retentionDaysLogs,
+                RetentionDaysRuns = _retentionDaysRuns,
+                VictoriaMetricsEndpoint = _victoriaMetricsEndpoint,
+                VmUiEndpoint = _vmUiEndpoint
+            };
+
+            var response = await Http.PutAsJsonAsync("/api/settings", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("System settings saved successfully", Severity.Success);
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to save system settings: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving system settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private class ProviderSecretSummary
+    {
+        public required string Provider { get; set; }
+        public DateTime UpdatedAtUtc { get; set; }
+    }
+
+    private class ProjectDocument
+    {
+        public required string Id { get; set; }
+        public required string Name { get; set; }
+    }
+
+    private class RepositoryDocument
+    {
+        public required string Id { get; set; }
+        public required string Name { get; set; }
+    }
+
+    private class SystemSettingsDocument
+    {
+        public List<string> DockerAllowedImages { get; set; } = [];
+        public int RetentionDaysLogs { get; set; } = 30;
+        public int RetentionDaysRuns { get; set; } = 90;
+        public string VictoriaMetricsEndpoint { get; set; } = "http://localhost:8428";
+        public string VmUiEndpoint { get; set; } = "http://localhost:8081";
+    }
+
+    private class ValidationResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+    }
+
+    private class HarnessProviderSettingsResponse
+    {
+        public string? Model { get; set; }
+        public double Temperature { get; set; } = 0.7;
+        public int MaxTokens { get; set; } = 4096;
+    }
+}

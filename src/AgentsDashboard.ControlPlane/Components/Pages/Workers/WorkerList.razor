@@ -1,0 +1,78 @@
+@page "/workers"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+
+<PageTitle>Workers - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Workers</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">
+        Refresh
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate />
+}
+else if (_workers.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">No workers have registered yet. Workers register via heartbeat when they start.</MudAlert>
+}
+else
+{
+    <MudPaper Elevation="2">
+        <MudTable Items="@_workers" Hover Dense Striped>
+            <HeaderContent>
+                <MudTh>Worker ID</MudTh>
+                <MudTh>Endpoint</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Slots</MudTh>
+                <MudTh>Utilization</MudTh>
+                <MudTh>Last Heartbeat</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Worker ID"><b>@context.WorkerId</b></MudTd>
+                <MudTd DataLabel="Endpoint" Style="font-family: monospace; font-size: 0.85rem;">
+                    @context.Endpoint
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Online ? Color.Success : Color.Error)">
+                        @(context.Online ? "Online" : "Offline")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Slots">@context.ActiveSlots / @context.MaxSlots</MudTd>
+                <MudTd DataLabel="Utilization" Style="min-width: 150px;">
+                    <MudProgressLinear Color="@GetUtilColor(context.ActiveSlots, context.MaxSlots)"
+                                       Value="@(context.MaxSlots > 0 ? (double)context.ActiveSlots / context.MaxSlots * 100 : 0)"
+                                       Rounded Size="Size.Medium" />
+                </MudTd>
+                <MudTd DataLabel="Last Heartbeat">@context.LastHeartbeatUtc.ToString("g") UTC</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private List<WorkerRegistration> _workers = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _workers = await Store.ListWorkersAsync(CancellationToken.None);
+        _loading = false;
+    }
+
+    private static Color GetUtilColor(int used, int max)
+    {
+        if (max == 0) return Color.Default;
+        var ratio = (double)used / max;
+        return ratio > 0.8 ? Color.Error : ratio > 0.5 ? Color.Warning : Color.Success;
+    }
+}

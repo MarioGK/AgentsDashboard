@@ -1,0 +1,726 @@
+@page "/workflows/new"
+@attribute [Authorize]
+@page "/workflows/{Id}"
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject NavigationManager Navigation
+@inject AgentsDashboard.ControlPlane.Services.WorkflowExecutor WorkflowExecutor
+
+<PageTitle>@(IsNew ? "New Workflow" : "Edit Workflow") - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/workflows" />
+    <MudText Typo="Typo.h4">@(IsNew ? "New Workflow" : "Edit Workflow")</MudText>
+    <MudSpacer />
+    <MudButtonGroup Variant="Variant.Outlined">
+        <MudButton Color="Color.Default" StartIcon="@Icons.Material.Filled.Check" OnClick="ValidateWorkflow">
+            Validate
+        </MudButton>
+        <MudButton Color="Color.Secondary" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="ExecuteWorkflowAsync" Disabled="@IsNew">
+            Execute
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="Save">
+            Save
+        </MudButton>
+    </MudButtonGroup>
+</MudStack>
+
+@if (!string.IsNullOrEmpty(_validationMessage))
+{
+    <MudAlert Severity="@_validationSeverity" Class="mb-4">
+        @_validationMessage
+    </MudAlert>
+}
+
+<MudGrid Class="ma-0 pa-0" Style="height: calc(100vh - 200px);">
+    <MudItem xs="12" md="2" Class="pa-2">
+        <MudPaper Elevation="2" Class="pa-4" Style="height: 100%;">
+            <MudText Typo="Typo.h6" Class="mb-4">Stage Palette</MudText>
+            <MudDivider Class="mb-4" />
+            <MudStack Spacing="2">
+                @foreach (var stageType in _stageTypes)
+                {
+                    <MudCard Elevation="1" Class="cursor-pointer stage-palette-item" 
+                             @onclick="() => AddStageFromPalette(stageType.Type)"
+                             @ondragstart="@((DragEventArgs e) => OnDragStart(e, stageType.Type))"
+                             Draggable="true">
+                        <MudCardContent Class="pa-3">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@stageType.Icon" Color="@stageType.Color" Size="Size.Large" />
+                                <div>
+                                    <MudText Typo="Typo.body1">@stageType.Label</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@stageType.Description</MudText>
+                                </div>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                }
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="7" Class="pa-2">
+        <MudPaper Elevation="2" Class="pa-4" Style="height: 100%; overflow-y: auto;">
+            <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+                <MudTextField @bind-Value="_name" Label="Workflow Name" Variant="Variant.Outlined"
+                              Required RequiredError="Name is required" Class="mr-4" Style="max-width: 300px;" />
+<MudSelect T="string" Value="_repositoryId" 
+           Label="Repository" Variant="Variant.Outlined" Style="min-width: 200px;"
+           ValueChanged="@OnRepositoryChanged">
+                    @foreach (var r in _repositories)
+                    {
+                        <MudSelectItem Value="@r.Id">@r.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSpacer />
+                <MudSwitch @bind-Value="_enabled" Label="Enabled" Color="Color.Primary" />
+            </MudStack>
+
+            <MudDivider Class="mb-4" />
+
+            <div @ondragover:preventDefault @ondragover="OnDragOver" @ondrop="OnDrop" Class="workflow-canvas">
+                @if (_stages.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info">
+                        Drag stages from the palette or click a stage type to add.
+                    </MudAlert>
+                }
+                else
+                {
+                    @for (var i = 0; i < _stages.Count; i++)
+                    {
+                        var index = i;
+                        var stage = _stages[i];
+                        
+                        <div class="stage-container">
+                            @if (index > 0)
+                            {
+                                <div class="stage-connector">
+                                    <div class="connector-line"></div>
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Disabled />
+                                </div>
+                            }
+                             <MudCard Elevation="@(_selectedStageIndex == index ? 4 : 2)"
+                                     Class="@(_selectedStageIndex == index ? "stage-card selected" : "stage-card")"
+                                     @onclick="() => SelectStage(index)"
+                                     @ondragstart="@((DragEventArgs e) => OnStageDragStart(e, index))"
+                                     @ondragover:preventDefault
+                                     @ondrop="@((DragEventArgs e) => OnStageDrop(e, index))"
+                                     Draggable="true">
+                                <MudCardContent>
+                                    <MudStack Row AlignItems="AlignItems.Center">
+                                        <MudIcon Icon="@GetStageIcon(stage.Type)" Color="@GetStageColor(stage.Type)" Class="mr-3" />
+                                        <MudText Typo="Typo.subtitle1">@(string.IsNullOrEmpty(stage.Name) ? $"Stage {index + 1}" : stage.Name)</MudText>
+                                        <MudSpacer />
+                                        <MudChip T="string" Size="Size.Small" Color="@GetStageColor(stage.Type)">
+                                            @stage.Type
+                                        </MudChip>
+                                    </MudStack>
+                                    <div class="mt-2">
+                                        @switch (stage.Type)
+                                        {
+                                            case WorkflowStageType.Task:
+                                                var task = _tasks.FirstOrDefault(t => t.Id == stage.TaskId);
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    Task: @(task?.Name ?? "Not selected")
+                                                </MudText>
+                                                break;
+                                            case WorkflowStageType.Delay:
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    Duration: @stage.DelaySeconds seconds
+                                                </MudText>
+                                                break;
+                                            case WorkflowStageType.Approval:
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    Approver: @(stage.ApproverRole ?? "Not set")
+                                                </MudText>
+                                                break;
+                                            case WorkflowStageType.Parallel:
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @(stage.ParallelStageIds?.Count ?? 0) parallel stages
+                                                </MudText>
+                                                break;
+                                        }
+                                    </div>
+                                </MudCardContent>
+                                <MudCardActions>
+                                    @if (index > 0)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" 
+                                                       OnClick="() => MoveStageUp(index)" />
+                                    }
+                                    @if (index < _stages.Count - 1)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
+                                                       OnClick="() => MoveStageDown(index)" />
+                                    }
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                                   OnClick="() => RemoveStage(index)" />
+                                </MudCardActions>
+                            </MudCard>
+                        </div>
+                    }
+                }
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="3" Class="pa-2">
+        <MudPaper Elevation="2" Class="pa-4" Style="height: 100%; overflow-y: auto;">
+            @if (_selectedStageIndex >= 0 && _selectedStageIndex < _stages.Count)
+            {
+                var selectedStage = _stages[_selectedStageIndex];
+                <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+                    <MudText Typo="Typo.h6">Stage Properties</MudText>
+                    <MudSpacer />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                   OnClick="RemoveSelectedStage" />
+                </MudStack>
+                <MudDivider Class="mb-4" />
+
+                <MudTextField @bind-Value="selectedStage.Name" Label="Stage Name" Variant="Variant.Outlined"
+                              Class="mb-4" />
+
+                <MudSelect @bind-Value="selectedStage.Type" Label="Stage Type" Variant="Variant.Outlined"
+                           Class="mb-4">
+                    <MudSelectItem Value="@WorkflowStageType.Task">Task</MudSelectItem>
+                    <MudSelectItem Value="@WorkflowStageType.Approval">Approval</MudSelectItem>
+                    <MudSelectItem Value="@WorkflowStageType.Delay">Delay</MudSelectItem>
+                    <MudSelectItem Value="@WorkflowStageType.Parallel">Parallel</MudSelectItem>
+                </MudSelect>
+
+                @switch (selectedStage.Type)
+                {
+                    case WorkflowStageType.Task:
+                        <MudSelect @bind-Value="selectedStage.TaskId" Label="Task" Variant="Variant.Outlined"
+                                   Clearable Class="mb-4">
+                            @foreach (var t in _tasks)
+                            {
+                                <MudSelectItem Value="@t.Id">@t.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudNumericField @bind-Value="selectedStage.TimeoutSeconds" Label="Timeout (seconds)"
+                                         Variant="Variant.Outlined" Min="30" Max="3600" Class="mb-4" />
+                        <MudNumericField @bind-Value="selectedStage.RetryAttempts" Label="Retry Attempts"
+                                         Variant="Variant.Outlined" Min="0" Max="5" Class="mb-4" />
+                        break;
+
+                    case WorkflowStageType.Approval:
+                        <MudSelect @bind-Value="selectedStage.ApproverRole" Label="Approver Role"
+                                   Variant="Variant.Outlined" Clearable Class="mb-4">
+                            <MudSelectItem Value="@("viewer")">Viewer</MudSelectItem>
+                            <MudSelectItem Value="@("operator")">Operator</MudSelectItem>
+                            <MudSelectItem Value="@("admin")">Admin</MudSelectItem>
+                        </MudSelect>
+                        <MudNumericField @bind-Value="selectedStage.TimeoutSeconds" Label="Timeout (seconds)"
+                                         Variant="Variant.Outlined" Min="60" Max="86400" Class="mb-4" />
+                        break;
+
+                    case WorkflowStageType.Delay:
+                        <MudNumericField @bind-Value="selectedStage.DelaySeconds" Label="Delay (seconds)"
+                                         Variant="Variant.Outlined" Min="1" Max="86400" Class="mb-4" />
+                        break;
+
+                    case WorkflowStageType.Parallel:
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Parallel Branches</MudText>
+                        @if (selectedStage.ParallelStageIds != null)
+                        {
+                            @for (var i = 0; i < selectedStage.ParallelStageIds.Count; i++)
+                            {
+                                var idx = i;
+                                <MudStack Row Class="mb-2">
+                                    <MudTextField @bind-Value="selectedStage.ParallelStageIds[idx]"
+                                                  Placeholder="Stage ID" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Remove" Color="Color.Error" Size="Size.Small"
+                                                   OnClick="() => RemoveParallelBranch(selectedStage, idx)" />
+                                </MudStack>
+                            }
+                        }
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="() => AddParallelBranch(selectedStage)">
+                            Add Branch
+                        </MudButton>
+                        break;
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.h6" Class="mb-4">Properties</MudText>
+                <MudDivider Class="mb-4" />
+                <MudAlert Severity="Severity.Info">
+                    Select a stage to edit its properties.
+                </MudAlert>
+                <div class="mt-4">
+                    <MudTextField @bind-Value="_description" Label="Description" Variant="Variant.Outlined"
+                                  Lines="3" />
+                </div>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<style>
+    .workflow-canvas {
+        min-height: 400px;
+        padding: 16px;
+        background: var(--mud-palette-background-grey);
+        border-radius: 8px;
+    }
+    
+    .stage-container {
+        margin-bottom: 8px;
+    }
+    
+    .stage-card {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
+    }
+    
+    .stage-card:hover {
+        border-color: var(--mud-palette-primary);
+    }
+    
+    .stage-card.selected {
+        border-color: var(--mud-palette-primary);
+        background: var(--mud-palette-primary-hover);
+    }
+    
+    .stage-connector {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px 0;
+    }
+    
+    .connector-line {
+        width: 2px;
+        height: 24px;
+        background: var(--mud-palette-primary);
+    }
+    
+    .stage-palette-item {
+        cursor: grab;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .stage-palette-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .stage-palette-item:active {
+        cursor: grabbing;
+    }
+    
+    .cursor-pointer {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private bool IsNew => string.IsNullOrEmpty(Id) || Id == "new";
+
+    private string _name = "";
+    private string _repositoryId = "";
+    private string _description = "";
+    private bool _enabled = true;
+
+    private string? _validationMessage;
+    private Severity _validationSeverity = Severity.Info;
+
+    private int _selectedStageIndex = -1;
+    private int? _draggedStageIndex;
+    private WorkflowStageType? _draggedPaletteType;
+
+    private List<AgentsDashboard.Contracts.Domain.RepositoryDocument> _repositories = [];
+    private List<AgentsDashboard.Contracts.Domain.TaskDocument> _tasks = [];
+
+    private List<StageItem> _stages = [];
+
+    private readonly List<StageTypeInfo> _stageTypes =
+    [
+        new(WorkflowStageType.Task, "Task", "Execute a task", Icons.Material.Filled.PlayArrow, Color.Primary),
+        new(WorkflowStageType.Approval, "Approval", "Wait for approval", Icons.Material.Filled.CheckCircle, Color.Success),
+        new(WorkflowStageType.Delay, "Delay", "Wait for duration", Icons.Material.Filled.Schedule, Color.Warning),
+        new(WorkflowStageType.Parallel, "Parallel", "Run stages in parallel", Icons.Material.Filled.CallSplit, Color.Info),
+    ];
+
+    private record StageTypeInfo(WorkflowStageType Type, string Label, string Description, string Icon, Color Color);
+
+    private class StageItem
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string Name { get; set; } = "";
+        public WorkflowStageType Type { get; set; } = WorkflowStageType.Task;
+        public string? TaskId { get; set; }
+        public int? DelaySeconds { get; set; } = 60;
+        public int? TimeoutSeconds { get; set; } = 600;
+        public int? RetryAttempts { get; set; } = 1;
+        public List<string>? ParallelStageIds { get; set; } = [];
+        public string? ApproverRole { get; set; }
+        public int Order { get; set; }
+    }
+
+    private string GetStageIcon(WorkflowStageType type) => type switch
+    {
+        WorkflowStageType.Task => Icons.Material.Filled.PlayArrow,
+        WorkflowStageType.Approval => Icons.Material.Filled.CheckCircle,
+        WorkflowStageType.Delay => Icons.Material.Filled.Schedule,
+        WorkflowStageType.Parallel => Icons.Material.Filled.CallSplit,
+        _ => Icons.Material.Filled.Info,
+    };
+
+    private Color GetStageColor(WorkflowStageType type) => type switch
+    {
+        WorkflowStageType.Task => Color.Primary,
+        WorkflowStageType.Approval => Color.Success,
+        WorkflowStageType.Delay => Color.Warning,
+        WorkflowStageType.Parallel => Color.Info,
+        _ => Color.Default,
+    };
+
+    private void SelectStage(int index)
+    {
+        _selectedStageIndex = index;
+    }
+
+    private void AddStageFromPalette(WorkflowStageType type)
+    {
+        var stage = new StageItem
+        {
+            Type = type,
+            Name = $"{type} Stage {_stages.Count + 1}",
+            Order = _stages.Count,
+        };
+        
+        if (type == WorkflowStageType.Parallel)
+        {
+            stage.ParallelStageIds = [];
+        }
+        
+        _stages.Add(stage);
+        _selectedStageIndex = _stages.Count - 1;
+    }
+
+    private void RemoveStage(int index)
+    {
+        if (index >= 0 && index < _stages.Count)
+        {
+            _stages.RemoveAt(index);
+            ReorderStages();
+            if (_selectedStageIndex >= _stages.Count)
+            {
+                _selectedStageIndex = _stages.Count - 1;
+            }
+        }
+    }
+
+    private void RemoveSelectedStage()
+    {
+        if (_selectedStageIndex >= 0 && _selectedStageIndex < _stages.Count)
+        {
+            _stages.RemoveAt(_selectedStageIndex);
+            ReorderStages();
+            _selectedStageIndex = Math.Min(_selectedStageIndex, _stages.Count - 1);
+        }
+    }
+
+    private void MoveStageUp(int index)
+    {
+        if (index > 0)
+        {
+            (_stages[index], _stages[index - 1]) = (_stages[index - 1], _stages[index]);
+            ReorderStages();
+            if (_selectedStageIndex == index)
+            {
+                _selectedStageIndex--;
+            }
+            else if (_selectedStageIndex == index - 1)
+            {
+                _selectedStageIndex++;
+            }
+        }
+    }
+
+    private void MoveStageDown(int index)
+    {
+        if (index < _stages.Count - 1)
+        {
+            (_stages[index], _stages[index + 1]) = (_stages[index + 1], _stages[index]);
+            ReorderStages();
+            if (_selectedStageIndex == index)
+            {
+                _selectedStageIndex++;
+            }
+            else if (_selectedStageIndex == index + 1)
+            {
+                _selectedStageIndex--;
+            }
+        }
+    }
+
+    private void ReorderStages()
+    {
+        for (var i = 0; i < _stages.Count; i++)
+        {
+            _stages[i].Order = i;
+        }
+    }
+
+    private void AddParallelBranch(StageItem stage)
+    {
+        stage.ParallelStageIds ??= [];
+        stage.ParallelStageIds.Add("");
+    }
+
+    private void RemoveParallelBranch(StageItem stage, int index)
+    {
+        if (stage.ParallelStageIds != null && index >= 0 && index < stage.ParallelStageIds.Count)
+        {
+            stage.ParallelStageIds.RemoveAt(index);
+        }
+    }
+
+    private void OnDragStart(DragEventArgs e, WorkflowStageType type)
+    {
+        _draggedPaletteType = type;
+        _draggedStageIndex = null;
+    }
+
+    private void OnStageDragStart(DragEventArgs e, int index)
+    {
+        _draggedStageIndex = index;
+        _draggedPaletteType = null;
+    }
+
+    private void OnDragOver(DragEventArgs _)
+    {
+    }
+
+    private void OnDrop(DragEventArgs e)
+    {
+        if (_draggedPaletteType.HasValue)
+        {
+            AddStageFromPalette(_draggedPaletteType.Value);
+        }
+        _draggedPaletteType = null;
+        _draggedStageIndex = null;
+    }
+
+    private void OnStageDrop(DragEventArgs e, int targetIndex)
+    {
+        if (_draggedPaletteType.HasValue)
+        {
+            var stage = new StageItem
+            {
+                Type = _draggedPaletteType.Value,
+                Name = $"{_draggedPaletteType.Value} Stage {_stages.Count + 1}",
+                Order = targetIndex,
+            };
+            
+            if (_draggedPaletteType.Value == WorkflowStageType.Parallel)
+            {
+                stage.ParallelStageIds = [];
+            }
+            
+            _stages.Insert(targetIndex, stage);
+            ReorderStages();
+            _selectedStageIndex = targetIndex;
+        }
+        else if (_draggedStageIndex.HasValue && _draggedStageIndex != targetIndex)
+        {
+            var stage = _stages[_draggedStageIndex.Value];
+            _stages.RemoveAt(_draggedStageIndex.Value);
+            
+            var newIndex = targetIndex;
+            if (_draggedStageIndex < targetIndex)
+                newIndex--;
+            
+            _stages.Insert(newIndex, stage);
+            ReorderStages();
+            _selectedStageIndex = newIndex;
+        }
+        
+        _draggedPaletteType = null;
+        _draggedStageIndex = null;
+    }
+
+    private async Task OnRepositoryChanged(string value)
+    {
+        _repositoryId = value;
+        if (!string.IsNullOrEmpty(_repositoryId))
+        {
+            _tasks = await Store.ListTasksAsync(_repositoryId, CancellationToken.None);
+        }
+        else
+        {
+            _tasks.Clear();
+        }
+    }
+
+    private void ValidateWorkflow()
+    {
+        _validationMessage = null;
+        
+        if (string.IsNullOrWhiteSpace(_name))
+        {
+            _validationMessage = "Workflow name is required.";
+            _validationSeverity = Severity.Error;
+            return;
+        }
+
+        if (_stages.Count == 0)
+        {
+            _validationMessage = "At least one stage is required.";
+            _validationSeverity = Severity.Error;
+            return;
+        }
+
+        for (var i = 0; i < _stages.Count; i++)
+        {
+            var stage = _stages[i];
+            
+            if (string.IsNullOrWhiteSpace(stage.Name))
+            {
+                _validationMessage = $"Stage {i + 1}: Name is required.";
+                _validationSeverity = Severity.Error;
+                return;
+            }
+
+            switch (stage.Type)
+            {
+                case WorkflowStageType.Task when string.IsNullOrEmpty(stage.TaskId):
+                    _validationMessage = $"Stage '{stage.Name}': Task must be selected.";
+                    _validationSeverity = Severity.Error;
+                    return;
+                case WorkflowStageType.Approval when string.IsNullOrEmpty(stage.ApproverRole):
+                    _validationMessage = $"Stage '{stage.Name}': Approver role must be selected.";
+                    _validationSeverity = Severity.Error;
+                    return;
+                case WorkflowStageType.Delay when (!stage.DelaySeconds.HasValue || stage.DelaySeconds < 1):
+                    _validationMessage = $"Stage '{stage.Name}': Delay duration must be at least 1 second.";
+                    _validationSeverity = Severity.Error;
+                    return;
+            }
+        }
+
+        _validationMessage = "Workflow is valid.";
+        _validationSeverity = Severity.Success;
+    }
+
+    private async Task ExecuteWorkflowAsync()
+    {
+        if (IsNew) return;
+
+        try
+        {
+            var workflow = await Store.GetWorkflowAsync(Id!, CancellationToken.None);
+            if (workflow is null) return;
+
+            var repo = await Store.GetRepositoryAsync(workflow.RepositoryId, CancellationToken.None);
+            if (repo is null) return;
+
+            var projects = await Store.ListProjectsAsync(CancellationToken.None);
+            var project = projects.FirstOrDefault(p => p.Id == repo.ProjectId);
+            if (project is null) return;
+
+            await WorkflowExecutor.ExecuteWorkflowAsync(workflow, project.Id, CancellationToken.None);
+            
+            _validationMessage = "Workflow execution started.";
+            _validationSeverity = Severity.Success;
+        }
+        catch (Exception ex)
+        {
+            _validationMessage = $"Failed to execute workflow: {ex.Message}";
+            _validationSeverity = Severity.Error;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var projects = await Store.ListProjectsAsync(CancellationToken.None);
+        foreach (var p in projects)
+        {
+            var repos = await Store.ListRepositoriesAsync(p.Id, CancellationToken.None);
+            _repositories.AddRange(repos);
+        }
+
+        if (!IsNew)
+        {
+            var workflow = await Store.GetWorkflowAsync(Id!, CancellationToken.None);
+            if (workflow is not null)
+            {
+                _name = workflow.Name;
+                _description = workflow.Description;
+                _repositoryId = workflow.RepositoryId;
+                _enabled = workflow.Enabled;
+                _stages.Clear();
+                _stages.AddRange(workflow.Stages.Select(s => new StageItem
+                {
+                    Id = s.Id,
+                    Name = s.Name,
+                    Type = s.Type,
+                    TaskId = s.TaskId,
+                    DelaySeconds = s.DelaySeconds,
+                    ParallelStageIds = s.ParallelStageIds?.ToList(),
+                    ApproverRole = s.ApproverRole,
+                    Order = s.Order,
+                }));
+            }
+        }
+
+        if (!string.IsNullOrEmpty(_repositoryId))
+        {
+            _tasks = await Store.ListTasksAsync(_repositoryId, CancellationToken.None);
+        }
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_name)) return;
+
+        var stages = _stages.Select(s => new AgentsDashboard.Contracts.Domain.WorkflowStageConfig
+        {
+            Id = s.Id,
+            Name = s.Name,
+            Type = s.Type,
+            TaskId = s.TaskId,
+            DelaySeconds = s.DelaySeconds,
+            ParallelStageIds = s.ParallelStageIds,
+            ApproverRole = s.ApproverRole,
+            Order = s.Order,
+        }).ToList();
+
+        if (IsNew)
+        {
+            var workflow = new AgentsDashboard.Contracts.Domain.WorkflowDocument
+            {
+                RepositoryId = _repositoryId,
+                Name = _name,
+                Description = _description,
+                Stages = stages,
+                Enabled = _enabled,
+            };
+            var created = await Store.CreateWorkflowAsync(workflow, CancellationToken.None);
+            Navigation.NavigateTo($"/workflows/{created.Id}");
+        }
+        else
+        {
+            var existing = await Store.GetWorkflowAsync(Id!, CancellationToken.None);
+            if (existing is not null)
+            {
+                existing.Name = _name;
+                existing.Description = _description;
+                existing.RepositoryId = _repositoryId;
+                existing.Stages = stages;
+                existing.Enabled = _enabled;
+                await Store.UpdateWorkflowAsync(Id!, existing, CancellationToken.None);
+                _validationMessage = "Workflow saved successfully.";
+                _validationSeverity = Severity.Success;
+            }
+        }
+    }
+}

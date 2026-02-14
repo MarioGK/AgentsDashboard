@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+option csharp_namespace = "AgentsDashboard.Contracts.Worker";
+
+package worker;
+
+service WorkerGateway {
+  rpc DispatchJob (DispatchJobRequest) returns (DispatchJobReply);
+  rpc CancelJob (CancelJobRequest) returns (CancelJobReply);
+  rpc SubscribeEvents (SubscribeEventsRequest) returns (stream JobEventReply);
+  rpc Heartbeat (HeartbeatRequest) returns (HeartbeatReply);
+}
+
+message DispatchJobRequest {
+  string run_id = 1;
+  string project_id = 2;
+  string repository_id = 3;
+  string task_id = 4;
+  string harness = 5;
+  string command = 6;
+  string prompt = 7;
+  map<string, string> env = 8;
+  int32 timeout_seconds = 9;
+  int32 attempt = 10;
+  map<string, string> container_labels = 11;
+  double sandbox_profile_cpu_limit = 12;
+  string sandbox_profile_memory_limit = 13;
+  bool sandbox_profile_network_disabled = 14;
+  bool sandbox_profile_read_only_root_fs = 15;
+  string git_url = 16;
+  string workspace_path = 17;
+  int32 artifact_policy_max_artifacts = 18;
+  int64 artifact_policy_max_total_size_bytes = 19;
+}
+
+message DispatchJobReply {
+  bool accepted = 1;
+  string reason = 2;
+}
+
+message CancelJobRequest {
+  string run_id = 1;
+}
+
+message CancelJobReply {
+  bool accepted = 1;
+}
+
+message SubscribeEventsRequest {}
+
+message JobEventReply {
+  string run_id = 1;
+  string kind = 2;
+  string message = 3;
+  string payload_json = 4;
+  int64 timestamp_unix_ms = 5;
+}
+
+message HeartbeatRequest {
+  string worker_id = 1;
+  int32 active_slots = 2;
+  int32 max_slots = 3;
+}
+
+message HeartbeatReply {
+  bool acknowledged = 1;
+}

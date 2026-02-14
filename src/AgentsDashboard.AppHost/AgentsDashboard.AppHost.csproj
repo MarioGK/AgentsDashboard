@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.1.1">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentsDashboard.ControlPlane\AgentsDashboard.ControlPlane.csproj" />
+    <ProjectReference Include="..\AgentsDashboard.WorkerGateway\AgentsDashboard.WorkerGateway.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>b6adfd72-2a38-4506-a03a-99e147b6fc6e</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

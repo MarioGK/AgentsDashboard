@@ -1,0 +1,264 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION_PATH: 'src/AgentsDashboard.slnx'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: 'preview'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            ~/.dotnet/tools
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            src/**/bin/Release
+            src/**/obj/Release
+          retention-days: 1
+
+  test-unit:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: 'preview'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            ~/.dotnet/tools
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Run unit tests
+        run: |
+          dotnet test ${{ env.SOLUTION_PATH }} \
+            --configuration Release \
+            --no-restore \
+            --filter "FullyQualifiedName!~IntegrationTests&FullyQualifiedName!~PlaywrightTests" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory TestResults/unit \
+            --logger "trx;LogFileName=unit-tests.trx" \
+            --logger "GitHubActions;summary.includeSource=true"
+
+      - name: Upload unit test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: TestResults/unit/**/*.trx
+          retention-days: 7
+
+      - name: Generate coverage report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.4.5
+        with:
+          reports: 'TestResults/unit/**/coverage.cobertura.xml'
+          targetdir: 'CoverageReport/unit'
+          reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
+          verbosity: 'Warning'
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage-report
+          path: CoverageReport/unit
+          retention-days: 7
+
+  test-integration:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MongoDB__ConnectionString: mongodb://localhost:27017
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: 'preview'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            ~/.dotnet/tools
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Run integration tests
+        run: |
+          dotnet test tests/AgentsDashboard.IntegrationTests \
+            --configuration Release \
+            --no-restore \
+            --collect:"XPlat Code Coverage" \
+            --results-directory TestResults/integration \
+            --logger "trx;LogFileName=integration-tests.trx" \
+            --logger "GitHubActions;summary.includeSource=true"
+
+      - name: Upload integration test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: TestResults/integration/**/*.trx
+          retention-days: 7
+
+      - name: Generate coverage report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.4.5
+        with:
+          reports: 'TestResults/integration/**/coverage.cobertura.xml'
+          targetdir: 'CoverageReport/integration'
+          reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
+          verbosity: 'Warning'
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-coverage-report
+          path: CoverageReport/integration
+          retention-days: 7
+
+  test-e2e:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MongoDB__ConnectionString: mongodb://localhost:27017
+      ASPNETCORE_ENVIRONMENT: Testing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: 'preview'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            ~/.dotnet/tools
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup Playwright
+        run: |
+          dotnet restore ${{ env.SOLUTION_PATH }}
+          dotnet tool install --global Microsoft.Playwright.CLI 2>/dev/null || true
+          ~/.dotnet/tools/playwright install --with-deps chromium
+
+      - name: Start ControlPlane
+        run: |
+          dotnet run --project src/AgentsDashboard.ControlPlane --urls=http://localhost:5266 &
+          echo "Waiting for ControlPlane to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:5266/health > /dev/null 2>&1; then
+              echo "ControlPlane is ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run Playwright tests
+        run: |
+          dotnet test tests/AgentsDashboard.PlaywrightTests \
+            --configuration Release \
+            --no-restore \
+            --logger "trx;LogFileName=e2e-tests.trx" \
+            --logger "GitHubActions;summary.includeSource=true" \
+            --results-directory TestResults/e2e
+
+      - name: Upload e2e test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            TestResults/e2e/**/*.trx
+            TestResults/e2e/**/playwright-trace.zip
+          retention-days: 7
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: |
+            tests/AgentsDashboard.PlaywrightTests/playwright-trace
+            tests/AgentsDashboard.PlaywrightTests/TestResults
+          retention-days: 7

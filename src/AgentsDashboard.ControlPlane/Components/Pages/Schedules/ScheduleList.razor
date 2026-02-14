@@ -1,0 +1,75 @@
+@page "/schedules"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+
+<PageTitle>Schedules - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Schedules</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">
+        Refresh
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate />
+}
+else if (_tasks.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">No cron-scheduled tasks found. Create a task with Cron kind to see it here.</MudAlert>
+}
+else
+{
+    <MudPaper Elevation="2">
+        <MudTable Items="@_tasks" Hover Dense Striped>
+            <HeaderContent>
+                <MudTh>Name</MudTh>
+                <MudTh>Repository</MudTh>
+                <MudTh>Harness</MudTh>
+                <MudTh>Cron Expression</MudTh>
+                <MudTh>Next Run</MudTh>
+                <MudTh>Enabled</MudTh>
+                <MudTh>Retry</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Name"><b>@context.Name</b></MudTd>
+                <MudTd DataLabel="Repository">@context.RepositoryId[..8]</MudTd>
+                <MudTd DataLabel="Harness">
+                    <MudChip T="string" Size="Size.Small">@context.Harness</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Cron">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Style="font-family: monospace;">
+                        @context.CronExpression
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Next Run">@(context.NextRunAtUtc?.ToString("g") ?? "—")</MudTd>
+                <MudTd DataLabel="Enabled">
+                    <MudIcon Icon="@(context.Enabled ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)"
+                             Color="@(context.Enabled ? Color.Success : Color.Error)" Size="Size.Small" />
+                </MudTd>
+                <MudTd DataLabel="Retry">@context.RetryPolicy.MaxAttempts attempts</MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private List<TaskDocument> _tasks = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _tasks = await Store.ListScheduledTasksAsync(CancellationToken.None);
+        _loading = false;
+    }
+}

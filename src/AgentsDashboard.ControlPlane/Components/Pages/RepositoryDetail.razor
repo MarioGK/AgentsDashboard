@@ -1,0 +1,566 @@
+@page "/repositories/{RepositoryId}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject Data.OrchestratorStore Store
+@inject Services.RunDispatcher Dispatcher
+@inject Services.SecretCryptoService Crypto
+@inject Services.TaskTemplateService TemplateService
+@using AgentsDashboard.ControlPlane.Services
+@using AgentsDashboard.Contracts.Domain
+@using AgentsDashboard.Contracts.Domain
+
+<PageTitle>Repository</PageTitle>
+
+@if (_repository is null)
+{
+    <MudAlert Severity="Severity.Error">Repository not found</MudAlert>
+}
+else
+{
+    <MudStack Spacing="2">
+        <MudText Typo="Typo.h4">@_repository.Name</MudText>
+        <MudText Typo="Typo.subtitle2">@_repository.GitUrl</MudText>
+
+        <MudTabs Elevation="1" Rounded>
+            <MudTabPanel Text="Tasks">
+                <MudPaper Class="pa-4 mb-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Quick Start from Template</MudText>
+                    <MudStack Row Spacing="2" Style="flex-wrap: wrap;">
+                        @foreach (var template in _templates)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                       OnClick="() => ApplyTemplate(template)">
+                                @template.Name
+                            </MudButton>
+                        }
+                    </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-4 mb-3">
+                    <MudText Typo="Typo.h6" Class="mb-3">Create Task</MudText>
+                    <MudGrid>
+                        <MudItem xs="12" md="4"><MudTextField @bind-Value="_taskName" Label="Task Name" /></MudItem>
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="TaskKind" @bind-Value="_taskKind" Label="Kind">
+                                <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
+                                <MudSelectItem T="TaskKind" Value="@TaskKind.Cron">Cron</MudSelectItem>
+                                <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="string" @bind-Value="_taskHarness" Label="Harness">
+                                <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
+                                <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
+                                <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
+                                <MudSelectItem T="string" Value='@("zai")'>Zai (GLM-5)</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="2" Class="d-flex align-center">
+                            <MudSwitch @bind-Value="_taskEnabled" Label="Enabled" />
+                        </MudItem>
+                    </MudGrid>
+                    <MudGrid Class="mt-2">
+                        <MudItem xs="12" md="4"><MudTextField @bind-Value="_taskCron" Label="Cron (if cron)" /></MudItem>
+                        <MudItem xs="12" md="6"><MudTextField @bind-Value="_taskCommand" Label="Shell Command" /></MudItem>
+                        <MudItem xs="12" md="2" Class="d-flex align-center"><MudSwitch @bind-Value="_taskAutoPr" Label="Auto PR" /></MudItem>
+                    </MudGrid>
+                    <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">Prompt (Monaco)</MudText>
+                    <StandaloneCodeEditor Id="promptEditor" ConstructionOptions="EditorOptions" @bind-Value="_taskPrompt" Height="280px" />
+                    <MudStack Row Spacing="2" Class="mt-3">
+                        @if (_editingTaskId is not null)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="CreateTaskAsync">Update Task</MudButton>
+                            <MudButton Variant="Variant.Outlined" OnClick="CancelEdit">Cancel</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateTaskAsync">Create Task</MudButton>
+                        }
+                    </MudStack>
+                </MudPaper>
+
+                <MudTable Items="_tasks" Dense Hover>
+                    <HeaderContent>
+                        <MudTh>Name</MudTh>
+                        <MudTh>Kind</MudTh>
+                        <MudTh>Harness</MudTh>
+                        <MudTh>Enabled</MudTh>
+                        <MudTh>Next Run</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Name</MudTd>
+                        <MudTd>@context.Kind</MudTd>
+                        <MudTd>@context.Harness</MudTd>
+                        <MudTd>@context.Enabled</MudTd>
+                        <MudTd>@(context.NextRunAtUtc?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+                        <MudTd>
+                            <MudStack Row>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="() => TriggerTaskAsync(context)">Run</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Secondary" Size="Size.Small" OnClick="() => StartEditTask(context)">Edit</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="() => DeleteTaskAsync(context)">Delete</MudButton>
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Runs">
+                <MudTable Items="_runs" Dense Hover>
+                    <HeaderContent>
+                        <MudTh>Run</MudTh>
+                        <MudTh>Task</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Summary</MudTh>
+                        <MudTh>Created</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Id[..8]</MudTd>
+                        <MudTd>@context.TaskId[..Math.Min(8, context.TaskId.Length)]</MudTd>
+                        <MudTd><MudChip T="string" Color="@StateColor(context.State)">@context.State</MudChip></MudTd>
+                        <MudTd>@context.Summary</MudTd>
+                        <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Findings Inbox">
+                <MudTable Items="_findings" Dense Hover>
+                    <HeaderContent>
+                        <MudTh>Title</MudTh>
+                        <MudTh>Severity</MudTh>
+                        <MudTh>State</MudTh>
+                        <MudTh>Created</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Title</MudTd>
+                        <MudTd>@context.Severity</MudTd>
+                        <MudTd>@context.State</MudTd>
+                        <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Instructions">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Repository Instruction Files</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        These instructions are layered into every task prompt for this repository (Project → Repository → Task → User Prompt).
+                    </MudText>
+
+                    @for (var i = 0; i < _repoInstructionFiles.Count; i++)
+                    {
+                        var index = i;
+                        var file = _repoInstructionFiles[index];
+                        <MudPaper Class="pa-3 mb-3" Outlined>
+                            <MudGrid>
+                                <MudItem xs="12" md="5">
+                                    <MudTextField Value="@file.Name" Label="File Name"
+                                                  ValueChanged="@((string v) => UpdateInstructionFileName(index, v))" />
+                                </MudItem>
+                                <MudItem xs="12" md="3">
+                                    <MudNumericField Value="@file.Order" Label="Order"
+                                                     ValueChanged="@((int v) => UpdateInstructionFileOrder(index, v))" />
+                                </MudItem>
+                                <MudItem xs="12" md="4" Class="d-flex align-center justify-end">
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Tooltip="Move Up" Size="Size.Small"
+                                                   Disabled="@(index == 0)"
+                                                   OnClick="() => MoveInstructionFile(index, -1)" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Tooltip="Move Down" Size="Size.Small"
+                                                   Disabled="@(index == _repoInstructionFiles.Count - 1)"
+                                                   OnClick="() => MoveInstructionFile(index, 1)" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Tooltip="Remove" Size="Size.Small" Color="Color.Error"
+                                                   OnClick="() => RemoveInstructionFile(index)" />
+                                </MudItem>
+                            </MudGrid>
+                            <StandaloneCodeEditor @key="@($"repo-instr-{index}-{file.Name}")"
+                                                  Id="@($"repoInstrEditor_{index}")"
+                                                  ConstructionOptions="InstructionEditorOptions"
+                                                  CssClass="mt-2"
+                                                  OnDidChangeModelContent="() => OnInstructionContentChanged(index)"
+                                                  @ref="_instructionEditors[index]"
+                                                  Height="200px" />
+                        </MudPaper>
+                    }
+
+                    <MudStack Row Spacing="2">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="AddInstructionFile"
+                                   StartIcon="@Icons.Material.Filled.Add">Add Instruction File</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveInstructionFilesAsync">Save Instructions</MudButton>
+                    </MudStack>
+
+                    @if (!string.IsNullOrWhiteSpace(_instructionSaveMessage))
+                    {
+                        <MudAlert Severity="Severity.Success" Class="mt-3">@_instructionSaveMessage</MudAlert>
+                    }
+                </MudPaper>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Secrets & Webhooks">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">Repository Secrets</MudText>
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_githubToken" Label="GitHub Token (GH_TOKEN)" InputType="InputType.Password" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_codexToken" Label="Codex API Key" InputType="InputType.Password" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_opencodeToken" Label="OpenCode API Key" InputType="InputType.Password" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_claudeToken" Label="Claude Code API Key" InputType="InputType.Password" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_zaiToken" Label="Z.ai API Key (Z_AI_API_KEY)" InputType="InputType.Password" />
+                        </MudItem>
+                    </MudGrid>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSecretsAsync" Class="mt-3">Save Secrets</MudButton>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudText Typo="Typo.h6" Class="mb-2">Webhook Token</MudText>
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="GenerateWebhookTokenAsync">Generate Token</MudButton>
+                        @if (!string.IsNullOrWhiteSpace(_webhookToken))
+                        {
+                            <MudChip T="string" Color="Color.Info">@_webhookToken</MudChip>
+                        }
+                    </MudStack>
+
+                    @if (!string.IsNullOrWhiteSpace(_saveMessage))
+                    {
+                        <MudAlert Severity="Severity.Success" Class="mt-3">@_saveMessage</MudAlert>
+                    }
+                </MudPaper>
+            </MudTabPanel>
+        </MudTabs>
+    </MudStack>
+}
+
+@code {
+    [Parameter] public string RepositoryId { get; set; } = string.Empty;
+
+    private RepositoryDocument? _repository;
+    private ProjectDocument? _project;
+
+    private readonly List<TaskDocument> _tasks = [];
+    private readonly List<RunDocument> _runs = [];
+    private readonly List<FindingDocument> _findings = [];
+    private List<TaskTemplateDocument> _templates = [];
+
+    private string _taskName = string.Empty;
+    private TaskKind _taskKind = TaskKind.OneShot;
+    private string _taskHarness = "codex";
+    private string _taskCron = string.Empty;
+    private string _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
+    private string _taskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
+    private bool _taskAutoPr;
+    private bool _taskEnabled = true;
+    private string? _editingTaskId = null;
+    private string _githubToken = string.Empty;
+    private string _codexToken = string.Empty;
+    private string _opencodeToken = string.Empty;
+    private string _claudeToken = string.Empty;
+    private string _zaiToken = string.Empty;
+    private string _webhookToken = string.Empty;
+    private string _saveMessage = string.Empty;
+    private readonly List<InstructionFileEdit> _repoInstructionFiles = [];
+    private readonly Dictionary<int, StandaloneCodeEditor> _instructionEditors = [];
+    private string _instructionSaveMessage = string.Empty;
+
+    private StandaloneEditorConstructionOptions InstructionEditorOptions(StandaloneCodeEditor editor)
+        => new()
+        {
+            AutomaticLayout = true,
+            Language = "markdown",
+            Theme = "vs-dark",
+            Minimap = new EditorMinimapOptions { Enabled = false },
+            WordWrap = "on",
+            FontSize = 13,
+            Value = GetInstructionEditorValue(editor),
+        };
+
+    private string GetInstructionEditorValue(StandaloneCodeEditor editor)
+    {
+        var entry = _instructionEditors.FirstOrDefault(kv => kv.Value == editor);
+        if (entry.Value is not null && entry.Key < _repoInstructionFiles.Count)
+            return _repoInstructionFiles[entry.Key].Content;
+
+        var index = _repoInstructionFiles.Count - 1;
+        return index >= 0 ? _repoInstructionFiles[index].Content : string.Empty;
+    }
+
+    private StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor editor)
+        => new()
+        {
+            AutomaticLayout = true,
+            Language = "markdown",
+            Theme = "vs-dark",
+            Minimap = new EditorMinimapOptions { Enabled = false },
+            WordWrap = "on",
+            FontSize = 13,
+        };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _repository = await Store.GetRepositoryAsync(RepositoryId, CancellationToken.None);
+
+        if (_repository is null)
+        {
+            return;
+        }
+
+        _project = await Store.GetProjectAsync(_repository.ProjectId, CancellationToken.None);
+        _templates = await TemplateService.ListTemplatesAsync(CancellationToken.None);
+        await RefreshAsync();
+        await LoadInstructionFilesAsync();
+    }
+
+    private void ApplyTemplate(TaskTemplateDocument template)
+    {
+        _taskName = template.Name;
+        _taskKind = template.Kind;
+        _taskHarness = template.Harness;
+        _taskCommand = template.Commands.FirstOrDefault() ?? string.Empty;
+        _taskPrompt = template.Prompt;
+        _taskCron = template.CronExpression;
+        _taskEnabled = true;
+        _editingTaskId = null;
+        StateHasChanged();
+    }
+
+    private void StartEditTask(TaskDocument task)
+    {
+        _editingTaskId = task.Id;
+        _taskName = task.Name;
+        _taskKind = task.Kind;
+        _taskHarness = task.Harness;
+        _taskCommand = task.Command;
+        _taskPrompt = task.Prompt;
+        _taskCron = task.CronExpression;
+        _taskEnabled = task.Enabled;
+        _taskAutoPr = task.AutoCreatePullRequest;
+        StateHasChanged();
+    }
+
+    private void CancelEdit()
+    {
+        _editingTaskId = null;
+        _taskName = string.Empty;
+        _taskCron = string.Empty;
+        _taskAutoPr = false;
+        _taskEnabled = true;
+        _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
+        _taskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
+        StateHasChanged();
+    }
+
+    private async Task CreateTaskAsync()
+    {
+        if (_repository is null || string.IsNullOrWhiteSpace(_taskName))
+        {
+            return;
+        }
+
+        if (_editingTaskId is not null)
+        {
+            var updateRequest = new UpdateTaskRequest(
+                _taskName.Trim(),
+                _taskKind,
+                _taskHarness,
+                _taskPrompt,
+                _taskCommand,
+                _taskAutoPr,
+                _taskCron,
+                _taskEnabled);
+            await Store.UpdateTaskAsync(_editingTaskId, updateRequest, CancellationToken.None);
+            _editingTaskId = null;
+        }
+        else
+        {
+            var request = new CreateTaskRequest(
+                _repository.Id,
+                _taskName.Trim(),
+                _taskKind,
+                _taskHarness,
+                _taskPrompt,
+                _taskCommand,
+                _taskAutoPr,
+                _taskCron,
+                _taskEnabled);
+
+            await Store.CreateTaskAsync(request, CancellationToken.None);
+        }
+
+        _taskName = string.Empty;
+        _taskCron = string.Empty;
+        _taskAutoPr = false;
+
+        await RefreshAsync();
+    }
+
+    private async Task DeleteTaskAsync(TaskDocument task)
+    {
+        await Store.DeleteTaskAsync(task.Id, CancellationToken.None);
+        await RefreshAsync();
+    }
+
+    private async Task TriggerTaskAsync(TaskDocument task)
+    {
+        if (_project is null || _repository is null)
+        {
+            return;
+        }
+
+        var run = await Store.CreateRunAsync(task, _project.Id, CancellationToken.None);
+        await Dispatcher.DispatchAsync(_project, _repository, task, run, CancellationToken.None);
+
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        _tasks.Clear();
+        _tasks.AddRange(await Store.ListTasksAsync(_repository.Id, CancellationToken.None));
+
+        _runs.Clear();
+        _runs.AddRange(await Store.ListRunsByRepositoryAsync(_repository.Id, CancellationToken.None));
+
+        _findings.Clear();
+        _findings.AddRange(await Store.ListFindingsAsync(_repository.Id, CancellationToken.None));
+
+        var secrets = await Store.ListProviderSecretsAsync(_repository.Id, CancellationToken.None);
+        _webhookToken = secrets.Any(x => x.Provider == "webhook-token") ? "configured" : string.Empty;
+    }
+
+    private async Task SaveSecretsAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        await SaveSecretIfPresentAsync("github", _githubToken);
+        await SaveSecretIfPresentAsync("codex", _codexToken);
+        await SaveSecretIfPresentAsync("opencode", _opencodeToken);
+        await SaveSecretIfPresentAsync("claude-code", _claudeToken);
+        await SaveSecretIfPresentAsync("zai", _zaiToken);
+
+        _saveMessage = "Secrets saved.";
+        await RefreshAsync();
+    }
+
+    private async Task SaveSecretIfPresentAsync(string provider, string value)
+    {
+        if (_repository is null || string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        await Store.UpsertProviderSecretAsync(_repository.Id, provider, Crypto.Encrypt(value.Trim()), CancellationToken.None);
+    }
+
+    private async Task GenerateWebhookTokenAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        var token = Convert.ToHexString(Guid.NewGuid().ToByteArray()).ToLowerInvariant();
+        await Store.UpsertProviderSecretAsync(_repository.Id, "webhook-token", Crypto.Encrypt(token), CancellationToken.None);
+        _webhookToken = token;
+        _saveMessage = "New webhook token generated.";
+    }
+
+    private async Task LoadInstructionFilesAsync()
+    {
+        if (_repository is null) return;
+        var files = await Store.GetRepositoryInstructionFilesAsync(_repository.Id, CancellationToken.None);
+        _repoInstructionFiles.Clear();
+        _instructionEditors.Clear();
+        foreach (var f in files.OrderBy(f => f.Order))
+            _repoInstructionFiles.Add(new InstructionFileEdit { Name = f.Name, Content = f.Content, Order = f.Order });
+    }
+
+    private void AddInstructionFile()
+    {
+        var nextOrder = _repoInstructionFiles.Count > 0 ? _repoInstructionFiles.Max(f => f.Order) + 1 : 0;
+        _repoInstructionFiles.Add(new InstructionFileEdit { Name = $"instruction-{nextOrder}.md", Content = string.Empty, Order = nextOrder });
+        StateHasChanged();
+    }
+
+    private void RemoveInstructionFile(int index)
+    {
+        _repoInstructionFiles.RemoveAt(index);
+        _instructionEditors.Remove(index);
+        StateHasChanged();
+    }
+
+    private void UpdateInstructionFileName(int index, string name)
+    {
+        _repoInstructionFiles[index].Name = name;
+    }
+
+    private void UpdateInstructionFileOrder(int index, int order)
+    {
+        _repoInstructionFiles[index].Order = order;
+    }
+
+    private void MoveInstructionFile(int index, int direction)
+    {
+        var newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= _repoInstructionFiles.Count) return;
+        (_repoInstructionFiles[index], _repoInstructionFiles[newIndex]) = (_repoInstructionFiles[newIndex], _repoInstructionFiles[index]);
+        for (var i = 0; i < _repoInstructionFiles.Count; i++)
+            _repoInstructionFiles[i].Order = i;
+        StateHasChanged();
+    }
+
+    private async void OnInstructionContentChanged(int index)
+    {
+        if (_instructionEditors.TryGetValue(index, out var editor))
+            _repoInstructionFiles[index].Content = await editor.GetValue();
+    }
+
+    private async Task SaveInstructionFilesAsync()
+    {
+        if (_repository is null) return;
+
+        foreach (var kv in _instructionEditors)
+        {
+            if (kv.Key < _repoInstructionFiles.Count)
+                _repoInstructionFiles[kv.Key].Content = await kv.Value.GetValue();
+        }
+
+        var files = _repoInstructionFiles
+            .Select(f => new InstructionFile(f.Name, f.Content, f.Order))
+            .ToList();
+        await Store.UpdateRepositoryInstructionFilesAsync(_repository.Id, files, CancellationToken.None);
+        _instructionSaveMessage = "Instructions saved.";
+        StateHasChanged();
+    }
+
+    private static Color StateColor(RunState state) => state switch
+    {
+        RunState.Succeeded => Color.Success,
+        RunState.Failed => Color.Error,
+        RunState.Running => Color.Info,
+        RunState.Queued => Color.Warning,
+        _ => Color.Default
+    };
+
+    private sealed class InstructionFileEdit
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public int Order { get; set; }
+    }
+}

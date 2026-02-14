@@ -1,0 +1,126 @@
+services:
+  harness-image:
+    build:
+      context: ./harness-image
+      dockerfile: Dockerfile
+    image: ghcr.io/mariogk/ai-harness:latest
+    profiles:
+      - build
+
+  harness-base:
+    build:
+      context: ./harness-images
+      dockerfile: Dockerfile.harness-base
+    image: ghcr.io/mariogk/ai-harness-base:latest
+    profiles:
+      - build-harnesses
+
+  harness-codex:
+    build:
+      context: ./harness-images
+      dockerfile: Dockerfile.harness-codex
+    image: ghcr.io/mariogk/harness-codex:latest
+    profiles:
+      - build-harnesses
+    depends_on:
+      - harness-base
+
+  harness-opencode:
+    build:
+      context: ./harness-images
+      dockerfile: Dockerfile.harness-opencode
+    image: ghcr.io/mariogk/harness-opencode:latest
+    profiles:
+      - build-harnesses
+    depends_on:
+      - harness-base
+
+  harness-claudecode:
+    build:
+      context: ./harness-images
+      dockerfile: Dockerfile.harness-claudecode
+    image: ghcr.io/mariogk/harness-claudecode:latest
+    profiles:
+      - build-harnesses
+    depends_on:
+      - harness-base
+
+  harness-zai:
+    build:
+      context: ./harness-images
+      dockerfile: Dockerfile.harness-zai
+    image: ghcr.io/mariogk/harness-zai:latest
+    profiles:
+      - build-harnesses
+    depends_on:
+      - harness-base
+
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:latest
+    restart: unless-stopped
+    command: ["-storageDataPath=/victoria-metrics-data"]
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm-data:/victoria-metrics-data
+
+  vmui:
+    image: victoriametrics/vmui:latest
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      VMUI_BACKEND_URL: http://victoria-metrics:8428
+    depends_on:
+      - victoria-metrics
+
+  worker-gateway:
+    build:
+      context: ..
+      dockerfile: src/AgentsDashboard.WorkerGateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      Worker__UseDocker: "true"
+      Worker__DefaultImage: "ghcr.io/mariogk/ai-harness:latest"
+      Worker__HarnessImages__codex: "ghcr.io/mariogk/harness-codex:latest"
+      Worker__HarnessImages__opencode: "ghcr.io/mariogk/harness-opencode:latest"
+      Worker__HarnessImages__claude-code: "ghcr.io/mariogk/harness-claudecode:latest"
+      Worker__HarnessImages__zai: "ghcr.io/mariogk/harness-zai:latest"
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      Z_AI_API_KEY: ${Z_AI_API_KEY:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - mongodb
+
+  control-plane:
+    build:
+      context: ..
+      dockerfile: src/AgentsDashboard.ControlPlane/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      Orchestrator__MongoConnectionString: mongodb://mongodb:27017
+      Orchestrator__MongoDatabase: agentsdashboard
+      Orchestrator__WorkerGrpcAddress: http://worker-gateway:5201
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://victoria-metrics:8428
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - mongodb
+      - worker-gateway
+
+volumes:
+  mongo-data:
+  vm-data:

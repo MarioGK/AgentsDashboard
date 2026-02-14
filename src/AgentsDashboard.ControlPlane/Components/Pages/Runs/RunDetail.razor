@@ -1,0 +1,441 @@
+@page "/runs/{Id}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Services.RunDispatcher Dispatcher
+@inject AgentsDashboard.ControlPlane.Services.IRunEventPublisher Publisher
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<div style="display: none;">
+    @(_workflowExecutionRefresh)
+</div>
+
+<PageTitle>Run @Id?[..8] - AgentsDashboard</PageTitle>
+
+@if (_run is null)
+{
+    <MudProgressLinear Indeterminate />
+}
+else
+{
+    <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/runs" />
+        <MudText Typo="Typo.h4">Run @_run.Id[..8]</MudText>
+        <MudChip T="string" Color="@GetStateColor(_run.State)" Class="ml-2">@_run.State</MudChip>
+        @if (_run.Attempt > 1)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Attempt @_run.Attempt</MudChip>
+        }
+        <MudSpacer />
+        @if (_run.State is RunState.PendingApproval)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.CheckCircle"
+                       OnClick="ApproveRunAsync">
+                Approve
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Cancel"
+                       OnClick="RejectRunAsync">
+                Reject
+            </MudButton>
+        }
+        @if (_run.State is RunState.Queued or RunState.Running or RunState.PendingApproval)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop"
+                       OnClick="CancelRunAsync">
+                Cancel Run
+            </MudButton>
+        }
+        @if (_run.State is RunState.Failed)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Replay"
+                       OnClick="RetryRunAsync">
+                Retry
+            </MudButton>
+        }
+    </MudStack>
+
+    <MudTabs Elevation="2" Rounded ApplyEffectsToContainer>
+        <MudTabPanel Text="Overview" Icon="@Icons.Material.Filled.Visibility">
+            <MudPaper Class="pa-6">
+                <MudGrid>
+                    <MudItem xs="12" md="3">
+                        <MudField Label="Project" Variant="Variant.Outlined">@_run.ProjectId[..8]</MudField>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudField Label="Task" Variant="Variant.Outlined">@_run.TaskId[..8]</MudField>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudField Label="Started" Variant="Variant.Outlined">@(_run.StartedAtUtc?.ToString("g") ?? "—")</MudField>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudField Label="Ended" Variant="Variant.Outlined">@(_run.EndedAtUtc?.ToString("g") ?? "—")</MudField>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudField Label="Summary" Variant="Variant.Outlined">@_run.Summary</MudField>
+                    </MudItem>
+                    @if (!string.IsNullOrEmpty(_run.PrUrl))
+                    {
+                        <MudItem xs="12">
+                            <MudField Label="Pull Request" Variant="Variant.Outlined">
+                                <MudLink Href="@_run.PrUrl" Target="_blank">@_run.PrUrl</MudLink>
+                            </MudField>
+                        </MudItem>
+                    }
+                    @if (!string.IsNullOrEmpty(_run.FailureClass))
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudField Label="Failure Class" Variant="Variant.Outlined">@_run.FailureClass</MudField>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudPaper>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Logs" Icon="@Icons.Material.Filled.Terminal">
+            <MudPaper Class="pa-4" Style="background: #1e1e1e; max-height: 600px; overflow-y: auto;">
+                @if (_logs.Count == 0)
+                {
+                    <MudText Style="color: #888;">No logs yet...</MudText>
+                }
+                else
+                {
+                    @foreach (var log in _logs)
+                    {
+                        <MudText Style="font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 0.85rem; color: #d4d4d4; white-space: pre-wrap;">[@log.TimestampUtc.ToString("HH:mm:ss")] @log.Message</MudText>
+                    }
+                }
+            </MudPaper>
+            @if (_run.State is RunState.Running)
+            {
+                <MudProgressLinear Indeterminate Color="Color.Info" Class="mt-1" />
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Artifacts" Icon="@Icons.Material.Filled.Inventory">
+            <MudPaper Class="pa-4">
+                @if (_storedArtifacts.Count == 0 && _artifacts.Count == 0)
+                {
+                    <MudText Color="Color.Secondary">No artifacts produced.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Hover Dense Striped>
+                        <thead>
+                            <tr>
+                                <th>Artifact</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var artifact in _storedArtifacts)
+                            {
+                                <tr>
+                                    <td>@artifact</td>
+                                    <td>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Download"
+                                                       Size="Size.Small"
+                                                       Href="@($"/api/runs/{Id}/artifacts/{artifact}")"
+                                                       Target="_blank"
+                                                       Tooltip="Download artifact" />
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var artifact in _artifacts.Where(a => !_storedArtifacts.Contains(a)))
+                            {
+                                <tr>
+                                    <td>@artifact</td>
+                                    <td>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Referenced only</MudText>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Proxy Links" Icon="@Icons.Material.Filled.Link">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Active YARP reverse-proxy routes for this run's container.
+                </MudText>
+                <MudList T="string" Dense>
+                    <MudListItem Icon="@Icons.Material.Filled.OpenInNew">
+                        <MudLink Href="@($"/proxy/run-{Id}/vscode")" Target="_blank">VS Code Server</MudLink>
+                    </MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.OpenInNew">
+                        <MudLink Href="@($"/proxy/run-{Id}/terminal")" Target="_blank">Terminal</MudLink>
+                    </MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.OpenInNew">
+                        <MudLink Href="@($"/proxy/run-{Id}/app")" Target="_blank">Application Preview</MudLink>
+                    </MudListItem>
+                </MudList>
+            </MudPaper>
+        </MudTabPanel>
+
+        @if (_workflowExecution is not null)
+        {
+            <MudTabPanel Text="Workflow" Icon="@Icons.Material.Filled.AccountTree">
+                <MudPaper Class="pa-4">
+                    <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+                        <MudText Typo="Typo.h6">Workflow Execution</MudText>
+                        <MudChip T="string" Color="@GetWorkflowStateColor(_workflowExecution.State)">@_workflowExecution.State</MudChip>
+                        @if (!string.IsNullOrEmpty(_workflow?.Name))
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="ml-2">(@_workflow.Name)</MudText>
+                        }
+                    </MudStack>
+
+                    <MudTimeline TimelinePosition="TimelinePosition.Start" TimelineOrientation="TimelineOrientation.Vertical">
+                        @foreach (var stage in _orderedStages)
+                        {
+                            var result = _workflowExecution.StageResults.FirstOrDefault(r => r.StageId == stage.Id);
+                            var status = GetStageStatus(result, stage);
+                            <MudTimelineItem Color="@GetStageColor(status)" Size="Size.Small" Elevation="2">
+                                <ItemOpposite>
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.subtitle2">@stage.Name</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@stage.Type</MudText>
+                                        @if (result is not null)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Default">
+                                                @GetDuration(result.StartedAtUtc, result.EndedAtUtc)
+                                            </MudText>
+                                        }
+                                    </MudStack>
+                                </ItemOpposite>
+                                <ItemContent>
+                                    <MudCard Elevation="1" Class="pa-2" @onclick="() => ToggleStageRuns(stage.Id)" Style="cursor: pointer;">
+                                        <MudCardContent>
+                                            <MudStack Row AlignItems="AlignItems.Center">
+                                                <MudIcon Icon="@GetStageIcon(status)" Color="@GetStageColor(status)" Size="Size.Small" />
+                                                <MudText Typo="Typo.body2" Class="ml-2">@GetStageStatusText(status)</MudText>
+                                                @if (result?.RunIds.Count > 0)
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ml-2">
+                                                        @result.RunIds.Count run(s)
+                                                    </MudChip>
+                                                }
+                                            </MudStack>
+                                            @if (!string.IsNullOrEmpty(result?.Summary))
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">@result.Summary</MudText>
+                                            }
+                                            @if (_expandedStageId == stage.Id && result?.RunIds.Count > 0)
+                                            {
+                                                <MudDivider Class="my-2" />
+                                                <MudText Typo="Typo.caption" Color="Color.Primary">Associated Runs:</MudText>
+                                                <MudStack Spacing="1">
+                                                    @foreach (var runId in result.RunIds)
+                                                    {
+                                                        <MudLink Href="@($"/runs/{runId}")" Typo="Typo.body2">@runId[..8]...</MudLink>
+                                                    }
+                                                </MudStack>
+                                            }
+                                        </MudCardContent>
+                                    </MudCard>
+                                </ItemContent>
+                            </MudTimelineItem>
+                        }
+                    </MudTimeline>
+                </MudPaper>
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private RunDocument? _run;
+    private List<RunLogEvent> _logs = [];
+    private List<string> _artifacts = [];
+    private List<string> _storedArtifacts = [];
+    private HubConnection? _hubConnection;
+    private WorkflowExecutionDocument? _workflowExecution;
+    private WorkflowDocument? _workflow;
+    private List<WorkflowStageConfig> _orderedStages = [];
+    private string? _expandedStageId;
+    private int _workflowExecutionRefresh;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(Id)) return;
+
+        _run = await Store.GetRunAsync(Id, CancellationToken.None);
+        _logs = await Store.ListRunLogsAsync(Id, CancellationToken.None);
+        _storedArtifacts = await Store.ListArtifactsAsync(Id, CancellationToken.None);
+
+        if (_run is not null && !string.IsNullOrEmpty(_run.OutputJson))
+        {
+            try
+            {
+                var envelope = System.Text.Json.JsonSerializer.Deserialize<HarnessResultEnvelope>(_run.OutputJson);
+                _artifacts = envelope?.Artifacts ?? [];
+            }
+            catch { }
+        }
+
+        _workflowExecution = await Store.GetWorkflowExecutionByRunIdAsync(Id, CancellationToken.None);
+        if (_workflowExecution is not null)
+        {
+            _workflow = await Store.GetWorkflowForExecutionAsync(_workflowExecution.WorkflowId, CancellationToken.None);
+            _orderedStages = _workflow?.Stages.OrderBy(s => s.Order).ToList() ?? [];
+        }
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/runs"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<string, string, string, DateTime>("RunLogChunk", (runId, level, message, timestamp) =>
+        {
+            if (runId != Id) return;
+            _logs.Add(new RunLogEvent { RunId = runId, Level = level, Message = message, TimestampUtc = timestamp });
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<string, string, string, DateTime?, DateTime?>("RunStatusChanged", async (runId, state, summary, started, ended) =>
+        {
+            if (runId != Id) return;
+            _run = await Store.GetRunAsync(Id, CancellationToken.None);
+            _workflowExecution = await Store.GetWorkflowExecutionByRunIdAsync(Id, CancellationToken.None);
+            if (_workflowExecution is not null)
+            {
+                _workflow = await Store.GetWorkflowForExecutionAsync(_workflowExecution.WorkflowId, CancellationToken.None);
+                _orderedStages = _workflow?.Stages.OrderBy(s => s.Order).ToList() ?? [];
+            }
+            _workflowExecutionRefresh++;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    private async Task CancelRunAsync()
+    {
+        if (_run is null) return;
+        await Dispatcher.CancelAsync(_run.Id, CancellationToken.None);
+        var cancelled = await Store.MarkRunCancelledAsync(_run.Id, CancellationToken.None);
+        if (cancelled is not null) _run = cancelled;
+    }
+
+    private async Task RetryRunAsync()
+    {
+        if (_run is null) return;
+        // Navigate to the retry endpoint result
+        Navigation.NavigateTo($"/runs/{_run.Id}");
+    }
+
+    private async Task ApproveRunAsync()
+    {
+        if (_run is null) return;
+
+        using var httpClient = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        var response = await httpClient.PostAsync($"/api/runs/{_run.Id}/approve", null);
+
+        if (response.IsSuccessStatusCode)
+        {
+            _run = await Store.GetRunAsync(_run.Id, CancellationToken.None);
+        }
+    }
+
+    private async Task RejectRunAsync()
+    {
+        if (_run is null) return;
+
+        using var httpClient = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        var response = await httpClient.PostAsync($"/api/runs/{_run.Id}/reject", null);
+
+        if (response.IsSuccessStatusCode)
+        {
+            _run = await Store.GetRunAsync(_run.Id, CancellationToken.None);
+        }
+    }
+
+    private static Color GetStateColor(RunState state) => state switch
+    {
+        RunState.Queued => Color.Default,
+        RunState.Running => Color.Info,
+        RunState.Succeeded => Color.Success,
+        RunState.Failed => Color.Error,
+        RunState.Cancelled => Color.Warning,
+        RunState.PendingApproval => Color.Secondary,
+        _ => Color.Default,
+    };
+
+    private static Color GetWorkflowStateColor(WorkflowExecutionState state) => state switch
+    {
+        WorkflowExecutionState.Running => Color.Info,
+        WorkflowExecutionState.Succeeded => Color.Success,
+        WorkflowExecutionState.Failed => Color.Error,
+        WorkflowExecutionState.Cancelled => Color.Warning,
+        WorkflowExecutionState.PendingApproval => Color.Secondary,
+        _ => Color.Default,
+    };
+
+    private enum StageStatus { Pending, Running, Succeeded, Failed }
+
+    private StageStatus GetStageStatus(WorkflowStageResult? result, WorkflowStageConfig stage)
+    {
+        if (result is null)
+        {
+            if (_workflowExecution?.CurrentStageIndex >= _orderedStages.IndexOf(stage))
+                return StageStatus.Running;
+            return StageStatus.Pending;
+        }
+        return result.Succeeded ? StageStatus.Succeeded : StageStatus.Failed;
+    }
+
+    private static Color GetStageColor(StageStatus status) => status switch
+    {
+        StageStatus.Pending => Color.Default,
+        StageStatus.Running => Color.Info,
+        StageStatus.Succeeded => Color.Success,
+        StageStatus.Failed => Color.Error,
+        _ => Color.Default,
+    };
+
+    private static string GetStageIcon(StageStatus status) => status switch
+    {
+        StageStatus.Pending => Icons.Material.Filled.Schedule,
+        StageStatus.Running => Icons.Material.Filled.Sync,
+        StageStatus.Succeeded => Icons.Material.Filled.CheckCircle,
+        StageStatus.Failed => Icons.Material.Filled.Error,
+        _ => Icons.Material.Filled.Help,
+    };
+
+    private static string GetStageStatusText(StageStatus status) => status switch
+    {
+        StageStatus.Pending => "Pending",
+        StageStatus.Running => "Running...",
+        StageStatus.Succeeded => "Succeeded",
+        StageStatus.Failed => "Failed",
+        _ => "Unknown",
+    };
+
+    private static string GetDuration(DateTime started, DateTime? ended)
+    {
+        var end = ended ?? DateTime.UtcNow;
+        var duration = end - started;
+        if (duration.TotalSeconds < 60)
+            return $"{(int)duration.TotalSeconds}s";
+        if (duration.TotalMinutes < 60)
+            return $"{(int)duration.TotalMinutes}m {(int)duration.Seconds}s";
+        return $"{(int)duration.TotalHours}h {(int)duration.Minutes}m";
+    }
+
+    private void ToggleStageRuns(string stageId)
+    {
+        _expandedStageId = _expandedStageId == stageId ? null : stageId;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+            await _hubConnection.DisposeAsync();
+    }
+}

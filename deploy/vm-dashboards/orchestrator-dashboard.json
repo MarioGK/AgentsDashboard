@@ -1,0 +1,55 @@
+{
+  "title": "AgentsDashboard Orchestrator",
+  "panels": [
+    {
+      "title": "Run Throughput (runs/min)",
+      "type": "graph",
+      "query": "rate(orchestrator_runs_total[5m])"
+    },
+    {
+      "title": "Run Latency P95 (seconds)",
+      "type": "graph",
+      "query": "histogram_quantile(0.95, rate(orchestrator_run_duration_seconds_bucket[5m]))"
+    },
+    {
+      "title": "Failed Runs (last 1h)",
+      "type": "stat",
+      "query": "increase(orchestrator_runs_total{state=\"failed\"}[1h])"
+    },
+    {
+      "title": "Active Runs",
+      "type": "stat",
+      "query": "orchestrator_active_runs"
+    },
+    {
+      "title": "Queue Depth",
+      "type": "graph",
+      "query": "orchestrator_queued_runs"
+    },
+    {
+      "title": "Worker Slots (used/total)",
+      "type": "graph",
+      "query": "orchestrator_worker_active_slots / orchestrator_worker_max_slots"
+    },
+    {
+      "title": "Harness Execution by Provider",
+      "type": "graph",
+      "query": "rate(orchestrator_runs_total[5m]) by (harness)"
+    },
+    {
+      "title": "Finding Rate",
+      "type": "graph",
+      "query": "rate(orchestrator_findings_total[5m])"
+    },
+    {
+      "title": "Proxy Request Latency P95",
+      "type": "graph",
+      "query": "histogram_quantile(0.95, rate(orchestrator_proxy_duration_seconds_bucket[5m]))"
+    },
+    {
+      "title": "Proxy Requests/sec",
+      "type": "graph",
+      "query": "rate(orchestrator_proxy_requests_total[5m])"
+    }
+  ]
+}

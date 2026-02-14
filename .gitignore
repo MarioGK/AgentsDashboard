@@ -1,0 +1,27 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## VS / Rider
+.vs/
+.idea/
+*.swp
+*~
+
+## Node
+node_modules/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Aspire
+.dcproj.user
+
+## Test results
+TestResults/
+coverage/

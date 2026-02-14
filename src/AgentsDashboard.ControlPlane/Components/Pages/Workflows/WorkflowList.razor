@@ -1,0 +1,94 @@
+@page "/workflows"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+
+<PageTitle>Workflows - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Workflows</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               Href="/workflows/new">
+        New Workflow
+    </MudButton>
+</MudStack>
+
+<MudPaper Elevation="2">
+    <MudTable Items="@_workflows" Hover Dense Striped Filter="new Func<WorkflowRow, bool>(FilterFunc)">
+        <ToolBarContent>
+            <MudTextField @bind-Value="_searchString" Placeholder="Search workflows..."
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium" Class="mt-0" Immediate />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<WorkflowRow, object>(x => x.Name)">Name</MudTableSortLabel></MudTh>
+            <MudTh>Repository</MudTh>
+            <MudTh>Stages</MudTh>
+            <MudTh>Enabled</MudTh>
+            <MudTh>Created</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">
+                <MudLink Href="@($"/workflows/{context.Id}")">@context.Name</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Repository">@context.RepositoryName</MudTd>
+            <MudTd DataLabel="Stages">@context.StageCount</MudTd>
+            <MudTd DataLabel="Enabled">
+                <MudChip T="string" Size="Size.Small" Color="@(@context.Enabled ? Color.Success : Color.Default)">
+                    @(@context.Enabled ? "Enabled" : "Disabled")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Created">@context.CreatedAt.ToString("g")</MudTd>
+            <MudTd DataLabel="Actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               Href="@($"/workflows/{context.Id}")" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="() => DeleteWorkflow(context.Id)" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private string _searchString = "";
+
+    private record WorkflowRow(string Id, string Name, string RepositoryId, string RepositoryName, int StageCount, bool Enabled, DateTime CreatedAt);
+
+    private List<WorkflowRow> _workflows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var workflows = await Store.ListAllWorkflowsAsync(CancellationToken.None);
+        var workflowRows = new List<WorkflowRow>();
+
+        foreach (var w in workflows)
+        {
+            var repo = await Store.GetRepositoryAsync(w.RepositoryId, CancellationToken.None);
+            workflowRows.Add(new WorkflowRow(
+                w.Id, w.Name, w.RepositoryId, repo?.Name ?? "Unknown", w.Stages.Count, w.Enabled, w.CreatedAtUtc));
+        }
+
+        _workflows = workflowRows.OrderByDescending(x => x.CreatedAt).ToList();
+    }
+
+    private bool FilterFunc(WorkflowRow row) =>
+        string.IsNullOrWhiteSpace(_searchString)
+        || row.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase)
+        || row.RepositoryName.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+
+    private async Task DeleteWorkflow(string id)
+    {
+        await Store.DeleteWorkflowAsync(id, CancellationToken.None);
+        _workflows.RemoveAll(w => w.Id == id);
+    }
+}

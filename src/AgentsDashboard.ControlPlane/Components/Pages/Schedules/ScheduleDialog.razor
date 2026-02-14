@@ -1,0 +1,41 @@
+@using Cronos
+@attribute [Authorize]
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_cronExpression" Label="Cron Expression" Variant="Variant.Outlined"
+                          Placeholder="0 * * * *" HelperText="@_cronPreview"
+                          Immediate TextChanged="UpdateCronPreview" />
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Schedules are managed via task definitions. Create a task with Kind = Cron to add a schedule.
+            </MudText>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private string _cronExpression = "";
+    private string _cronPreview = "";
+
+    private void UpdateCronPreview(string cron)
+    {
+        try
+        {
+            var expression = CronExpression.Parse(cron);
+            var next = expression.GetNextOccurrence(DateTimeOffset.UtcNow, TimeZoneInfo.Local);
+            _cronPreview = next.HasValue ? $"Next: {next.Value.LocalDateTime:g}" : "No upcoming occurrence";
+        }
+        catch
+        {
+            _cronPreview = "Invalid cron expression";
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

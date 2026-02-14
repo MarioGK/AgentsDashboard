@@ -1,0 +1,282 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject Data.OrchestratorStore Store
+@inject Services.IGlobalSelectionService SelectionService
+@implements IDisposable
+
+<PageTitle>Overview</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Overview</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.subtitle2">Projects</MudText>
+                <MudText Typo="Typo.h4">@_projects.Count</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.subtitle2">Recent Runs</MudText>
+                <MudText Typo="Typo.h4">@_runs.Count</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.subtitle2">Failing Runs</MudText>
+                <MudText Typo="Typo.h4">@_runs.Count(r => r.State == RunState.Failed)</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-4">
+            Reliability Overview
+            @if (SelectionService.SelectedRepository is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">@SelectionService.SelectedRepository.Name</MudChip>
+            }
+            else if (SelectionService.SelectedProject is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">@SelectionService.SelectedProject.Name</MudChip>
+            }
+        </MudText>
+        
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent Class="text-center">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Success Rate (7d)</MudText>
+                        <MudText Typo="Typo.h4" Color="@SuccessRateColor(_metrics?.SuccessRate7Days ?? 0)">@(_metrics?.SuccessRate7Days.ToString("F1") ?? "0")%</MudText>
+                        <MudText Typo="Typo.caption">@(_metrics?.TotalRuns7Days ?? 0) runs</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent Class="text-center">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Success Rate (30d)</MudText>
+                        <MudText Typo="Typo.h4" Color="@SuccessRateColor(_metrics?.SuccessRate30Days ?? 0)">@(_metrics?.SuccessRate30Days.ToString("F1") ?? "0")%</MudText>
+                        <MudText Typo="Typo.caption">@(_metrics?.TotalRuns30Days ?? 0) runs</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent Class="text-center">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Avg Duration</MudText>
+                        <MudText Typo="Typo.h4">@FormatDuration(_metrics?.AverageDurationSeconds)</MudText>
+                        <MudText Typo="Typo.caption">completed runs</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent Class="text-center">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Active Runs</MudText>
+                        <MudText Typo="Typo.h4">@(_metrics?.RunsByState.GetValueOrDefault("Running", 0) + _metrics?.RunsByState.GetValueOrDefault("Queued", 0))</MudText>
+                        <MudText Typo="Typo.caption">running / queued</MudText>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Class="mt-4">
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.subtitle1">Run Distribution by State</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (_metrics?.RunsByState?.Count > 0)
+                        {
+                            <MudList T="string" Dense="true">
+                                @foreach (var state in _metrics.RunsByState.OrderByDescending(s => s.Value))
+                                {
+                                    <MudListItem>
+                                        <div class="d-flex justify-space-between align-center" style="width:100%">
+                                            <span><MudChip T="string" Size="Size.Small" Color="@StateColor(Enum.Parse<RunState>(state.Key))">@state.Key</MudChip></span>
+                                            <MudText><strong>@state.Value</strong> runs</MudText>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                        else
+                        {
+                            <MudText>No run data available</MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.subtitle1">Failure Trend (14 days)</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (_metrics?.FailureTrend14Days?.Count > 0)
+                        {
+                            <div class="d-flex align-end" style="height:120px; gap:2px;">
+                                @{
+                                    var maxFailures = _metrics.FailureTrend14Days.Max(f => f.Count);
+                                    maxFailures = Math.Max(maxFailures, 1);
+                                }
+                                @foreach (var day in _metrics.FailureTrend14Days)
+                                {
+                                    var height = (int)((double)day.Count / maxFailures * 100);
+                                    var tooltipText = $"{day.Date:MMM dd}: {day.Count} failures";
+                                    <MudTooltip Text="@tooltipText" Placement="Placement.Top">
+                                        <div style="width:calc(100% / 14); height:@(Math.Max(height, 4))px; background-color:var(--mud-palette-error); border-radius:2px 2px 0 0;" />
+                                    </MudTooltip>
+                                }
+                            </div>
+                            <div class="d-flex justify-space-between mt-2">
+                                <MudText Typo="Typo.caption">@_metrics.FailureTrend14Days.First().Date.ToString("MMM dd")</MudText>
+                                <MudText Typo="Typo.caption">@_metrics.FailureTrend14Days.Last().Date.ToString("MMM dd")</MudText>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudText>No failure trend data</MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        @if (_metrics?.PerProjectMetrics?.Count > 0 && SelectionService.SelectedRepository is null)
+        {
+            <MudText Typo="Typo.subtitle1" Class="mt-4 mb-2">Per-Project Reliability</MudText>
+            <MudTable Items="_metrics.PerProjectMetrics" Dense="true" Hover="true" Elevation="2">
+                <HeaderContent>
+                    <MudTh>Project</MudTh>
+                    <MudTh>Total Runs</MudTh>
+                    <MudTh>Successful</MudTh>
+                    <MudTh>Failed</MudTh>
+                    <MudTh>Success Rate</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudLink Href="@($"/projects/{context.ProjectId}")">@context.ProjectName</MudLink>
+                    </MudTd>
+                    <MudTd>@context.TotalRuns</MudTd>
+                    <MudTd>@context.SuccessfulRuns</MudTd>
+                    <MudTd>@context.FailedRuns</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Color="@SuccessRateColor(context.SuccessRate)">@context.SuccessRate%</MudChip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-2">Recent Runs</MudText>
+        <MudTable Items="_runs" Dense Hover>
+            <HeaderContent>
+                <MudTh>Run</MudTh>
+                <MudTh>Task</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Created</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Id[..8]</MudTd>
+                <MudTd>@context.TaskId[..Math.Min(8, context.TaskId.Length)]</MudTd>
+                <MudTd><MudChip T="string" Color="@StateColor(context.State)">@context.State</MudChip></MudTd>
+                <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private bool _loading = true;
+    private List<ProjectDocument> _projects = [];
+    private List<RunDocument> _runs = [];
+    private ReliabilityMetrics? _metrics;
+    private IDisposable? _selectionSubscription;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _selectionSubscription = SelectionService.Subscribe(async _ => await LoadDataAsync());
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            _projects = await Store.ListProjectsAsync(CancellationToken.None);
+
+            if (SelectionService.SelectedRepositoryId is not null)
+            {
+                _runs = await Store.ListRunsByRepositoryAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
+                _metrics = await Store.GetReliabilityMetricsByRepositoryAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
+            }
+            else if (SelectionService.SelectedProjectId is not null)
+            {
+                _runs = await Store.ListRecentRunsByProjectAsync(SelectionService.SelectedProjectId, CancellationToken.None);
+                _metrics = await Store.GetReliabilityMetricsByProjectAsync(SelectionService.SelectedProjectId, CancellationToken.None);
+            }
+            else
+            {
+                _runs = await Store.ListRecentRunsAsync(CancellationToken.None);
+                _metrics = await Store.GetReliabilityMetricsAsync(CancellationToken.None);
+            }
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static Color StateColor(RunState state) => state switch
+    {
+        RunState.Succeeded => Color.Success,
+        RunState.Failed => Color.Error,
+        RunState.Running => Color.Info,
+        RunState.Queued => Color.Warning,
+        RunState.PendingApproval => Color.Warning,
+        _ => Color.Default
+    };
+
+    private static Color SuccessRateColor(double rate) => rate switch
+    {
+        >= 90 => Color.Success,
+        >= 70 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private static string FormatDuration(double? seconds)
+    {
+        if (!seconds.HasValue) return "N/A";
+        
+        var ts = TimeSpan.FromSeconds(seconds.Value);
+        if (ts.TotalMinutes >= 60)
+            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        if (ts.TotalSeconds >= 60)
+            return $"{(int)ts.TotalMinutes}m {ts.Seconds}s";
+        return $"{(int)ts.TotalSeconds}s";
+    }
+
+    public void Dispose()
+    {
+        _selectionSubscription?.Dispose();
+    }
+}

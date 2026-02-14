@@ -1,0 +1,364 @@
+@page "/image-builder"
+@attribute [Authorize(Policy = "operator")]
+@rendermode InteractiveServer
+@using BlazorMonaco.Editor
+@using AgentsDashboard.ControlPlane.Services
+@inject ImageBuilderService ImageBuilderService
+@inject ISnackbar Snackbar
+
+<PageTitle>Container Image Builder</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Container Image Builder</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+        Build custom Docker images for use with harness execution. Images are built on the local Docker daemon.
+    </MudText>
+
+    <MudPaper Elevation="2" Class="pa-4 mb-4">
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudSelect @bind-Value="_selectedTemplate"
+                           Label="Template"
+                           Variant="Variant.Outlined"
+                           T="string"
+                           ToStringFunc="@(x => x ?? "Custom")"
+                           Class="mb-2">
+                    @foreach (var template in _templates.Keys)
+                    {
+                        <MudSelectItem Value="@template">@template</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_imageTag"
+                              Label="Image Tag"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              HelperText="Format: name:version (e.g., myharness:latest)"
+                              Class="mb-2" />
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.h6" Class="mb-2 mt-4">Dockerfile</MudText>
+        <StandaloneCodeEditor @bind-Value="_dockerfileContent"
+                              ConstructionOptions="EditorOptions"
+                              Height="500px"
+                              CssClass="mb-4" />
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Build"
+                   OnClick="BuildImageAsync"
+                   Disabled="@(_isBuilding || string.IsNullOrWhiteSpace(_imageTag))">
+            @if (_isBuilding)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Building...</span>
+            }
+            else
+            {
+                <span>Build Image</span>
+            }
+        </MudButton>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Secondary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   Class="ml-2"
+                   OnClick="RefreshImagesAsync"
+                   Disabled="_isBuilding">
+            Refresh Images
+        </MudButton>
+    </MudPaper>
+
+    @if (_buildResult != null)
+    {
+        <MudAlert Severity="@(_buildResult.Success ? Severity.Success : Severity.Error)" Class="mb-4" CloseIconClicked="() => _buildResult = null" ShowCloseIcon="true">
+            @if (_buildResult.Success)
+            {
+                <text>Successfully built image: <strong>@_buildResult.ImageId</strong></text>
+            }
+            else
+            {
+                <text>Build failed. Check the logs below for details.</text>
+            }
+        </MudAlert>
+    }
+
+    @if (_buildLogs.Count > 0)
+    {
+        <MudPaper Elevation="2" Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Build Logs</MudText>
+            <MudPaper Elevation="0" Class="pa-3" Style="max-height: 400px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;">
+                @foreach (var log in _buildLogs)
+                {
+                    <div>@log</div>
+                }
+            </MudPaper>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Secondary"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Clear"
+                       Class="mt-2"
+                       OnClick="() => _buildLogs.Clear()">
+                Clear Logs
+            </MudButton>
+        </MudPaper>
+    }
+
+    @if (_images.Count > 0)
+    {
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Available Images (@_images.Count)</MudText>
+            <MudTable Items="_images" Dense="true" Hover="true" Striped="true" Class="mb-0">
+                <HeaderContent>
+                    <MudTh>Tag</MudTh>
+                    <MudTh>Image ID</MudTh>
+                    <MudTh>Size</MudTh>
+                    <MudTh>Created</MudTh>
+                    <MudTh Style="text-align: right">Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Tag">
+                        <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" Class="mr-2" />
+                        <code>@context.Tag</code>
+                    </MudTd>
+                    <MudTd DataLabel="Image ID">
+                        <code style="font-size: 0.8em;">@(context.Id.Length > 19 ? context.Id.Substring(7, 12) : context.Id)</code>
+                    </MudTd>
+                    <MudTd DataLabel="Size">@FormatBytes(context.Size)</MudTd>
+                    <MudTd DataLabel="Created">@context.Created.ToString("yyyy-MM-dd HH:mm")</MudTd>
+                    <MudTd DataLabel="Actions" Style="text-align: right">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="() => DeleteImageAsync(context.Tag)" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-2">Available Images</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">No images found. Build an image to get started.</MudText>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private string _dockerfileContent = string.Empty;
+    private string _imageTag = "myharness:latest";
+    private string _selectedTemplate = "Full Harness";
+    private bool _isBuilding = false;
+    private ImageBuildResult? _buildResult;
+    private List<string> _buildLogs = new();
+    private List<ImageInfo> _images = new();
+
+    private readonly Dictionary<string, string> _templates = new()
+    {
+        ["Full Harness"] = @"FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    python3 \
+    python3-pip \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir anthropic openai
+
+RUN npm install -g @opencode/cli
+
+WORKDIR /workspace
+
+CMD [""/bin/bash""]",
+
+        ["Python + Claude"] = @"FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir \
+    anthropic \
+    requests \
+    pydantic
+
+WORKDIR /workspace
+
+CMD [""python3""]",
+
+        ["Node + Codex"] = @"FROM node:20-slim
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @opencode/cli typescript
+
+WORKDIR /workspace
+
+CMD [""node""]",
+
+        ["Go + Tools"] = @"FROM golang:1.22-alpine
+
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash
+
+WORKDIR /workspace
+
+CMD [""/bin/bash""]",
+
+        ["Rust Dev"] = @"FROM rust:1.75-slim
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+CMD [""/bin/bash""]",
+
+        ["Minimal Alpine"] = @"FROM alpine:3.19
+
+RUN apk add --no-cache \
+    bash \
+    git \
+    curl
+
+WORKDIR /workspace
+
+CMD [""/bin/bash""]"
+    };
+
+    private StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor editor) => new()
+    {
+        Language = "dockerfile",
+        Theme = "vs-dark",
+        AutomaticLayout = true,
+        Minimap = new EditorMinimapOptions { Enabled = false },
+        FontSize = 13,
+        TabSize = 4,
+        ScrollBeyondLastLine = false
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dockerfileContent = _templates[_selectedTemplate];
+        await RefreshImagesAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_templates.TryGetValue(_selectedTemplate, out var template))
+        {
+            _dockerfileContent = template;
+        }
+    }
+
+    private async Task BuildImageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_dockerfileContent) || string.IsNullOrWhiteSpace(_imageTag))
+        {
+            Snackbar.Add("Please provide both Dockerfile content and image tag", Severity.Warning);
+            return;
+        }
+
+        _isBuilding = true;
+        _buildResult = null;
+        _buildLogs.Clear();
+        StateHasChanged();
+
+        try
+        {
+            _buildResult = await ImageBuilderService.BuildImageAsync(
+                _dockerfileContent,
+                _imageTag,
+                logLine =>
+                {
+                    _buildLogs.Add(logLine);
+                    InvokeAsync(StateHasChanged);
+                },
+                CancellationToken.None);
+
+            if (_buildResult.Success)
+            {
+                Snackbar.Add($"Successfully built image: {_buildResult.ImageId}", Severity.Success);
+                await RefreshImagesAsync();
+            }
+            else
+            {
+                Snackbar.Add("Build failed. Check logs for details.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Build error: {ex.Message}", Severity.Error);
+            _buildLogs.Add($"Exception: {ex.Message}");
+        }
+        finally
+        {
+            _isBuilding = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshImagesAsync()
+    {
+        try
+        {
+            _images = await ImageBuilderService.ListImagesAsync(null, CancellationToken.None);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to refresh images: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteImageAsync(string tag)
+    {
+        try
+        {
+            var deleted = await ImageBuilderService.DeleteImageAsync(tag, CancellationToken.None);
+            if (deleted)
+            {
+                Snackbar.Add($"Deleted image: {tag}", Severity.Success);
+                await RefreshImagesAsync();
+            }
+            else
+            {
+                Snackbar.Add($"Failed to delete image: {tag}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting image: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len /= 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+}

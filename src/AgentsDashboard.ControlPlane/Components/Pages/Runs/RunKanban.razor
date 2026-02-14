@@ -1,0 +1,137 @@
+@page "/runs"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject NavigationManager Navigation
+
+<PageTitle>Runs - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Runs</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">
+        Refresh
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate />
+}
+else
+{
+    <MudStack Row Spacing="3" Style="overflow-x: auto; min-height: 500px;">
+        @foreach (var column in _columns)
+        {
+            <MudPaper Class="pa-3" Elevation="2" Style="min-width: 240px; width: 240px; flex-shrink: 0;">
+                <MudStack Spacing="2">
+                    <MudStack Row AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@column.Icon" Size="Size.Small" Color="@column.Color" />
+                        <MudText Typo="Typo.subtitle1"><b>@column.Title</b></MudText>
+                        <MudSpacer />
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                            @column.Runs.Count
+                        </MudChip>
+                    </MudStack>
+
+                    <MudDivider />
+
+                    @foreach (var run in column.Runs)
+                    {
+                        <MudPaper Class="pa-3" Outlined>
+                            <MudLink Href="@($"/runs/{run.Id}")" Typo="Typo.body2">
+                                <b>@run.Id[..8]</b>
+                            </MudLink>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Task: @run.TaskId[..8]</MudText>
+                            <MudStack Row AlignItems="AlignItems.Center" Class="mt-1">
+                                <MudIcon Icon="@Icons.Material.Filled.Timer" Size="Size.Small" />
+                                <MudText Typo="Typo.caption">@FormatDuration(run)</MudText>
+                            </MudStack>
+                            @if (run.Attempt > 1)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Warning">Attempt @run.Attempt</MudText>
+                            }
+                        </MudPaper>
+                    }
+
+                    @if (column.Runs.Count == 0)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">Empty</MudText>
+                    }
+                </MudStack>
+            </MudPaper>
+        }
+    </MudStack>
+}
+
+@code {
+    private record KanbanColumn(string Title, string Icon, Color Color, List<RunDocument> Runs);
+
+    private List<KanbanColumn> _columns = [];
+    private bool _loading = true;
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/runs"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<string, string>("RunStatusChanged", async (runId, newState) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadAsync();
+                StateHasChanged();
+            });
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var runs = await Store.ListRecentRunsAsync(CancellationToken.None);
+
+        var grouped = runs.GroupBy(r => r.State).ToDictionary(g => g.Key, g => g.ToList());
+
+        _columns =
+        [
+            new("Pending Approval", Icons.Material.Filled.Approval, Color.Secondary,
+                grouped.GetValueOrDefault(RunState.PendingApproval, [])),
+            new("Queued", Icons.Material.Filled.HourglassEmpty, Color.Default,
+                grouped.GetValueOrDefault(RunState.Queued, [])),
+            new("Running", Icons.Material.Filled.PlayCircle, Color.Info,
+                grouped.GetValueOrDefault(RunState.Running, [])),
+            new("Succeeded", Icons.Material.Filled.CheckCircle, Color.Success,
+                grouped.GetValueOrDefault(RunState.Succeeded, [])),
+            new("Failed", Icons.Material.Filled.Cancel, Color.Error,
+                grouped.GetValueOrDefault(RunState.Failed, [])),
+            new("Cancelled", Icons.Material.Filled.Block, Color.Warning,
+                grouped.GetValueOrDefault(RunState.Cancelled, [])),
+        ];
+
+        _loading = false;
+    }
+
+    private static string FormatDuration(RunDocument run)
+    {
+        if (run.StartedAtUtc is null) return "—";
+        var end = run.EndedAtUtc ?? DateTime.UtcNow;
+        var duration = end - run.StartedAtUtc.Value;
+        return duration.TotalMinutes >= 1 ? $"{duration.TotalMinutes:F0}m {duration.Seconds}s" : $"{duration.TotalSeconds:F0}s";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+            await _hubConnection.DisposeAsync();
+    }
+}

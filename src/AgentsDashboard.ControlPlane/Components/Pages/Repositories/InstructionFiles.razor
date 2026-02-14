@@ -1,0 +1,209 @@
+@page "/repositories/{RepositoryId}/instructions"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using BlazorMonaco.Editor
+@using AgentsDashboard.Contracts.Domain
+@using AgentsDashboard.Contracts.Api
+@inject Data.OrchestratorStore Store
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Instruction Files</PageTitle>
+
+@if (_repository is null)
+{
+    <MudAlert Severity="Severity.Error">Repository not found</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" />
+                <MudText Typo="Typo.h4">Instruction Files</MudText>
+            </MudStack>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddInstruction">
+                Add Instruction
+            </MudButton>
+        </MudStack>
+
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Repository: <strong>@_repository.Name</strong> - These instructions are layered into every task prompt for this repository.
+        </MudText>
+
+        @if (_instructions.Count == 0)
+        {
+            <MudPaper Elevation="2" Class="pa-8 text-center">
+                <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                <MudText Typo="Typo.h6">No instruction files</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    Add instruction files to provide context and guidelines for AI harnesses.
+                </MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddInstruction">Add First Instruction</MudButton>
+            </MudPaper>
+        }
+        else
+        {
+            @foreach (var instruction in _instructions.OrderBy(i => i.Priority))
+            {
+                <MudPaper Elevation="2" Class="pa-4 mb-4">
+                    <MudGrid>
+                        <MudItem xs="12" md="5">
+                            <MudTextField @bind-Value="instruction.Name" Label="Name" Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="3">
+                            <MudNumericField @bind-Value="instruction.Priority" Label="Priority" Min="0" Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="2" Class="d-flex align-center">
+                            <MudSwitch @bind-Value="instruction.Enabled" Label="Enabled" Color="Color.Success" />
+                        </MudItem>
+                        <MudItem xs="12" md="2" Class="d-flex align-center justify-end">
+                            <MudIconButton Icon="@Icons.Material.Filled.Save" Title="Save" Color="Color.Primary" OnClick="() => SaveInstructionAsync(instruction)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Title="Delete" Color="Color.Error" OnClick="() => DeleteInstructionAsync(instruction)" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Content (Markdown)</MudText>
+                    <div style="height: 300px;">
+                        <StandaloneCodeEditor @key="@($"instr-{instruction.Id}")"
+                                              Id="@($"editor_{instruction.Id}")"
+                                              ConstructionOptions="@(e => GetEditorOptions(e, instruction))"
+                                              Height="300px"
+                                              @ref="@(_editorRefs[instruction.Id])"
+                                              OnDidChangeModelContent="@(() => OnContentChanged(instruction))" />
+                    </div>
+
+                    <MudDivider Class="my-3" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Created: @instruction.CreatedAtUtc.ToLocalTime().ToString("g") |
+                        Updated: @instruction.UpdatedAtUtc.ToLocalTime().ToString("g")
+                    </MudText>
+                </MudPaper>
+            }
+        }
+    </MudContainer>
+
+    <MudDialog @bind-IsOpen="_showAddDialog">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Add New Instruction</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudTextField @bind-Value="_newName" Label="Name" Variant="Variant.Outlined" Class="mb-3" />
+            <MudNumericField @bind-Value="_newPriority" Label="Priority" Min="0" Variant="Variant.Outlined" Class="mb-3" />
+            <MudSwitch @bind-Value="_newEnabled" Label="Enabled" Color="Color.Success" />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="() => _showAddDialog = false">Cancel</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CreateInstructionAsync">Create</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    [Parameter] public string RepositoryId { get; set; } = string.Empty;
+
+    private RepositoryDocument? _repository;
+    private List<RepositoryInstructionDocument> _instructions = [];
+    private readonly Dictionary<string, StandaloneCodeEditor> _editorRefs = [];
+    private bool _showAddDialog;
+    private string _newName = "";
+    private int _newPriority;
+    private bool _newEnabled = true;
+
+    private StandaloneEditorConstructionOptions GetEditorOptions(StandaloneCodeEditor editor, RepositoryInstructionDocument instruction)
+        => new()
+        {
+            AutomaticLayout = true,
+            Language = "markdown",
+            Theme = "vs-dark",
+            Minimap = new EditorMinimapOptions { Enabled = false },
+            WordWrap = "on",
+            FontSize = 13,
+            Value = instruction.Content,
+        };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _repository = await Store.GetRepositoryAsync(RepositoryId, CancellationToken.None);
+        if (_repository is not null)
+        {
+            await LoadInstructionsAsync();
+        }
+    }
+
+    private async Task LoadInstructionsAsync()
+    {
+        _instructions = await Store.GetInstructionsAsync(RepositoryId, CancellationToken.None);
+        foreach (var instr in _instructions)
+        {
+            if (!_editorRefs.ContainsKey(instr.Id))
+                _editorRefs[instr.Id] = null!;
+        }
+        StateHasChanged();
+    }
+
+    private void AddInstruction()
+    {
+        _newName = "";
+        _newPriority = _instructions.Count > 0 ? _instructions.Max(i => i.Priority) + 1 : 0;
+        _newEnabled = true;
+        _showAddDialog = true;
+    }
+
+    private async Task CreateInstructionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName))
+        {
+            Snackbar.Add("Name is required", Severity.Warning);
+            return;
+        }
+
+        var request = new CreateRepositoryInstructionRequest(_newName, "", _newPriority, _newEnabled);
+        var created = await Store.UpsertInstructionAsync(RepositoryId, null, request, CancellationToken.None);
+        _showAddDialog = false;
+        Snackbar.Add("Instruction created", Severity.Success);
+        await LoadInstructionsAsync();
+    }
+
+    private async void OnContentChanged(RepositoryInstructionDocument instruction)
+    {
+        if (_editorRefs.TryGetValue(instruction.Id, out var editor) && editor is not null)
+        {
+            var content = await editor.GetValue();
+            instruction.Content = content;
+        }
+    }
+
+    private async Task SaveInstructionAsync(RepositoryInstructionDocument instruction)
+    {
+        if (_editorRefs.TryGetValue(instruction.Id, out var editor) && editor is not null)
+        {
+            instruction.Content = await editor.GetValue();
+        }
+
+        await Store.UpsertInstructionAsync(RepositoryId, instruction.Id,
+            new CreateRepositoryInstructionRequest(instruction.Name, instruction.Content, instruction.Priority, instruction.Enabled),
+            CancellationToken.None);
+        Snackbar.Add("Instruction saved", Severity.Success);
+    }
+
+    private async Task DeleteInstructionAsync(RepositoryInstructionDocument instruction)
+    {
+        var deleted = await Store.DeleteInstructionAsync(instruction.Id, CancellationToken.None);
+        if (deleted)
+        {
+            _editorRefs.Remove(instruction.Id);
+            Snackbar.Add("Instruction deleted", Severity.Success);
+            await LoadInstructionsAsync();
+        }
+        else
+        {
+            Snackbar.Add("Failed to delete instruction", Severity.Error);
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo($"/repositories/{RepositoryId}");
+    }
+}

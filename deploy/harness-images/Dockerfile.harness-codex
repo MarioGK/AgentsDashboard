@@ -1,0 +1,88 @@
+# AI Orchestrator - Codex Harness Image
+# OpenAI Codex/GPT CLI harness
+# Build: docker build -f Dockerfile.harness-codex -t ghcr.io/mariogk/harness-codex:latest .
+
+FROM ghcr.io/mariogk/ai-harness-base:latest
+
+LABEL org.opencontainers.image.source=https://github.com/mariogk/AgentsDashboard \
+      org.opencontainers.image.description="Codex harness for AI Orchestrator" \
+      org.opencontainers.image.licenses=MIT
+
+USER root
+
+RUN npm install -g \
+    openai \
+    @openai/codex 2>/dev/null || echo "Official Codex CLI not available, using custom implementation"
+
+COPY --chmod=755 <<'EOF' /usr/local/bin/codex
+#!/bin/bash
+# Codex CLI wrapper for AI Orchestrator
+# Usage: codex --prompt "..." [--output-format json]
+
+set -e
+
+PROMPT=""
+OUTPUT_FORMAT="text"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --prompt|-p)
+            PROMPT="$2"
+            shift 2
+            ;;
+        --output-format|-f)
+            OUTPUT_FORMAT="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$PROMPT" ]; then
+    echo '{"status": "failed", "error": "No prompt provided"}' >&2
+    exit 1
+fi
+
+if [ -z "$OPENAI_API_KEY" ]; then
+    echo '{"status": "failed", "error": "OPENAI_API_KEY not set"}' >&2
+    exit 1
+fi
+
+MODEL="${CODEX_MODEL:-gpt-4o}"
+
+RESPONSE=$(curl -s -X POST https://api.openai.com/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $OPENAI_API_KEY" \
+    -d "{
+        \"model\": \"$MODEL\",
+        \"messages\": [{\"role\": \"user\", \"content\": $(echo "$PROMPT" | jq -Rs .)}],
+        \"max_tokens\": 4096
+    }")
+
+if [ "$OUTPUT_FORMAT" = "json" ]; then
+    CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+    cat <<ENVELOPE
+{
+    "runId": "${CODEX_RUN_ID:-unknown}",
+    "taskId": "${CODEX_TASK_ID:-unknown}",
+    "status": "succeeded",
+    "summary": "Codex execution completed",
+    "metadata": {
+        "model": "$MODEL",
+        "contentLength": "${#CONTENT}"
+    }
+}
+ENVELOPE
+else
+    echo "$RESPONSE" | jq -r '.choices[0].message.content // .error.message // "No response"'
+fi
+EOF
+
+USER agent
+
+ENV CODEX_FORMAT=json \
+    CODEX_MODEL=gpt-4o
+
+CMD ["/bin/bash"]

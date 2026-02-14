@@ -1,0 +1,34 @@
+@page "/login"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Login</PageTitle>
+
+@{
+    var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+    var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+    var hasError = query.ContainsKey("error");
+}
+
+<MudPaper Class="pa-6 mx-auto mt-12" Style="max-width:420px;">
+    <MudText Typo="Typo.h5" Class="mb-2">Sign In</MudText>
+    <MudText Typo="Typo.caption" Class="mb-4">Use your configured dashboard account.</MudText>
+
+    @if (hasError)
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">Invalid credentials.</MudAlert>
+    }
+
+    <form method="post" action="/auth/login">
+        <input type="hidden" name="returnUrl" value="/" />
+        <div class="mb-2">
+            <label>Username</label>
+            <input class="mud-input-slot mud-input-root mud-input-root-outlined" name="username" autocomplete="username" />
+        </div>
+        <div class="mb-2">
+            <label>Password</label>
+            <input class="mud-input-slot mud-input-root mud-input-root-outlined" type="password" name="password" autocomplete="current-password" />
+        </div>
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-2">Sign In</MudButton>
+    </form>
+</MudPaper>

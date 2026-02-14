@@ -1,0 +1,128 @@
+@page "/settings"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject ISnackbar Snackbar
+
+<PageTitle>System Settings - AgentsDashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">System Settings</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Docker Policy</MudText>
+                <MudText Typo="Typo.body2" Class="mb-2">Allowed images (one per line)</MudText>
+                <MudTextField T="string" @bind-Value="_allowedImagesText" Lines="6" Variant="Variant.Outlined"
+                              Placeholder="e.g. mcr.microsoft.com/dotnet/sdk:10.0" />
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Retention</MudText>
+                <MudNumericField T="int" @bind-Value="_retentionDaysLogs" Label="Log retention (days)"
+                                 Variant="Variant.Outlined" Min="1" Max="365" Class="mb-3" />
+                <MudNumericField T="int" @bind-Value="_retentionDaysRuns" Label="Run retention (days)"
+                                 Variant="Variant.Outlined" Min="1" Max="365" />
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Observability</MudText>
+                <MudTextField T="string" @bind-Value="_victoriaMetricsEndpoint" Label="VictoriaMetrics Endpoint"
+                              Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField T="string" @bind-Value="_vmUiEndpoint" Label="VMUI Endpoint"
+                              Variant="Variant.Outlined" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudStack Row Class="mt-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                   OnClick="SaveAsync" Disabled="_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
+            }
+            Save Settings
+        </MudButton>
+    </MudStack>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _saving;
+    private string _allowedImagesText = string.Empty;
+    private int _retentionDaysLogs = 30;
+    private int _retentionDaysRuns = 90;
+    private string _victoriaMetricsEndpoint = string.Empty;
+    private string _vmUiEndpoint = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var settings = await Store.GetSettingsAsync(CancellationToken.None);
+            _allowedImagesText = string.Join("\n", settings.DockerAllowedImages);
+            _retentionDaysLogs = settings.RetentionDaysLogs;
+            _retentionDaysRuns = settings.RetentionDaysRuns;
+            _victoriaMetricsEndpoint = settings.VictoriaMetricsEndpoint;
+            _vmUiEndpoint = settings.VmUiEndpoint;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            var images = _allowedImagesText
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+
+            var updated = new SystemSettingsDocument
+            {
+                Id = "singleton",
+                DockerAllowedImages = images,
+                RetentionDaysLogs = _retentionDaysLogs,
+                RetentionDaysRuns = _retentionDaysRuns,
+                VictoriaMetricsEndpoint = _victoriaMetricsEndpoint,
+                VmUiEndpoint = _vmUiEndpoint,
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+
+            await Store.UpdateSettingsAsync(updated, CancellationToken.None);
+            Snackbar.Add("Settings saved", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
