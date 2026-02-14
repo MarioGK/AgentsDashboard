@@ -46,7 +46,7 @@ builder.Services.AddSingleton<IMongoClient>(sp =>
 builder.Services.AddSingleton<IOrchestratorStore, OrchestratorStore>();
 builder.Services.AddSingleton<OrchestratorStore>(sp => (OrchestratorStore)sp.GetRequiredService<IOrchestratorStore>());
 builder.Services.AddSingleton<RunDispatcher>();
-builder.Services.AddSingleton<SecretCryptoService>();
+builder.Services.AddSingleton<ISecretCryptoService, SecretCryptoService>();
 builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddSingleton<IRunEventPublisher, SignalRRunEventPublisher>();
 builder.Services.AddHostedService<MongoInitializationService>();
@@ -64,6 +64,7 @@ builder.Services.AddHostedService<TaskTemplateInitializationService>();
 builder.Services.AddSingleton<IContainerReaper, ContainerReaper>();
 builder.Services.AddHostedService<HarnessHealthService>();
 builder.Services.AddTransient<ProxyAuditMiddleware>();
+builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 builder.Services.AddScoped<ProjectContext>();
 builder.Services.AddScoped<IGlobalSelectionService, GlobalSelectionService>();
 

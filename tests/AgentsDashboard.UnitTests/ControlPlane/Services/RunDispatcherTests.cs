@@ -72,7 +72,7 @@ public class RunDispatcherDispatchTests
 {
     private readonly Mock<WorkerGatewayClient> _workerClientMock;
     private readonly Mock<IOrchestratorStore> _storeMock;
-    private readonly Mock<SecretCryptoService> _secretCryptoMock;
+    private readonly Mock<ISecretCryptoService> _secretCryptoMock;
     private readonly Mock<IRunEventPublisher> _publisherMock;
     private readonly OrchestratorOptions _options;
 
@@ -80,7 +80,7 @@ public class RunDispatcherDispatchTests
     {
         _workerClientMock = new Mock<WorkerGatewayClient>();
         _storeMock = new Mock<IOrchestratorStore>(MockBehavior.Loose);
-        _secretCryptoMock = new Mock<SecretCryptoService>(MockBehavior.Loose);
+        _secretCryptoMock = new Mock<ISecretCryptoService>(MockBehavior.Loose);
         _publisherMock = new Mock<IRunEventPublisher>();
         _options = new OrchestratorOptions
         {

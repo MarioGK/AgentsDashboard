@@ -3,7 +3,13 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public class SecretCryptoService(IDataProtectionProvider provider)
+public interface ISecretCryptoService
+{
+    string Encrypt(string plaintext);
+    string Decrypt(string ciphertext);
+}
+
+public class SecretCryptoService(IDataProtectionProvider provider) : ISecretCryptoService
 {
     private readonly IDataProtector _protector = provider.CreateProtector("AgentsDashboard.ProviderSecrets.v1");
 

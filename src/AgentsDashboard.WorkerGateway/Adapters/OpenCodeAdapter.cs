@@ -56,7 +56,7 @@ public sealed class OpenCodeAdapter(
         if (string.Equals(envelope.Status, "succeeded", StringComparison.OrdinalIgnoreCase))
             return FailureClassification.Success();
 
-        var error = envelope.Error ?? envelope.Summary ?? string.Empty;
+        var error = string.IsNullOrEmpty(envelope.Error) ? (envelope.Summary ?? string.Empty) : envelope.Error;
         var lowerError = error.ToLowerInvariant();
 
         if (ContainsAny(lowerError, "opencode", "context window", "token limit"))
