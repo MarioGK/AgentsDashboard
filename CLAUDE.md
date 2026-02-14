@@ -21,12 +21,7 @@ tests/
 └── AgentsDashboard.Benchmarks/     # Performance benchmarks
 
 deploy/
-├── docker-compose.yml              # Full stack deployment
 ├── harness-image/Dockerfile        # All-in-one harness execution image
-├── backup/                         # Database backup/restore scripts
-├── vm-dashboards/                  # Pre-configured VMUI dashboards
-│   ├── orchestrator-dashboard.json # Main orchestrator metrics
-│   └── harness-metrics-dashboard.json # Per-harness metrics
 └── harness-images/                 # Individual harness Dockerfiles
     ├── Dockerfile.harness-base     # Base image with common dependencies
     ├── Dockerfile.harness-codex    # Codex/GPT harness
@@ -45,7 +40,6 @@ deploy/
 - **YARP 2.3.x** for reverse proxy (dynamic routes for runs)
 - **SignalR** for real-time run status/log updates
 - **Aspire** for local orchestration and OpenTelemetry
-- **VictoriaMetrics + VMUI** for metrics/observability
 - **Docker** for isolated harness execution
 - **Docker.DotNet** for image builder service
 - **CliWrap 3.8.2** for CLI process execution in harness adapters
@@ -113,7 +107,7 @@ Centralized build configuration using:
 
 1. Start infrastructure:
 ```bash
-docker compose -f deploy/docker-compose.yml up -d
+docker compose up -d
 ```
 
 2. Run via Aspire:
@@ -129,7 +123,6 @@ dotnet run --project src/AgentsDashboard.ControlPlane
 
 3. Access:
 - Dashboard: http://localhost:5266
-- VMUI: http://localhost:8081
 - Swagger: http://localhost:5266/api/docs
 
 ## Harness Setup
@@ -266,10 +259,6 @@ projects, repositories, tasks, runs, run_events, findings, workers, webhooks, pr
 - harness-codex, harness-opencode, harness-claudecode, harness-zai
 - ai-harness (all-in-one)
 
-### VMUI Dashboards (70 panels)
-- Orchestrator Dashboard: 31 panels - throughput, latency, errors, queue, workers, runs, findings, proxy
-- Harness Metrics Dashboard: 39 panels - per-harness execution, duration, success rate, failures, container metrics
-
 ## UI Pages (25)
 
 | Page | Route |
@@ -319,7 +308,7 @@ dotnet format
 
 | Option | Command |
 |--------|---------|
-| Docker Compose | `docker compose -f deploy/docker-compose.yml up -d` |
+| Docker Compose | `docker compose up -d` |
 
 ## CI/CD Pipeline
 
@@ -330,20 +319,6 @@ dotnet format
 - **test-unit**: Unit tests with code coverage
 - **test-integration**: Integration tests with external service containers
 - **test-e2e**: Playwright E2E tests with running application
-- **trivy-scan**: Container vulnerability scanning for all harness images
-
-### Container Images
-
-| Image | Description | Registry |
-|-------|-------------|----------|
-| ai-harness-base | Base image with .NET 10, Node.js, Python, Go, Playwright | ghcr.io |
-| harness-codex | OpenAI Codex harness | ghcr.io |
-| harness-opencode | OpenCode harness | ghcr.io |
-| harness-claudecode | Claude Code harness | ghcr.io |
-| harness-zai | Zhipu GLM-5 harness | ghcr.io |
-| ai-harness | All-in-one harness image | ghcr.io |
-| control-plane | Blazor Server control plane | ghcr.io |
-| worker-gateway | gRPC worker gateway | ghcr.io |
 
 ## API Endpoints (96 total)
 
@@ -377,5 +352,5 @@ dotnet format
 | gRPC Services | Complete | 6 RPCs implemented |
 | Built-in Templates | Complete | 4 templates (QA, UnitTest, Deps, Regression) |
 | Rate Limiting | Complete | 4 policies (Global, Auth, Webhook, Burst) |
-| CI/CD | Complete | GitHub Actions (ci.yml, deploy.yml) |
+| CI/CD | Complete | GitHub Actions (ci.yml) |
 | DTO Completeness | Fixed | Added ArtifactPatterns, LinkedFailureRuns to template DTOs; TimeoutMinutes to WorkflowStageConfigRequest |

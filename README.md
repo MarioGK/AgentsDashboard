@@ -9,7 +9,6 @@ Production-oriented AI orchestration control plane built with .NET 10.
 - SQLite persistence via EF Core
 - YARP embedded in control plane
 - Aspire app host + OpenTelemetry-ready services
-- VictoriaMetrics + VMUI for metrics
 - Cookie auth + RBAC (`viewer`, `operator`, `admin`)
 - Encrypted provider secret vault (Data Protection + SQLite)
 
@@ -22,7 +21,7 @@ Production-oriented AI orchestration control plane built with .NET 10.
 ## Local run (recommended)
 1. Start control plane container:
 ```bash
-docker compose -f deploy/docker-compose.yml up -d
+docker compose up -d
 ```
 2. (Optional) Run worker gateway directly for local dev:
 ```bash
@@ -34,11 +33,10 @@ dotnet run --project src/AgentsDashboard.ControlPlane
 ```
 4. Open:
 - Dashboard: `http://localhost:5266` (or the printed control-plane URL)
-- VMUI: `http://localhost:8081`
 
 ## Full container stack
 ```bash
-docker compose -f deploy/docker-compose.yml up --build
+docker compose up --build
 ```
 Control plane: `http://localhost:8080`
 

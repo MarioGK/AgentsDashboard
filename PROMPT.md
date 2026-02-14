@@ -44,8 +44,8 @@
 
   1. ControlPlane (Blazor Server + APIs + SignalR + Scheduler + YARP + Docker client).
   2. WorkerGateway (ASP.NET Core gRPC + Channel<> local queues + container runner).
-  3. mongodb as system of record.
-  4. victoria-metrics and vmui with OpenTelemetry instrumentation via Aspire.
+  3. SQLite as system of record via EF Core.
+  4. OpenTelemetry instrumentation via Aspire.
   5. Docker Compose single-host topology
 
   ## Execution Model (Harness-Only)
@@ -74,7 +74,7 @@
   4. Route TTL and cleanup on run completion or timeout.
   5. Proxy audit records must include projectId, repoId, taskId, runId, upstream target, and latency.
 
-  ## Data Model (MongoDB)
+  ## Data Model (SQLite / EF Core)
 
   1. Collections: projects, repositories, tasks, task_schedules, runs, run_events, findings, artifacts, workers, provider_configs.
   2. Required task fields: kind, harness, instructions, commands, timeouts, retryPolicy, approvalProfile, sandboxProfile, artifactPolicy.
@@ -105,7 +105,7 @@
   2. Scheduler tick every 10 seconds with drift-safe next-run calculation.
   3. Concurrency controls: global cap, per-project cap, per-repository cap, per-task cap.
   4. Retries with exponential backoff and max-attempt policy per task.
-  5. Restart recovery rehydrates pending/running intents from Mongo and reconciles orphan containers.
+  5. Restart recovery rehydrates pending/running intents from SQLite and reconciles orphan containers.
   6. Dead-run protection via per-stage timeout and forced termination policy.
 
   ## GitHub and PR Automation
@@ -119,8 +119,7 @@
   ## Observability
 
   1. Aspire defines service composition and local operational wiring.
-  2. OpenTelemetry tracing/metrics/log correlation across control plane, worker, gRPC, Mongo, and harness execution.
-  3. VictoriaMetrics stores metrics; VMUI dashboards cover throughput, latency, failures, queue depth, worker saturation.
+  2. OpenTelemetry tracing/metrics/log correlation across control plane, worker, gRPC, SQLite, and harness execution.
   4. Alerts: missing heartbeat, failure-rate spike, queue backlog threshold, repeated PR failures, route-leak detection.
 
   ## Testing and Acceptance Criteria
@@ -149,7 +148,7 @@
   4. No direct AI provider APIs are used; harness CLI tools like opencode,codex and claude code.
   5. MudBlazor and BlazorMonaco are mandatory UI/editor standards.
   6. Credentials for all tools must come from host configuration page and be injected into the worker container.
-  7. MongoDB is the source of truth; queue transport is hybrid durable-intent + in-memory dispatch.
+  7. SQLite is the source of truth via EF Core.
 
   ## Tests
   
