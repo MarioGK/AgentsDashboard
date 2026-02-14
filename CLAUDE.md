@@ -141,9 +141,11 @@ dotnet test
 
 | Test Project | Files | Tests | Coverage Area |
 |--------------|-------|-------|---------------|
-| UnitTests | 33+ | ~850 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection |
-| IntegrationTests | 28+ | ~152 | MongoDB store, Image allowlist, Secret redactor, API endpoints |
-| PlaywrightTests | 11 | ~190 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+| UnitTests | 36 | 789 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection |
+| IntegrationTests | 23 | 152 | MongoDB store, Image allowlist, Secret redactor, API endpoints |
+| PlaywrightTests | 11 | 210 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+
+**Total: 70 test files, 1,151 tests**
 
 ## Implementation Status
 
@@ -170,13 +172,17 @@ dotnet test
 | Artifact storage | Complete | File-based, download via API |
 | Artifact extraction | Complete | Automatic extraction from container workspaces |
 | Alerting service | Complete | 5 rule types, webhook firing |
+| Alert cooldown mechanism | Complete | 15-minute default cooldown, configurable per rule |
+| Alert resolution API | Complete | POST /alerts/events/{id}/resolve endpoint |
+| Workflow execution recovery | Complete | Orphaned workflows marked as failed on startup |
+| Pending approval logging | Complete | Logs pending approval runs on startup |
 | Alert rules UI | Complete | Create/edit/delete rules, event timeline |
 | Worker management UI | Complete | Worker list with status, slots, utilization |
 | CRUD operations | Complete | PUT/DELETE for tasks, repos, projects |
 | CI/CD pipeline | Complete | GitHub Actions workflow with coverage |
-| Unit tests | Complete | ~612 tests for core services |
+| Unit tests | Complete | 789 tests for core services |
 | Integration tests | Complete | 152 tests: store, allowlist, redactor, API endpoints |
-| E2E tests | Complete | 183 Playwright tests across 10 test files |
+| E2E tests | Complete | 210 Playwright tests across 11 test files |
 | Global project/repo switcher | Complete | MudSelect dropdowns in MainLayout header |
 | Aggregate reliability metrics | Complete | Success rates (7d/30d), avg duration, failure trends on Dashboard |
 | Stage timeline visualization | Complete | MudTimeline in RunDetail Workflow tab with color-coded stages, duration, expandable runs |
@@ -185,6 +191,10 @@ dotnet test
 | System Settings UI | Complete | /settings page with Docker policy, retention, observability |
 | Repository instruction files | Complete | Repo-level instruction files with BlazorMonaco editor, layered prompts |
 | Harness Docker images | Complete | Individual images for each harness + all-in-one image |
+| Container security hardening | Complete | no-new-privileges, cap-drop ALL, agent user |
+| Artifact volume mount | Complete | /artifacts mount for container-to-host transfer |
+| Container metrics | Complete | CPU/memory/network/block I/O collection |
+| Image pre-pull | Complete | Pre-pulls harness images on startup |
 
 ## UI Pages Summary
 
