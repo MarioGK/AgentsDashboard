@@ -204,7 +204,7 @@ dotnet test
 
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
-| UnitTests | 47 | 1,139 | 100% (36 skipped, all pass) |
+| UnitTests | 47 | 1,139 | 100% (37 skipped, all pass) |
 | IntegrationTests | 40 | 232 | Requires MongoDB |
 | PlaywrightTests | 21 | 277 | Requires Running App |
 | Benchmarks | 7 | 4 | Performance |
@@ -297,9 +297,9 @@ dotnet format
 ## Known Issues
 
 - No Blazor component tests (bunit compatibility with .NET 10 pending)
-- Docker-dependent tests skipped (36 tests) due to Docker.DotNet version mismatch and BackgroundService testability
+- Docker-dependent tests skipped (37 tests) due to Docker.DotNet version mismatch and BackgroundService testability
 - Integration tests require running MongoDB infrastructure
-- Unit test pass rate: 1,103/1,139 (100% of non-skipped tests pass)
+- Unit test pass rate: 1,102/1,139 (100% of non-skipped tests pass)
 
 ## Deployment Options
 

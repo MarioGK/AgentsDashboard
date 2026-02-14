@@ -82,7 +82,9 @@ public interface IOrchestratorStore
     Task MarkStaleWorkersOfflineAsync(TimeSpan threshold, CancellationToken cancellationToken);
 
     Task<WebhookRegistration> CreateWebhookAsync(CreateWebhookRequest request, CancellationToken cancellationToken);
+    Task<WebhookRegistration?> GetWebhookAsync(string webhookId, CancellationToken cancellationToken);
     Task<List<WebhookRegistration>> ListWebhooksAsync(string repositoryId, CancellationToken cancellationToken);
+    Task<WebhookRegistration?> UpdateWebhookAsync(string webhookId, UpdateWebhookRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken);
 
     Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken);

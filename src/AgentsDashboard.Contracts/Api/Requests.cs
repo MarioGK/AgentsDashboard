@@ -22,7 +22,9 @@ public sealed record CreateTaskRequest(
     ArtifactPolicyConfig? ArtifactPolicy = null,
     ApprovalProfileConfig? ApprovalProfile = null,
     int? ConcurrencyLimit = null,
-    List<InstructionFile>? InstructionFiles = null);
+    List<InstructionFile>? InstructionFiles = null,
+    List<string>? ArtifactPatterns = null,
+    List<string>? LinkedFailureRuns = null);
 public sealed record UpdateTaskRequest(
     string Name,
     TaskKind Kind,
@@ -38,7 +40,9 @@ public sealed record UpdateTaskRequest(
     ArtifactPolicyConfig? ArtifactPolicy = null,
     ApprovalProfileConfig? ApprovalProfile = null,
     int? ConcurrencyLimit = null,
-    List<InstructionFile>? InstructionFiles = null);
+    List<InstructionFile>? InstructionFiles = null,
+    List<string>? ArtifactPatterns = null,
+    List<string>? LinkedFailureRuns = null);
 public sealed record CreateRunRequest(string TaskId);
 public sealed record RetryRunRequest(string RunId);
 public sealed record CancelRunRequest(string RunId);

@@ -121,6 +121,8 @@ public sealed class TaskDocument
     public ApprovalProfileConfig ApprovalProfile { get; set; } = new();
     public SandboxProfileConfig SandboxProfile { get; set; } = new();
     public ArtifactPolicyConfig ArtifactPolicy { get; set; } = new();
+    public List<string> ArtifactPatterns { get; set; } = [];
+    public List<string> LinkedFailureRuns { get; set; } = [];
     public int ConcurrencyLimit { get; set; } = 1;
     public List<InstructionFile> InstructionFiles { get; set; } = [];
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;

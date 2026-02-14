@@ -399,6 +399,8 @@ public class OrchestratorStore : IOrchestratorStore
             ApprovalProfile = request.ApprovalProfile ?? new ApprovalProfileConfig(),
             ConcurrencyLimit = request.ConcurrencyLimit ?? 0,
             InstructionFiles = request.InstructionFiles ?? [],
+            ArtifactPatterns = request.ArtifactPatterns ?? [],
+            LinkedFailureRuns = request.LinkedFailureRuns ?? [],
         };
 
         task.NextRunAtUtc = ComputeNextRun(task, DateTime.UtcNow);
@@ -474,6 +476,8 @@ public class OrchestratorStore : IOrchestratorStore
             .Set(x => x.ApprovalProfile, request.ApprovalProfile ?? new ApprovalProfileConfig())
             .Set(x => x.ConcurrencyLimit, request.ConcurrencyLimit ?? 0)
             .Set(x => x.InstructionFiles, request.InstructionFiles ?? [])
+            .Set(x => x.ArtifactPatterns, request.ArtifactPatterns ?? [])
+            .Set(x => x.LinkedFailureRuns, request.LinkedFailureRuns ?? [])
             .Set(x => x.NextRunAtUtc, nextRun);
 
         return await _tasks.FindOneAndUpdateAsync(

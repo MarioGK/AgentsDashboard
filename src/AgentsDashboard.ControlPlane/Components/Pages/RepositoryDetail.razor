@@ -269,7 +269,12 @@ else
     private int _taskOverallTimeout = 1800;
     private double _taskCpuLimit = 1.5;
     private string _taskMemoryLimit = "2g";
+    private bool _taskNetworkDisabled;
+    private bool _taskReadOnlyRootFs;
     private int _taskMaxArtifacts = 50;
+    private long _taskMaxTotalSizeBytes = 104_857_600;
+    private List<string> _taskArtifactPatterns = [];
+    private List<string> _taskLinkedFailureRuns = [];
     private string _githubToken = string.Empty;
     private string _codexToken = string.Empty;
     private string _opencodeToken = string.Empty;
@@ -344,7 +349,12 @@ else
         _taskOverallTimeout = template.Timeouts.OverallSeconds;
         _taskCpuLimit = template.SandboxProfile.CpuLimit;
         _taskMemoryLimit = template.SandboxProfile.MemoryLimit;
+        _taskNetworkDisabled = template.SandboxProfile.NetworkDisabled;
+        _taskReadOnlyRootFs = template.SandboxProfile.ReadOnlyRootFs;
         _taskMaxArtifacts = template.ArtifactPolicy.MaxArtifacts;
+        _taskMaxTotalSizeBytes = template.ArtifactPolicy.MaxTotalSizeBytes;
+        _taskArtifactPatterns = [.. template.ArtifactPatterns];
+        _taskLinkedFailureRuns = [.. template.LinkedFailureRuns];
         _editingTaskId = null;
         StateHasChanged();
     }
@@ -365,7 +375,12 @@ else
         _taskOverallTimeout = task.Timeouts.OverallSeconds;
         _taskCpuLimit = task.SandboxProfile.CpuLimit;
         _taskMemoryLimit = task.SandboxProfile.MemoryLimit;
+        _taskNetworkDisabled = task.SandboxProfile.NetworkDisabled;
+        _taskReadOnlyRootFs = task.SandboxProfile.ReadOnlyRootFs;
         _taskMaxArtifacts = task.ArtifactPolicy.MaxArtifacts;
+        _taskMaxTotalSizeBytes = task.ArtifactPolicy.MaxTotalSizeBytes;
+        _taskArtifactPatterns = [.. task.ArtifactPatterns];
+        _taskLinkedFailureRuns = [.. task.LinkedFailureRuns];
         StateHasChanged();
     }
 
@@ -383,7 +398,12 @@ else
         _taskOverallTimeout = 1800;
         _taskCpuLimit = 1.5;
         _taskMemoryLimit = "2g";
+        _taskNetworkDisabled = false;
+        _taskReadOnlyRootFs = false;
         _taskMaxArtifacts = 50;
+        _taskMaxTotalSizeBytes = 104_857_600;
+        _taskArtifactPatterns = [];
+        _taskLinkedFailureRuns = [];
         StateHasChanged();
     }
 
@@ -396,8 +416,8 @@ else
 
         var retryPolicy = new RetryPolicyConfig(_taskRetryMaxAttempts);
         var timeouts = new TimeoutConfig(_taskExecutionTimeout, _taskOverallTimeout);
-        var sandboxProfile = new SandboxProfileConfig(_taskCpuLimit, _taskMemoryLimit);
-        var artifactPolicy = new ArtifactPolicyConfig(_taskMaxArtifacts);
+        var sandboxProfile = new SandboxProfileConfig(_taskCpuLimit, _taskMemoryLimit, _taskNetworkDisabled, _taskReadOnlyRootFs);
+        var artifactPolicy = new ArtifactPolicyConfig(_taskMaxArtifacts, _taskMaxTotalSizeBytes);
 
         if (_editingTaskId is not null)
         {
@@ -413,7 +433,12 @@ else
                 retryPolicy,
                 timeouts,
                 sandboxProfile,
-                artifactPolicy);
+                artifactPolicy,
+                null,
+                null,
+                null,
+                _taskArtifactPatterns.Count > 0 ? _taskArtifactPatterns : null,
+                _taskLinkedFailureRuns.Count > 0 ? _taskLinkedFailureRuns : null);
             await Store.UpdateTaskAsync(_editingTaskId, updateRequest, CancellationToken.None);
             _editingTaskId = null;
         }
@@ -432,7 +457,12 @@ else
                 retryPolicy,
                 timeouts,
                 sandboxProfile,
-                artifactPolicy);
+                artifactPolicy,
+                null,
+                null,
+                null,
+                _taskArtifactPatterns.Count > 0 ? _taskArtifactPatterns : null,
+                _taskLinkedFailureRuns.Count > 0 ? _taskLinkedFailureRuns : null);
 
             await Store.CreateTaskAsync(request, CancellationToken.None);
         }
@@ -440,6 +470,8 @@ else
         _taskName = string.Empty;
         _taskCron = string.Empty;
         _taskAutoPr = false;
+        _taskArtifactPatterns = [];
+        _taskLinkedFailureRuns = [];
 
         await RefreshAsync();
     }
