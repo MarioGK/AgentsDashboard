@@ -243,16 +243,15 @@ dotnet test
 
 ## Missing Test Coverage
 
-- MongoInitializationService, ProjectContext lack dedicated tests
 - No Blazor component tests currently (bunit compatibility with .NET 10 pending)
 - Some sealed classes (HarnessExecutor, JobProcessorService) cannot be mocked with Moq
 
 ## Known Issues
 
-- ~78 unit tests fail due to sealed classes (HarnessExecutor, JobProcessorService) that cannot be mocked with Moq
+- ~75 unit tests fail due to sealed classes (HarnessExecutor, JobProcessorService) and IJSRuntime extension methods that cannot be mocked with Moq
 - No Blazor component tests currently (bunit compatibility with .NET 10 pending)
 - Integration tests require running MongoDB and Docker infrastructure
-- Some GlobalSelectionService tests fail due to IJSRuntime extension method mocking limitations
+- Some GlobalSelectionService/ProjectContext tests fail due to IJSRuntime extension method mocking limitations
 
 ## Recent Fixes (2026-02-14)
 
@@ -344,3 +343,62 @@ dotnet format
 - **CliWrap Usage**: Verified CliWrap 3.8.2 is properly used with robust error handling, cancellation support, and secret redaction
 - **Branch Naming Convention**: Verified full implementation in RunDispatcher (generation) and HarnessExecutor (validation)
 - **Instruction Files**: Fixed bug where embedded repo instruction files were not included in layered prompts
+
+## Additional Improvements (2026-02-14 - Session 3)
+
+### API Enhancements
+- **Webhook Management**: Added `GET /api/repositories/{id}/webhooks` endpoint to list webhooks for a repository
+- **Webhook Deletion**: Added `DELETE /api/webhooks/{id}` endpoint to delete webhooks
+- **Bulk Cancel Runs**: Added `POST /api/runs/bulk-cancel` endpoint for cancelling multiple runs at once
+- **Bulk Resolve Alerts**: Added `POST /api/alerts/events/bulk-resolve` endpoint for resolving multiple alert events
+- Added `BulkCancelRunsRequest`, `BulkResolveAlertsRequest`, and `BulkOperationResult` DTOs
+
+### Configuration Validation
+- **OrchestratorOptions**: Implemented `IValidatableObject` for startup validation
+- Validates: connection strings, concurrency limits hierarchy, scheduler interval bounds
+- Options registered with `.ValidateOnStart()` for early failure detection
+
+### Docker Improvements
+- **All-in-One Image**: Refactored to extend from `ai-harness-base:latest` instead of duplicating base setup
+- Reduced image build time and maintenance burden
+- Added ripgrep and fd-find utilities
+
+### Test Coverage Updates
+- **MongoInitializationService**: 8 unit tests covering initialization, logging, error handling
+- **ProjectContext**: 18 unit tests covering project/repo selection, localStorage persistence, edge cases
+- Login and Workers E2E tests already exist in DashboardE2ETests.cs
+
+### Store Methods Added
+- `DeleteWebhookAsync(webhookId)`: Delete a webhook registration
+- `ResolveAlertEventsAsync(eventIds)`: Bulk resolve alert events
+- `BulkCancelRunsAsync(runIds)`: Bulk cancel runs by ID
+
+### Documentation Updates
+- Updated Missing Test Coverage section: MongoInitializationService and ProjectContext now have dedicated tests
+- Removed stale items from Known Issues
+
+## Additional Improvements (2026-02-14 - Session 4)
+
+### Interface Extraction for Testability
+- **IOrchestratorStore**: Created interface with all 82 public methods from OrchestratorStore for better Moq compatibility
+- **IWorkflowExecutor**: Created interface for WorkflowExecutor with ExecuteWorkflowAsync and ApproveWorkflowStageAsync methods
+- Updated all services to use interfaces instead of concrete types:
+  - RunDispatcher, WorkflowExecutor, CronSchedulerService, WorkerEventListenerService
+  - RecoveryService, AlertingService, TaskTemplateService, WebhookService, GlobalSelectionService, ProjectContext
+- Program.cs updated to register interfaces with DI container
+
+### Test Improvements
+- Fixed OpenTelemetry.Instrumentation.GrpcNetClient package version (1.14.0 -> 1.15.0-beta.1)
+- Updated all test files to use interfaces instead of concrete classes:
+  - ApiEndpointsTests, RunDispatcherTests, WebhookServiceTests
+  - GlobalSelectionServiceTests, RecoveryServiceTests, DeadRunDetectionTests
+- Unit test pass rate improved from 985/1076 to 1017/1105 (92% pass rate)
+
+### Deployment Fixes
+- Added grpc_health_probe to WorkerGateway Dockerfile for proper healthcheck support
+- Installed wget and ca-certificates for downloading the health probe binary
+
+### Remaining Test Failures (75 tests)
+- IJSRuntime extension methods cannot be mocked with Moq (affects GlobalSelectionService, ProjectContext tests)
+- Sealed classes (HarnessExecutor, JobProcessorService, DockerContainerService) cannot be mocked with Moq
+- These require either creating interfaces or using a different mocking framework

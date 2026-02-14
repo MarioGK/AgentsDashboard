@@ -1,6 +1,8 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AgentsDashboard.ControlPlane.Configuration;
 
-public sealed class OrchestratorOptions
+public sealed class OrchestratorOptions : IValidatableObject
 {
     public const string SectionName = "Orchestrator";
 
@@ -15,6 +17,36 @@ public sealed class OrchestratorOptions
     public TtlDaysConfig TtlDays { get; set; } = new();
     public DeadRunDetectionConfig DeadRunDetection { get; set; } = new();
     public StageTimeoutConfig StageTimeout { get; set; } = new();
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(MongoConnectionString))
+            yield return new ValidationResult("MongoConnectionString is required", [nameof(MongoConnectionString)]);
+
+        if (string.IsNullOrWhiteSpace(MongoDatabase))
+            yield return new ValidationResult("MongoDatabase is required", [nameof(MongoDatabase)]);
+
+        if (string.IsNullOrWhiteSpace(WorkerGrpcAddress))
+            yield return new ValidationResult("WorkerGrpcAddress is required", [nameof(WorkerGrpcAddress)]);
+
+        if (SchedulerIntervalSeconds < 1 || SchedulerIntervalSeconds > 300)
+            yield return new ValidationResult("SchedulerIntervalSeconds must be between 1 and 300", [nameof(SchedulerIntervalSeconds)]);
+
+        if (MaxGlobalConcurrentRuns < 1)
+            yield return new ValidationResult("MaxGlobalConcurrentRuns must be at least 1", [nameof(MaxGlobalConcurrentRuns)]);
+
+        if (PerProjectConcurrencyLimit < 1)
+            yield return new ValidationResult("PerProjectConcurrencyLimit must be at least 1", [nameof(PerProjectConcurrencyLimit)]);
+
+        if (PerRepoConcurrencyLimit < 1)
+            yield return new ValidationResult("PerRepoConcurrencyLimit must be at least 1", [nameof(PerRepoConcurrencyLimit)]);
+
+        if (PerProjectConcurrencyLimit > MaxGlobalConcurrentRuns)
+            yield return new ValidationResult("PerProjectConcurrencyLimit cannot exceed MaxGlobalConcurrentRuns", [nameof(PerProjectConcurrencyLimit)]);
+
+        if (PerRepoConcurrencyLimit > PerProjectConcurrencyLimit)
+            yield return new ValidationResult("PerRepoConcurrencyLimit cannot exceed PerProjectConcurrencyLimit", [nameof(PerRepoConcurrencyLimit)]);
+    }
 }
 
 public sealed class RetryDefaultsConfig

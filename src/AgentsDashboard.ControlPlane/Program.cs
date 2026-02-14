@@ -18,7 +18,9 @@ AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
-builder.Services.Configure<OrchestratorOptions>(builder.Configuration.GetSection(OrchestratorOptions.SectionName));
+builder.Services.AddOptions<OrchestratorOptions>()
+    .Bind(builder.Configuration.GetSection(OrchestratorOptions.SectionName))
+    .ValidateOnStart();
 builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSection(DashboardAuthOptions.SectionName));
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

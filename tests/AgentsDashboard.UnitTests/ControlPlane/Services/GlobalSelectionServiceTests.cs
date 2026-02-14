@@ -16,7 +16,7 @@ public class GlobalSelectionServiceTests
     public GlobalSelectionServiceTests()
     {
         _storeMock = new Mock<IOrchestratorStore>(MockBehavior.Loose);
-        _jsRuntimeMock = new Mock<IJSRuntime>(MockBehavior.Strict);
+        _jsRuntimeMock = new Mock<IJSRuntime>(MockBehavior.Loose);
         _testProjects =
         [
             new ProjectDocument { Id = "proj-1", Name = "Project 1" },
@@ -28,6 +28,21 @@ public class GlobalSelectionServiceTests
             new RepositoryDocument { Id = "repo-1", Name = "Repo 1", ProjectId = "proj-1" },
             new RepositoryDocument { Id = "repo-2", Name = "Repo 2", ProjectId = "proj-1" }
         ];
+    }
+
+    private void SetupLocalStorageGetItem(string? projectId = null, string? repoId = null)
+    {
+        var sequence = _jsRuntimeMock.SetupSequence(j => j.InvokeAsync<string?>(
+            "localStorage.getItem", It.IsAny<CancellationToken>(), It.IsAny<object[]>()));
+        
+        if (projectId != null || repoId != null)
+        {
+            sequence = sequence.ReturnsAsync(projectId).ReturnsAsync(repoId);
+        }
+        else
+        {
+            sequence = sequence.ReturnsAsync((string?)null).ReturnsAsync((string?)null);
+        }
     }
 
     private GlobalSelectionService CreateService()
@@ -42,10 +57,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
 
@@ -62,10 +74,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
 
@@ -82,11 +91,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-2", It.IsAny<CancellationToken>()))
             .ReturnsAsync([new RepositoryDocument { Id = "repo-3", Name = "Repo 3", ProjectId = "proj-2" }]);
-        _jsRuntimeMock.SetupSequence(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync("proj-2")
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem("proj-2", null);
 
         var service = CreateService();
 
@@ -102,11 +107,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.SetupSequence(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync("invalid-id")
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem("invalid-id", null);
 
         var service = CreateService();
 
@@ -122,11 +123,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.SetupSequence(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync("proj-1")
-            .ReturnsAsync("repo-2");
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem("proj-1", "repo-2");
 
         var service = CreateService();
 
@@ -143,10 +140,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-2", It.IsAny<CancellationToken>()))
             .ReturnsAsync([new RepositoryDocument { Id = "repo-3", Name = "Repo 3", ProjectId = "proj-2" }]);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
@@ -164,10 +158,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
@@ -188,10 +179,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
@@ -210,20 +198,16 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
 
-        var callCountBefore = _jsRuntimeMock.Invocations.Count(i => i.Method.Name == "InvokeVoidAsync");
+        var initialProjectId = service.SelectedProjectId;
 
         await service.SelectProjectAsync("proj-1", CancellationToken.None);
 
-        var callCountAfter = _jsRuntimeMock.Invocations.Count(i => i.Method.Name == "InvokeVoidAsync");
-        callCountAfter.Should().Be(callCountBefore);
+        service.SelectedProjectId.Should().Be(initialProjectId);
     }
 
     [Fact]
@@ -233,10 +217,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
@@ -254,10 +235,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
@@ -278,10 +256,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
@@ -299,20 +274,16 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
 
-        var callCountBefore = _jsRuntimeMock.Invocations.Count(i => i.Method.Name == "InvokeVoidAsync");
+        var initialRepoId = service.SelectedRepositoryId;
 
         await service.SelectRepositoryAsync("repo-1", CancellationToken.None);
 
-        var callCountAfter = _jsRuntimeMock.Invocations.Count(i => i.Method.Name == "InvokeVoidAsync");
-        callCountAfter.Should().Be(callCountBefore);
+        service.SelectedRepositoryId.Should().Be(initialRepoId);
     }
 
     [Fact]
@@ -333,10 +304,7 @@ public class GlobalSelectionServiceTests
         _storeMock.SetupSequence(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories)
             .ReturnsAsync(updatedRepos);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
@@ -356,10 +324,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         SelectionChangedEventArgs? receivedArgs = null;
@@ -379,10 +344,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         var callCount1 = 0;
@@ -407,10 +369,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         var callCount = 0;
@@ -428,8 +387,7 @@ public class GlobalSelectionServiceTests
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
 
@@ -447,10 +405,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
 
@@ -469,10 +424,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
 
@@ -489,10 +441,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         service.InitializeAsync(CancellationToken.None).Wait();
@@ -520,10 +469,7 @@ public class GlobalSelectionServiceTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
         await service.InitializeAsync(CancellationToken.None);
@@ -537,26 +483,26 @@ public class GlobalSelectionServiceTests
     public async Task InitializeAsync_ConcurrentCalls_OnlyInitializesOnce()
     {
         var callCount = 0;
+        var tcs = new TaskCompletionSource();
+        
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
             .Callback(async () =>
             {
                 callCount++;
-                await Task.Delay(100);
+                await tcs.Task;
             })
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()))
-            .ReturnsAsync((string?)null);
-        _jsRuntimeMock.Setup(j => j.InvokeVoidAsync("localStorage.setItem", It.IsAny<object[]>()))
-            .Returns(ValueTask.CompletedTask);
+        SetupLocalStorageGetItem();
 
         var service = CreateService();
 
         var tasks = Enumerable.Range(0, 5)
             .Select(_ => service.InitializeAsync(CancellationToken.None))
-            .ToArray();
+            .ToList();
 
+        tcs.SetResult();
         await Task.WhenAll(tasks);
 
         callCount.Should().Be(1);

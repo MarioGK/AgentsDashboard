@@ -4,6 +4,32 @@ using Microsoft.JSInterop;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
+public interface ILocalStorageService
+{
+    Task<string?> GetItemAsync(string key);
+    Task SetItemAsync(string key, string value);
+}
+
+public sealed class LocalStorageService : ILocalStorageService
+{
+    private readonly IJSRuntime _jsRuntime;
+
+    public LocalStorageService(IJSRuntime jsRuntime)
+    {
+        _jsRuntime = jsRuntime;
+    }
+
+    public async Task<string?> GetItemAsync(string key)
+    {
+        return await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", key);
+    }
+
+    public async Task SetItemAsync(string key, string value)
+    {
+        await _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, value);
+    }
+}
+
 public sealed class SelectionChangedEventArgs
 {
     public string? ProjectId { get; init; }
@@ -34,7 +60,7 @@ public interface IGlobalSelectionService
 public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposable
 {
     private readonly IOrchestratorStore _store;
-    private readonly IJSRuntime _jsRuntime;
+    private readonly ILocalStorageService _localStorage;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly List<Action<SelectionChangedEventArgs>> _subscribers = [];
     private readonly object _subscribersLock = new();
@@ -53,10 +79,10 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
 
     public event EventHandler<SelectionChangedEventArgs>? SelectionChanged;
 
-    public GlobalSelectionService(IOrchestratorStore store, IJSRuntime jsRuntime)
+    public GlobalSelectionService(IOrchestratorStore store, ILocalStorageService localStorage)
     {
         _store = store;
-        _jsRuntime = jsRuntime;
+        _localStorage = localStorage;
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
@@ -68,8 +94,8 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
 
             ProjectList = await _store.ListProjectsAsync(cancellationToken);
 
-            var savedProjectId = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "selectedProjectId");
-            var savedRepoId = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "selectedRepositoryId");
+            var savedProjectId = await _localStorage.GetItemAsync("selectedProjectId");
+            var savedRepoId = await _localStorage.GetItemAsync("selectedRepositoryId");
 
             if (savedProjectId is not null && ProjectList.Any(p => p.Id == savedProjectId))
             {
@@ -95,7 +121,7 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
         if (projectId is not null)
         {
             await SetProjectInternalAsync(projectId, null, cancellationToken);
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "selectedProjectId", projectId);
+            await _localStorage.SetItemAsync("selectedProjectId", projectId);
         }
         else
         {
@@ -104,8 +130,8 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
             SelectedRepositoryId = null;
             SelectedRepository = null;
             RepositoryList = [];
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "selectedProjectId", string.Empty);
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "selectedRepositoryId", string.Empty);
+            await _localStorage.SetItemAsync("selectedProjectId", string.Empty);
+            await _localStorage.SetItemAsync("selectedRepositoryId", string.Empty);
             RaiseSelectionChanged();
         }
     }
@@ -119,7 +145,7 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
             ? RepositoryList.FirstOrDefault(r => r.Id == repositoryId)
             : null;
 
-        await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "selectedRepositoryId", repositoryId ?? string.Empty);
+        await _localStorage.SetItemAsync("selectedRepositoryId", repositoryId ?? string.Empty);
         RaiseSelectionChanged();
     }
 
@@ -168,7 +194,7 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
         {
             SelectedRepositoryId = RepositoryList[0].Id;
             SelectedRepository = RepositoryList[0];
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "selectedRepositoryId", SelectedRepositoryId);
+            await _localStorage.SetItemAsync("selectedRepositoryId", SelectedRepositoryId);
         }
         else
         {

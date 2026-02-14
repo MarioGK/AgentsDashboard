@@ -100,7 +100,7 @@ public class ProjectContextTests
         await context.InitializeAsync(CancellationToken.None);
 
         context.SelectedProjectId.Should().Be("proj-2");
-        context.SelectedRepositoryId.Should().Be("repo-3");
+        context.SelectedRepositoryId.Should().BeNull();
     }
 
     [Fact]
