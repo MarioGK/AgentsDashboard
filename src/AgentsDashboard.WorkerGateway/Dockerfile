@@ -13,7 +13,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
-RUN apt-get update && apt-get install -y --no-install-recommends docker.io gh && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends docker.io gh wget ca-certificates && rm -rf /var/lib/apt/lists/* \
+    && wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.24/grpc_health_probe-linux-amd64 \
+    && chmod +x /bin/grpc_health_probe
 
 EXPOSE 5201
 ENTRYPOINT ["dotnet", "AgentsDashboard.WorkerGateway.dll"]

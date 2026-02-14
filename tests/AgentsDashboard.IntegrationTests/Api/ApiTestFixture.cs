@@ -79,6 +79,12 @@ public sealed class ApiTestFixture : IAsyncLifetime
                         logger);
                 });
 
+                var reaperDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IContainerReaper));
+                if (reaperDescriptor != null)
+                    services.Remove(reaperDescriptor);
+
+                services.AddSingleton<IContainerReaper, MockContainerReaper>();
+
                 services.AddAuthentication("Test")
                     .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
 
@@ -156,5 +162,18 @@ public sealed class MockWorkerClient : AgentsDashboard.Contracts.Worker.WorkerGa
             () => Grpc.Core.Status.DefaultSuccess,
             () => new Grpc.Core.Metadata(),
             () => { });
+    }
+}
+
+public sealed class MockContainerReaper : IContainerReaper
+{
+    public Task<ContainerKillResult> KillContainerAsync(string runId, string reason, bool force, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new ContainerKillResult { Killed = true, ContainerId = "mock-container-id" });
+    }
+
+    public Task<int> ReapOrphanedContainersAsync(IEnumerable<string> activeRunIds, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(0);
     }
 }

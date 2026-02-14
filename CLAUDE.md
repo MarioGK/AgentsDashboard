@@ -145,19 +145,19 @@ dotnet test
 
 | Test Project | Files | Tests | Coverage Area |
 |--------------|-------|-------|---------------|
-| UnitTests | 46 | ~850 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping, WorkerEventBus, ImagePrePull, ContainerOrphanReconciler |
-| IntegrationTests | 32 | ~160 | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
-| PlaywrightTests | 15 | 210 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+| UnitTests | 41 | 1083 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping, WorkerEventBus, ImagePrePull, ContainerOrphanReconciler |
+| IntegrationTests | 29 | 166 | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
+| PlaywrightTests | 12 | 213 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
 | Benchmarks | 4 | - | WorkerQueue, SignalR Publish, MongoDB Operations |
 
-**Total: 97+ test files, ~1,220+ tests**
+**Total: 86 test files, 1462 tests**
 
 ### Test Notes
 
 - **RecoveryServiceTests**: Updated to use IContainerReaper interface instead of direct WorkerGatewayClient
 - **ContainerReaperTests**: Tests for container reaping via gRPC
 - **WorkerEventBusTests**: Tests for event bus channel operations
-- **DeadRunDetectionTests**: Timer-based dead run detection tests are skipped (require integration testing with actual timer)
+- **DeadRunDetectionTests**: Tests run successfully using mocks (no timer required)
 - **ImagePrePullServiceTests**: Tests for image pre-pull service
 - **ContainerOrphanReconcilerTests**: Tests for orphaned container reconciliation
 
@@ -244,13 +244,13 @@ dotnet test
 ## Missing Test Coverage
 
 - Some API endpoint tests require OrchestratorStore methods to be made virtual for Moq
-- Component tests require bunit package updates for .NET 10 compatibility
-- MongoInitializationService, ProjectContext, ContainerOrphanReconciler lack dedicated tests
+- MongoInitializationService, ProjectContext lack dedicated tests
+- No Blazor component tests currently (bunit compatibility with .NET 10 pending)
 
 ## Known Issues
 
 - Some unit tests fail due to Moq limitations (non-virtual methods in OrchestratorStore cannot be mocked)
-- Component tests in `tests/AgentsDashboard.UnitTests/ControlPlane/Components/` require bunit API updates for .NET 10
+- No Blazor component tests currently (bunit compatibility with .NET 10 pending)
 - Integration tests require running MongoDB and Docker infrastructure
 - ImagePrePullServiceTests and ContainerOrphanReconcilerTests have Docker-dependent tests that are skipped in unit test environment
 
@@ -271,6 +271,7 @@ dotnet test
 - **HarnessType enum**: Codex, OpenCode, ClaudeCode, Zai - standardized harness type identifiers
 - **ContainerMetrics**: CPU percent, memory usage/limit/percent, network RX/TX, block read/write, timestamp
 - **ArtifactDocument**: Persistent artifact metadata with run ID, file name, path, content type, size, SHA256, artifact type
+- **DeadRunDetectionResult**: Tracks stale/zombie/overdue run termination counts from monitoring cycle
 
 ### API Enhancements
 - **Alert Rules**: Added `CooldownMinutes` to `CreateAlertRuleRequest` and `UpdateAlertRuleRequest` (default: 15 minutes)
@@ -285,13 +286,23 @@ dotnet test
 - **Graceful shutdown**: JobProcessorService now tracks running jobs and waits for completion (30s timeout) during shutdown
 - **Container metrics**: DockerContainerService implements container stats collection (CPU, memory, network, block I/O)
 
+### Observability
+- **gRPC Instrumentation**: Enabled OpenTelemetry gRPC client instrumentation in ServiceDefaults for distributed tracing
+
+### Recovery Service Improvements
+- **Testable Detection Methods**: Dead run detection methods now return termination counts and are directly callable for testing
+- `DetectAndTerminateStaleRunsAsync()`, `DetectAndTerminateZombieRunsAsync()`, `DetectAndTerminateOverdueRunsAsync()` return int counts
+- `MonitorForDeadRunsAsync()` returns `DeadRunDetectionResult` with aggregate counts
+
 ### Known Issues Updated
 - DockerContainerService now has `IDockerContainerService` interface for mocking in tests
-- ContainerMetrics class duplicate removed from WorkerGateway.Models (uses Contracts.Domain.ContainerMetrics)
+- ContainerMetrics duplicate in WorkerGateway.Models removed (now uses Contracts.Domain.ContainerMetrics)
+- DeadRunDetectionTests now pass without requiring timer-based integration tests
 
-### New Tests Added
-- **ImagePrePullServiceTests**: 6 tests for image pre-pull service (Docker-dependent, skipped in unit tests)
-- **ContainerOrphanReconcilerTests**: 12 tests for orphaned container reconciliation (6 unit tests, 6 Docker-dependent)
+### Tests Updated
+- **DeadRunDetectionTests**: 10 tests now pass (previously 4 skipped, now all run directly against detection methods)
+- **ImagePrePullServiceTests**: 17 tests for image pre-pull service
+- **ContainerOrphanReconcilerTests**: 12 tests for orphaned container reconciliation
 
 ## Build Commands
 
