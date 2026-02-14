@@ -301,7 +301,7 @@ public class RecoveryServiceTests
         store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<string> { "pending-1" });
+            .Returns(Task.FromResult(new List<string> { "pending-1" }));
 
         var publisher = new Mock<IRunEventPublisher>();
         var reaper = new Mock<IContainerReaper>();
@@ -327,7 +327,7 @@ public class RecoveryServiceTests
         store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<string> { "run-1", "run-2" });
+            .Returns(Task.FromResult(new List<string> { "run-1", "run-2" }));
 
         var publisher = new Mock<IRunEventPublisher>();
         var reaper = new Mock<IContainerReaper>();

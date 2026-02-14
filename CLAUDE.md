@@ -17,11 +17,15 @@ src/
 tests/
 ├── AgentsDashboard.UnitTests/      # Unit tests for core services
 ├── AgentsDashboard.IntegrationTests/   # Testcontainers-based integration tests
-└── AgentsDashboard.PlaywrightTests/    # E2E UI tests
+├── AgentsDashboard.PlaywrightTests/    # E2E UI tests
+└── AgentsDashboard.Benchmarks/     # Performance benchmarks
 
 deploy/
 ├── docker-compose.yml              # Full stack deployment
 ├── harness-image/Dockerfile        # All-in-one harness execution image
+├── vm-dashboards/                  # Pre-configured VMUI dashboards
+│   ├── orchestrator-dashboard.json # Main orchestrator metrics
+│   └── harness-metrics-dashboard.json # Per-harness metrics
 └── harness-images/                 # Individual harness Dockerfiles
     ├── Dockerfile.harness-base     # Base image with common dependencies
     ├── Dockerfile.harness-codex    # Codex/GPT harness
