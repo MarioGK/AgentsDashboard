@@ -1,13 +1,19 @@
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
+using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
 public class WorkflowExecutor(
     OrchestratorStore store,
     RunDispatcher dispatcher,
+    IContainerReaper containerReaper,
+    IOptions<OrchestratorOptions> options,
     ILogger<WorkflowExecutor> logger)
 {
+    private readonly StageTimeoutConfig _timeoutConfig = options.Value.StageTimeout;
+
     public virtual async Task<WorkflowExecutionDocument> ExecuteWorkflowAsync(
         WorkflowDocument workflow,
         string projectId,
@@ -54,6 +60,7 @@ public class WorkflowExecutor(
         CancellationToken cancellationToken)
     {
         var orderedStages = workflow.Stages.OrderBy(s => s.Order).ToList();
+        var maxStageTimeout = TimeSpan.FromHours(_timeoutConfig.MaxStageTimeoutHours);
 
         for (int i = 0; i < orderedStages.Count; i++)
         {
@@ -82,26 +89,16 @@ public class WorkflowExecutor(
                 StartedAtUtc = DateTime.UtcNow
             };
 
+            var stageTimeout = GetStageTimeout(stage);
+            stageTimeout = stageTimeout > maxStageTimeout ? maxStageTimeout : stageTimeout;
+
+            using var stageCts = new CancellationTokenSource(stageTimeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stageCts.Token);
+
             try
             {
-                switch (stage.Type)
-                {
-                    case WorkflowStageType.Task:
-                        await ExecuteTaskStageAsync(stage, stageResult, execution.ProjectId, cancellationToken);
-                        break;
-
-                    case WorkflowStageType.Approval:
-                        await ExecuteApprovalStageAsync(stage, stageResult, execution, cancellationToken);
-                        break;
-
-                    case WorkflowStageType.Delay:
-                        await ExecuteDelayStageAsync(stage, stageResult, cancellationToken);
-                        break;
-
-                    case WorkflowStageType.Parallel:
-                        await ExecuteParallelStageAsync(stage, stageResult, execution.ProjectId, cancellationToken);
-                        break;
-                }
+                await ExecuteStageWithTimeoutAsync(
+                    stage, stageResult, execution, projectId: execution.ProjectId, linkedCts.Token, stageCts);
 
                 stageResult.EndedAtUtc = DateTime.UtcNow;
                 execution.StageResults.Add(stageResult);
@@ -124,6 +121,24 @@ public class WorkflowExecutor(
                 }
 
                 logger.LogInformation("Stage {StageName} completed successfully: {Summary}", stage.Name, stageResult.Summary);
+            }
+            catch (OperationCanceledException) when (stageCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning("Stage {StageName} timed out after {Timeout}", stage.Name, stageTimeout);
+                stageResult.Succeeded = false;
+                stageResult.Summary = $"Stage timed out after {stageTimeout.TotalMinutes:F0} minutes";
+                stageResult.EndedAtUtc = DateTime.UtcNow;
+                execution.StageResults.Add(stageResult);
+                await store.UpdateWorkflowExecutionAsync(execution, cancellationToken);
+
+                await KillStageContainersAsync(stageResult.RunIds, "Stage timeout");
+
+                await store.MarkWorkflowExecutionCompletedAsync(
+                    execution.Id,
+                    WorkflowExecutionState.Failed,
+                    $"Stage '{stage.Name}' timed out after {stageTimeout.TotalMinutes:F0} minutes",
+                    cancellationToken);
+                return;
             }
             catch (OperationCanceledException)
             {
@@ -158,6 +173,66 @@ public class WorkflowExecutor(
             WorkflowExecutionState.Succeeded,
             string.Empty,
             cancellationToken);
+    }
+
+    private async Task ExecuteStageWithTimeoutAsync(
+        WorkflowStageConfig stage,
+        WorkflowStageResult result,
+        WorkflowExecutionDocument execution,
+        string projectId,
+        CancellationToken cancellationToken,
+        CancellationTokenSource timeoutCts)
+    {
+        switch (stage.Type)
+        {
+            case WorkflowStageType.Task:
+                await ExecuteTaskStageAsync(stage, result, projectId, cancellationToken);
+                break;
+
+            case WorkflowStageType.Approval:
+                await ExecuteApprovalStageAsync(stage, result, execution, cancellationToken);
+                break;
+
+            case WorkflowStageType.Delay:
+                await ExecuteDelayStageAsync(stage, result, cancellationToken);
+                break;
+
+            case WorkflowStageType.Parallel:
+                await ExecuteParallelStageAsync(stage, result, projectId, cancellationToken);
+                break;
+        }
+    }
+
+    private TimeSpan GetStageTimeout(WorkflowStageConfig stage)
+    {
+        if (stage.TimeoutMinutes.HasValue && stage.TimeoutMinutes.Value > 0)
+        {
+            return TimeSpan.FromMinutes(stage.TimeoutMinutes.Value);
+        }
+
+        return stage.Type switch
+        {
+            WorkflowStageType.Task => TimeSpan.FromMinutes(_timeoutConfig.DefaultTaskStageTimeoutMinutes),
+            WorkflowStageType.Approval => TimeSpan.FromHours(_timeoutConfig.DefaultApprovalStageTimeoutHours),
+            WorkflowStageType.Parallel => TimeSpan.FromMinutes(_timeoutConfig.DefaultParallelStageTimeoutMinutes),
+            WorkflowStageType.Delay => TimeSpan.FromHours(1),
+            _ => TimeSpan.FromMinutes(60)
+        };
+    }
+
+    private async Task KillStageContainersAsync(List<string> runIds, string reason)
+    {
+        foreach (var runId in runIds)
+        {
+            try
+            {
+                await containerReaper.KillContainerAsync(runId, reason, force: true, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to kill container for run {RunId}", runId);
+            }
+        }
     }
 
     private async Task ExecuteTaskStageAsync(
@@ -212,13 +287,19 @@ public class WorkflowExecutor(
         }
 
         var pollingInterval = TimeSpan.FromSeconds(2);
-        var maxWaitTime = TimeSpan.FromMinutes(30);
-        var elapsed = TimeSpan.Zero;
+        var stageTimeout = GetStageTimeout(stage);
+        var startTime = DateTime.UtcNow;
 
-        while (elapsed < maxWaitTime)
+        while (DateTime.UtcNow - startTime < stageTimeout)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                result.Succeeded = false;
+                result.Summary = "Cancelled";
+                return;
+            }
+
             await Task.Delay(pollingInterval, cancellationToken);
-            elapsed += pollingInterval;
 
             var updatedRun = await store.GetRunAsync(run.Id, cancellationToken);
             if (updatedRun is null)
@@ -265,14 +346,20 @@ public class WorkflowExecutor(
 
         await store.MarkWorkflowExecutionPendingApprovalAsync(execution.Id, stage.Id, cancellationToken);
 
+        var stageTimeout = GetStageTimeout(stage);
         var pollingInterval = TimeSpan.FromSeconds(5);
-        var maxWaitTime = TimeSpan.FromHours(24);
-        var elapsed = TimeSpan.Zero;
+        var startTime = DateTime.UtcNow;
 
-        while (elapsed < maxWaitTime)
+        while (DateTime.UtcNow - startTime < stageTimeout)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                result.Succeeded = false;
+                result.Summary = "Cancelled";
+                return;
+            }
+
             await Task.Delay(pollingInterval, cancellationToken);
-            elapsed += pollingInterval;
 
             var updatedExecution = await store.GetWorkflowExecutionAsync(execution.Id, cancellationToken);
             if (updatedExecution is null)
@@ -302,7 +389,7 @@ public class WorkflowExecutor(
         }
 
         result.Succeeded = false;
-        result.Summary = "Approval timeout (24 hours)";
+        result.Summary = $"Approval timeout ({stageTimeout.TotalHours:F0} hours)";
     }
 
     private async Task ExecuteDelayStageAsync(
@@ -355,7 +442,7 @@ public class WorkflowExecutor(
 
         foreach (var taskId in parallelTaskIds)
         {
-            tasks.Add(ExecuteParallelTaskAsync(taskId, projectId, cancellationToken));
+            tasks.Add(ExecuteParallelTaskAsync(taskId, projectId, stage, cancellationToken));
         }
 
         var results = await Task.WhenAll(tasks);
@@ -374,6 +461,7 @@ public class WorkflowExecutor(
     private async Task<(bool Success, string Summary, string RunId)> ExecuteParallelTaskAsync(
         string taskId,
         string projectId,
+        WorkflowStageConfig stage,
         CancellationToken cancellationToken)
     {
         var task = await store.GetTaskAsync(taskId, cancellationToken);
@@ -404,13 +492,17 @@ public class WorkflowExecutor(
         }
 
         var pollingInterval = TimeSpan.FromSeconds(2);
-        var maxWaitTime = TimeSpan.FromMinutes(30);
-        var elapsed = TimeSpan.Zero;
+        var stageTimeout = GetStageTimeout(stage);
+        var startTime = DateTime.UtcNow;
 
-        while (elapsed < maxWaitTime)
+        while (DateTime.UtcNow - startTime < stageTimeout)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return (false, "Cancelled", run.Id);
+            }
+
             await Task.Delay(pollingInterval, cancellationToken);
-            elapsed += pollingInterval;
 
             var updatedRun = await store.GetRunAsync(run.Id, cancellationToken);
             if (updatedRun is null)

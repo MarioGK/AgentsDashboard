@@ -1,11 +1,12 @@
 using System.Text;
+using AgentsDashboard.WorkerGateway.Models;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 
 namespace AgentsDashboard.WorkerGateway.Services;
 
-public sealed class DockerContainerService(ILogger<DockerContainerService> logger) : IDisposable
+public sealed class DockerContainerService(ILogger<DockerContainerService> logger) : IDockerContainerService, IDisposable
 {
     private readonly DockerClient _client = new DockerClientConfiguration().CreateClient();
 
@@ -205,6 +206,110 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         catch
         {
             return false;
+        }
+    }
+
+    public async Task<List<OrchestratorContainerInfo>> ListOrchestratorContainersAsync(CancellationToken cancellationToken)
+    {
+        var containers = await _client.Containers.ListContainersAsync(
+            new ContainersListParameters { All = true },
+            cancellationToken);
+
+        var result = new List<OrchestratorContainerInfo>();
+
+        foreach (var container in containers)
+        {
+            if (container.Labels is null)
+                continue;
+
+            if (!container.Labels.TryGetValue("orchestrator.run-id", out var runId))
+                continue;
+
+            container.Labels.TryGetValue("orchestrator.task-id", out var taskId);
+            container.Labels.TryGetValue("orchestrator.repo-id", out var repoId);
+            container.Labels.TryGetValue("orchestrator.project-id", out var projectId);
+
+            result.Add(new OrchestratorContainerInfo
+            {
+                ContainerId = container.ID,
+                RunId = runId,
+                TaskId = taskId ?? string.Empty,
+                RepoId = repoId ?? string.Empty,
+                ProjectId = projectId ?? string.Empty,
+                State = container.State,
+                Image = container.Image,
+                CreatedAt = container.Created
+            });
+        }
+
+        return result;
+    }
+
+    public async Task<bool> RemoveContainerForceAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _client.Containers.RemoveContainerAsync(
+                containerId,
+                new ContainerRemoveParameters { Force = true },
+                cancellationToken);
+            logger.LogInformation("Force removed orphaned container {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
+            return true;
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to force remove container {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
+            return false;
+        }
+    }
+
+    public async Task<ContainerKillResult> KillContainerByRunIdAsync(string runId, string reason, bool force, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var containers = await ListOrchestratorContainersAsync(cancellationToken);
+            var container = containers.FirstOrDefault(c => 
+                string.Equals(c.RunId, runId, StringComparison.OrdinalIgnoreCase));
+
+            if (container is null)
+            {
+                logger.LogWarning("No container found for run {RunId}", runId);
+                return new ContainerKillResult(false, string.Empty, $"No container found for run {runId}");
+            }
+
+            var containerId = container.ContainerId;
+            logger.LogWarning("Killing container {ContainerId} for run {RunId}. Reason: {Reason}, Force: {Force}",
+                containerId[..Math.Min(12, containerId.Length)], runId, reason, force);
+
+            if (force)
+            {
+                var removed = await RemoveContainerForceAsync(containerId, cancellationToken);
+                return new ContainerKillResult(removed, containerId, removed ? string.Empty : "Failed to force remove container");
+            }
+
+            try
+            {
+                await _client.Containers.StopContainerAsync(
+                    containerId,
+                    new ContainerStopParameters { WaitBeforeKillSeconds = 5 },
+                    cancellationToken);
+
+                logger.LogInformation("Stopped container {ContainerId} for run {RunId}", containerId[..12], runId);
+                return new ContainerKillResult(true, containerId, string.Empty);
+            }
+            catch (DockerContainerNotFoundException)
+            {
+                return new ContainerKillResult(false, string.Empty, "Container not found");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error killing container for run {RunId}", runId);
+            return new ContainerKillResult(false, string.Empty, ex.Message);
         }
     }
 

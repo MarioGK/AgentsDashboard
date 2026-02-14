@@ -5,7 +5,12 @@ using Grpc.Core;
 
 namespace AgentsDashboard.WorkerGateway.Grpc;
 
-public sealed class WorkerGatewayGrpcService(WorkerQueue queue, WorkerEventBus eventBus, ILogger<WorkerGatewayGrpcService> logger)
+public sealed class WorkerGatewayGrpcService(
+    WorkerQueue queue,
+    WorkerEventBus eventBus,
+    IContainerOrphanReconciler orphanReconciler,
+    IDockerContainerService dockerService,
+    ILogger<WorkerGatewayGrpcService> logger)
     : AgentsDashboard.Contracts.Worker.WorkerGateway.WorkerGatewayBase
 {
     public override async Task<DispatchJobReply> DispatchJob(DispatchJobRequest request, ServerCallContext context)
@@ -32,6 +37,30 @@ public sealed class WorkerGatewayGrpcService(WorkerQueue queue, WorkerEventBus e
         return Task.FromResult(new CancelJobReply { Accepted = accepted });
     }
 
+    public override async Task<KillContainerReply> KillContainer(KillContainerRequest request, ServerCallContext context)
+    {
+        if (string.IsNullOrWhiteSpace(request.RunId))
+        {
+            return new KillContainerReply { Killed = false, Error = "run_id is required" };
+        }
+
+        logger.LogWarning("KillContainer request received for run {RunId}. Reason: {Reason}, Force: {Force}",
+            request.RunId, request.Reason, request.Force);
+
+        var result = await dockerService.KillContainerByRunIdAsync(
+            request.RunId,
+            request.Reason,
+            request.Force,
+            context.CancellationToken);
+
+        return new KillContainerReply
+        {
+            Killed = result.Killed,
+            ContainerId = result.ContainerId,
+            Error = result.Error
+        };
+    }
+
     public override async Task SubscribeEvents(SubscribeEventsRequest request, IServerStreamWriter<JobEventReply> responseStream, ServerCallContext context)
     {
         await foreach (var evt in eventBus.ReadAllAsync(context.CancellationToken))
@@ -47,5 +76,33 @@ public sealed class WorkerGatewayGrpcService(WorkerQueue queue, WorkerEventBus e
             Acknowledged = true
         };
         return Task.FromResult(reply);
+    }
+
+    public override async Task<ReconcileOrphanedContainersReply> ReconcileOrphanedContainers(
+        ReconcileOrphanedContainersRequest request,
+        ServerCallContext context)
+    {
+        logger.LogInformation("Received orphan reconciliation request with {Count} active run IDs", request.ActiveRunIds.Count);
+
+        var result = await orphanReconciler.ReconcileAsync(request.ActiveRunIds, context.CancellationToken);
+
+        var reply = new ReconcileOrphanedContainersReply
+        {
+            OrphanedCount = result.OrphanedCount
+        };
+
+        foreach (var container in result.RemovedContainers)
+        {
+            reply.RemovedContainers.Add(new OrphanedContainerInfo
+            {
+                ContainerId = container.ContainerId,
+                RunId = container.RunId
+            });
+        }
+
+        logger.LogInformation("Orphan reconciliation complete: {OrphanedCount} found, {RemovedCount} removed",
+            result.OrphanedCount, result.RemovedContainers.Count);
+
+        return reply;
     }
 }

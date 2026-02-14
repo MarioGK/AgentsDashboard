@@ -1,0 +1,296 @@
+{
+  "title": "AgentsDashboard Harness Metrics",
+  "description": "Detailed metrics for individual harness execution (Codex, OpenCode, ClaudeCode, Zai)",
+  "tags": ["harness", "execution", "performance"],
+  "panels": [
+    {
+      "title": "Codex Executions/min",
+      "type": "graph",
+      "description": "Codex harness execution throughput",
+      "query": "rate(orchestrator_runs_total{harness=\"codex\"}[5m]) * 60",
+      "unit": "runs/min"
+    },
+    {
+      "title": "OpenCode Executions/min",
+      "type": "graph",
+      "description": "OpenCode harness execution throughput",
+      "query": "rate(orchestrator_runs_total{harness=\"opencode\"}[5m]) * 60",
+      "unit": "runs/min"
+    },
+    {
+      "title": "ClaudeCode Executions/min",
+      "type": "graph",
+      "description": "ClaudeCode harness execution throughput",
+      "query": "rate(orchestrator_runs_total{harness=\"claudecode\"}[5m]) * 60",
+      "unit": "runs/min"
+    },
+    {
+      "title": "Zai/GLM-5 Executions/min",
+      "type": "graph",
+      "description": "Zai harness execution throughput",
+      "query": "rate(orchestrator_runs_total{harness=\"zai\"}[5m]) * 60",
+      "unit": "runs/min"
+    },
+    {
+      "title": "Execution Throughput by Harness",
+      "type": "graph",
+      "description": "Combined execution throughput comparison",
+      "query": "rate(orchestrator_runs_total[5m]) * 60 by (harness)",
+      "unit": "runs/min"
+    },
+    {
+      "title": "Codex Duration P95",
+      "type": "graph",
+      "description": "95th percentile execution duration for Codex",
+      "query": "histogram_quantile(0.95, rate(orchestrator_run_duration_seconds_bucket{harness=\"codex\"}[5m]))",
+      "unit": "s"
+    },
+    {
+      "title": "OpenCode Duration P95",
+      "type": "graph",
+      "description": "95th percentile execution duration for OpenCode",
+      "query": "histogram_quantile(0.95, rate(orchestrator_run_duration_seconds_bucket{harness=\"opencode\"}[5m]))",
+      "unit": "s"
+    },
+    {
+      "title": "ClaudeCode Duration P95",
+      "type": "graph",
+      "description": "95th percentile execution duration for ClaudeCode",
+      "query": "histogram_quantile(0.95, rate(orchestrator_run_duration_seconds_bucket{harness=\"claudecode\"}[5m]))",
+      "unit": "s"
+    },
+    {
+      "title": "Zai Duration P95",
+      "type": "graph",
+      "description": "95th percentile execution duration for Zai",
+      "query": "histogram_quantile(0.95, rate(orchestrator_run_duration_seconds_bucket{harness=\"zai\"}[5m]))",
+      "unit": "s"
+    },
+    {
+      "title": "Duration P50 by Harness",
+      "type": "graph",
+      "description": "Median execution duration per harness",
+      "query": "histogram_quantile(0.50, rate(orchestrator_run_duration_seconds_bucket[5m])) by (harness)",
+      "unit": "s"
+    },
+    {
+      "title": "Duration P99 by Harness",
+      "type": "graph",
+      "description": "99th percentile execution duration per harness",
+      "query": "histogram_quantile(0.99, rate(orchestrator_run_duration_seconds_bucket[5m])) by (harness)",
+      "unit": "s"
+    },
+    {
+      "title": "Codex Success Rate",
+      "type": "gauge",
+      "description": "Success percentage for Codex executions",
+      "query": "rate(orchestrator_runs_total{harness=\"codex\",state=\"completed\"}[5m]) / rate(orchestrator_runs_total{harness=\"codex\"}[5m]) * 100",
+      "unit": "percent",
+      "thresholds": {
+        "warning": 80,
+        "critical": 50
+      }
+    },
+    {
+      "title": "OpenCode Success Rate",
+      "type": "gauge",
+      "description": "Success percentage for OpenCode executions",
+      "query": "rate(orchestrator_runs_total{harness=\"opencode\",state=\"completed\"}[5m]) / rate(orchestrator_runs_total{harness=\"opencode\"}[5m]) * 100",
+      "unit": "percent",
+      "thresholds": {
+        "warning": 80,
+        "critical": 50
+      }
+    },
+    {
+      "title": "ClaudeCode Success Rate",
+      "type": "gauge",
+      "description": "Success percentage for ClaudeCode executions",
+      "query": "rate(orchestrator_runs_total{harness=\"claudecode\",state=\"completed\"}[5m]) / rate(orchestrator_runs_total{harness=\"claudecode\"}[5m]) * 100",
+      "unit": "percent",
+      "thresholds": {
+        "warning": 80,
+        "critical": 50
+      }
+    },
+    {
+      "title": "Zai Success Rate",
+      "type": "gauge",
+      "description": "Success percentage for Zai executions",
+      "query": "rate(orchestrator_runs_total{harness=\"zai\",state=\"completed\"}[5m]) / rate(orchestrator_runs_total{harness=\"zai\"}[5m]) * 100",
+      "unit": "percent",
+      "thresholds": {
+        "warning": 80,
+        "critical": 50
+      }
+    },
+    {
+      "title": "Success Rate by Harness",
+      "type": "graph",
+      "description": "Success rate trend per harness over time",
+      "query": "rate(orchestrator_runs_total{state=\"completed\"}[5m]) / rate(orchestrator_runs_total[5m]) * 100 by (harness)",
+      "unit": "percent"
+    },
+    {
+      "title": "Codex Failure Count (1h)",
+      "type": "stat",
+      "description": "Failed Codex runs in last hour",
+      "query": "increase(orchestrator_runs_total{harness=\"codex\",state=\"failed\"}[1h])",
+      "unit": "runs"
+    },
+    {
+      "title": "OpenCode Failure Count (1h)",
+      "type": "stat",
+      "description": "Failed OpenCode runs in last hour",
+      "query": "increase(orchestrator_runs_total{harness=\"opencode\",state=\"failed\"}[1h])",
+      "unit": "runs"
+    },
+    {
+      "title": "ClaudeCode Failure Count (1h)",
+      "type": "stat",
+      "description": "Failed ClaudeCode runs in last hour",
+      "query": "increase(orchestrator_runs_total{harness=\"claudecode\",state=\"failed\"}[1h])",
+      "unit": "runs"
+    },
+    {
+      "title": "Zai Failure Count (1h)",
+      "type": "stat",
+      "description": "Failed Zai runs in last hour",
+      "query": "increase(orchestrator_runs_total{harness=\"zai\",state=\"failed\"}[1h])",
+      "unit": "runs"
+    },
+    {
+      "title": "Failures by Harness",
+      "type": "graph",
+      "description": "Failure rate comparison across harnesses",
+      "query": "rate(orchestrator_runs_total{state=\"failed\"}[5m]) by (harness)",
+      "unit": "ops"
+    },
+    {
+      "title": "Codex Errors by Type",
+      "type": "graph",
+      "description": "Error distribution for Codex harness",
+      "query": "rate(orchestrator_errors_total{harness=\"codex\"}[5m]) by (error_type)",
+      "unit": "errors/s"
+    },
+    {
+      "title": "OpenCode Errors by Type",
+      "type": "graph",
+      "description": "Error distribution for OpenCode harness",
+      "query": "rate(orchestrator_errors_total{harness=\"opencode\"}[5m]) by (error_type)",
+      "unit": "errors/s"
+    },
+    {
+      "title": "ClaudeCode Errors by Type",
+      "type": "graph",
+      "description": "Error distribution for ClaudeCode harness",
+      "query": "rate(orchestrator_errors_total{harness=\"claudecode\"}[5m]) by (error_type)",
+      "unit": "errors/s"
+    },
+    {
+      "title": "Zai Errors by Type",
+      "type": "graph",
+      "description": "Error distribution for Zai harness",
+      "query": "rate(orchestrator_errors_total{harness=\"zai\"}[5m]) by (error_type)",
+      "unit": "errors/s"
+    },
+    {
+      "title": "Container Memory Usage by Harness",
+      "type": "graph",
+      "description": "Memory consumption per harness container",
+      "query": "orchestrator_container_memory_bytes by (harness)",
+      "unit": "bytes"
+    },
+    {
+      "title": "Container CPU Usage by Harness",
+      "type": "graph",
+      "description": "CPU utilization per harness container",
+      "query": "rate(orchestrator_container_cpu_seconds_total[1m]) by (harness) * 100",
+      "unit": "percent"
+    },
+    {
+      "title": "Artifacts Generated by Harness",
+      "type": "graph",
+      "description": "Artifact creation rate per harness",
+      "query": "rate(orchestrator_artifacts_total[5m]) by (harness)",
+      "unit": "artifacts/s"
+    },
+    {
+      "title": "Artifact Size by Harness",
+      "type": "graph",
+      "description": "Total artifact size per harness",
+      "query": "orchestrator_artifact_bytes_total by (harness)",
+      "unit": "bytes"
+    },
+    {
+      "title": "Timeout Rate by Harness",
+      "type": "graph",
+      "description": "Execution timeout rate per harness",
+      "query": "rate(orchestrator_runs_total{state=\"timeout\"}[5m]) by (harness)",
+      "unit": "ops"
+    },
+    {
+      "title": "Cancelled Runs by Harness",
+      "type": "graph",
+      "description": "Cancellation rate per harness",
+      "query": "rate(orchestrator_runs_total{state=\"cancelled\"}[5m]) by (harness)",
+      "unit": "ops"
+    },
+    {
+      "title": "Retried Runs by Harness",
+      "type": "graph",
+      "description": "Retry rate per harness",
+      "query": "rate(orchestrator_retries_total[5m]) by (harness)",
+      "unit": "ops"
+    },
+    {
+      "title": "Container Restarts by Harness",
+      "type": "graph",
+      "description": "Container restart count per harness",
+      "query": "increase(orchestrator_container_restarts_total[1h]) by (harness)",
+      "unit": "restarts"
+    },
+    {
+      "title": "Queue Wait Time by Harness P95",
+      "type": "graph",
+      "description": "95th percentile queue wait per harness",
+      "query": "histogram_quantile(0.95, rate(orchestrator_queue_wait_seconds_bucket[5m])) by (harness)",
+      "unit": "s"
+    },
+    {
+      "title": "Active Runs by Harness",
+      "type": "graph",
+      "description": "Currently executing runs per harness",
+      "query": "orchestrator_active_runs by (harness)",
+      "unit": "runs"
+    },
+    {
+      "title": "Harness Health Status",
+      "type": "table",
+      "description": "Health check status per harness",
+      "query": "orchestrator_harness_healthy",
+      "unit": "boolean"
+    },
+    {
+      "title": "API Rate Limit Hits by Harness",
+      "type": "graph",
+      "description": "Rate limit encountered per harness",
+      "query": "rate(orchestrator_rate_limit_hits_total[5m]) by (harness)",
+      "unit": "hits/s"
+    },
+    {
+      "title": "Token Usage by Harness",
+      "type": "graph",
+      "description": "Token consumption per harness",
+      "query": "rate(orchestrator_tokens_total[5m]) by (harness)",
+      "unit": "tokens/s"
+    },
+    {
+      "title": "Cost Estimation by Harness",
+      "type": "graph",
+      "description": "Estimated cost per harness (USD)",
+      "query": "orchestrator_cost_dollars_total by (harness)",
+      "unit": "USD"
+    }
+  ]
+}

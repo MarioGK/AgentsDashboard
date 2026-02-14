@@ -1,11 +1,14 @@
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
+using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
 using Grpc.Core;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using WorkerGatewayClient = AgentsDashboard.Contracts.Worker.WorkerGateway.WorkerGatewayClient;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
@@ -67,7 +70,7 @@ public class RunDispatcherTests
 
 public class RunDispatcherDispatchTests
 {
-    private readonly Mock<WorkerGateway.WorkerGatewayClient> _workerClientMock;
+    private readonly Mock<WorkerGatewayClient> _workerClientMock;
     private readonly Mock<OrchestratorStore> _storeMock;
     private readonly Mock<SecretCryptoService> _secretCryptoMock;
     private readonly Mock<IRunEventPublisher> _publisherMock;
@@ -75,7 +78,7 @@ public class RunDispatcherDispatchTests
 
     public RunDispatcherDispatchTests()
     {
-        _workerClientMock = new Mock<WorkerGateway.WorkerGatewayClient>();
+        _workerClientMock = new Mock<WorkerGatewayClient>();
         _storeMock = new Mock<OrchestratorStore>(MockBehavior.Loose);
         _secretCryptoMock = new Mock<SecretCryptoService>(MockBehavior.Loose);
         _publisherMock = new Mock<IRunEventPublisher>();
@@ -120,11 +123,11 @@ public class RunDispatcherDispatchTests
         Harness = "codex",
         Command = "codex run",
         Prompt = "Test prompt",
-        ApprovalProfile = new ApprovalProfile { RequireApproval = requireApproval },
+        ApprovalProfile = new ApprovalProfileConfig(RequireApproval: requireApproval),
         ConcurrencyLimit = concurrencyLimit,
-        Timeouts = new TaskTimeouts { ExecutionSeconds = 300 },
+        Timeouts = new TimeoutConfig(ExecutionSeconds: 300),
         SandboxProfile = new SandboxProfileConfig(),
-        ArtifactPolicy = new ArtifactPolicy()
+        ArtifactPolicy = new ArtifactPolicyConfig()
     };
 
     private static RunDocument CreateRun(string id = "run-1", string taskId = "task-1") => new()
@@ -269,8 +272,8 @@ public class RunDispatcherDispatchTests
         SetupSuccessfulConcurrencyChecks();
         SetupSuccessfulInstructionRetrieval();
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = false, Reason = "Worker busy" }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = false, Reason = "Worker busy" }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -296,8 +299,8 @@ public class RunDispatcherDispatchTests
         SetupSuccessfulConcurrencyChecks();
         SetupSuccessfulInstructionRetrieval();
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -337,8 +340,8 @@ public class RunDispatcherDispatchTests
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -349,8 +352,8 @@ public class RunDispatcherDispatchTests
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
             .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -392,8 +395,8 @@ public class RunDispatcherDispatchTests
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
             .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -434,8 +437,8 @@ public class RunDispatcherDispatchTests
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
             .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -470,8 +473,8 @@ public class RunDispatcherDispatchTests
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
             .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -508,8 +511,8 @@ public class RunDispatcherDispatchTests
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
             .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -547,8 +550,8 @@ public class RunDispatcherDispatchTests
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
             .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -573,7 +576,7 @@ public class RunDispatcherDispatchTests
         var task = WithSandboxProfile(CreateTask(), new SandboxProfileConfig
         {
             CpuLimit = 2.0,
-            MemoryLimit = 4096,
+            MemoryLimit = "4096",
             NetworkDisabled = true,
             ReadOnlyRootFs = true
         });
@@ -591,8 +594,8 @@ public class RunDispatcherDispatchTests
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
             .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobResponse>(
-                Task.FromResult(new DispatchJobResponse { Accepted = true }),
+            .Returns(new AsyncUnaryCall<DispatchJobReply>(
+                Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -602,7 +605,7 @@ public class RunDispatcherDispatchTests
 
         capturedRequest.Should().NotBeNull();
         capturedRequest!.SandboxProfileCpuLimit.Should().Be(2.0);
-        capturedRequest.SandboxProfileMemoryLimit.Should().Be(4096);
+        capturedRequest.SandboxProfileMemoryLimit.Should().Be("4096");
         capturedRequest.SandboxProfileNetworkDisabled.Should().BeTrue();
         capturedRequest.SandboxProfileReadOnlyRootFs.Should().BeTrue();
     }
@@ -614,8 +617,8 @@ public class RunDispatcherDispatchTests
         var runId = "run-to-cancel";
 
         _workerClientMock.Setup(c => c.CancelJobAsync(It.IsAny<CancelJobRequest>(), It.IsAny<CallOptions>()))
-            .Returns(new AsyncUnaryCall<CancelJobResponse>(
-                Task.FromResult(new CancelJobResponse()),
+            .Returns(new AsyncUnaryCall<CancelJobReply>(
+                Task.FromResult(new CancelJobReply()),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
@@ -649,7 +652,7 @@ public class RunDispatcherDispatchTests
 
 public class TestableRunDispatcher
 {
-    private readonly WorkerGateway.WorkerGatewayClient _workerClient;
+    private readonly WorkerGatewayClient _workerClient;
     private readonly OrchestratorStore _store;
     private readonly SecretCryptoService _secretCrypto;
     private readonly IRunEventPublisher _publisher;
@@ -657,7 +660,7 @@ public class TestableRunDispatcher
     private readonly ILogger<TestableRunDispatcher> _logger;
 
     public TestableRunDispatcher(
-        WorkerGateway.WorkerGatewayClient workerClient,
+        WorkerGatewayClient workerClient,
         OrchestratorStore store,
         SecretCryptoService secretCrypto,
         IRunEventPublisher publisher,

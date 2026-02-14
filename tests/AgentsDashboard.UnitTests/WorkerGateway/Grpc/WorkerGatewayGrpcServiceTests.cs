@@ -13,14 +13,23 @@ public class WorkerGatewayGrpcServiceTests : IDisposable
 {
     private readonly WorkerQueue _queue;
     private readonly WorkerEventBus _eventBus;
+    private readonly Mock<IContainerOrphanReconciler> _orphanReconcilerMock;
+    private readonly Mock<IDockerContainerService> _dockerServiceMock;
     private readonly WorkerGatewayGrpcService _service;
 
     public WorkerGatewayGrpcServiceTests()
     {
         _queue = new WorkerQueue(new WorkerOptions { MaxSlots = 4 });
         _eventBus = new WorkerEventBus();
+        _orphanReconcilerMock = new Mock<IContainerOrphanReconciler>();
+        _dockerServiceMock = new Mock<IDockerContainerService>();
         var logger = new Mock<ILogger<WorkerGatewayGrpcService>>();
-        _service = new WorkerGatewayGrpcService(_queue, _eventBus, logger.Object);
+        _service = new WorkerGatewayGrpcService(
+            _queue,
+            _eventBus,
+            _orphanReconcilerMock.Object,
+            _dockerServiceMock.Object,
+            logger.Object);
     }
 
     public void Dispose()
@@ -84,7 +93,9 @@ public class WorkerGatewayGrpcServiceTests : IDisposable
             new QueuedJob { Request = new DispatchJobRequest { RunId = "run-existing" } },
             CancellationToken.None);
         var logger = new Mock<ILogger<WorkerGatewayGrpcService>>();
-        var serviceAtCapacity = new WorkerGatewayGrpcService(smallQueue, _eventBus, logger.Object);
+        var dockerMock = new Mock<DockerContainerService>(new Mock<ILogger<DockerContainerService>>().Object);
+        var orphanMock = new Mock<IContainerOrphanReconciler>();
+        var serviceAtCapacity = new WorkerGatewayGrpcService(smallQueue, _eventBus, orphanMock.Object, dockerMock.Object, logger.Object);
 
         var request = new DispatchJobRequest { RunId = "run-123", Harness = "codex" };
 
@@ -286,7 +297,9 @@ public class WorkerGatewayGrpcServiceTests : IDisposable
     {
         var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 10 });
         var logger = new Mock<ILogger<WorkerGatewayGrpcService>>();
-        var service = new WorkerGatewayGrpcService(queue, _eventBus, logger.Object);
+        var dockerMock = new Mock<DockerContainerService>(new Mock<ILogger<DockerContainerService>>().Object);
+        var orphanMock = new Mock<IContainerOrphanReconciler>();
+        var service = new WorkerGatewayGrpcService(queue, _eventBus, orphanMock.Object, dockerMock.Object, logger.Object);
 
         for (int i = 0; i < 5; i++)
         {
@@ -419,7 +432,9 @@ public class WorkerGatewayGrpcServiceTests : IDisposable
     {
         var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 10 });
         var logger = new Mock<ILogger<WorkerGatewayGrpcService>>();
-        var service = new WorkerGatewayGrpcService(queue, _eventBus, logger.Object);
+        var dockerMock = new Mock<DockerContainerService>(new Mock<ILogger<DockerContainerService>>().Object);
+        var orphanMock = new Mock<IContainerOrphanReconciler>();
+        var service = new WorkerGatewayGrpcService(queue, _eventBus, orphanMock.Object, dockerMock.Object, logger.Object);
 
         var tasks = Enumerable.Range(0, 5)
             .Select(i => service.DispatchJob(
@@ -504,5 +519,81 @@ public class WorkerGatewayGrpcServiceTests : IDisposable
         var result = await _service.CancelJob(new CancelJobRequest { RunId = "run-queued-only" }, CreateTestContext());
 
         result.Accepted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ReconcileOrphanedContainers_WithNoOrphans_ReturnsZeroCount()
+    {
+        _orphanReconcilerMock
+            .Setup(r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OrphanReconciliationResult(0, []));
+
+        var request = new ReconcileOrphanedContainersRequest();
+        request.ActiveRunIds.AddRange(["run-1", "run-2"]);
+
+        var result = await _service.ReconcileOrphanedContainers(request, CreateTestContext());
+
+        result.OrphanedCount.Should().Be(0);
+        result.RemovedContainers.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ReconcileOrphanedContainers_WithOrphans_ReturnsOrphanCount()
+    {
+        var removedContainers = new List<OrphanedContainer>
+        {
+            new("container-1", "orphan-run-1"),
+            new("container-2", "orphan-run-2")
+        };
+
+        _orphanReconcilerMock
+            .Setup(r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OrphanReconciliationResult(2, removedContainers));
+
+        var request = new ReconcileOrphanedContainersRequest();
+        request.ActiveRunIds.AddRange(["run-1", "run-2"]);
+
+        var result = await _service.ReconcileOrphanedContainers(request, CreateTestContext());
+
+        result.OrphanedCount.Should().Be(2);
+        result.RemovedContainers.Should().HaveCount(2);
+        result.RemovedContainers[0].ContainerId.Should().Be("container-1");
+        result.RemovedContainers[0].RunId.Should().Be("orphan-run-1");
+        result.RemovedContainers[1].ContainerId.Should().Be("container-2");
+        result.RemovedContainers[1].RunId.Should().Be("orphan-run-2");
+    }
+
+    [Fact]
+    public async Task ReconcileOrphanedContainers_WithEmptyRunIds_PassesEmptyList()
+    {
+        _orphanReconcilerMock
+            .Setup(r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OrphanReconciliationResult(0, []));
+
+        var request = new ReconcileOrphanedContainersRequest();
+
+        var result = await _service.ReconcileOrphanedContainers(request, CreateTestContext());
+
+        result.OrphanedCount.Should().Be(0);
+        _orphanReconcilerMock.Verify(
+            r => r.ReconcileAsync(It.Is<IEnumerable<string>>(ids => !ids.Any()), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ReconcileOrphanedContainers_PassesCorrectRunIds()
+    {
+        var capturedRunIds = new List<string>();
+        _orphanReconcilerMock
+            .Setup(r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<string>, CancellationToken>((ids, _) => capturedRunIds.AddRange(ids))
+            .ReturnsAsync(new OrphanReconciliationResult(0, []));
+
+        var request = new ReconcileOrphanedContainersRequest();
+        request.ActiveRunIds.AddRange(["run-1", "run-2", "run-3"]);
+
+        await _service.ReconcileOrphanedContainers(request, CreateTestContext());
+
+        capturedRunIds.Should().Contain(["run-1", "run-2", "run-3"]);
     }
 }

@@ -141,11 +141,12 @@ dotnet test
 
 | Test Project | Files | Tests | Coverage Area |
 |--------------|-------|-------|---------------|
-| UnitTests | 36 | 789 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection |
-| IntegrationTests | 23 | 152 | MongoDB store, Image allowlist, Secret redactor, API endpoints |
-| PlaywrightTests | 11 | 210 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+| UnitTests | 42 | 870 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping |
+| IntegrationTests | 30 | 180 | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
+| PlaywrightTests | 12 | 220 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+| Benchmarks | 4 | - | WorkerQueue, SignalR Publish, MongoDB Operations |
 
-**Total: 70 test files, 1,151 tests**
+**Total: 88 test files, 1,270+ tests**
 
 ## Implementation Status
 
@@ -195,6 +196,13 @@ dotnet test
 | Artifact volume mount | Complete | /artifacts mount for container-to-host transfer |
 | Container metrics | Complete | CPU/memory/network/block I/O collection |
 | Image pre-pull | Complete | Pre-pulls harness images on startup |
+| Dead-run protection | Complete | Stale/zombie/overdue run detection, forced container termination |
+| Harness envelope validation | Complete | JSON schema validation for standardized harness output |
+| Branch naming convention | Complete | Enforces agent/<repo>/<task>/<runId> format for PR branches |
+| Orphan container reconciliation | Complete | Detects and removes containers without matching runs on startup |
+| Performance tests | Complete | 50 concurrent jobs, sub-2s p95 latency stress tests |
+| VMUI dashboards | Complete | Orchestrator + harness-specific metrics dashboards |
+| Per-stage timeout | Complete | Configurable timeouts per workflow stage with max caps |
 
 ## UI Pages Summary
 
@@ -221,12 +229,11 @@ dotnet test
 
 ## Missing Test Coverage
 
-- RunDispatcherTests.cs has pre-existing build issues (namespace conflicts, type mismatches)
+- Some API endpoint tests require proper mock setup for OrchestratorStore virtual methods
 - Component tests require bunit package updates for .NET 10 compatibility
 
 ## Known Issues
 
-- `tests/AgentsDashboard.UnitTests/ControlPlane/Services/RunDispatcherTests.cs` has compilation errors due to namespace conflicts with `AgentsDashboard.UnitTests.WorkerGateway`
 - Component tests in `tests/AgentsDashboard.UnitTests/ControlPlane/Components/` require bunit API updates
 
 ## Build Commands

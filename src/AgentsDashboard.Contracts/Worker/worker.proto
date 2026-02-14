@@ -7,8 +7,10 @@ package worker;
 service WorkerGateway {
   rpc DispatchJob (DispatchJobRequest) returns (DispatchJobReply);
   rpc CancelJob (CancelJobRequest) returns (CancelJobReply);
+  rpc KillContainer (KillContainerRequest) returns (KillContainerReply);
   rpc SubscribeEvents (SubscribeEventsRequest) returns (stream JobEventReply);
   rpc Heartbeat (HeartbeatRequest) returns (HeartbeatReply);
+  rpc ReconcileOrphanedContainers (ReconcileOrphanedContainersRequest) returns (ReconcileOrphanedContainersReply);
 }
 
 message DispatchJobRequest {
@@ -66,4 +68,30 @@ message HeartbeatRequest {
 
 message HeartbeatReply {
   bool acknowledged = 1;
+}
+
+message KillContainerRequest {
+  string run_id = 1;
+  string reason = 2;
+  bool force = 3;
+}
+
+message KillContainerReply {
+  bool killed = 1;
+  string container_id = 2;
+  string error = 3;
+}
+
+message ReconcileOrphanedContainersRequest {
+  repeated string active_run_ids = 1;
+}
+
+message ReconcileOrphanedContainersReply {
+  int32 orphaned_count = 1;
+  repeated OrphanedContainerInfo removed_containers = 2;
+}
+
+message OrphanedContainerInfo {
+  string container_id = 1;
+  string run_id = 2;
 }

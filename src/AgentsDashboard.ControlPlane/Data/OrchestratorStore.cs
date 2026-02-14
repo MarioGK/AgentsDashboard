@@ -574,6 +574,14 @@ public class OrchestratorStore
     public virtual Task<List<RunDocument>> ListRunsByStateAsync(RunState state, CancellationToken cancellationToken)
         => _runs.Find(x => x.State == state).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
 
+    public virtual async Task<List<string>> ListAllRunIdsAsync(CancellationToken cancellationToken)
+    {
+        var runs = await _runs.Find(FilterDefinition<RunDocument>.Empty)
+            .Project(x => x.Id)
+            .ToListAsync(cancellationToken);
+        return runs;
+    }
+
     public virtual async Task<long> CountActiveRunsAsync(CancellationToken cancellationToken)
         => await _runs.CountDocumentsAsync(x => x.State == RunState.Queued || x.State == RunState.Running || x.State == RunState.PendingApproval, cancellationToken: cancellationToken);
 
@@ -1053,10 +1061,10 @@ public class OrchestratorStore
         return rule;
     }
 
-    public Task<List<AlertRuleDocument>> ListAlertRulesAsync(CancellationToken cancellationToken)
+    public virtual Task<List<AlertRuleDocument>> ListAlertRulesAsync(CancellationToken cancellationToken)
         => _alertRules.Find(FilterDefinition<AlertRuleDocument>.Empty).SortBy(x => x.Name).ToListAsync(cancellationToken);
 
-    public Task<List<AlertRuleDocument>> ListEnabledAlertRulesAsync(CancellationToken cancellationToken)
+    public virtual Task<List<AlertRuleDocument>> ListEnabledAlertRulesAsync(CancellationToken cancellationToken)
         => _alertRules.Find(x => x.Enabled).ToListAsync(cancellationToken);
 
     public virtual async Task<AlertRuleDocument?> GetAlertRuleAsync(string ruleId, CancellationToken cancellationToken)
@@ -1083,13 +1091,13 @@ public class OrchestratorStore
         return alertEvent;
     }
 
-    public Task<List<AlertEventDocument>> ListRecentAlertEventsAsync(int limit, CancellationToken cancellationToken)
+    public virtual Task<List<AlertEventDocument>> ListRecentAlertEventsAsync(int limit, CancellationToken cancellationToken)
         => _alertEvents.Find(FilterDefinition<AlertEventDocument>.Empty)
             .SortByDescending(x => x.FiredAtUtc)
             .Limit(limit)
             .ToListAsync(cancellationToken);
 
-    public Task<List<AlertEventDocument>> ListAlertEventsByRuleAsync(string ruleId, CancellationToken cancellationToken)
+    public virtual Task<List<AlertEventDocument>> ListAlertEventsByRuleAsync(string ruleId, CancellationToken cancellationToken)
         => _alertEvents.Find(x => x.RuleId == ruleId)
             .SortByDescending(x => x.FiredAtUtc)
             .Limit(50)

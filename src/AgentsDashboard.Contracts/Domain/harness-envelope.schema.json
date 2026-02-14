@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentsdashboard.internal/schemas/harness-envelope.schema.json",
+  "title": "HarnessResultEnvelope",
+  "description": "Standardized output envelope for harness execution results",
+  "type": "object",
+  "required": ["status"],
+  "additionalProperties": false,
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Unique identifier for the run"
+    },
+    "taskId": {
+      "type": "string",
+      "description": "Unique identifier for the task that triggered this run"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["succeeded", "failed", "unknown", "cancelled", "pending"],
+      "description": "Execution status of the harness run"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Human-readable summary of the execution result"
+    },
+    "error": {
+      "type": "string",
+      "description": "Error message if the execution failed"
+    },
+    "actions": {
+      "type": "array",
+      "description": "List of actions performed during execution",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Type of action (e.g., file_write, pr_create, test_run)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of the action"
+          },
+          "target": {
+            "type": "string",
+            "description": "Target resource for the action"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "description": "List of artifact file paths produced by the execution",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Numeric metrics collected during execution",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional key-value metadata",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "rawOutputRef": {
+      "type": "string",
+      "description": "Reference to raw output storage location"
+    }
+  }
+}

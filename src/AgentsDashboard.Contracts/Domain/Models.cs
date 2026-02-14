@@ -237,6 +237,7 @@ public sealed class WorkflowStageConfig
     public int? DelaySeconds { get; set; }
     public List<string>? ParallelStageIds { get; set; }
     public string? ApproverRole { get; set; }
+    public int? TimeoutMinutes { get; set; }
     public int Order { get; set; }
 }
 
