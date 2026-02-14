@@ -557,6 +557,8 @@ public static class ApiEndpoints
             if (task is null)
                 return Results.NotFound(new { message = "Task not found" });
 
+            var linkedFailureRuns = request.LinkedFailureRuns ?? [finding.RunId];
+
             var createTaskRequest = new CreateTaskRequest(
                 RepositoryId: task.RepositoryId,
                 Name: request.Name,
@@ -566,7 +568,8 @@ public static class ApiEndpoints
                 Kind: TaskKind.OneShot,
                 Enabled: true,
                 CronExpression: string.Empty,
-                AutoCreatePullRequest: false
+                AutoCreatePullRequest: false,
+                LinkedFailureRuns: linkedFailureRuns
             );
 
             return Results.Ok(await store.CreateTaskAsync(createTaskRequest, ct));
