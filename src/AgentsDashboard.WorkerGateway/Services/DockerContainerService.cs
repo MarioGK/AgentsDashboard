@@ -313,6 +313,70 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         }
     }
 
+    public async Task<ContainerMetrics?> GetContainerStatsAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var stats = await _client.Containers.GetContainerStatsAsync(
+                containerId,
+                new ContainerStatsParameters { Stream = false },
+                cancellationToken);
+
+            if (stats is null)
+                return null;
+
+            var cpuDelta = stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage;
+            var systemDelta = stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage;
+            var cpuPercent = systemDelta > 0 ? (double)cpuDelta / systemDelta * 100.0 * stats.CPUStats.OnlineCPUs : 0;
+
+            long networkRx = 0;
+            long networkTx = 0;
+            if (stats.Networks is not null)
+            {
+                foreach (var network in stats.Networks.Values)
+                {
+                    networkRx += network.RxBytes;
+                    networkTx += network.TxBytes;
+                }
+            }
+
+            long blockRead = 0;
+            long blockWrite = 0;
+            if (stats.BlkioStats.IoServiceBytesRecursive is not null)
+            {
+                foreach (var entry in stats.BlkioStats.IoServiceBytesRecursive)
+                {
+                    if (entry.Op == "read")
+                        blockRead += entry.Value;
+                    else if (entry.Op == "write")
+                        blockWrite += entry.Value;
+                }
+            }
+
+            var memoryUsage = stats.MemoryStats.Usage;
+            var memoryLimit = stats.MemoryStats.Limit;
+            var memoryPercent = memoryLimit > 0 ? (double)memoryUsage / memoryLimit * 100.0 : 0;
+
+            return new ContainerMetrics
+            {
+                CpuPercent = Math.Round(cpuPercent, 2),
+                MemoryUsageBytes = memoryUsage,
+                MemoryLimitBytes = memoryLimit,
+                MemoryPercent = Math.Round(memoryPercent, 2),
+                NetworkRxBytes = networkRx,
+                NetworkTxBytes = networkTx,
+                BlockReadBytes = blockRead,
+                BlockWriteBytes = blockWrite,
+                TimestampUtc = DateTime.UtcNow,
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to get container stats for {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
+            return null;
+        }
+    }
+
     private static long ParseMemoryLimit(string memoryLimit)
     {
         var trimmed = memoryLimit.Trim().ToLowerInvariant();

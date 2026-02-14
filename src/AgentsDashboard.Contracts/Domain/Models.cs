@@ -34,6 +34,41 @@ public enum FindingState
     Ignored = 4
 }
 
+public enum HarnessType
+{
+    Codex = 0,
+    OpenCode = 1,
+    ClaudeCode = 2,
+    Zai = 3
+}
+
+public sealed class ContainerMetrics
+{
+    public string ContainerId { get; set; } = string.Empty;
+    public string RunId { get; set; } = string.Empty;
+    public double CpuPercent { get; set; }
+    public long MemoryUsageBytes { get; set; }
+    public double MemoryPercent { get; set; }
+    public long NetworkRxBytes { get; set; }
+    public long NetworkTxBytes { get; set; }
+    public long BlockReadBytes { get; set; }
+    public long BlockWriteBytes { get; set; }
+    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class ArtifactDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RunId { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string FilePath { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long SizeBytes { get; set; }
+    public string Sha256 { get; set; } = string.Empty;
+    public string ArtifactType { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public sealed record RetryPolicyConfig(int MaxAttempts = 1, int BackoffBaseSeconds = 10, double BackoffMultiplier = 2.0);
 
 public sealed record TimeoutConfig(int ExecutionSeconds = 600, int OverallSeconds = 1800);

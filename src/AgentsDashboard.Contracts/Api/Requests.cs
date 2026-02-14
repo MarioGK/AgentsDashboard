@@ -71,14 +71,16 @@ public sealed record CreateAlertRuleRequest(
     int Threshold,
     int WindowMinutes,
     string? WebhookUrl = null,
-    bool Enabled = true);
+    bool Enabled = true,
+    int CooldownMinutes = 15);
 public sealed record UpdateAlertRuleRequest(
     string Name,
     AlertRuleType RuleType,
     int Threshold,
     int WindowMinutes,
     string? WebhookUrl = null,
-    bool Enabled = true);
+    bool Enabled = true,
+    int CooldownMinutes = 15);
 public sealed record ExecuteWorkflowRequest(string WorkflowId);
 public sealed record ApproveWorkflowStageRequest(string ApprovedBy);
 public sealed record ValidateProviderRequest(string Provider, string SecretValue);

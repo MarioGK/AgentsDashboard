@@ -788,6 +788,7 @@ public static class ApiEndpoints
                 RuleType = request.RuleType,
                 Threshold = request.Threshold,
                 WindowMinutes = request.WindowMinutes > 0 ? request.WindowMinutes : 10,
+                CooldownMinutes = request.CooldownMinutes > 0 ? request.CooldownMinutes : 15,
                 WebhookUrl = request.WebhookUrl ?? string.Empty,
                 Enabled = request.Enabled
             };
@@ -814,6 +815,7 @@ public static class ApiEndpoints
                 RuleType = request.RuleType,
                 Threshold = request.Threshold,
                 WindowMinutes = request.WindowMinutes > 0 ? request.WindowMinutes : 10,
+                CooldownMinutes = request.CooldownMinutes > 0 ? request.CooldownMinutes : 15,
                 WebhookUrl = request.WebhookUrl ?? string.Empty,
                 Enabled = request.Enabled,
                 CreatedAtUtc = DateTime.UtcNow

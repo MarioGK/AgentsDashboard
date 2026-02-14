@@ -93,7 +93,7 @@ public class WorkerGatewayGrpcServiceTests : IDisposable
             new QueuedJob { Request = new DispatchJobRequest { RunId = "run-existing" } },
             CancellationToken.None);
         var logger = new Mock<ILogger<WorkerGatewayGrpcService>>();
-        var dockerMock = new Mock<DockerContainerService>(new Mock<ILogger<DockerContainerService>>().Object);
+        var dockerMock = new Mock<IDockerContainerService>();
         var orphanMock = new Mock<IContainerOrphanReconciler>();
         var serviceAtCapacity = new WorkerGatewayGrpcService(smallQueue, _eventBus, orphanMock.Object, dockerMock.Object, logger.Object);
 
@@ -297,7 +297,7 @@ public class WorkerGatewayGrpcServiceTests : IDisposable
     {
         var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 10 });
         var logger = new Mock<ILogger<WorkerGatewayGrpcService>>();
-        var dockerMock = new Mock<DockerContainerService>(new Mock<ILogger<DockerContainerService>>().Object);
+        var dockerMock = new Mock<IDockerContainerService>();
         var orphanMock = new Mock<IContainerOrphanReconciler>();
         var service = new WorkerGatewayGrpcService(queue, _eventBus, orphanMock.Object, dockerMock.Object, logger.Object);
 
@@ -432,7 +432,7 @@ public class WorkerGatewayGrpcServiceTests : IDisposable
     {
         var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 10 });
         var logger = new Mock<ILogger<WorkerGatewayGrpcService>>();
-        var dockerMock = new Mock<DockerContainerService>(new Mock<ILogger<DockerContainerService>>().Object);
+        var dockerMock = new Mock<IDockerContainerService>();
         var orphanMock = new Mock<IContainerOrphanReconciler>();
         var service = new WorkerGatewayGrpcService(queue, _eventBus, orphanMock.Object, dockerMock.Object, logger.Object);
 
