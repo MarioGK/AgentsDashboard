@@ -597,6 +597,21 @@ public sealed class MockStressRunEventPublisher : IRunEventPublisher
         Interlocked.Increment(ref _logCount);
         return Task.CompletedTask;
     }
+
+    public Task PublishFindingUpdatedAsync(FindingDocument finding, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task PublishWorkerHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task PublishRouteAvailableAsync(string runId, string routePath, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class NullLogger<T> : ILogger<T>

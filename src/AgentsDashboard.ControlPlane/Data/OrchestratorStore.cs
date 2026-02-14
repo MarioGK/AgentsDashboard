@@ -819,6 +819,7 @@ public class OrchestratorStore : IOrchestratorStore
             .Set(x => x.MaxSlots, maxSlots)
             .Set(x => x.Online, true)
             .Set(x => x.LastHeartbeatUtc, DateTime.UtcNow)
+            .SetOnInsert(x => x.Id, Guid.NewGuid().ToString("N"))
             .SetOnInsert(x => x.WorkerId, workerId)
             .SetOnInsert(x => x.RegisteredAtUtc, DateTime.UtcNow);
 

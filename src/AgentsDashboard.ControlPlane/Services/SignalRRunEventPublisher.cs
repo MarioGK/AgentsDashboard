@@ -28,4 +28,38 @@ public sealed class SignalRRunEventPublisher(IHubContext<RunEventsHub> hubContex
             logEvent.TimestampUtc,
             cancellationToken);
     }
+
+    public Task PublishFindingUpdatedAsync(FindingDocument finding, CancellationToken cancellationToken)
+    {
+        return hubContext.Clients.All.SendAsync(
+            "FindingUpdated",
+            finding.Id,
+            finding.RepositoryId,
+            finding.State.ToString(),
+            finding.Severity.ToString(),
+            finding.Title,
+            cancellationToken);
+    }
+
+    public Task PublishWorkerHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken)
+    {
+        return hubContext.Clients.All.SendAsync(
+            "WorkerHeartbeat",
+            workerId,
+            hostName,
+            activeSlots,
+            maxSlots,
+            DateTime.UtcNow,
+            cancellationToken);
+    }
+
+    public Task PublishRouteAvailableAsync(string runId, string routePath, CancellationToken cancellationToken)
+    {
+        return hubContext.Clients.All.SendAsync(
+            "RouteAvailable",
+            runId,
+            routePath,
+            DateTime.UtcNow,
+            cancellationToken);
+    }
 }

@@ -847,3 +847,36 @@ All plan requirements verified complete:
 - All built-in task templates
 - Full webhook support with event filtering
 - Complete instruction file layering
+
+## Additional Improvements (2026-02-14 - Session 20)
+
+### Task Template Enhancement
+- **ApplyTemplate Full Property Copy**: Fixed `ApplyTemplate()` in RepositoryDetail.razor to copy all template properties:
+  - RetryPolicy (MaxAttempts)
+  - Timeouts (ExecutionSeconds, OverallSeconds)
+  - SandboxProfile (CpuLimit, MemoryLimit)
+  - ArtifactPolicy (MaxArtifacts)
+  - AutoCreatePullRequest flag
+- **Advanced Settings UI**: Added collapsible "Advanced Settings" panel to task creation form:
+  - Max Retry Attempts (0-10)
+  - Execution Timeout (60-7200 seconds)
+  - Overall Timeout (60-14400 seconds)
+  - CPU Limit (cores)
+  - Memory Limit (e.g., 2g, 512m)
+  - Max Artifacts (1-1000)
+- **CreateTaskAsync Enhanced**: Now passes all configuration properties when creating/updating tasks
+
+### Code Quality
+- **Build**: SUCCESS (0 errors, 19 warnings - all MudBlazor analyzer warnings)
+- **Unit Tests**: 1068/1105 pass (96.6%), 37 skipped (Docker runtime)
+- **Solution**: Builds cleanly with no compilation errors
+
+### Exploration Results Summary
+| Component | Status | Details |
+|-----------|--------|---------|
+| Harness Adapters | Complete | All 4 (Codex, OpenCode, ClaudeCode, Zai) with 6 interface methods |
+| Task Templates | Complete | 4 built-in templates + template-to-task property copying |
+| gRPC Interface | Complete | 6 RPCs (DispatchJob, CancelJob, SubscribeEvents, Heartbeat, KillContainer, ReconcileOrphanedContainers) |
+| Docker Images | Complete | 6 images (base + 4 harnesses + all-in-one) |
+| UI Pages | Complete | All 18 pages with advanced settings for task creation |
+

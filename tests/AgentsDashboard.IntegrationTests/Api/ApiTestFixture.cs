@@ -131,6 +131,9 @@ public sealed class NullRunEventPublisher : IRunEventPublisher
 {
     public Task PublishStatusAsync(RunDocument run, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task PublishLogAsync(RunLogEvent logEvent, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task PublishFindingUpdatedAsync(FindingDocument finding, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task PublishWorkerHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task PublishRouteAvailableAsync(string runId, string routePath, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 public sealed class MockWorkerClient : AgentsDashboard.Contracts.Worker.WorkerGateway.WorkerGatewayClient
