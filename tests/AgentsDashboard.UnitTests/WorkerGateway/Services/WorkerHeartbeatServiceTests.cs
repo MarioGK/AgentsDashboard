@@ -70,6 +70,7 @@ public class WorkerHeartbeatServiceTests
 
         await Task.Delay(TimeSpan.FromSeconds(6), CancellationToken.None);
 
+        _mockHandler.LastRequestContent.Should().NotBeNull();
         var payload = JsonSerializer.Deserialize<JsonElement>(_mockHandler.LastRequestContent!);
         payload.GetProperty("endpoint").GetString().Should().StartWith("http://");
         payload.GetProperty("endpoint").GetString().Should().Contain(":5201");
@@ -86,6 +87,7 @@ public class WorkerHeartbeatServiceTests
 
         await Task.Delay(TimeSpan.FromSeconds(6), CancellationToken.None);
 
+        _mockHandler.LastRequestContent.Should().NotBeNull();
         var payload = JsonSerializer.Deserialize<JsonElement>(_mockHandler.LastRequestContent!);
         payload.GetProperty("activeSlots").GetInt32().Should().Be(0);
     }
@@ -101,6 +103,7 @@ public class WorkerHeartbeatServiceTests
 
         await Task.Delay(TimeSpan.FromSeconds(6), CancellationToken.None);
 
+        _mockHandler.LastRequestContent.Should().NotBeNull();
         var payload = JsonSerializer.Deserialize<JsonElement>(_mockHandler.LastRequestContent!);
         payload.GetProperty("maxSlots").GetInt32().Should().Be(4);
     }
