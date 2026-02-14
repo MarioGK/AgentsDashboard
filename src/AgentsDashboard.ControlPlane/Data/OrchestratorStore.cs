@@ -777,6 +777,12 @@ public class OrchestratorStore : IOrchestratorStore
             cancellationToken);
     }
 
+    public virtual async Task<bool> DeleteFindingAsync(string findingId, CancellationToken cancellationToken)
+    {
+        var result = await _findings.DeleteOneAsync(x => x.Id == findingId, cancellationToken);
+        return result.DeletedCount > 0;
+    }
+
     // --- Provider Secrets ---
 
     public virtual async Task UpsertProviderSecretAsync(

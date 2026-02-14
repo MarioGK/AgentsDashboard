@@ -72,10 +72,12 @@ public interface IOrchestratorStore
     Task<FindingDocument> CreateFindingFromFailureAsync(RunDocument run, string description, CancellationToken cancellationToken);
     Task<FindingDocument?> UpdateFindingStateAsync(string findingId, FindingState state, CancellationToken cancellationToken);
     Task<FindingDocument?> AssignFindingAsync(string findingId, string assignedTo, CancellationToken cancellationToken);
+    Task<bool> DeleteFindingAsync(string findingId, CancellationToken cancellationToken);
 
     Task UpsertProviderSecretAsync(string repositoryId, string provider, string encryptedValue, CancellationToken cancellationToken);
     Task<List<ProviderSecretDocument>> ListProviderSecretsAsync(string repositoryId, CancellationToken cancellationToken);
     Task<ProviderSecretDocument?> GetProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken);
+    Task<bool> DeleteProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken);
 
     Task<List<WorkerRegistration>> ListWorkersAsync(CancellationToken cancellationToken);
     Task UpsertWorkerHeartbeatAsync(string workerId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken);
@@ -120,6 +122,7 @@ public interface IOrchestratorStore
     Task<bool> DeleteAlertRuleAsync(string ruleId, CancellationToken cancellationToken);
 
     Task<AlertEventDocument> RecordAlertEventAsync(AlertEventDocument alertEvent, CancellationToken cancellationToken);
+    Task<AlertEventDocument?> GetAlertEventAsync(string eventId, CancellationToken cancellationToken);
     Task<List<AlertEventDocument>> ListRecentAlertEventsAsync(int limit, CancellationToken cancellationToken);
     Task<List<AlertEventDocument>> ListAlertEventsByRuleAsync(string ruleId, CancellationToken cancellationToken);
     Task<AlertEventDocument?> ResolveAlertEventAsync(string eventId, CancellationToken cancellationToken);

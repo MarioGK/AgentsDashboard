@@ -48,9 +48,10 @@ public sealed record RetryRunRequest(string RunId);
 public sealed record CancelRunRequest(string RunId);
 public sealed record UpdateFindingStateRequest(FindingState State);
 public sealed record AssignFindingRequest(string AssignedTo);
-public sealed record CreateTaskFromFindingRequest(string Name, string Harness, string Command, string Prompt);
+public sealed record CreateTaskFromFindingRequest(string Name, string Harness, string Command, string Prompt, List<string>? LinkedFailureRuns = null);
 public sealed record SetProviderSecretRequest(string SecretValue);
 public sealed record CreateWebhookRequest(string RepositoryId, string TaskId, string EventFilter, string Secret);
+public sealed record UpdateWebhookRequest(string TaskId, string EventFilter, string Secret, bool Enabled);
 public sealed record WorkerHeartbeatRequest(string WorkerId, string? Endpoint, int ActiveSlots, int MaxSlots);
 public sealed record UpdateSystemSettingsRequest(
     List<string>? DockerAllowedImages = null,
