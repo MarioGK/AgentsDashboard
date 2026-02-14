@@ -155,11 +155,6 @@ else
     });
 }
 
-builder.Services.AddDbContext<OrchestratorDbContext>((sp, options) =>
-{
-    var orchestratorOptions = sp.GetRequiredService<IOptions<OrchestratorOptions>>().Value;
-    options.UseSqlite(orchestratorOptions.SqliteConnectionString);
-});
 builder.Services.AddDbContextFactory<OrchestratorDbContext>((sp, options) =>
 {
     var orchestratorOptions = sp.GetRequiredService<IOptions<OrchestratorOptions>>().Value;

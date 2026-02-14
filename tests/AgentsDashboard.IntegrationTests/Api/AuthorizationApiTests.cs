@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -32,6 +33,10 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
         {
             builder.ConfigureTestServices(services =>
             {
+                var hostedServices = services.Where(d => d.ServiceType == typeof(IHostedService)).ToList();
+                foreach (var service in hostedServices)
+                    services.Remove(service);
+
                 var dispatcherDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(RunDispatcher));
                 if (dispatcherDescriptor != null)
                     services.Remove(dispatcherDescriptor);
@@ -268,7 +273,12 @@ public class AuthorizationApiTests(AuthorizationTestFixture fixture) : IClassFix
     {
         var factory = new WebApplicationFactory<AgentsDashboard.ControlPlane.Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseSolutionRelativeContentRoot("src/AgentsDashboard.ControlPlane");
+            builder.ConfigureTestServices(services =>
+            {
+                var hostedServices = services.Where(d => d.ServiceType == typeof(IHostedService)).ToList();
+                foreach (var service in hostedServices)
+                    services.Remove(service);
+            });
             builder.UseEnvironment("Testing");
         });
 

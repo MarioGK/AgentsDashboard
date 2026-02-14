@@ -30,7 +30,10 @@ public static class AuthEndpoints
             }
             else
             {
-                payload = await JsonSerializer.DeserializeAsync<LoginRequest>(request.Body, cancellationToken: context.RequestAborted)
+                payload = await JsonSerializer.DeserializeAsync<LoginRequest>(
+                        request.Body,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                        cancellationToken: context.RequestAborted)
                     ?? new LoginRequest(string.Empty, string.Empty, "/");
             }
 
