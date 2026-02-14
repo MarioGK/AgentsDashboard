@@ -815,6 +815,14 @@ public class OrchestratorStore : IOrchestratorStore
         => await _providerSecrets.Find(x => x.RepositoryId == repositoryId && x.Provider == provider)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public virtual async Task<bool> DeleteProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
+    {
+        var result = await _providerSecrets.DeleteOneAsync(
+            x => x.RepositoryId == repositoryId && x.Provider == provider,
+            cancellationToken);
+        return result.DeletedCount > 0;
+    }
+
     // --- Workers ---
 
     public virtual Task<List<WorkerRegistration>> ListWorkersAsync(CancellationToken cancellationToken)
@@ -861,8 +869,26 @@ public class OrchestratorStore : IOrchestratorStore
         return webhook;
     }
 
+    public virtual async Task<WebhookRegistration?> GetWebhookAsync(string webhookId, CancellationToken cancellationToken)
+        => await _webhooks.Find(x => x.Id == webhookId).FirstOrDefaultAsync(cancellationToken);
+
     public virtual Task<List<WebhookRegistration>> ListWebhooksAsync(string repositoryId, CancellationToken cancellationToken)
         => _webhooks.Find(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
+
+    public virtual async Task<WebhookRegistration?> UpdateWebhookAsync(string webhookId, UpdateWebhookRequest request, CancellationToken cancellationToken)
+    {
+        var update = Builders<WebhookRegistration>.Update
+            .Set(x => x.TaskId, request.TaskId)
+            .Set(x => x.EventFilter, request.EventFilter)
+            .Set(x => x.Secret, request.Secret)
+            .Set(x => x.Enabled, request.Enabled);
+
+        return await _webhooks.FindOneAndUpdateAsync(
+            x => x.Id == webhookId,
+            update,
+            new FindOneAndUpdateOptions<WebhookRegistration> { ReturnDocument = ReturnDocument.After },
+            cancellationToken);
+    }
 
     public virtual async Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken)
     {

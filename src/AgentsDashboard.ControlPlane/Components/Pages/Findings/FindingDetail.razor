@@ -4,7 +4,9 @@
 
 @inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
 @inject AgentsDashboard.ControlPlane.Services.RunDispatcher Dispatcher
+@inject AgentsDashboard.ControlPlane.Services.TaskTemplateService TemplateService
 @inject NavigationManager Navigation
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Finding @Id?[..8] - AgentsDashboard</PageTitle>
 
@@ -82,18 +84,62 @@ else
                 Ignore
             </MudButton>
             <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.AddTask"
-                       OnClick="CreateFollowupTaskAsync">
+                       OnClick="() => _showTaskDialog = true">
                 Create Follow-up Task
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Replay"
+                       OnClick="() => _showRegressionDialog = true">
+                Create Regression Replay
             </MudButton>
         }
     </MudStack>
 }
+
+<MudDialog @bind-IsOpen="_showTaskDialog">
+    <TitleContent>Create Follow-up Task</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_taskName" Label="Task Name" Class="mb-3" />
+        <MudSelect @bind-Value="_taskHarness" Label="Harness" Class="mb-3">
+            <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
+            <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
+            <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
+            <MudSelectItem T="string" Value='@("zai")'>Zai (GLM-5)</MudSelectItem>
+        </MudSelect>
+        <MudTextField @bind-Value="_taskCommand" Label="Command" Class="mb-3" />
+        <MudTextField @bind-Value="_taskPrompt" Label="Prompt" Lines="4" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _showTaskDialog = false">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CreateFollowupTaskAsync">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<MudDialog @bind-IsOpen="_showRegressionDialog">
+    <TitleContent>Create Regression Replay Task</TitleContent>
+    <DialogContent>
+        <MudAlert Severity="Severity.Info" Class="mb-3">
+            This will create a task linked to run <strong>@(_finding?.RunId?[..8])</strong> for regression replay.
+        </MudAlert>
+        <MudTextField @bind-Value="_regressionTaskName" Label="Task Name" Class="mb-3" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _showRegressionDialog = false">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CreateRegressionReplayTaskAsync">Create</MudButton>
+    </DialogActions>
+</MudDialog>
 
 @code {
     [Parameter] public string? Id { get; set; }
 
     private FindingDocument? _finding;
     private string _assignee = string.Empty;
+    private bool _showTaskDialog;
+    private bool _showRegressionDialog;
+    private string _taskName = string.Empty;
+    private string _taskHarness = "codex";
+    private string _taskCommand = string.Empty;
+    private string _taskPrompt = string.Empty;
+    private string _regressionTaskName = "Regression Replay";
 
     protected override async Task OnInitializedAsync()
     {
@@ -115,14 +161,54 @@ else
         _finding = await Store.GetFindingAsync(_finding.Id, CancellationToken.None);
     }
 
-    private Task CreateFollowupTaskAsync()
+    private async Task CreateFollowupTaskAsync()
     {
-        if (_finding is null) return Task.CompletedTask;
-        Navigation.NavigateTo($"/repositories/{_finding.RepositoryId}");
-        return Task.CompletedTask;
+        if (_finding is null) return;
+        _showTaskDialog = false;
+
+        var request = new CreateTaskFromFindingRequest(
+            _taskName.Trim(),
+            _taskHarness,
+            _taskCommand,
+            _taskPrompt,
+            [_finding.RunId]);
+
+        var client = HttpClientFactory.CreateClient("Api");
+        var response = await client.PostAsJsonAsync($"/api/findings/{_finding.Id}/create-task", request);
+
+        if (response.IsSuccessStatusCode)
+            Navigation.NavigateTo($"/repositories/{_finding.RepositoryId}");
     }
 
-    private async Task RetryAsync()
+    private async Task CreateRegressionReplayTaskAsync()
+    {
+        if (_finding is null) return;
+        _showRegressionDialog = false;
+
+        var template = await TemplateService.GetTemplateByTemplateIdAsync("regression-replay", CancellationToken.None);
+        if (template is null) return;
+
+        var request = new CreateTaskFromFindingRequest(
+            _regressionTaskName.Trim(),
+            template.Harness,
+            string.Join(" && ", template.Commands),
+            template.Prompt,
+            [_finding.RunId]);
+
+        var client = HttpClientFactory.CreateClient("Api");
+        var response = await client.PostAsJsonAsync($"/api/findings/{_finding.Id}/create-task", request);
+
+        if (response.IsSuccessStatusCode)
+            Navigation.NavigateTo($"/repositories/{_finding.RepositoryId}");
+    }
+
+    private Task RetryAsync()
+    {
+        if (_finding is null) return Task.CompletedTask;
+        return RetryInternalAsync();
+    }
+
+    private async Task RetryInternalAsync()
     {
         if (_finding is null) return;
 
