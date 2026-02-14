@@ -297,3 +297,70 @@ dotnet format
 | Docker Compose | `docker compose -f deploy/docker-compose.yml up -d` |
 | Helm | `helm install ai-orchestrator deploy/helm/ai-orchestrator` |
 | Kustomize | `kubectl apply -k deploy/k8s/` |
+
+## CI/CD Pipeline
+
+### CI Workflow (`.github/workflows/ci.yml`)
+- **lint**: Code format verification with `dotnet format --verify-no-changes`
+- **security-scan**: CodeQL analysis and vulnerable package check
+- **build**: Compile solution with .NET 10
+- **test-unit**: Unit tests with code coverage
+- **test-integration**: Integration tests with MongoDB service container
+- **test-e2e**: Playwright E2E tests with running application
+- **trivy-scan**: Container vulnerability scanning for all harness images
+
+### Deploy Workflow (`.github/workflows/deploy.yml`)
+- **prepare**: Determine version from release tag or input
+- **build-base**: Build and push `ai-harness-base` image
+- **build-harnesses**: Build and push 4 harness images (codex, opencode, claudecode, zai)
+- **build-all-in-one**: Build and push `ai-harness` all-in-one image
+- **build-applications**: Build and push `control-plane` and `worker-gateway` images
+- **production-approval**: Manual approval gate for production deployments
+- **helm-deploy**: Deploy to Kubernetes using Helm
+- **update-compose**: Create PR with updated docker-compose image tags
+
+### Container Images
+
+| Image | Description | Registry |
+|-------|-------------|----------|
+| ai-harness-base | Base image with .NET 10, Node.js, Python, Go, Playwright | ghcr.io |
+| harness-codex | OpenAI Codex harness | ghcr.io |
+| harness-opencode | OpenCode harness | ghcr.io |
+| harness-claudecode | Claude Code harness | ghcr.io |
+| harness-zai | Zhipu GLM-5 harness | ghcr.io |
+| ai-harness | All-in-one harness image | ghcr.io |
+| control-plane | Blazor Server control plane | ghcr.io |
+| worker-gateway | gRPC worker gateway | ghcr.io |
+
+## API Endpoints (79 total)
+
+| Category | Count | Key Endpoints |
+|----------|-------|---------------|
+| Projects | 5 | CRUD + repositories |
+| Repositories | 3 | CRUD |
+| Tasks | 4 | CRUD |
+| Runs | 9 | CRUD + cancel/retry/approve/reject + bulk |
+| Findings | 7 | CRUD + retry/assign/create-task |
+| Workflows | 10 | CRUD + execute + approvals |
+| Alerts | 7 | Rules + Events + bulk-resolve |
+| Webhooks | 5 | CRUD + token + event receiver |
+| Templates | 5 | CRUD |
+| Images | 3 | List/build/delete |
+| Other | 26 | Workers, Secrets, Instructions, Settings, Health, Proxy |
+
+## Helm Chart Components
+
+| Component | Template | Description |
+|-----------|----------|-------------|
+| ControlPlane | `control-plane.yaml` | Deployment + Service (2 replicas) |
+| WorkerGateway | `worker-gateway.yaml` | Deployment + Service (3 replicas) |
+| MongoDB | `mongodb.yaml` | StatefulSet + Headless Service |
+| VictoriaMetrics | `victoriametrics.yaml` | Deployment + PVC |
+| VMUI | `vmui.yaml` | Deployment + Service |
+| ConfigMaps | `configmap.yaml` | 5 ConfigMaps |
+| Secrets | `secrets.yaml` | 3 Secrets |
+| Ingress | `ingress.yaml` | 2 Ingress resources with TLS |
+| HPA | `hpa.yaml` | HorizontalPodAutoscalers |
+| PVC | `pvc.yaml` | PersistentVolumeClaims |
+| NetworkPolicy | `networkpolicy.yaml` | Network policies for all components |
+| Namespace | `namespace.yaml` | Conditional namespace creation |
