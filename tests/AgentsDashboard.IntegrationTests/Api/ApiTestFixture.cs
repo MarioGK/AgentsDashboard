@@ -104,8 +104,7 @@ public sealed class ApiTestFixture : IAsyncLifetime
                 if (cryptoInterfaceDescriptor != null)
                     services.Remove(cryptoInterfaceDescriptor);
 
-                var mockCrypto = new MockSecretCryptoService();
-                services.AddSingleton<ISecretCryptoService>(mockCrypto);
+                services.AddSingleton<ISecretCryptoService>(_ => new MockSecretCryptoService());
             });
 
             builder.UseEnvironment("Testing");
@@ -193,12 +192,14 @@ public sealed class MockContainerReaper : IContainerReaper
     }
 }
 
-public sealed class MockSecretCryptoService : ISecretCryptoService
+public sealed class MockSecretCryptoService : SecretCryptoService
 {
-    public string Encrypt(string plaintext)
+    public MockSecretCryptoService() : base(new MockDataProtectionProvider()) { }
+
+    public new string Encrypt(string plaintext)
         => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plaintext));
 
-    public string Decrypt(string ciphertext)
+    public new string Decrypt(string ciphertext)
         => System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(ciphertext));
 }
 

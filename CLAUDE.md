@@ -147,10 +147,10 @@ dotnet test
 |--------------|-------|-------|---------------|
 | UnitTests | 44 | 1105 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping, WorkerEventBus, ImagePrePull, ContainerOrphanReconciler |
 | IntegrationTests | 29 | 166 | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
-| PlaywrightTests | 12 | 213 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+| PlaywrightTests | 14 | 256 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings, Schedules, Workers, ProviderSettings |
 | Benchmarks | 4 | - | WorkerQueue, SignalR Publish, MongoDB Operations |
 
-**Total: 89 test files, 1484 tests**
+**Total: 91 test files, 1527 tests**
 
 ### Test Notes
 
@@ -644,3 +644,84 @@ All implementation items from the plan are complete:
 - **Before**: 3 failed, 18 skipped in HarnessExecutor/JobProcessorService tests
 - **After**: 0 failed, 28 skipped (properly categorized)
 - Pass rate improved from 95.6% to 96.6%
+
+## Additional Improvements (2026-02-14 - Session 14)
+
+### Observability Improvements
+- **OrchestratorMetrics Service**: Created centralized metrics service for all dashboard metrics
+  - `IOrchestratorMetrics` interface with 20+ metric recording methods
+  - Counters for runs, jobs, errors, proxy requests, alerts, webhooks, findings, artifacts
+  - UpDownCounters for pending/active jobs, queued runs, active runs, SignalR connections
+  - Histograms for run duration, queue wait time, status update latency, proxy duration, gRPC duration
+  - ObservableGauges for worker slots (active/max per host)
+  - Container metrics support (CPU percent, memory bytes)
+- **OpenTelemetry Meter Registration**: Registered custom meters in ServiceDefaults
+  - Added `AgentsDashboard.Orchestrator` meter
+  - Added `AgentsDashboard.ControlPlane.Recovery` meter
+  - Added `AgentsDashboard.WorkerGateway.OrphanReconciliation` meter
+
+### E2E Test Coverage Improvements
+- **ScheduleE2ETests**: New test file with 6 tests for `/schedules` page
+  - Page load, refresh button, table headers, empty state, navigation
+- **WorkerE2ETests**: New test file with 7 tests for `/workers` page
+  - Page load, refresh button, table headers, empty state, utilization display
+- **ProviderSettingsE2ETests**: New test file with 10 tests for `/providers` page
+  - Page load, repository selection, system settings, retention fields, VictoriaMetrics fields
+
+### Test Fixture Fixes
+- **ApiTestFixture**: Updated to use `ISecretCryptoService` interface
+  - `MockSecretCryptoService` now implements `ISecretCryptoService` directly
+  - Removed dependency on concrete `SecretCryptoService` class
+  - Fixed registration to only register interface
+
+### E2E Test Summary
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| DashboardE2ETests.cs | 19 | Dashboard, Login, Navigation |
+| ProjectE2ETests.cs | 15 | Projects CRUD |
+| RepositoryE2ETests.cs | 19 | Repository Detail tabs |
+| RunE2ETests.cs | 25+17 | Run Kanban + Run Detail |
+| FindingE2ETests.cs | 26 | Findings List + Detail |
+| TaskE2ETests.cs | 18 | Task CRUD |
+| WorkflowE2ETests.cs | 24+10 | Workflows + Editor |
+| ImageBuilderE2ETests.cs | 25 | Image Builder |
+| AlertE2ETests.cs | 27 | Alert Rules + Events |
+| SettingsE2ETests.cs | 8 | System Settings |
+| ProxyAuditsE2ETests.cs | 20 | Proxy Audits |
+| ScheduleE2ETests.cs | 6 | Schedules (NEW) |
+| WorkerE2ETests.cs | 7 | Workers (NEW) |
+| ProviderSettingsE2ETests.cs | 10 | Provider Settings (NEW) |
+| **Total** | **256+** | All 18 UI pages |
+
+## Additional Improvements (2026-02-14 - Session 15)
+
+### True AI-Assisted Dockerfile Generation
+- **ImageBuilderService**: Added `GenerateDockerfileWithAiAsync` method that calls ZhipuAI GLM-4-Plus API
+  - Uses natural language descriptions to generate custom Dockerfiles
+  - Validates generated content contains proper Dockerfile structure
+  - Strips markdown code blocks from AI response
+  - Includes comprehensive error handling and timeout support
+- **ImageBuilder.razor**: Enhanced UI with two generation options:
+  - **Template**: Rule-based generation using predefined patterns
+  - **AI Generate**: True AI-powered generation using GLM-5 model
+  - Added loading indicator and error display for AI generation
+  - AI generation requires Z.ai API key configured in Provider Settings
+
+### OpenAPI/Swagger Documentation
+- **Added Swashbuckle.AspNetCore 7.3.2**: Full OpenAPI/Swagger support
+- **Swagger UI**: Available at `/api/docs`
+  - Interactive API documentation
+  - Try-it-out functionality for all endpoints
+  - Cookie-based authentication support
+- **OpenAPI Spec**: Available at `/api/docs/v1/swagger.json`
+  - Complete API endpoint documentation
+  - Request/response schemas
+  - Authentication requirements
+
+### Bug Fixes
+- **ApiTestFixture**: Fixed ISecretCryptoService registration to use interface directly
+  - Removed incorrect registration of concrete type
+  - MockSecretCryptoService now properly implements interface
+
+### Tech Stack Updates
+- Added Swashbuckle.AspNetCore for API documentation
