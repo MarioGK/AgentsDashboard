@@ -116,6 +116,22 @@ dotnet run --project src/AgentsDashboard.ControlPlane
 - VMUI: http://localhost:8081
 - Swagger: http://localhost:5266/api/docs
 
+## Harness Setup
+
+### Zai Harness (GLM-5)
+The Zai harness uses cc-mirror to configure GLM-5 as the backend:
+```bash
+npx cc-mirror quick --provider zai --api-key "$Z_AI_API_KEY"
+```
+
+### Supported Harnesses
+| Harness | CLI Tool | Provider |
+|---------|----------|----------|
+| Codex | `codex` | OpenAI GPT |
+| OpenCode | `opencode` | OpenCode |
+| Claude Code | `claude-code` | Anthropic Claude |
+| Zai | `zai` | Zhipu GLM-5 |
+
 ## Building Harness Images
 
 ```bash
@@ -163,6 +179,10 @@ dotnet test
 | Workflows with visual editor | Complete |
 | Alerting (5 rule types) | Complete |
 | Built-in templates (4) | Complete |
+| - QA Browser Sweep | Complete |
+| - Unit Test Guard | Complete |
+| - Dependency Health Check | Complete |
+| - Regression Replay | Complete |
 | AI-assisted Dockerfile generation | Complete |
 | OpenAPI/Swagger | Complete |
 | Kubernetes/Helm deployment | Complete |
@@ -174,12 +194,12 @@ dotnet test
 
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
-| UnitTests | 45 | 1,139 | 96.7% (37 skipped) |
-| IntegrationTests | 24 | 167 | Requires MongoDB |
-| PlaywrightTests | 15 | 270+ | Requires Running App |
-| Benchmarks | 3 | - | Performance |
+| UnitTests | 46 | 1,139 | 96.7% (37 skipped, all pass) |
+| IntegrationTests | 29 | 167 | Requires MongoDB |
+| PlaywrightTests | 15 | 250 | Requires Running App |
+| Benchmarks | 4 | - | Performance |
 
-**Total: 87 test files, 1,576+ tests**
+**Total: 94 test files, 1,556+ tests**
 
 ## Architecture Summary
 
