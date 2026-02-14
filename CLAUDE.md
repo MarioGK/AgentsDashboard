@@ -233,7 +233,7 @@ dotnet test
 ## Architecture Summary
 
 ### ControlPlane
-- **92 API endpoints** with authentication/authorization
+- **88 API endpoints** with authentication/authorization
 - **22 Blazor pages** with MudBlazor UI
 - **18 services** for business logic
 - **SignalR hub** with 5 event types
@@ -262,9 +262,9 @@ projects, repositories, tasks, runs, run_events, findings, workers, webhooks, pr
 - harness-codex, harness-opencode, harness-claudecode, harness-zai
 - ai-harness (all-in-one)
 
-### VMUI Dashboards (72 panels)
-- Orchestrator Dashboard: 32 panels - throughput, latency, errors, queue, workers, runs, findings, proxy
-- Harness Metrics Dashboard: 40 panels - per-harness execution, duration, success rate, failures, container metrics
+### VMUI Dashboards (70 panels)
+- Orchestrator Dashboard: 31 panels - throughput, latency, errors, queue, workers, runs, findings, proxy
+- Harness Metrics Dashboard: 39 panels - per-harness execution, duration, success rate, failures, container metrics
 
 ## UI Pages (22)
 
@@ -304,7 +304,7 @@ dotnet format
 ## Known Issues
 
 - No Blazor component tests (bunit compatibility with .NET 10 pending)
-- Docker-dependent tests skipped (37 tests) due to Docker.DotNet version mismatch and BackgroundService testability
+- Docker-dependent tests skipped (36 tests) due to Docker.DotNet version mismatch and BackgroundService testability
 - Integration tests require running MongoDB infrastructure
 - Unit test pass rate: 1,102/1,139 (100% of non-skipped tests pass)
 
@@ -350,18 +350,18 @@ dotnet format
 | control-plane | Blazor Server control plane | ghcr.io |
 | worker-gateway | gRPC worker gateway | ghcr.io |
 
-## API Endpoints (83 total)
+## API Endpoints (92 total)
 
 | Category | Count | Key Endpoints |
 |----------|-------|---------------|
-| Projects | 5 | CRUD + repositories |
-| Repositories | 3 | CRUD |
-| Tasks | 4 | CRUD |
+| Projects | 6 | CRUD + repositories |
+| Repositories | 4 | CRUD |
+| Tasks | 5 | CRUD |
 | Runs | 9 | CRUD + cancel/retry/approve/reject + bulk |
-| Findings | 7 | CRUD + retry/assign/create-task |
+| Findings | 8 | CRUD + retry/assign/create-task |
 | Workflows | 10 | CRUD + execute + approvals |
-| Alerts | 7 | Rules + Events + bulk-resolve |
-| Webhooks | 5 | CRUD + token + event receiver |
+| Alerts | 9 | Rules + Events + bulk-resolve |
+| Webhooks | 7 | CRUD + token + event receiver |
 | Templates | 5 | CRUD |
 | Images | 3 | List/build/delete |
 | Other | 26 | Workers, Secrets, Instructions, Settings, Health, Proxy |
@@ -393,7 +393,7 @@ dotnet format
 |-----------|--------|---------|
 | Build | Passed | 0 Warnings, 0 Errors |
 | Unit Tests | Passed | 1,103/1,139 passed (36 skipped, 0 failed) |
-| API Endpoints | Complete | 83 endpoints across 23 groups |
+| API Endpoints | Complete | 92 endpoints across 23 groups |
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
 | Blazor Pages | Complete | 22 pages with full functionality |
 | Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
