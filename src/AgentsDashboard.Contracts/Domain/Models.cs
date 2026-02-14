@@ -42,6 +42,32 @@ public enum HarnessType
     Zai = 3
 }
 
+public enum WebhookEventType
+{
+    Push = 0,
+    PullRequest = 1,
+    Issues = 2,
+    Release = 3,
+    WorkflowRun = 4,
+    Any = 99
+}
+
+public enum FailureClassification
+{
+    None = 0,
+    AuthenticationError = 1,
+    RateLimitExceeded = 2,
+    TimeoutExceeded = 3,
+    OutOfMemory = 4,
+    NetworkError = 5,
+    SandboxViolation = 6,
+    ContentPolicyViolation = 7,
+    ContextWindowExceeded = 8,
+    InvalidOutput = 9,
+    ToolExecutionFailed = 10,
+    Unknown = 99
+}
+
 public sealed class ContainerMetrics
 {
     public string ContainerId { get; set; } = string.Empty;
