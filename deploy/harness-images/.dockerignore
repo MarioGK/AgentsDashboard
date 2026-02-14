@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+LICENSE
+
+# IDE
+.vs
+.vscode
+.idea
+*.suo
+*.user
+*.userosscache
+
+# Build artifacts
+**/bin
+**/obj
+**/node_modules
+
+# Test files
+**/tests
+
+# CI/CD
+.github
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+
+# Helm and K8s
+helm/
+k8s/
+
+# Other
+**/.env
+**/.env.*
+*.log
