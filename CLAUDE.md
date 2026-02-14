@@ -394,7 +394,7 @@ dotnet format
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| Build | Passed | 0 Errors, 13 Warnings (pre-existing in tests) |
+| Build | Passed | 0 Errors, 0 Warnings |
 | Unit Tests | Passed | 1,103/1,139 passed (36 skipped, 0 failed) |
 | API Endpoints | Complete | 96 endpoints across 22 categories |
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
