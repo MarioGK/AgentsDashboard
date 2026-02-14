@@ -563,6 +563,71 @@ public class AlertingServiceTests
 
         triggered.Should().BeTrue();
     }
+
+    [Fact]
+    public void AlertRule_CooldownMinutesDefault_IsFifteen()
+    {
+        var rule = new AlertRuleDocument
+        {
+            RuleType = AlertRuleType.FailureRateSpike,
+            Threshold = 5
+        };
+
+        rule.CooldownMinutes.Should().Be(15);
+    }
+
+    [Fact]
+    public void AlertRule_LastFiredAtUtc_DefaultIsNull()
+    {
+        var rule = new AlertRuleDocument
+        {
+            RuleType = AlertRuleType.FailureRateSpike,
+            Threshold = 5
+        };
+
+        rule.LastFiredAtUtc.Should().BeNull();
+    }
+
+    [Fact]
+    public void AlertRule_CooldownCanBeCustomized()
+    {
+        var rule = new AlertRuleDocument
+        {
+            RuleType = AlertRuleType.FailureRateSpike,
+            Threshold = 5,
+            CooldownMinutes = 30
+        };
+
+        rule.CooldownMinutes.Should().Be(30);
+    }
+
+    [Fact]
+    public void AlertRule_LastFiredAtCanBeSet()
+    {
+        var now = DateTime.UtcNow;
+        var rule = new AlertRuleDocument
+        {
+            RuleType = AlertRuleType.FailureRateSpike,
+            Threshold = 5,
+            LastFiredAtUtc = now
+        };
+
+        rule.LastFiredAtUtc.Should().Be(now);
+    }
+
+    [Fact]
+    public void AlertRule_CooldownZero_DisablesCooldown()
+    {
+        var rule = new AlertRuleDocument
+        {
+            RuleType = AlertRuleType.FailureRateSpike,
+            Threshold = 5,
+            CooldownMinutes = 0,
+            LastFiredAtUtc = DateTime.UtcNow
+        };
+
+        rule.CooldownMinutes.Should().Be(0);
+    }
 }
 
 public interface IAlertDataProvider

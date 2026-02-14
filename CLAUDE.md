@@ -67,10 +67,11 @@ deploy/
 - Cookie-based auth with roles: viewer, operator, admin
 - Policies enforced on API endpoints and Blazor pages
 
-### API Design
+## API Design
 - REST endpoints under `/api/`
 - No versioning prefix (v1)
 - Use domain documents directly (DTOs planned)
+- CreateTaskRequest/UpdateTaskRequest include: ApprovalProfile, ConcurrencyLimit, InstructionFiles
 
 ### Database
 - MongoDB with typed collections
@@ -140,9 +141,9 @@ dotnet test
 
 | Test Project | Files | Tests | Coverage Area |
 |--------------|-------|-------|---------------|
-| UnitTests | 27+ | ~612 | Alerting, Cron, Dispatcher, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher |
+| UnitTests | 33+ | ~850 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection |
 | IntegrationTests | 28+ | ~152 | MongoDB store, Image allowlist, Secret redactor, API endpoints |
-| PlaywrightTests | 10 | ~183 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
+| PlaywrightTests | 11 | ~190 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
 
 ## Implementation Status
 
@@ -204,24 +205,19 @@ dotnet test
 | Image Builder | `/image-builder` | Complete |
 | Provider Settings | `/providers` | Complete |
 | Alert Settings | `/alerts` | Complete |
+| Proxy Audits | `/proxy-audits` | Complete |
 | System Settings | `/settings` | Complete (Docker policy, retention, observability) |
 | Login | `/login` | Complete |
 
 ## Missing Test Coverage
 
-- None (bunit component tests added)
+- RunDispatcherTests.cs has pre-existing build issues (namespace conflicts, type mismatches)
+- Component tests require bunit package updates for .NET 10 compatibility
 
-## Component Tests (bunit)
+## Known Issues
 
-Located in `tests/AgentsDashboard.UnitTests/ControlPlane/Components/`:
-- `DashboardTests.cs` - 6 tests for Overview page
-- `RunKanbanTests.cs` - 8 tests for Runs Kanban board
-- `FindingsListTests.cs` - 8 tests for Findings list page
-
-Run component tests:
-```bash
-dotnet test tests/AgentsDashboard.UnitTests --filter "FullyQualifiedName~Components"
-```
+- `tests/AgentsDashboard.UnitTests/ControlPlane/Services/RunDispatcherTests.cs` has compilation errors due to namespace conflicts with `AgentsDashboard.UnitTests.WorkerGateway`
+- Component tests in `tests/AgentsDashboard.UnitTests/ControlPlane/Components/` require bunit API updates
 
 ## Build Commands
 

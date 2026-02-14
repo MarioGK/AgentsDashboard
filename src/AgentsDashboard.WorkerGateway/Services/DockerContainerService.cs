@@ -15,6 +15,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         IDictionary<string, string> env,
         IDictionary<string, string> labels,
         string? workspaceHostPath,
+        string? artifactsHostPath,
         double cpuLimit,
         string memoryLimit,
         bool networkDisabled,
@@ -29,6 +30,8 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
             NanoCPUs = (long)(cpuLimit * 1_000_000_000),
             Memory = ParseMemoryLimit(memoryLimit),
             ReadonlyRootfs = readOnlyRootFs,
+            SecurityOpt = ["no-new-privileges"],
+            CapDrop = new List<string> { "ALL" },
         };
 
         if (networkDisabled)
@@ -38,12 +41,22 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
 
         if (readOnlyRootFs)
         {
-            hostConfig.Tmpfs = new Dictionary<string, string> { ["/tmp"] = "rw,size=100m" };
+            hostConfig.Tmpfs = new Dictionary<string, string> { ["/tmp"] = "rw,size=100m", ["/var/tmp"] = "rw,size=50m" };
         }
 
+        var binds = new List<string>();
         if (!string.IsNullOrWhiteSpace(workspaceHostPath))
         {
-            hostConfig.Binds = [$"{workspaceHostPath}:/workspace:rw"];
+            binds.Add($"{workspaceHostPath}:/workspace:rw");
+        }
+        if (!string.IsNullOrWhiteSpace(artifactsHostPath))
+        {
+            Directory.CreateDirectory(artifactsHostPath);
+            binds.Add($"{artifactsHostPath}:/artifacts:rw");
+        }
+        if (binds.Count > 0)
+        {
+            hostConfig.Binds = binds;
         }
 
         var createParams = new CreateContainerParameters
@@ -54,6 +67,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
             Labels = new Dictionary<string, string>(labels),
             HostConfig = hostConfig,
             WorkingDir = !string.IsNullOrWhiteSpace(workspaceHostPath) ? "/workspace" : null,
+            User = "agent",
         };
 
         var response = await _client.Containers.CreateContainerAsync(createParams, cancellationToken);

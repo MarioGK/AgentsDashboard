@@ -834,6 +834,17 @@ public static class ApiEndpoints
         readApi.MapGet("/alerts/events", async (OrchestratorStore store, CancellationToken ct) =>
             Results.Ok(await store.ListRecentAlertEventsAsync(100, ct)));
 
+        writeApi.MapPost("/alerts/events/{eventId}/resolve", async (
+            string eventId,
+            OrchestratorStore store,
+            CancellationToken ct) =>
+        {
+            var resolved = await store.ResolveAlertEventAsync(eventId, ct);
+            return resolved is null
+                ? Results.NotFound(new { message = "Alert event not found" })
+                : Results.Ok(resolved);
+        });
+
         // --- Credential Validation ---
 
         writeApi.MapPost("/providers/validate", async (

@@ -2,7 +2,6 @@ using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Services;
-using Google.Protobuf.Collections;
 using Grpc.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -136,6 +135,24 @@ public class RunDispatcherDispatchTests
         Attempt = 1
     };
 
+    private static RunDocument WithState(RunDocument run, RunState state)
+    {
+        run.State = state;
+        return run;
+    }
+
+    private static TaskDocument WithAutoCreatePullRequest(TaskDocument task, bool autoCreate)
+    {
+        task.AutoCreatePullRequest = autoCreate;
+        return task;
+    }
+
+    private static TaskDocument WithSandboxProfile(TaskDocument task, SandboxProfileConfig sandboxProfile)
+    {
+        task.SandboxProfile = sandboxProfile;
+        return task;
+    }
+
     [Fact]
     public async Task DispatchAsync_WithRequireApproval_MarksRunPendingApproval()
     {
@@ -146,7 +163,7 @@ public class RunDispatcherDispatchTests
         var run = CreateRun();
 
         _storeMock.Setup(s => s.MarkRunPendingApprovalAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.PendingApproval });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.PendingApproval));
         _publisherMock.Setup(p => p.PublishStatusAsync(It.IsAny<RunDocument>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
@@ -256,10 +273,10 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = false, Reason = "Worker busy" }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
         _storeMock.Setup(s => s.MarkRunCompletedAsync(run.Id, false, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Failed });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Failed));
 
         var result = await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
@@ -283,10 +300,10 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Running });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
         _storeMock.Setup(s => s.ListProviderSecretsAsync(repo.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
@@ -324,10 +341,10 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Running });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
@@ -336,8 +353,8 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
@@ -370,7 +387,7 @@ public class RunDispatcherDispatchTests
                 AdditionalSettings = { ["custom-setting"] = "custom-value" }
             });
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Running });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
@@ -379,8 +396,8 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
@@ -412,7 +429,7 @@ public class RunDispatcherDispatchTests
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Running });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
@@ -421,8 +438,8 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
@@ -448,7 +465,7 @@ public class RunDispatcherDispatchTests
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Running });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
@@ -457,8 +474,8 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
@@ -486,7 +503,7 @@ public class RunDispatcherDispatchTests
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Running });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
@@ -495,8 +512,8 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
@@ -515,7 +532,7 @@ public class RunDispatcherDispatchTests
         var dispatcher = CreateDispatcher();
         var project = CreateProject();
         var repo = CreateRepository();
-        var task = CreateTask() with { AutoCreatePullRequest = true };
+        var task = WithAutoCreatePullRequest(CreateTask(), true);
         var run = CreateRun();
 
         SetupSuccessfulConcurrencyChecks();
@@ -525,7 +542,7 @@ public class RunDispatcherDispatchTests
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Running });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
@@ -534,8 +551,8 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
@@ -553,16 +570,13 @@ public class RunDispatcherDispatchTests
         var dispatcher = CreateDispatcher();
         var project = CreateProject();
         var repo = CreateRepository();
-        var task = CreateTask() with
+        var task = WithSandboxProfile(CreateTask(), new SandboxProfileConfig
         {
-            SandboxProfile = new SandboxProfileConfig
-            {
-                CpuLimit = 2.0,
-                MemoryLimit = 4096,
-                NetworkDisabled = true,
-                ReadOnlyRootFs = true
-            }
-        };
+            CpuLimit = 2.0,
+            MemoryLimit = 4096,
+            NetworkDisabled = true,
+            ReadOnlyRootFs = true
+        });
         var run = CreateRun();
 
         SetupSuccessfulConcurrencyChecks();
@@ -572,7 +586,7 @@ public class RunDispatcherDispatchTests
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(run with { State = RunState.Running });
+            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
         _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
@@ -581,8 +595,8 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new DispatchJobResponse { Accepted = true }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
@@ -604,8 +618,8 @@ public class RunDispatcherDispatchTests
                 Task.FromResult(new CancelJobResponse()),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
-                () => { },
-                () => { }));
+                () => new Metadata(),
+                () => new Metadata()));
 
         await dispatcher.CancelAsync(runId, CancellationToken.None);
 

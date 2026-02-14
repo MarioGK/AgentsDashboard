@@ -189,7 +189,8 @@ public class HarnessAdapterFactoryTests
             WorkspacePath = "/workspace",
             GitUrl = "",
             Env = new Dictionary<string, string>(),
-            ContainerLabels = new Dictionary<string, string>()
+            ContainerLabels = new Dictionary<string, string>(),
+            ArtifactsHostPath = "/tmp/artifacts"
         };
         public HarnessCommand BuildCommand(HarnessExecutionContext context) => new() { FileName = "test" };
         public Task<HarnessResultEnvelope> ExecuteAsync(HarnessExecutionContext context, HarnessCommand command, CancellationToken cancellationToken) => Task.FromResult(new HarnessResultEnvelope());

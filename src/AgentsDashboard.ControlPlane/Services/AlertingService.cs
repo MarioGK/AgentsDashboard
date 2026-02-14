@@ -46,6 +46,16 @@ public sealed class AlertingService(
     {
         try
         {
+            if (rule.LastFiredAtUtc.HasValue && rule.CooldownMinutes > 0)
+            {
+                var cooldownEnd = rule.LastFiredAtUtc.Value.AddMinutes(rule.CooldownMinutes);
+                if (DateTime.UtcNow < cooldownEnd)
+                {
+                    logger.LogDebug("Alert rule {RuleName} is in cooldown until {CooldownEnd}", rule.Name, cooldownEnd);
+                    return;
+                }
+            }
+
             var (triggered, message) = rule.RuleType switch
             {
                 AlertRuleType.MissingHeartbeat => await CheckMissingHeartbeatAsync(rule, store, cancellationToken),
@@ -185,6 +195,9 @@ public sealed class AlertingService(
         };
 
         await store.RecordAlertEventAsync(alertEvent, cancellationToken);
+
+        rule.LastFiredAtUtc = DateTime.UtcNow;
+        await store.UpdateAlertRuleAsync(rule.Id, rule, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(rule.WebhookUrl))
         {

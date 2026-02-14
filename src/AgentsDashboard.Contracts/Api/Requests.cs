@@ -19,7 +19,10 @@ public sealed record CreateTaskRequest(
     RetryPolicyConfig? RetryPolicy = null,
     TimeoutConfig? Timeouts = null,
     SandboxProfileConfig? SandboxProfile = null,
-    ArtifactPolicyConfig? ArtifactPolicy = null);
+    ArtifactPolicyConfig? ArtifactPolicy = null,
+    ApprovalProfileConfig? ApprovalProfile = null,
+    int? ConcurrencyLimit = null,
+    List<InstructionFile>? InstructionFiles = null);
 public sealed record UpdateTaskRequest(
     string Name,
     TaskKind Kind,
@@ -32,7 +35,10 @@ public sealed record UpdateTaskRequest(
     RetryPolicyConfig? RetryPolicy = null,
     TimeoutConfig? Timeouts = null,
     SandboxProfileConfig? SandboxProfile = null,
-    ArtifactPolicyConfig? ArtifactPolicy = null);
+    ArtifactPolicyConfig? ArtifactPolicy = null,
+    ApprovalProfileConfig? ApprovalProfile = null,
+    int? ConcurrencyLimit = null,
+    List<InstructionFile>? InstructionFiles = null);
 public sealed record CreateRunRequest(string TaskId);
 public sealed record RetryRunRequest(string RunId);
 public sealed record CancelRunRequest(string RunId);

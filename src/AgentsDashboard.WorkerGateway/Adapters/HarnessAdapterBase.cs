@@ -28,6 +28,7 @@ public abstract class HarnessAdapterBase(
             Image = image,
             WorkspacePath = request.WorkspacePath,
             GitUrl = request.GitUrl,
+            ArtifactsHostPath = System.IO.Path.Combine(options.Value.ArtifactStoragePath, request.RunId),
             Env = request.Env,
             ContainerLabels = request.ContainerLabels,
             TimeoutSeconds = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : options.Value.DefaultTimeoutSeconds,

@@ -118,6 +118,7 @@ public sealed class HarnessExecutor(
                 env,
                 context.ContainerLabels,
                 workspaceHostPath,
+                context.ArtifactsHostPath,
                 context.CpuLimit,
                 context.MemoryLimit,
                 context.NetworkDisabled,

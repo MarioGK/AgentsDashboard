@@ -85,6 +85,7 @@ public sealed class RunDispatcher(
             GitUrl = repository.GitUrl,
             ArtifactPolicyMaxArtifacts = task.ArtifactPolicy.MaxArtifacts,
             ArtifactPolicyMaxTotalSizeBytes = task.ArtifactPolicy.MaxTotalSizeBytes,
+            ArtifactsPath = $"/data/artifacts/{run.Id}",
         };
 
         request.ContainerLabels.Add("orchestrator.run-id", run.Id);

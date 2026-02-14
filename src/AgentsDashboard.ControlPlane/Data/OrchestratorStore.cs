@@ -396,6 +396,9 @@ public class OrchestratorStore
             Timeouts = request.Timeouts ?? new TimeoutConfig(),
             SandboxProfile = request.SandboxProfile ?? new SandboxProfileConfig(),
             ArtifactPolicy = request.ArtifactPolicy ?? new ArtifactPolicyConfig(),
+            ApprovalProfile = request.ApprovalProfile ?? new ApprovalProfileConfig(),
+            ConcurrencyLimit = request.ConcurrencyLimit ?? 0,
+            InstructionFiles = request.InstructionFiles ?? [],
         };
 
         task.NextRunAtUtc = ComputeNextRun(task, DateTime.UtcNow);
@@ -468,6 +471,9 @@ public class OrchestratorStore
             .Set(x => x.Timeouts, request.Timeouts ?? new TimeoutConfig())
             .Set(x => x.SandboxProfile, request.SandboxProfile ?? new SandboxProfileConfig())
             .Set(x => x.ArtifactPolicy, request.ArtifactPolicy ?? new ArtifactPolicyConfig())
+            .Set(x => x.ApprovalProfile, request.ApprovalProfile ?? new ApprovalProfileConfig())
+            .Set(x => x.ConcurrencyLimit, request.ConcurrencyLimit ?? 0)
+            .Set(x => x.InstructionFiles, request.InstructionFiles ?? [])
             .Set(x => x.NextRunAtUtc, nextRun);
 
         return await _tasks.FindOneAndUpdateAsync(
@@ -950,6 +956,20 @@ public class OrchestratorStore
 
     public Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsAsync(string workflowId, CancellationToken cancellationToken)
         => _workflowExecutions.Find(x => x.WorkflowId == workflowId).SortByDescending(x => x.CreatedAtUtc).Limit(100).ToListAsync(cancellationToken);
+
+    public virtual Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsByStateAsync(WorkflowExecutionState state, CancellationToken cancellationToken)
+        => _workflowExecutions.Find(x => x.State == state).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
+
+    public virtual async Task<AlertEventDocument?> ResolveAlertEventAsync(string eventId, CancellationToken cancellationToken)
+    {
+        var update = Builders<AlertEventDocument>.Update.Set(x => x.Resolved, true);
+
+        return await _alertEvents.FindOneAndUpdateAsync(
+            x => x.Id == eventId,
+            update,
+            new FindOneAndUpdateOptions<AlertEventDocument> { ReturnDocument = ReturnDocument.After },
+            cancellationToken);
+    }
 
     public virtual async Task<WorkflowExecutionDocument?> GetWorkflowExecutionAsync(string executionId, CancellationToken cancellationToken)
         => await _workflowExecutions.Find(x => x.Id == executionId).FirstOrDefaultAsync(cancellationToken);

@@ -92,12 +92,19 @@ RUN pip3 install --no-cache-dir \
 
 RUN npx playwright@latest install --with-deps chromium || echo "Playwright installation skipped"
 
-RUN npm install -g openai 2>/dev/null || echo "OpenAI SDK installed"
-RUN npm install -g @openai/codex 2>/dev/null || echo "Codex CLI installation attempted"
-RUN npm install -g @anthropic-ai/claude-code 2>/dev/null || echo "Claude Code installation attempted"
-RUN npm install -g cc-mirror 2>/dev/null || echo "cc-mirror installation attempted"
-RUN npx cc-mirror quick --provider zai 2>/dev/null || echo "Zai (claude-code mirror) installation attempted"
-RUN go install github.com/opencode-ai/opencode@latest 2>/dev/null || echo "OpenCode installation attempted"
+RUN npm install -g openai && echo "OpenAI SDK installed successfully"
+RUN npm install -g @openai/codex 2>/dev/null || echo "Codex CLI not yet available, using API fallback"
+RUN npm install -g @anthropic-ai/claude-code 2>/dev/null || echo "Claude Code not available, using API fallback"
+RUN npm install -g cc-mirror 2>/dev/null || echo "cc-mirror not available, using ZhipuAI API fallback"
+RUN go install github.com/opencode-ai/opencode@latest 2>/dev/null || echo "OpenCode not available, using placeholder"
+
+RUN echo "Verifying installed tools..." && \
+    node --version && \
+    python --version && \
+    dotnet --version && \
+    go version && \
+    gh --version | head -1 && \
+    echo "Tool verification complete"
 
 RUN useradd -m -s /bin/bash -u 1000 agent \
     && echo "agent ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \

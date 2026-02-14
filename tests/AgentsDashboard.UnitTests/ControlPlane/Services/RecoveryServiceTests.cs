@@ -38,6 +38,10 @@ public class RecoveryServiceTests
             .ReturnsAsync(new List<RunDocument>());
         store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<WorkflowExecutionDocument>());
 
         var publisher = new Mock<IRunEventPublisher>();
         var service = new RecoveryService(store.Object, publisher.Object, NullLogger<RecoveryService>.Instance);
@@ -70,6 +74,10 @@ public class RecoveryServiceTests
             .ReturnsAsync(new List<RunDocument> { orphanRun });
         store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.MarkRunCompletedAsync(
                 "orphan-1", false, "Orphaned run recovered on startup", "{}",
                 It.IsAny<CancellationToken>(), "OrphanRecovery"))
@@ -112,6 +120,10 @@ public class RecoveryServiceTests
             .ReturnsAsync(new List<RunDocument> { orphanRun });
         store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.MarkRunCompletedAsync(
                 "orphan-2", false, It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<CancellationToken>(), It.IsAny<string>()))
@@ -147,6 +159,10 @@ public class RecoveryServiceTests
             .ReturnsAsync(new List<RunDocument> { orphanRun });
         store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.MarkRunCompletedAsync(
                 It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<CancellationToken>(), It.IsAny<string>()))
@@ -178,6 +194,10 @@ public class RecoveryServiceTests
             .ReturnsAsync(runs);
         store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<WorkflowExecutionDocument>());
         store.Setup(s => s.MarkRunCompletedAsync(
                 It.IsAny<string>(), false, It.IsAny<string>(), It.IsAny<string>(),
                 It.IsAny<CancellationToken>(), It.IsAny<string>()))
@@ -191,6 +211,67 @@ public class RecoveryServiceTests
         store.Verify(s => s.MarkRunCompletedAsync(
             It.IsAny<string>(), false, It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<CancellationToken>(), It.IsAny<string>()), Times.Exactly(3));
+    }
+
+    [Fact]
+    public async Task StartAsync_WithOrphanedWorkflowExecutions_MarksThemAsFailed()
+    {
+        var orphanExecution = new WorkflowExecutionDocument
+        {
+            Id = "exec-1",
+            WorkflowId = "wf-1",
+            State = WorkflowExecutionState.Running
+        };
+
+        var store = CreateMockStore();
+        store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<WorkflowExecutionDocument> { orphanExecution });
+        store.Setup(s => s.MarkWorkflowExecutionCompletedAsync(
+                "exec-1", WorkflowExecutionState.Failed, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(orphanExecution);
+
+        var publisher = new Mock<IRunEventPublisher>();
+        var service = new RecoveryService(store.Object, publisher.Object, NullLogger<RecoveryService>.Instance);
+
+        await service.StartAsync(CancellationToken.None);
+
+        store.Verify(s => s.MarkWorkflowExecutionCompletedAsync(
+            "exec-1", WorkflowExecutionState.Failed, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartAsync_WithPendingApprovalRuns_LogsThem()
+    {
+        var pendingRun = new RunDocument
+        {
+            Id = "pending-1",
+            TaskId = "task-1",
+            RepositoryId = "repo-1",
+            State = RunState.PendingApproval
+        };
+
+        var store = CreateMockStore();
+        store.Setup(s => s.ListRunsByStateAsync(RunState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.Queued, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument>());
+        store.Setup(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<RunDocument> { pendingRun });
+        store.Setup(s => s.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<WorkflowExecutionDocument>());
+
+        var publisher = new Mock<IRunEventPublisher>();
+        var service = new RecoveryService(store.Object, publisher.Object, NullLogger<RecoveryService>.Instance);
+
+        await service.StartAsync(CancellationToken.None);
+
+        store.Verify(s => s.ListRunsByStateAsync(RunState.PendingApproval, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static Mock<OrchestratorStore> CreateMockStore()
