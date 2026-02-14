@@ -162,14 +162,20 @@ else
                                                      ValueChanged="@((int v) => UpdateInstructionFileOrder(index, v))" />
                                 </MudItem>
                                 <MudItem xs="12" md="4" Class="d-flex align-center justify-end">
-                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Tooltip="Move Up" Size="Size.Small"
-                                                   Disabled="@(index == 0)"
-                                                   OnClick="() => MoveInstructionFile(index, -1)" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Tooltip="Move Down" Size="Size.Small"
-                                                   Disabled="@(index == _repoInstructionFiles.Count - 1)"
-                                                   OnClick="() => MoveInstructionFile(index, 1)" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Tooltip="Remove" Size="Size.Small" Color="Color.Error"
-                                                   OnClick="() => RemoveInstructionFile(index)" />
+                                    <MudTooltip Text="Move Up">
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small"
+                                                       Disabled="@(index == 0)"
+                                                       OnClick="() => MoveInstructionFile(index, -1)" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Move Down">
+                                        <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small"
+                                                       Disabled="@(index == _repoInstructionFiles.Count - 1)"
+                                                       OnClick="() => MoveInstructionFile(index, 1)" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Remove">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                                       OnClick="() => RemoveInstructionFile(index)" />
+                                    </MudTooltip>
                                 </MudItem>
                             </MudGrid>
                             <StandaloneCodeEditor @key="@($"repo-instr-{index}-{file.Name}")"
