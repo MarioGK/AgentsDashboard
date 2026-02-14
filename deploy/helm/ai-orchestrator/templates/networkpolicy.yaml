@@ -1,0 +1,225 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ai-orchestrator.fullname" . }}-control-plane
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "ai-orchestrator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: control-plane
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ai-orchestrator.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: control-plane
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+        {{- if .Values.networkPolicy.ingress }}
+        {{- toYaml .Values.networkPolicy.ingress | nindent 8 }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.controlPlane.targetPort }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: worker-gateway
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.controlPlane.targetPort }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: mongodb
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.mongodb.targetPort }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: worker-gateway
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.workerGateway.targetPort }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: victoriametrics
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.victoriametrics.targetPort }}
+    {{- if .Values.networkPolicy.egress }}
+    {{- toYaml .Values.networkPolicy.egress | nindent 4 }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ai-orchestrator.fullname" . }}-worker-gateway
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "ai-orchestrator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker-gateway
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ai-orchestrator.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: control-plane
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.workerGateway.targetPort }}
+        - protocol: TCP
+          port: 50051
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: mongodb
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.mongodb.targetPort }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: control-plane
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.controlPlane.targetPort }}
+    {{- if .Values.networkPolicy.egress }}
+    {{- toYaml .Values.networkPolicy.egress | nindent 4 }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ai-orchestrator.fullname" . }}-mongodb
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "ai-orchestrator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mongodb
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ai-orchestrator.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mongodb
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: control-plane
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: worker-gateway
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.mongodb.targetPort }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ai-orchestrator.fullname" . }}-victoriametrics
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "ai-orchestrator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: victoriametrics
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ai-orchestrator.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: victoriametrics
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: control-plane
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: vmui
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.victoriametrics.targetPort }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ai-orchestrator.fullname" . }}-vmui
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "ai-orchestrator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vmui
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ai-orchestrator.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: vmui
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- if .Values.networkPolicy.ingress }}
+    {{- toYaml .Values.networkPolicy.ingress | nindent 4 }}
+    {{- end }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: victoriametrics
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.victoriametrics.targetPort }}
+{{- end }}

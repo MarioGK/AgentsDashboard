@@ -200,14 +200,121 @@ jobs:
           sarif_file: 'trivy-results-all-in-one.sarif'
           category: 'all-in-one-image'
 
-  production-approval:
+  build-applications:
     needs: [prepare, build-all-in-one]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app:
+          - name: control-plane
+            dockerfile: src/AgentsDashboard.ControlPlane/Dockerfile
+            context: .
+          - name: worker-gateway
+            dockerfile: src/AgentsDashboard.WorkerGateway/Dockerfile
+            context: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.app.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.app.context }}
+          file: ${{ matrix.app.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.app.name }}:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.app.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.app.name }}:${{ needs.prepare.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.app.name }}.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results-${{ matrix.app.name }}.sarif'
+          category: '${{ matrix.app.name }}-image'
+
+  production-approval:
+    needs: [prepare, build-applications]
     if: ${{ needs.prepare.outputs.is_release == 'true' && github.event.inputs.skip_approval != 'true' }}
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Approval gate
         run: echo "Production deployment approved for version ${{ needs.prepare.outputs.version }}"
+
+  helm-deploy:
+    needs: [prepare, production-approval]
+    if: ${{ needs.prepare.outputs.is_release == 'true' || always() && github.event.inputs.skip_approval == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install ai-orchestrator deploy/helm/ai-orchestrator \
+            --namespace ai-orchestrator \
+            --create-namespace \
+            --set image.tag=${{ needs.prepare.outputs.version }} \
+            --set image.registry=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }} \
+            --set controlPlane.image.tag=${{ needs.prepare.outputs.version }} \
+            --set workerGateway.image.tag=${{ needs.prepare.outputs.version }} \
+            --set-string mongodb.auth.rootPassword="${{ secrets.MONGODB_ROOT_PASSWORD }}" \
+            --set-string secrets.apiKeys.openai="${{ secrets.OPENAI_API_KEY }}" \
+            --set-string secrets.apiKeys.anthropic="${{ secrets.ANTHROPIC_API_KEY }}" \
+            --set-string secrets.apiKeys.zhipu="${{ secrets.ZHIPU_API_KEY }}" \
+            --set-string secrets.apiKeys.github="${{ secrets.GITHUB_TOKEN }}" \
+            --wait \
+            --timeout 10m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/ai-orchestrator-control-plane -n ai-orchestrator
+          kubectl rollout status deployment/ai-orchestrator-worker-gateway -n ai-orchestrator
+          kubectl get pods -n ai-orchestrator
 
   update-compose:
     needs: [prepare, production-approval]
@@ -256,7 +363,7 @@ jobs:
             automated
 
   summary:
-    needs: [prepare, build-base, build-harnesses, build-all-in-one]
+    needs: [prepare, build-base, build-harnesses, build-all-in-one, build-applications]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -267,7 +374,7 @@ jobs:
           echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Registry:** ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "### Harness Images Built" >> $GITHUB_STEP_SUMMARY
           echo "| Image | Tag |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
           echo "| ai-harness-base | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
@@ -277,7 +384,14 @@ jobs:
           echo "| harness-zai | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "| ai-harness | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Application Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| control-plane | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| worker-gateway | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Build Status" >> $GITHUB_STEP_SUMMARY
           echo "- Base Image: ${{ needs.build-base.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Harness Images: ${{ needs.build-harnesses.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- All-in-One Image: ${{ needs.build-all-in-one.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Application Images: ${{ needs.build-applications.result }}" >> $GITHUB_STEP_SUMMARY
