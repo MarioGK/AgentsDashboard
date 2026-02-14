@@ -150,6 +150,9 @@ public sealed class TaskTemplateService
         template.IsEditable = true;
         template.CreatedAtUtc = DateTime.UtcNow;
         template.UpdatedAtUtc = DateTime.UtcNow;
+        template.ArtifactPatterns ??= [];
+        template.LinkedFailureRuns ??= [];
+        template.Commands ??= [];
 
         db.TaskTemplates.Add(template);
         await db.SaveChangesAsync(cancellationToken);

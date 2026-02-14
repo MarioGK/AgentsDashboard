@@ -1,0 +1,104 @@
+@using AgentsDashboard.Contracts.Domain
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudStack Spacing="3">
+                <MudSelect T="string" @bind-Value="_repositoryId" Label="Repository" Required
+                           RequiredError="Repository is required">
+                    @foreach (var repo in Repositories)
+                    {
+                        <MudSelectItem T="string" Value="@repo.Id">@repo.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_name" Label="Name" Required RequiredError="Name is required" />
+
+                <MudTextField @bind-Value="_description" Label="Description" Lines="2" />
+
+                <MudSelect T="string" @bind-Value="_harness" Label="Harness" Required>
+                    <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("zai")'>Zai (GLM-5)</MudSelectItem>
+                </MudSelect>
+
+                <MudTextField @bind-Value="_prompt" Label="Prompt" Lines="5" />
+
+                <MudTextField @bind-Value="_command" Label="Command"
+                              HelperText="CLI command to execute" />
+
+                <MudSwitch @bind-Value="_autoCreatePullRequest" Label="Auto Create Pull Request" Color="Color.Primary" />
+
+                <MudSwitch @bind-Value="_enabled" Label="Enabled" Color="Color.Success" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">
+            @(Agent is not null ? "Update" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public AgentDocument? Agent { get; set; }
+
+    [Parameter]
+    public List<RepositoryDocument> Repositories { get; set; } = [];
+
+    private MudForm _form = default!;
+    private bool _isValid;
+
+    private string _repositoryId = string.Empty;
+    private string _name = string.Empty;
+    private string _description = string.Empty;
+    private string _harness = "codex";
+    private string _prompt = string.Empty;
+    private string _command = string.Empty;
+    private bool _autoCreatePullRequest;
+    private bool _enabled = true;
+
+    protected override void OnInitialized()
+    {
+        if (Agent is not null)
+        {
+            _repositoryId = Agent.RepositoryId;
+            _name = Agent.Name;
+            _description = Agent.Description;
+            _harness = Agent.Harness;
+            _prompt = Agent.Prompt;
+            _command = Agent.Command;
+            _autoCreatePullRequest = Agent.AutoCreatePullRequest;
+            _enabled = Agent.Enabled;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        var agent = new AgentDocument
+        {
+            Id = Agent?.Id ?? Guid.NewGuid().ToString("N"),
+            RepositoryId = _repositoryId,
+            Name = _name.Trim(),
+            Description = _description.Trim(),
+            Harness = _harness,
+            Prompt = _prompt.Trim(),
+            Command = _command.Trim(),
+            AutoCreatePullRequest = _autoCreatePullRequest,
+            Enabled = _enabled,
+            CreatedAtUtc = Agent?.CreatedAtUtc ?? DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
+        };
+
+        MudDialog.Close(DialogResult.Ok(agent));
+    }
+}

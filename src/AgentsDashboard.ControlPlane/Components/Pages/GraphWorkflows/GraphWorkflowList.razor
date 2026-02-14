@@ -1,0 +1,161 @@
+@page "/workflows-v2"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Graph Workflows - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Graph Workflows</MudText>
+    <MudSpacer />
+    <MudSelect T="string" Value="_selectedRepoId" Label="Filter by Repository" Variant="Variant.Outlined"
+               Dense Class="mr-4" Style="max-width: 300px;" ValueChanged="OnRepositoryFilterChanged">
+        <MudSelectItem T="string" Value='@("")'>All Repositories</MudSelectItem>
+        @foreach (var repo in _repositories)
+        {
+            <MudSelectItem T="string" Value="@repo.Id">@repo.Name</MudSelectItem>
+        }
+    </MudSelect>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               Href="/workflows-v2/new">
+        Create Workflow
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate />
+}
+else
+{
+    <MudPaper Elevation="2">
+        <MudTable Items="@_workflows" Hover Dense Striped Filter="new Func<WorkflowRow, bool>(FilterFunc)">
+            <ToolBarContent>
+                <MudTextField @bind-Value="_searchString" Placeholder="Search workflows..."
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              IconSize="Size.Medium" Class="mt-0" Immediate />
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh><MudTableSortLabel SortBy="new Func<WorkflowRow, object>(x => x.Name)">Name</MudTableSortLabel></MudTh>
+                <MudTh>Repository</MudTh>
+                <MudTh>Nodes</MudTh>
+                <MudTh>Edges</MudTh>
+                <MudTh>Enabled</MudTh>
+                <MudTh>Trigger</MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<WorkflowRow, object>(x => x.CreatedAt)">Created</MudTableSortLabel></MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Name">
+                    <MudLink Href="@($"/workflows-v2/{context.Id}")">@context.Name</MudLink>
+                </MudTd>
+                <MudTd DataLabel="Repository">@context.RepositoryName</MudTd>
+                <MudTd DataLabel="Nodes">@context.NodeCount</MudTd>
+                <MudTd DataLabel="Edges">@context.EdgeCount</MudTd>
+                <MudTd DataLabel="Enabled">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Enabled ? Color.Success : Color.Default)">
+                        @(context.Enabled ? "Enabled" : "Disabled")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Trigger">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@context.TriggerType</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Created">@context.CreatedAt.ToString("g")</MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                                   Href="@($"/workflows-v2/{context.Id}")" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   OnClick="() => DeleteWorkflow(context.Id, context.Name)" />
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private string _searchString = "";
+    private string _selectedRepoId = "";
+    private bool _loading = true;
+
+    private record WorkflowRow(string Id, string Name, string RepositoryId, string RepositoryName, int NodeCount, int EdgeCount, bool Enabled, string TriggerType, DateTime CreatedAt);
+
+    private List<WorkflowRow> _workflows = [];
+    private List<RepositoryDocument> _repositories = [];
+    private Dictionary<string, string> _repoNameMap = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRepositoriesAsync();
+        await LoadWorkflowsAsync();
+    }
+
+    private async Task LoadRepositoriesAsync()
+    {
+        var projects = await Store.ListProjectsAsync(CancellationToken.None);
+        var allRepos = new List<RepositoryDocument>();
+        foreach (var project in projects)
+        {
+            var repos = await Store.ListRepositoriesAsync(project.Id, CancellationToken.None);
+            allRepos.AddRange(repos);
+        }
+        _repositories = allRepos.OrderBy(r => r.Name).ToList();
+        _repoNameMap = _repositories.ToDictionary(r => r.Id, r => r.Name);
+    }
+
+    private async Task LoadWorkflowsAsync()
+    {
+        _loading = true;
+
+        var workflows = string.IsNullOrEmpty(_selectedRepoId)
+            ? await Store.ListAllWorkflowsV2Async(CancellationToken.None)
+            : await Store.ListWorkflowsV2ByRepositoryAsync(_selectedRepoId, CancellationToken.None);
+
+        _workflows = workflows
+            .Select(w => new WorkflowRow(
+                w.Id,
+                w.Name,
+                w.RepositoryId,
+                _repoNameMap.TryGetValue(w.RepositoryId, out var name) ? name : w.RepositoryId[..Math.Min(8, w.RepositoryId.Length)],
+                w.Nodes.Count,
+                w.Edges.Count,
+                w.Enabled,
+                w.Trigger.Type,
+                w.CreatedAtUtc))
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+
+        _loading = false;
+    }
+
+    private async Task OnRepositoryFilterChanged(string repoId)
+    {
+        _selectedRepoId = repoId;
+        await LoadWorkflowsAsync();
+    }
+
+    private bool FilterFunc(WorkflowRow row) =>
+        string.IsNullOrWhiteSpace(_searchString)
+        || row.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase)
+        || row.RepositoryName.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+
+    private async Task DeleteWorkflow(string id, string name)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirm Delete",
+            $"Are you sure you want to delete workflow '{name}'?",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirm == true)
+        {
+            await Store.DeleteWorkflowV2Async(id, CancellationToken.None);
+            await LoadWorkflowsAsync();
+            Snackbar.Add("Workflow deleted", Severity.Success);
+        }
+    }
+}

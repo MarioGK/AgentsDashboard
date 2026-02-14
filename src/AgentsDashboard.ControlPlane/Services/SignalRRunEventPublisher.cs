@@ -62,4 +62,31 @@ public sealed class SignalRRunEventPublisher(IHubContext<RunEventsHub> hubContex
             DateTime.UtcNow,
             cancellationToken);
     }
+
+    public Task PublishWorkflowV2ExecutionStateAsync(WorkflowExecutionV2Document execution, CancellationToken cancellationToken)
+    {
+        return hubContext.Clients.All.SendAsync(
+            "WorkflowV2ExecutionStateChanged",
+            execution.Id,
+            execution.WorkflowV2Id,
+            execution.State.ToString(),
+            execution.CurrentNodeId,
+            execution.FailureReason,
+            DateTime.UtcNow,
+            cancellationToken);
+    }
+
+    public Task PublishWorkflowV2NodeStateAsync(WorkflowExecutionV2Document execution, WorkflowNodeResult nodeResult, CancellationToken cancellationToken)
+    {
+        return hubContext.Clients.All.SendAsync(
+            "WorkflowV2NodeStateChanged",
+            execution.Id,
+            nodeResult.NodeId,
+            nodeResult.NodeName,
+            nodeResult.State.ToString(),
+            nodeResult.RunId,
+            nodeResult.Summary,
+            DateTime.UtcNow,
+            cancellationToken);
+    }
 }

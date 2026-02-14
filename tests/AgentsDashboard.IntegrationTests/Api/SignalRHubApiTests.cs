@@ -12,7 +12,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     [Fact]
     public async Task SignalRHub_Negotiate_ReturnsSuccess()
     {
-        var loginRequest = new { username = "admin", password = "admin123" };
+        var loginRequest = new { username = "admin", password = "change-me" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
@@ -33,7 +33,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     [Fact]
     public async Task SignalRHub_NegotiateReturnsConnectionId()
     {
-        var loginRequest = new { username = "admin", password = "admin123" };
+        var loginRequest = new { username = "admin", password = "change-me" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
@@ -46,7 +46,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     [Fact]
     public async Task SignalRHub_SupportsWebSockets()
     {
-        var loginRequest = new { username = "admin", password = "admin123" };
+        var loginRequest = new { username = "admin", password = "change-me" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var negotiateResponse = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
@@ -56,7 +56,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     [Fact]
     public async Task SignalRHub_AvailableTransports_IncludeWebSockets()
     {
-        var loginRequest = new { username = "admin", password = "admin123" };
+        var loginRequest = new { username = "admin", password = "change-me" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response = await _client.PostAsync("/hubs/runs/negotiate?negotiateVersion=1", null);
@@ -77,7 +77,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     [Fact]
     public async Task SignalRHub_MultipleNegotiate_ReturnsDifferentConnectionIds()
     {
-        var loginRequest = new { username = "admin", password = "admin123" };
+        var loginRequest = new { username = "admin", password = "change-me" };
         await _client.PostAsJsonAsync("/auth/login", loginRequest);
 
         var response1 = await _client.PostAsync("/hubs/events/negotiate?negotiateVersion=1", null);
@@ -92,7 +92,7 @@ public class SignalRHubApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestF
     [Fact]
     public async Task SignalRHub_CookieAuth_IsSupported()
     {
-        var loginRequest = new { username = "admin", password = "admin123" };
+        var loginRequest = new { username = "admin", password = "change-me" };
         var loginResponse = await _client.PostAsJsonAsync("/auth/login", loginRequest);
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 

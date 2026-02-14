@@ -98,6 +98,7 @@ public sealed class ApiTestFixture : IAsyncLifetime
         {
             AllowAutoRedirect = false
         });
+        Client.DefaultRequestHeaders.Add("X-Test-Auth", "true");
     }
 
     public async Task DisposeAsync()
@@ -119,6 +120,8 @@ public sealed class NullRunEventPublisher : IRunEventPublisher
     public Task PublishFindingUpdatedAsync(FindingDocument finding, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task PublishWorkerHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task PublishRouteAvailableAsync(string runId, string routePath, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task PublishWorkflowV2ExecutionStateAsync(WorkflowExecutionV2Document execution, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task PublishWorkflowV2NodeStateAsync(WorkflowExecutionV2Document execution, WorkflowNodeResult nodeResult, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 public sealed class MockWorkerClient : AgentsDashboard.Contracts.Worker.WorkerGateway.WorkerGatewayClient

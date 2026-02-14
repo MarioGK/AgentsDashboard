@@ -611,6 +611,16 @@ public sealed class MockStressRunEventPublisher : IRunEventPublisher
     {
         return Task.CompletedTask;
     }
+
+    public Task PublishWorkflowV2ExecutionStateAsync(WorkflowExecutionV2Document execution, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task PublishWorkflowV2NodeStateAsync(WorkflowExecutionV2Document execution, WorkflowNodeResult nodeResult, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class NullLogger<T> : ILogger<T>

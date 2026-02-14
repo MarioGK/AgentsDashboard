@@ -25,6 +25,10 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<RepositoryInstructionDocument> RepositoryInstructions => Set<RepositoryInstructionDocument>();
     public DbSet<HarnessProviderSettingsDocument> HarnessProviderSettings => Set<HarnessProviderSettingsDocument>();
     public DbSet<TaskTemplateDocument> TaskTemplates => Set<TaskTemplateDocument>();
+    public DbSet<AgentDocument> Agents => Set<AgentDocument>();
+    public DbSet<WorkflowV2Document> WorkflowsV2 => Set<WorkflowV2Document>();
+    public DbSet<WorkflowExecutionV2Document> WorkflowExecutionsV2 => Set<WorkflowExecutionV2Document>();
+    public DbSet<WorkflowDeadLetterDocument> WorkflowDeadLetters => Set<WorkflowDeadLetterDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,6 +52,10 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<RepositoryInstructionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<HarnessProviderSettingsDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TaskTemplateDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<AgentDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<WorkflowV2Document>().HasKey(x => x.Id);
+        modelBuilder.Entity<WorkflowExecutionV2Document>().HasKey(x => x.Id);
+        modelBuilder.Entity<WorkflowDeadLetterDocument>().HasKey(x => x.Id);
 
         modelBuilder.Entity<RepositoryDocument>()
             .Property(x => x.InstructionFiles)
@@ -111,6 +119,46 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
             .Property(x => x.LinkedFailureRuns)
             .HasConversion(JsonConverter<List<string>>());
 
+        modelBuilder.Entity<AgentDocument>()
+            .Property(x => x.RetryPolicy)
+            .HasConversion(JsonConverter<RetryPolicyConfig>());
+        modelBuilder.Entity<AgentDocument>()
+            .Property(x => x.Timeouts)
+            .HasConversion(JsonConverter<TimeoutConfig>());
+        modelBuilder.Entity<AgentDocument>()
+            .Property(x => x.SandboxProfile)
+            .HasConversion(JsonConverter<SandboxProfileConfig>());
+        modelBuilder.Entity<AgentDocument>()
+            .Property(x => x.ArtifactPolicy)
+            .HasConversion(JsonConverter<ArtifactPolicyConfig>());
+        modelBuilder.Entity<AgentDocument>()
+            .Property(x => x.ArtifactPatterns)
+            .HasConversion(JsonConverter<List<string>>());
+        modelBuilder.Entity<AgentDocument>()
+            .Property(x => x.InstructionFiles)
+            .HasConversion(JsonConverter<List<InstructionFile>>());
+
+        modelBuilder.Entity<WorkflowV2Document>()
+            .Property(x => x.Nodes)
+            .HasConversion(JsonConverter<List<WorkflowNodeConfig>>());
+        modelBuilder.Entity<WorkflowV2Document>()
+            .Property(x => x.Edges)
+            .HasConversion(JsonConverter<List<WorkflowEdgeConfig>>());
+        modelBuilder.Entity<WorkflowV2Document>()
+            .Property(x => x.Trigger)
+            .HasConversion(JsonConverter<WorkflowV2TriggerConfig>());
+
+        modelBuilder.Entity<WorkflowExecutionV2Document>()
+            .Property(x => x.Context)
+            .HasConversion(JsonConverter<Dictionary<string, System.Text.Json.JsonElement>>());
+        modelBuilder.Entity<WorkflowExecutionV2Document>()
+            .Property(x => x.NodeResults)
+            .HasConversion(JsonConverter<List<WorkflowNodeResult>>());
+
+        modelBuilder.Entity<WorkflowDeadLetterDocument>()
+            .Property(x => x.InputContextSnapshot)
+            .HasConversion(JsonConverter<Dictionary<string, System.Text.Json.JsonElement>>());
+
         modelBuilder.Entity<ProjectDocument>()
             .HasIndex(x => x.Name);
         modelBuilder.Entity<RepositoryDocument>()
@@ -162,6 +210,22 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<HarnessProviderSettingsDocument>()
             .HasIndex(x => new { x.RepositoryId, x.Harness })
             .IsUnique();
+
+        modelBuilder.Entity<AgentDocument>()
+            .HasIndex(x => x.RepositoryId);
+        modelBuilder.Entity<AgentDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.Name })
+            .IsUnique();
+        modelBuilder.Entity<WorkflowV2Document>()
+            .HasIndex(x => x.RepositoryId);
+        modelBuilder.Entity<WorkflowExecutionV2Document>()
+            .HasIndex(x => new { x.WorkflowV2Id, x.CreatedAtUtc });
+        modelBuilder.Entity<WorkflowExecutionV2Document>()
+            .HasIndex(x => x.State);
+        modelBuilder.Entity<WorkflowDeadLetterDocument>()
+            .HasIndex(x => x.ExecutionId);
+        modelBuilder.Entity<WorkflowDeadLetterDocument>()
+            .HasIndex(x => x.Replayed);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

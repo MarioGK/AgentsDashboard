@@ -129,4 +129,36 @@ public interface IOrchestratorStore
     Task<int> ResolveAlertEventsAsync(List<string> eventIds, CancellationToken cancellationToken);
 
     Task<ReliabilityMetrics> GetReliabilityMetricsAsync(CancellationToken cancellationToken);
+
+    // ── Graph Agent Workflow (V2) ────────────────────────────────────────
+
+    Task<AgentDocument> CreateAgentAsync(AgentDocument agent, CancellationToken cancellationToken);
+    Task<List<AgentDocument>> ListAgentsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
+    Task<List<AgentDocument>> ListAllAgentsAsync(CancellationToken cancellationToken);
+    Task<AgentDocument?> GetAgentAsync(string agentId, CancellationToken cancellationToken);
+    Task<AgentDocument?> UpdateAgentAsync(string agentId, AgentDocument agent, CancellationToken cancellationToken);
+    Task<bool> DeleteAgentAsync(string agentId, CancellationToken cancellationToken);
+
+    Task<WorkflowV2Document> CreateWorkflowV2Async(WorkflowV2Document workflow, CancellationToken cancellationToken);
+    Task<List<WorkflowV2Document>> ListWorkflowsV2ByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
+    Task<List<WorkflowV2Document>> ListAllWorkflowsV2Async(CancellationToken cancellationToken);
+    Task<WorkflowV2Document?> GetWorkflowV2Async(string workflowId, CancellationToken cancellationToken);
+    Task<WorkflowV2Document?> UpdateWorkflowV2Async(string workflowId, WorkflowV2Document workflow, CancellationToken cancellationToken);
+    Task<bool> DeleteWorkflowV2Async(string workflowId, CancellationToken cancellationToken);
+
+    Task<WorkflowExecutionV2Document> CreateExecutionV2Async(WorkflowExecutionV2Document execution, CancellationToken cancellationToken);
+    Task<List<WorkflowExecutionV2Document>> ListExecutionsV2ByWorkflowAsync(string workflowId, CancellationToken cancellationToken);
+    Task<List<WorkflowExecutionV2Document>> ListExecutionsV2ByStateAsync(WorkflowV2ExecutionState state, CancellationToken cancellationToken);
+    Task<WorkflowExecutionV2Document?> GetExecutionV2Async(string executionId, CancellationToken cancellationToken);
+    Task<WorkflowExecutionV2Document?> UpdateExecutionV2Async(WorkflowExecutionV2Document execution, CancellationToken cancellationToken);
+    Task<WorkflowExecutionV2Document?> MarkExecutionV2CompletedAsync(string executionId, WorkflowV2ExecutionState finalState, string failureReason, CancellationToken cancellationToken);
+    Task<WorkflowExecutionV2Document?> MarkExecutionV2PendingApprovalAsync(string executionId, string pendingNodeId, CancellationToken cancellationToken);
+    Task<WorkflowExecutionV2Document?> ApproveExecutionV2NodeAsync(string executionId, string approvedBy, CancellationToken cancellationToken);
+    Task<WorkflowExecutionV2Document?> GetExecutionV2ByRunIdAsync(string runId, CancellationToken cancellationToken);
+
+    Task<WorkflowDeadLetterDocument> CreateDeadLetterAsync(WorkflowDeadLetterDocument deadLetter, CancellationToken cancellationToken);
+    Task<List<WorkflowDeadLetterDocument>> ListDeadLettersByExecutionAsync(string executionId, CancellationToken cancellationToken);
+    Task<List<WorkflowDeadLetterDocument>> ListUnreplayedDeadLettersAsync(CancellationToken cancellationToken);
+    Task<WorkflowDeadLetterDocument?> GetDeadLetterAsync(string deadLetterId, CancellationToken cancellationToken);
+    Task<WorkflowDeadLetterDocument?> MarkDeadLetterReplayedAsync(string deadLetterId, string replayedExecutionId, CancellationToken cancellationToken);
 }

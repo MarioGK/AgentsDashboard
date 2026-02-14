@@ -31,3 +31,20 @@ public sealed record RouteAvailableEvent(
     string RunId,
     string RoutePath,
     DateTime Timestamp);
+
+public sealed record WorkflowV2ExecutionStateChangedEvent(
+    string ExecutionId,
+    string WorkflowId,
+    string State,
+    string? CurrentNodeId,
+    string? FailureReason,
+    DateTime Timestamp);
+
+public sealed record WorkflowV2NodeStateChangedEvent(
+    string ExecutionId,
+    string NodeId,
+    string NodeName,
+    string NodeState,
+    string? RunId,
+    string? Summary,
+    DateTime Timestamp);

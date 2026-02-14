@@ -1287,4 +1287,289 @@ public sealed class OrchestratorStore(IDbContextFactory<OrchestratorDbContext> d
         var expression = CronExpression.Parse(task.CronExpression, CronFormat.Standard);
         return expression.GetNextOccurrence(nowUtc, TimeZoneInfo.Utc);
     }
+
+    // ── Graph Agent Workflow (V2) ────────────────────────────────────────
+
+    public async Task<AgentDocument> CreateAgentAsync(AgentDocument agent, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.Agents.Add(agent);
+        await db.SaveChangesAsync(cancellationToken);
+        return agent;
+    }
+
+    public async Task<List<AgentDocument>> ListAgentsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Agents.AsNoTracking()
+            .Where(x => x.RepositoryId == repositoryId)
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<AgentDocument>> ListAllAgentsAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Agents.AsNoTracking()
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<AgentDocument?> GetAgentAsync(string agentId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Agents.AsNoTracking().FirstOrDefaultAsync(x => x.Id == agentId, cancellationToken);
+    }
+
+    public async Task<AgentDocument?> UpdateAgentAsync(string agentId, AgentDocument agent, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.Agents.FirstOrDefaultAsync(x => x.Id == agentId, cancellationToken);
+        if (existing is null)
+            return null;
+
+        existing.Name = agent.Name;
+        existing.Description = agent.Description;
+        existing.Harness = agent.Harness;
+        existing.Prompt = agent.Prompt;
+        existing.Command = agent.Command;
+        existing.AutoCreatePullRequest = agent.AutoCreatePullRequest;
+        existing.RetryPolicy = agent.RetryPolicy;
+        existing.Timeouts = agent.Timeouts;
+        existing.SandboxProfile = agent.SandboxProfile;
+        existing.ArtifactPolicy = agent.ArtifactPolicy;
+        existing.ArtifactPatterns = agent.ArtifactPatterns;
+        existing.InstructionFiles = agent.InstructionFiles;
+        existing.Enabled = agent.Enabled;
+        existing.UpdatedAtUtc = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<bool> DeleteAgentAsync(string agentId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var agent = await db.Agents.FirstOrDefaultAsync(x => x.Id == agentId, cancellationToken);
+        if (agent is null)
+            return false;
+
+        db.Agents.Remove(agent);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<WorkflowV2Document> CreateWorkflowV2Async(WorkflowV2Document workflow, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.WorkflowsV2.Add(workflow);
+        await db.SaveChangesAsync(cancellationToken);
+        return workflow;
+    }
+
+    public async Task<List<WorkflowV2Document>> ListWorkflowsV2ByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowsV2.AsNoTracking()
+            .Where(x => x.RepositoryId == repositoryId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<WorkflowV2Document>> ListAllWorkflowsV2Async(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowsV2.AsNoTracking()
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<WorkflowV2Document?> GetWorkflowV2Async(string workflowId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowsV2.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
+    }
+
+    public async Task<WorkflowV2Document?> UpdateWorkflowV2Async(string workflowId, WorkflowV2Document workflow, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.WorkflowsV2.FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
+        if (existing is null)
+            return null;
+
+        existing.Name = workflow.Name;
+        existing.Description = workflow.Description;
+        existing.Nodes = workflow.Nodes;
+        existing.Edges = workflow.Edges;
+        existing.Trigger = workflow.Trigger;
+        existing.Enabled = workflow.Enabled;
+        existing.MaxConcurrentNodes = workflow.MaxConcurrentNodes;
+        existing.UpdatedAtUtc = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<bool> DeleteWorkflowV2Async(string workflowId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var workflow = await db.WorkflowsV2.FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
+        if (workflow is null)
+            return false;
+
+        db.WorkflowsV2.Remove(workflow);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<WorkflowExecutionV2Document> CreateExecutionV2Async(WorkflowExecutionV2Document execution, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.WorkflowExecutionsV2.Add(execution);
+        await db.SaveChangesAsync(cancellationToken);
+        return execution;
+    }
+
+    public async Task<List<WorkflowExecutionV2Document>> ListExecutionsV2ByWorkflowAsync(string workflowId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowExecutionsV2.AsNoTracking()
+            .Where(x => x.WorkflowV2Id == workflowId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<WorkflowExecutionV2Document>> ListExecutionsV2ByStateAsync(WorkflowV2ExecutionState state, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowExecutionsV2.AsNoTracking()
+            .Where(x => x.State == state)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<WorkflowExecutionV2Document?> GetExecutionV2Async(string executionId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowExecutionsV2.AsNoTracking().FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
+    }
+
+    public async Task<WorkflowExecutionV2Document?> UpdateExecutionV2Async(WorkflowExecutionV2Document execution, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.WorkflowExecutionsV2.FirstOrDefaultAsync(x => x.Id == execution.Id, cancellationToken);
+        if (existing is null)
+            return null;
+
+        existing.State = execution.State;
+        existing.CurrentNodeId = execution.CurrentNodeId;
+        existing.Context = execution.Context;
+        existing.NodeResults = execution.NodeResults;
+        existing.PendingApprovalNodeId = execution.PendingApprovalNodeId;
+        existing.ApprovedBy = execution.ApprovedBy;
+        existing.FailureReason = execution.FailureReason;
+        existing.StartedAtUtc = execution.StartedAtUtc;
+        existing.EndedAtUtc = execution.EndedAtUtc;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<WorkflowExecutionV2Document?> MarkExecutionV2CompletedAsync(string executionId, WorkflowV2ExecutionState finalState, string failureReason, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var execution = await db.WorkflowExecutionsV2.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
+        if (execution is null)
+            return null;
+
+        execution.State = finalState;
+        execution.FailureReason = failureReason;
+        execution.EndedAtUtc = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return execution;
+    }
+
+    public async Task<WorkflowExecutionV2Document?> MarkExecutionV2PendingApprovalAsync(string executionId, string pendingNodeId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var execution = await db.WorkflowExecutionsV2.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
+        if (execution is null)
+            return null;
+
+        execution.State = WorkflowV2ExecutionState.PendingApproval;
+        execution.PendingApprovalNodeId = pendingNodeId;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return execution;
+    }
+
+    public async Task<WorkflowExecutionV2Document?> ApproveExecutionV2NodeAsync(string executionId, string approvedBy, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var execution = await db.WorkflowExecutionsV2.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
+        if (execution is null)
+            return null;
+
+        execution.State = WorkflowV2ExecutionState.Running;
+        execution.ApprovedBy = approvedBy;
+        execution.PendingApprovalNodeId = string.Empty;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return execution;
+    }
+
+    public async Task<WorkflowExecutionV2Document?> GetExecutionV2ByRunIdAsync(string runId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowExecutionsV2.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.NodeResults.Any(nr => nr.RunId == runId), cancellationToken);
+    }
+
+    public async Task<WorkflowDeadLetterDocument> CreateDeadLetterAsync(WorkflowDeadLetterDocument deadLetter, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.WorkflowDeadLetters.Add(deadLetter);
+        await db.SaveChangesAsync(cancellationToken);
+        return deadLetter;
+    }
+
+    public async Task<List<WorkflowDeadLetterDocument>> ListDeadLettersByExecutionAsync(string executionId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowDeadLetters.AsNoTracking()
+            .Where(x => x.ExecutionId == executionId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<WorkflowDeadLetterDocument>> ListUnreplayedDeadLettersAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowDeadLetters.AsNoTracking()
+            .Where(x => !x.Replayed)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<WorkflowDeadLetterDocument?> GetDeadLetterAsync(string deadLetterId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowDeadLetters.AsNoTracking().FirstOrDefaultAsync(x => x.Id == deadLetterId, cancellationToken);
+    }
+
+    public async Task<WorkflowDeadLetterDocument?> MarkDeadLetterReplayedAsync(string deadLetterId, string replayedExecutionId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var dl = await db.WorkflowDeadLetters.FirstOrDefaultAsync(x => x.Id == deadLetterId, cancellationToken);
+        if (dl is null)
+            return null;
+
+        dl.Replayed = true;
+        dl.ReplayedExecutionId = replayedExecutionId;
+        dl.ReplayedAtUtc = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return dl;
+    }
 }

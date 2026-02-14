@@ -1,0 +1,87 @@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_isValid">
+            <MudStack Spacing="3">
+                <MudSelect T="string" @bind-Value="_sourceNodeId" Label="Source Node" Required
+                           RequiredError="Source node is required">
+                    @foreach (var node in Nodes)
+                    {
+                        <MudSelectItem T="string" Value="@node.Id">@node.Name (@node.Type)</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect T="string" @bind-Value="_targetNodeId" Label="Target Node" Required
+                           RequiredError="Target node is required">
+                    @foreach (var node in Nodes)
+                    {
+                        <MudSelectItem T="string" Value="@node.Id">@node.Name (@node.Type)</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_condition" Label="Condition"
+                              HelperText="Optional condition expression for this edge" />
+
+                <MudNumericField @bind-Value="_priority" Label="Priority" Min="0" Max="100"
+                                 HelperText="Higher priority edges are evaluated first" />
+
+                <MudTextField @bind-Value="_label" Label="Label"
+                              HelperText="Optional display label for this edge" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_isValid)">
+            @(Edge is not null ? "Update" : "Add")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public WorkflowEdgeConfig? Edge { get; set; }
+
+    [Parameter]
+    public List<WorkflowNodeConfig> Nodes { get; set; } = [];
+
+    private MudForm _form = default!;
+    private bool _isValid;
+
+    private string _sourceNodeId = string.Empty;
+    private string _targetNodeId = string.Empty;
+    private string _condition = string.Empty;
+    private int _priority;
+    private string _label = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        if (Edge is not null)
+        {
+            _sourceNodeId = Edge.SourceNodeId;
+            _targetNodeId = Edge.TargetNodeId;
+            _condition = Edge.Condition;
+            _priority = Edge.Priority;
+            _label = Edge.Label;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        var edge = new WorkflowEdgeConfig
+        {
+            Id = Edge?.Id ?? Guid.NewGuid().ToString("N"),
+            SourceNodeId = _sourceNodeId,
+            TargetNodeId = _targetNodeId,
+            Condition = _condition.Trim(),
+            Priority = _priority,
+            Label = _label.Trim(),
+        };
+
+        MudDialog.Close(DialogResult.Ok(edge));
+    }
+}

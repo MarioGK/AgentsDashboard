@@ -9,4 +9,6 @@ public interface IRunEventPublisher
     Task PublishFindingUpdatedAsync(FindingDocument finding, CancellationToken cancellationToken);
     Task PublishWorkerHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken);
     Task PublishRouteAvailableAsync(string runId, string routePath, CancellationToken cancellationToken);
+    Task PublishWorkflowV2ExecutionStateAsync(WorkflowExecutionV2Document execution, CancellationToken cancellationToken);
+    Task PublishWorkflowV2NodeStateAsync(WorkflowExecutionV2Document execution, WorkflowNodeResult nodeResult, CancellationToken cancellationToken);
 }

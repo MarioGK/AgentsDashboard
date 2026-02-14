@@ -80,10 +80,15 @@
         <MudNavMenu>
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Overview</MudNavLink>
             <MudNavLink Href="/projects" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AccountTree">Projects</MudNavLink>
+            <MudNavLink Href="/agents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SmartToy">Agents</MudNavLink>
             <MudNavLink Href="/runs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PlayCircle">Runs</MudNavLink>
             <MudNavLink Href="/findings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.BugReport">Findings</MudNavLink>
             <MudNavLink Href="/schedules" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">Schedules</MudNavLink>
-            <MudNavLink Href="/workflows" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AccountTree">Workflows</MudNavLink>
+            <MudNavGroup Title="Workflows" Icon="@Icons.Material.Filled.AccountTree">
+                <MudNavLink Href="/workflows" Match="NavLinkMatch.Prefix">Stages</MudNavLink>
+                <MudNavLink Href="/workflows-v2" Match="NavLinkMatch.Prefix">Graph</MudNavLink>
+                <MudNavLink Href="/workflow-deadletters" Match="NavLinkMatch.Prefix">Dead Letters</MudNavLink>
+            </MudNavGroup>
             <MudNavLink Href="/templates" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Description">Templates</MudNavLink>
             <MudNavLink Href="/workers" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dns">Workers</MudNavLink>
             <MudNavLink Href="/alerts" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Notifications">Alerts</MudNavLink>

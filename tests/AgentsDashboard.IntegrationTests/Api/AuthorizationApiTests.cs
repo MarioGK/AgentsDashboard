@@ -30,8 +30,6 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
     {
         var factory = new WebApplicationFactory<AgentsDashboard.ControlPlane.Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseSolutionRelativeContentRoot("src/AgentsDashboard.ControlPlane");
-
             builder.ConfigureTestServices(services =>
             {
                 var dispatcherDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(RunDispatcher));

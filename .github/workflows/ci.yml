@@ -250,10 +250,10 @@ jobs:
 
       - name: Start ControlPlane
         run: |
-          dotnet run --project src/AgentsDashboard.ControlPlane --configuration Release --urls=http://localhost:5266 &
+          dotnet run --project src/AgentsDashboard.ControlPlane --configuration Release --urls=http://localhost:8080 &
           echo "Waiting for ControlPlane to start..."
           for i in {1..30}; do
-            if curl -s http://localhost:5266/health > /dev/null 2>&1; then
+            if curl -s http://localhost:8080/health > /dev/null 2>&1; then
               echo "ControlPlane is ready"
               break
             fi

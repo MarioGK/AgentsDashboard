@@ -129,7 +129,8 @@ builder.Services.AddTransient<RateLimitHeadersMiddleware>();
 if (builder.Environment.IsEnvironment("Testing"))
 {
     builder.Services.AddAuthentication("Test")
-        .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
+        .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { })
+        .AddCookie();
 
     builder.Services.AddAuthorization(options =>
     {
@@ -181,13 +182,15 @@ builder.Services.AddHttpClient();
 builder.Services.AddHostedService<AlertingService>();
 builder.Services.AddSingleton<IWorkflowExecutor, WorkflowExecutor>();
 builder.Services.AddSingleton<WorkflowExecutor>(sp => (WorkflowExecutor)sp.GetRequiredService<IWorkflowExecutor>());
+builder.Services.AddSingleton<IWorkflowDagExecutor, WorkflowDagExecutor>();
 builder.Services.AddSingleton<ImageBuilderService>();
 builder.Services.AddSingleton<CredentialValidationService>();
 builder.Services.AddSingleton<TaskTemplateService>();
 builder.Services.AddHostedService<TaskTemplateInitializationService>();
 builder.Services.AddHostedService<DbMigrationHostedService>();
 builder.Services.AddSingleton<IContainerReaper, ContainerReaper>();
-builder.Services.AddHostedService<HarnessHealthService>();
+builder.Services.AddSingleton<HarnessHealthService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<HarnessHealthService>());
 builder.Services.AddTransient<ProxyAuditMiddleware>();
 builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 builder.Services.AddScoped<ProjectContext>();
@@ -291,6 +294,7 @@ app.MapStaticAssets();
 app.MapHub<RunEventsHub>("/hubs/runs").RequireAuthorization("viewer");
 app.MapAuthEndpoints();
 app.MapOrchestratorApi();
+app.MapDagWorkflowApi();
 app.UseMiddleware<ProxyAuditMiddleware>();
 app.MapReverseProxy();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

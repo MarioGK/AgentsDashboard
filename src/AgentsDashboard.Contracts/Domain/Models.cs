@@ -409,3 +409,154 @@ public sealed class HarnessProviderSettingsDocument
     public Dictionary<string, string> AdditionalSettings { get; set; } = [];
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }
+
+// ── Graph Agent Workflow (V2) ────────────────────────────────────────
+
+public enum WorkflowNodeType
+{
+    Start = 0,
+    Agent = 1,
+    Delay = 2,
+    Approval = 3,
+    End = 4
+}
+
+public enum WorkflowV2ExecutionState
+{
+    Running = 0,
+    Succeeded = 1,
+    Failed = 2,
+    Cancelled = 3,
+    PendingApproval = 4
+}
+
+public enum WorkflowNodeState
+{
+    Pending = 0,
+    Running = 1,
+    Succeeded = 2,
+    Failed = 3,
+    Skipped = 4,
+    TimedOut = 5,
+    DeadLettered = 6
+}
+
+public sealed class AgentDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RepositoryId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Harness { get; set; } = "codex";
+    public string Prompt { get; set; } = string.Empty;
+    public string Command { get; set; } = string.Empty;
+    public bool AutoCreatePullRequest { get; set; }
+    public RetryPolicyConfig RetryPolicy { get; set; } = new();
+    public TimeoutConfig Timeouts { get; set; } = new();
+    public SandboxProfileConfig SandboxProfile { get; set; } = new();
+    public ArtifactPolicyConfig ArtifactPolicy { get; set; } = new();
+    public List<string> ArtifactPatterns { get; set; } = [];
+    public List<InstructionFile> InstructionFiles { get; set; } = [];
+    public bool Enabled { get; set; } = true;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class WorkflowNodeConfig
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = string.Empty;
+    public WorkflowNodeType Type { get; set; }
+    public string? AgentId { get; set; }
+    public int? DelaySeconds { get; set; }
+    public string? ApproverRole { get; set; }
+    public int? TimeoutMinutes { get; set; }
+    public RetryPolicyConfig? RetryPolicy { get; set; }
+    public Dictionary<string, string> InputMappings { get; set; } = [];
+    public Dictionary<string, string> OutputMappings { get; set; } = [];
+    public double PositionX { get; set; }
+    public double PositionY { get; set; }
+}
+
+public sealed class WorkflowEdgeConfig
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string SourceNodeId { get; set; } = string.Empty;
+    public string TargetNodeId { get; set; } = string.Empty;
+    public string Condition { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public string Label { get; set; } = string.Empty;
+}
+
+public sealed class WorkflowV2TriggerConfig
+{
+    public string Type { get; set; } = "Manual";
+    public string CronExpression { get; set; } = string.Empty;
+    public string WebhookEventFilter { get; set; } = string.Empty;
+}
+
+public sealed class WorkflowV2Document
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RepositoryId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public List<WorkflowNodeConfig> Nodes { get; set; } = [];
+    public List<WorkflowEdgeConfig> Edges { get; set; } = [];
+    public WorkflowV2TriggerConfig Trigger { get; set; } = new();
+    public string WebhookToken { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+    public int MaxConcurrentNodes { get; set; } = 4;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class WorkflowNodeResult
+{
+    public string NodeId { get; set; } = string.Empty;
+    public string NodeName { get; set; } = string.Empty;
+    public WorkflowNodeType NodeType { get; set; }
+    public WorkflowNodeState State { get; set; }
+    public string? RunId { get; set; }
+    public string Summary { get; set; } = string.Empty;
+    public int Attempt { get; set; } = 1;
+    public Dictionary<string, System.Text.Json.JsonElement> OutputContext { get; set; } = [];
+    public DateTime? StartedAtUtc { get; set; }
+    public DateTime? EndedAtUtc { get; set; }
+}
+
+public sealed class WorkflowExecutionV2Document
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string WorkflowV2Id { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string ProjectId { get; set; } = string.Empty;
+    public WorkflowV2ExecutionState State { get; set; } = WorkflowV2ExecutionState.Running;
+    public string CurrentNodeId { get; set; } = string.Empty;
+    public Dictionary<string, System.Text.Json.JsonElement> Context { get; set; } = [];
+    public List<WorkflowNodeResult> NodeResults { get; set; } = [];
+    public string PendingApprovalNodeId { get; set; } = string.Empty;
+    public string ApprovedBy { get; set; } = string.Empty;
+    public string FailureReason { get; set; } = string.Empty;
+    public string TriggeredBy { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? StartedAtUtc { get; set; }
+    public DateTime? EndedAtUtc { get; set; }
+}
+
+public sealed class WorkflowDeadLetterDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string ExecutionId { get; set; } = string.Empty;
+    public string WorkflowV2Id { get; set; } = string.Empty;
+    public string FailedNodeId { get; set; } = string.Empty;
+    public string FailedNodeName { get; set; } = string.Empty;
+    public string FailureReason { get; set; } = string.Empty;
+    public Dictionary<string, System.Text.Json.JsonElement> InputContextSnapshot { get; set; } = [];
+    public string? RunId { get; set; }
+    public int Attempt { get; set; } = 1;
+    public bool Replayed { get; set; }
+    public string? ReplayedExecutionId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ReplayedAtUtc { get; set; }
+}

@@ -15,6 +15,9 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        if (!Request.Headers.ContainsKey("X-Test-Auth"))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
         var claims = new[]
         {
             new Claim(ClaimTypes.Name, "test-user"),

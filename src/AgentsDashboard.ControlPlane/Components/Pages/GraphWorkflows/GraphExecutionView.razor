@@ -1,0 +1,266 @@
+@page "/workflows-v2/executions/{Id}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Execution @Id?[..8] - AgentsDashboard</PageTitle>
+
+@if (_execution is null)
+{
+    <MudProgressLinear Indeterminate />
+}
+else
+{
+    <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                       Href="@($"/workflows-v2/{_execution.WorkflowV2Id}")" />
+        <MudText Typo="Typo.h4">Execution @_execution.Id[..8]</MudText>
+        <MudChip T="string" Color="@GetStateColor(_execution.State)" Class="ml-2">@_execution.State</MudChip>
+        <MudSpacer />
+        @if (_execution.State == WorkflowV2ExecutionState.Running)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="RefreshAsync">
+                Refresh
+            </MudButton>
+        }
+    </MudStack>
+
+    <MudPaper Class="pa-6 mb-4" Elevation="2">
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudField Label="State" Variant="Variant.Outlined">
+                    <MudChip T="string" Size="Size.Small" Color="@GetStateColor(_execution.State)">@_execution.State</MudChip>
+                </MudField>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudField Label="Triggered By" Variant="Variant.Outlined">
+                    @(string.IsNullOrEmpty(_execution.TriggeredBy) ? "Unknown" : _execution.TriggeredBy)
+                </MudField>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudField Label="Workflow" Variant="Variant.Outlined">
+                    <MudLink Href="@($"/workflows-v2/{_execution.WorkflowV2Id}")">
+                        @(_workflowName ?? _execution.WorkflowV2Id[..8])
+                    </MudLink>
+                </MudField>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudField Label="Created" Variant="Variant.Outlined">
+                    @_execution.CreatedAtUtc.ToString("g") UTC
+                </MudField>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudField Label="Started" Variant="Variant.Outlined">
+                    @(_execution.StartedAtUtc?.ToString("g") ?? "Not started") UTC
+                </MudField>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudField Label="Ended" Variant="Variant.Outlined">
+                    @(_execution.EndedAtUtc?.ToString("g") ?? "In progress") UTC
+                </MudField>
+            </MudItem>
+            @if (!string.IsNullOrEmpty(_execution.FailureReason))
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Error">@_execution.FailureReason</MudAlert>
+                </MudItem>
+            }
+            @if (!string.IsNullOrEmpty(_execution.ApprovedBy))
+            {
+                <MudItem xs="12" md="6">
+                    <MudField Label="Approved By" Variant="Variant.Outlined">@_execution.ApprovedBy</MudField>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+
+    @if (_execution.State == WorkflowV2ExecutionState.PendingApproval)
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                <MudIcon Icon="@Icons.Material.Filled.PauseCircle" Color="Color.Warning" Size="Size.Large" />
+                <MudText Typo="Typo.h6">Approval Required</MudText>
+                <MudSpacer />
+                <MudTextField @bind-Value="_approvedBy" Label="Approver Name" Variant="Variant.Outlined"
+                              Style="max-width: 250px;" />
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.CheckCircle"
+                           OnClick="() => HandleApprovalAsync(true)" Disabled="@string.IsNullOrWhiteSpace(_approvedBy)">
+                    Approve
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Cancel"
+                           OnClick="() => HandleApprovalAsync(false)" Disabled="@string.IsNullOrWhiteSpace(_approvedBy)">
+                    Reject
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.h6" Class="mb-3">Node Results</MudText>
+
+    @if (_execution.NodeResults.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">No node results yet.</MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="2" Class="mb-4">
+            <MudTable Items="@_execution.NodeResults" Hover Dense Striped>
+                <HeaderContent>
+                    <MudTh>Node</MudTh>
+                    <MudTh>Type</MudTh>
+                    <MudTh>State</MudTh>
+                    <MudTh>Run ID</MudTh>
+                    <MudTh>Summary</MudTh>
+                    <MudTh>Attempt</MudTh>
+                    <MudTh>Duration</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Node">@context.NodeName</MudTd>
+                    <MudTd DataLabel="Type">
+                        <MudChip T="string" Size="Size.Small" Color="@GetNodeTypeColor(context.NodeType)">
+                            @context.NodeType
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="State">
+                        <MudChip T="string" Size="Size.Small" Color="@GetNodeStateColor(context.State)">
+                            @context.State
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Run ID">
+                        @if (!string.IsNullOrEmpty(context.RunId))
+                        {
+                            <MudLink Href="@($"/runs/{context.RunId}")">@context.RunId[..Math.Min(8, context.RunId.Length)]</MudLink>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Summary">
+                        <MudText Typo="Typo.body2" Style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            @context.Summary
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Attempt">@context.Attempt</MudTd>
+                    <MudTd DataLabel="Duration">@FormatDuration(context.StartedAtUtc, context.EndedAtUtc)</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+
+    @if (_hasFailedNodes)
+    {
+        <MudText Typo="Typo.h6" Class="mb-3">Failed Nodes</MudText>
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            This execution has failed nodes. Check the
+            <MudLink Href="/workflow-deadletters">Dead Letters</MudLink>
+            page for replay options.
+        </MudAlert>
+    }
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private WorkflowExecutionV2Document? _execution;
+    private string? _workflowName;
+    private string _approvedBy = "";
+    private bool _hasFailedNodes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadExecutionAsync();
+    }
+
+    private async Task LoadExecutionAsync()
+    {
+        if (string.IsNullOrEmpty(Id)) return;
+
+        _execution = await Store.GetExecutionV2Async(Id, CancellationToken.None);
+
+        if (_execution is not null)
+        {
+            var workflow = await Store.GetWorkflowV2Async(_execution.WorkflowV2Id, CancellationToken.None);
+            _workflowName = workflow?.Name;
+
+            _hasFailedNodes = _execution.NodeResults.Any(nr =>
+                nr.State is WorkflowNodeState.Failed or WorkflowNodeState.DeadLettered or WorkflowNodeState.TimedOut);
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        await LoadExecutionAsync();
+        Snackbar.Add("Execution refreshed", Severity.Info);
+    }
+
+    private async Task HandleApprovalAsync(bool approved)
+    {
+        if (_execution is null || string.IsNullOrWhiteSpace(_approvedBy)) return;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("Api");
+            var request = new ApproveWorkflowV2NodeRequest(_approvedBy.Trim(), approved);
+            var response = await client.PostAsJsonAsync(
+                $"/api/workflows-v2/executions/{_execution.Id}/approve", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add(approved ? "Node approved" : "Node rejected", approved ? Severity.Success : Severity.Warning);
+                await LoadExecutionAsync();
+            }
+            else
+            {
+                Snackbar.Add($"Failed: {response.StatusCode}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static string FormatDuration(DateTime? start, DateTime? end)
+    {
+        if (start is null) return "-";
+        var duration = (end ?? DateTime.UtcNow) - start.Value;
+        if (duration.TotalHours >= 1)
+            return $"{duration.Hours}h {duration.Minutes}m";
+        if (duration.TotalMinutes >= 1)
+            return $"{duration.Minutes}m {duration.Seconds}s";
+        return $"{duration.TotalSeconds:F1}s";
+    }
+
+    private static Color GetStateColor(WorkflowV2ExecutionState state) => state switch
+    {
+        WorkflowV2ExecutionState.Running => Color.Info,
+        WorkflowV2ExecutionState.Succeeded => Color.Success,
+        WorkflowV2ExecutionState.Failed => Color.Error,
+        WorkflowV2ExecutionState.Cancelled => Color.Default,
+        WorkflowV2ExecutionState.PendingApproval => Color.Warning,
+        _ => Color.Default,
+    };
+
+    private static Color GetNodeTypeColor(WorkflowNodeType type) => type switch
+    {
+        WorkflowNodeType.Start => Color.Success,
+        WorkflowNodeType.Agent => Color.Primary,
+        WorkflowNodeType.Delay => Color.Warning,
+        WorkflowNodeType.Approval => Color.Info,
+        WorkflowNodeType.End => Color.Error,
+        _ => Color.Default,
+    };
+
+    private static Color GetNodeStateColor(WorkflowNodeState state) => state switch
+    {
+        WorkflowNodeState.Pending => Color.Default,
+        WorkflowNodeState.Running => Color.Info,
+        WorkflowNodeState.Succeeded => Color.Success,
+        WorkflowNodeState.Failed => Color.Error,
+        WorkflowNodeState.Skipped => Color.Default,
+        WorkflowNodeState.TimedOut => Color.Warning,
+        WorkflowNodeState.DeadLettered => Color.Error,
+        _ => Color.Default,
+    };
+}

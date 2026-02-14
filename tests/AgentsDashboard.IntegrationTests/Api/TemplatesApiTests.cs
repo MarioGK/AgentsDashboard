@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using FluentAssertions;
 
@@ -47,65 +46,54 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
     [Fact]
     public async Task CreateTemplate_ReturnsCreatedTemplate()
     {
-        var request = new CreateTaskTemplateRequest(
-            "custom-test",
-            "Custom Test Template",
-            "Test template description",
-            TaskKind.OneShot,
-            "codex",
-            "Test prompt",
-            ["echo test"],
-            "",
-            false,
-            new RetryPolicyConfig(2),
-            new TimeoutConfig(600, 1800),
-            new SandboxProfileConfig(1.5, "2g"),
-            new ArtifactPolicyConfig(50));
+        var request = new TaskTemplateDocument
+        {
+            Name = "Custom Test Template",
+            Description = "Test template description",
+            Kind = TaskKind.OneShot,
+            Harness = "codex",
+            Prompt = "Test prompt",
+            Commands = ["echo test"],
+        };
 
         var response = await _client.PostAsJsonAsync("/api/templates", request);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var template = await response.Content.ReadFromJsonAsync<TaskTemplateDocument>();
         template.Should().NotBeNull();
-        template!.TemplateId.Should().Be("custom-test");
+        template!.TemplateId.Should().StartWith("custom-");
         template.Name.Should().Be("Custom Test Template");
     }
 
     [Fact]
     public async Task UpdateTemplate_ReturnsUpdatedTemplate()
     {
-        var createRequest = new CreateTaskTemplateRequest(
-            "update-test",
-            "Original Name",
-            "Original description",
-            TaskKind.OneShot,
-            "codex",
-            "Original prompt",
-            ["echo test"],
-            "",
-            false,
-            new RetryPolicyConfig(1),
-            new TimeoutConfig(600, 1800),
-            new SandboxProfileConfig(1.5, "2g"),
-            new ArtifactPolicyConfig(50));
+        var createRequest = new TaskTemplateDocument
+        {
+            Name = "Original Name",
+            Description = "Original description",
+            Kind = TaskKind.OneShot,
+            Harness = "codex",
+            Prompt = "Original prompt",
+            Commands = ["echo test"],
+        };
 
-        await _client.PostAsJsonAsync("/api/templates", createRequest);
+        var createResponse = await _client.PostAsJsonAsync("/api/templates", createRequest);
+        var created = await createResponse.Content.ReadFromJsonAsync<TaskTemplateDocument>();
 
-        var updateRequest = new UpdateTaskTemplateRequest(
-            "Updated Name",
-            "Updated description",
-            TaskKind.Cron,
-            "opencode",
-            "Updated prompt",
-            ["echo updated"],
-            "0 * * * *",
-            true,
-            new RetryPolicyConfig(3),
-            new TimeoutConfig(900, 2400),
-            new SandboxProfileConfig(2.0, "4g"),
-            new ArtifactPolicyConfig(100));
+        var updateRequest = new TaskTemplateDocument
+        {
+            Name = "Updated Name",
+            Description = "Updated description",
+            Kind = TaskKind.Cron,
+            Harness = "opencode",
+            Prompt = "Updated prompt",
+            Commands = ["echo updated"],
+            CronExpression = "0 * * * *",
+            AutoCreatePullRequest = true,
+        };
 
-        var response = await _client.PutAsJsonAsync("/api/templates/update-test", updateRequest);
+        var response = await _client.PutAsJsonAsync($"/api/templates/{created!.TemplateId}", updateRequest);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var updated = await response.Content.ReadFromJsonAsync<TaskTemplateDocument>();
@@ -118,24 +106,20 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
     [Fact]
     public async Task DeleteTemplate_ReturnsOk_WhenExists()
     {
-        var createRequest = new CreateTaskTemplateRequest(
-            "delete-test",
-            "To Delete",
-            "Template for deletion test",
-            TaskKind.OneShot,
-            "codex",
-            "Prompt",
-            ["echo test"],
-            "",
-            false,
-            new RetryPolicyConfig(1),
-            new TimeoutConfig(600, 1800),
-            new SandboxProfileConfig(1.5, "2g"),
-            new ArtifactPolicyConfig(50));
+        var createRequest = new TaskTemplateDocument
+        {
+            Name = "To Delete",
+            Description = "Template for deletion test",
+            Kind = TaskKind.OneShot,
+            Harness = "codex",
+            Prompt = "Prompt",
+            Commands = ["echo test"],
+        };
 
-        await _client.PostAsJsonAsync("/api/templates", createRequest);
+        var createResponse = await _client.PostAsJsonAsync("/api/templates", createRequest);
+        var created = await createResponse.Content.ReadFromJsonAsync<TaskTemplateDocument>();
 
-        var response = await _client.DeleteAsync("/api/templates/delete-test");
+        var response = await _client.DeleteAsync($"/api/templates/{created!.TemplateId}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
