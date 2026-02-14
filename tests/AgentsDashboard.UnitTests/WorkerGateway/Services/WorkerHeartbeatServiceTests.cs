@@ -156,12 +156,14 @@ public class WorkerHeartbeatServiceTests
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);
         var service = new WorkerHeartbeatService(_options, _queue, _loggerMock.Object, _httpClient);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(7));
+        using var cts = new CancellationTokenSource();
 
         await service.StartAsync(cts.Token);
 
         await Task.Delay(TimeSpan.FromSeconds(6), CancellationToken.None);
         var countBeforeStop = _mockHandler.RequestCount;
+        countBeforeStop.Should().BeGreaterThanOrEqualTo(1);
+        
         await service.StopAsync(CancellationToken.None);
 
         await Task.Delay(TimeSpan.FromSeconds(2), CancellationToken.None);
