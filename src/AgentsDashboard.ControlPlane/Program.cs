@@ -192,6 +192,7 @@ builder.Services.AddDbContextFactory<OrchestratorDbContext>((sp, options) =>
     options.UseSqlite(orchestratorOptions.SqliteConnectionString);
 });
 
+builder.Services.AddHostedService<DbMigrationHostedService>();
 builder.Services.AddSingleton<IOrchestratorStore, OrchestratorStore>();
 builder.Services.AddSingleton<OrchestratorStore>(sp => (OrchestratorStore)sp.GetRequiredService<IOrchestratorStore>());
 builder.Services.AddSingleton<RunDispatcher>();
@@ -214,7 +215,6 @@ builder.Services.AddSingleton<ImageBuilderService>();
 builder.Services.AddSingleton<CredentialValidationService>();
 builder.Services.AddSingleton<TaskTemplateService>();
 builder.Services.AddHostedService<TaskTemplateInitializationService>();
-builder.Services.AddHostedService<DbMigrationHostedService>();
 builder.Services.AddSingleton<IContainerReaper, ContainerReaper>();
 builder.Services.AddSingleton<HarnessHealthService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HarnessHealthService>());

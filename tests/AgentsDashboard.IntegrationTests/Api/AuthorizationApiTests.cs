@@ -71,8 +71,13 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
                     services.Remove(reaperDescriptor);
                 services.AddSingleton<IContainerReaper, MockContainerReaper>();
 
-                services.AddAuthentication("Test")
-                    .AddScheme<AuthenticationSchemeOptions, RoleTestAuthHandler>("Test", _ => { });
+                services.AddAuthentication(options =>
+                    {
+                        options.DefaultScheme = "RoleTest";
+                        options.DefaultAuthenticateScheme = "RoleTest";
+                        options.DefaultChallengeScheme = "RoleTest";
+                    })
+                    .AddScheme<AuthenticationSchemeOptions, RoleTestAuthHandler>("RoleTest", _ => { });
 
                 services.AddAuthorization(options =>
                 {
@@ -131,7 +136,7 @@ public class RoleTestAuthHandler : AuthenticationHandler<AuthenticationSchemeOpt
 
         var identity = new ClaimsIdentity(claims, "Test");
         var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, "Test");
+        var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }
