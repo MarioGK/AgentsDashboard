@@ -41,7 +41,8 @@ builder.Services.AddSingleton<IMongoClient>(sp =>
     return new MongoClient(options.MongoConnectionString);
 });
 
-builder.Services.AddSingleton<OrchestratorStore>();
+builder.Services.AddSingleton<IOrchestratorStore, OrchestratorStore>();
+builder.Services.AddSingleton<OrchestratorStore>(sp => (OrchestratorStore)sp.GetRequiredService<IOrchestratorStore>());
 builder.Services.AddSingleton<RunDispatcher>();
 builder.Services.AddSingleton<SecretCryptoService>();
 builder.Services.AddSingleton<WebhookService>();
@@ -52,7 +53,8 @@ builder.Services.AddHostedService<CronSchedulerService>();
 builder.Services.AddHostedService<WorkerEventListenerService>();
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<AlertingService>();
-builder.Services.AddSingleton<WorkflowExecutor>();
+builder.Services.AddSingleton<IWorkflowExecutor, WorkflowExecutor>();
+builder.Services.AddSingleton<WorkflowExecutor>(sp => (WorkflowExecutor)sp.GetRequiredService<IWorkflowExecutor>());
 builder.Services.AddSingleton<ImageBuilderService>();
 builder.Services.AddSingleton<CredentialValidationService>();
 builder.Services.AddSingleton<TaskTemplateService>();

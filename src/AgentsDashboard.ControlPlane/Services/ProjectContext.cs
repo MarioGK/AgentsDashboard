@@ -6,7 +6,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public class ProjectContext
 {
-    private readonly OrchestratorStore _store;
+    private readonly IOrchestratorStore _store;
     private readonly IJSRuntime _jsRuntime;
     private bool _initialized;
 
@@ -15,7 +15,7 @@ public class ProjectContext
     public List<ProjectDocument> Projects { get; private set; } = [];
     public List<RepositoryDocument> Repositories { get; private set; } = [];
 
-    public ProjectContext(OrchestratorStore store, IJSRuntime jsRuntime)
+    public ProjectContext(IOrchestratorStore store, IJSRuntime jsRuntime)
     {
         _store = store;
         _jsRuntime = jsRuntime;

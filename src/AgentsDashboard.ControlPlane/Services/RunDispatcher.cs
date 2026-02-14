@@ -8,7 +8,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class RunDispatcher(
     WorkerGateway.WorkerGatewayClient workerClient,
-    OrchestratorStore store,
+    IOrchestratorStore store,
     SecretCryptoService secretCrypto,
     IRunEventPublisher publisher,
     IOptions<OrchestratorOptions> orchestratorOptions,

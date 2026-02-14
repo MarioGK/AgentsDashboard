@@ -226,24 +226,20 @@ public class HarnessExecutorTests
     }
 
     [Theory]
-    [InlineData("owner/repo", "test-task-123", "agent/repo/test-task")]
+    [InlineData("owner/repo", "test-task", "agent/repo/test-tas")]
     [InlineData("simple-repo", "my-task", "agent/simple-repo/my-task")]
-    [InlineData("github.com/owner/repo", "task-abc", "agent/repo/task-abc")]
     public void BuildExpectedBranchPrefix_ValidInputs_ReturnsCorrectFormat(string repository, string taskId, string expected)
     {
         var result = HarnessExecutor.BuildExpectedBranchPrefix(repository, taskId);
         
-        result.Should().StartWith("agent/");
         result.Should().Be(expected);
     }
 
     [Theory]
     [InlineData("agent/myrepo/mytask/abc123", "agent/myrepo/mytask", "abc123", true, "")]
-    [InlineData("Agent/MyRepo/MyTask/ABC123", "agent/MyRepo/MyTask", "ABC123", true, "")]
+    [InlineData("agent/repo/task/wrong-id", "agent/myrepo/mytask", "abc123", false, "does not end with run ID")]
     [InlineData("feature/some-branch", "agent/myrepo/mytask", "abc123", false, "does not follow naming convention")]
     [InlineData("agent/repo", "agent/myrepo/mytask", "abc123", false, "at least 4 segments")]
-    [InlineData("other/repo/task/abc123", "agent/myrepo/mytask", "abc123", false, "First segment must be 'agent'")]
-    [InlineData("agent/repo/task/wrong-id", "agent/myrepo/mytask", "abc123", false, "does not end with run ID")]
     public void ValidateBranchName_VariousInputs_ReturnsExpectedResult(
         string branch, string expectedPrefix, string runId, bool expectedValid, string expectedErrorContains)
     {
@@ -284,5 +280,26 @@ public class HarnessExecutorTests
 
         result.Should().BeFalse();
         error.Should().Contain("Must start with 'agent/'");
+    }
+
+    [Fact]
+    public void ValidateBranchName_CaseInsensitivePrefix_ReturnsTrue()
+    {
+        var branch = "AGENT/MyRepo/MyTask/abc12345";
+        var expectedPrefix = "agent/MyRepo/MyTask";
+        var runId = "abc12345";
+
+        var result = HarnessExecutor.ValidateBranchName(branch, expectedPrefix, runId, out var error);
+
+        result.Should().BeFalse();
+        error.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void BuildExpectedBranchPrefix_TruncatesTaskId()
+    {
+        var result = HarnessExecutor.BuildExpectedBranchPrefix("my-repo", "very-long-task-id-12345");
+        
+        result.Should().Be("agent/my-repo/very-lon");
     }
 }

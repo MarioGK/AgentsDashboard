@@ -324,3 +324,23 @@ dotnet build src/AgentsDashboard.slnx
 dotnet test
 dotnet format
 ```
+
+## Additional Improvements (2026-02-14 - Session 2)
+
+### Bug Fixes
+- **Instruction Files Layering**: Fixed `RunDispatcher.BuildLayeredPromptAsync()` to include both:
+  - Repository instructions from the separate collection (`repository_instructions`)
+  - Embedded instruction files from `RepositoryDocument.InstructionFiles`
+  - Task-level instruction files from `TaskDocument.InstructionFiles`
+  - Layering order: Repository Collection -> Embedded Repo Instructions -> Task Instructions -> Task Prompt
+
+### Testability Improvements
+- **Branch Naming Validation Tests**: Added 9 new tests for `ValidateBranchName` and `BuildExpectedBranchPrefix` methods
+- **InternalsVisibleTo**: Added `InternalsVisibleTo` attribute to WorkerGateway project for test project access
+- Made `ValidateBranchName` and `BuildExpectedBranchPrefix` methods internal (was private) for unit testing
+
+### Verification Completed
+- **Task Templates**: Verified all 4 built-in templates (QA Browser Sweep, Unit Test Guard, Dependency Health Check, Regression Replay) are complete and match plan requirements
+- **CliWrap Usage**: Verified CliWrap 3.8.2 is properly used with robust error handling, cancellation support, and secret redaction
+- **Branch Naming Convention**: Verified full implementation in RunDispatcher (generation) and HarnessExecutor (validation)
+- **Instruction Files**: Fixed bug where embedded repo instruction files were not included in layered prompts

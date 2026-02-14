@@ -2,7 +2,7 @@ using AgentsDashboard.ControlPlane.Data;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed class MongoInitializationService(OrchestratorStore store, ILogger<MongoInitializationService> logger) : IHostedService
+public sealed class MongoInitializationService(IOrchestratorStore store, ILogger<MongoInitializationService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {

@@ -7,7 +7,7 @@ using MongoDB.Driver;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
-public class OrchestratorStore
+public class OrchestratorStore : IOrchestratorStore
 {
     private readonly IMongoCollection<ProjectDocument> _projects;
     private readonly IMongoCollection<RepositoryDocument> _repositories;
