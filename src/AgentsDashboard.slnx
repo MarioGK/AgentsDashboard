@@ -5,6 +5,7 @@
   <Project Path="AgentsDashboard.ServiceDefaults/AgentsDashboard.ServiceDefaults.csproj" />
   <Project Path="AgentsDashboard.WorkerGateway/AgentsDashboard.WorkerGateway.csproj" />
   <Folder Name="/tests/">
+    <Project Path="../tests/AgentsDashboard.Benchmarks/AgentsDashboard.Benchmarks.csproj" />
     <Project Path="../tests/AgentsDashboard.IntegrationTests/AgentsDashboard.IntegrationTests.csproj" />
     <Project Path="../tests/AgentsDashboard.PlaywrightTests/AgentsDashboard.PlaywrightTests.csproj" />
     <Project Path="../tests/AgentsDashboard.UnitTests/AgentsDashboard.UnitTests.csproj" />

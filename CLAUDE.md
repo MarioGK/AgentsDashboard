@@ -204,12 +204,12 @@ dotnet test
 
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
-| UnitTests | 47 | 1,103 | 100% (36 skipped, all pass) |
-| IntegrationTests | 40 | 232 | Requires MongoDB |
-| PlaywrightTests | 21 | 274 | Requires Running App |
-| Benchmarks | 7 | 4 | Performance |
+| UnitTests | 43 | 1,103 | 100% (36 skipped, all pass) |
+| IntegrationTests | 35 | 210 | Requires MongoDB |
+| PlaywrightTests | 18 | 274 | Requires Running App |
+| Benchmarks | 4 | 4 | Performance |
 
-**Total: 115 test files, 1,613+ tests**
+**Total: 100 test files, 1,591+ tests**
 
 ### Test Coverage by Area
 
@@ -248,9 +248,9 @@ projects, repositories, tasks, runs, run_events, findings, artifacts, workers, w
 - harness-codex, harness-opencode, harness-claudecode, harness-zai
 - ai-harness (all-in-one)
 
-### VMUI Dashboards (70 panels)
-- Orchestrator Dashboard: throughput, latency, errors, queue, workers, runs, findings, proxy
-- Harness Metrics Dashboard: per-harness execution, duration, success rate, failures, container metrics
+### VMUI Dashboards (72 panels)
+- Orchestrator Dashboard: 32 panels - throughput, latency, errors, queue, workers, runs, findings, proxy
+- Harness Metrics Dashboard: 40 panels - per-harness execution, duration, success rate, failures, container metrics
 
 ## UI Pages (21)
 
@@ -382,6 +382,6 @@ dotnet format
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
 | Blazor Pages | Complete | 21 pages with full functionality |
 | Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
-| Deployment | Complete | Docker Compose, Helm (15 templates), K8s |
+| Deployment | Complete | Docker Compose, Helm (14 templates), K8s |
 | gRPC Services | Complete | 6 RPCs implemented |
 | Built-in Templates | Complete | 4 templates (QA, UnitTest, Deps, Regression) |
