@@ -7,21 +7,29 @@ public sealed class RunEventsHub(IOrchestratorMetrics metrics, ILogger<RunEvents
 {
     public override async Task OnConnectedAsync()
     {
-        metrics.SetSignalRConnections(1);
-        if (Context != null)
+        try
         {
-            logger.LogDebug("SignalR client connected: {ConnectionId}", Context.ConnectionId);
+            metrics.SetSignalRConnections(1);
+            logger.LogDebug("SignalR client connected: {ConnectionId}", Context?.ConnectionId ?? "unknown");
+            await base.OnConnectedAsync();
         }
-        await base.OnConnectedAsync();
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error in OnConnectedAsync");
+        }
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        metrics.SetSignalRConnections(-1);
-        if (Context != null)
+        try
         {
-            logger.LogDebug("SignalR client disconnected: {ConnectionId}", Context.ConnectionId);
+            metrics.SetSignalRConnections(-1);
+            logger.LogDebug("SignalR client disconnected: {ConnectionId}", Context?.ConnectionId ?? "unknown");
+            await base.OnDisconnectedAsync(exception);
         }
-        await base.OnDisconnectedAsync(exception);
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error in OnDisconnectedAsync");
+        }
     }
 }
