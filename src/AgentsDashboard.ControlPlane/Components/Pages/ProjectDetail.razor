@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject Data.OrchestratorStore Store
 @inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <PageTitle>Project</PageTitle>
 
@@ -13,7 +14,15 @@
 else
 {
     <MudStack Spacing="2">
-        <MudText Typo="Typo.h4">@_project.Name</MudText>
+        <MudStack Row AlignItems="AlignItems.Center">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/projects" />
+            <MudText Typo="Typo.h4">@_project.Name</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                       OnClick="ConfirmDeleteProjectAsync">
+                Delete Project
+            </MudButton>
+        </MudStack>
         <MudText Typo="Typo.subtitle1">@_project.Description</MudText>
 
         <MudPaper Class="pa-4">
@@ -40,7 +49,10 @@ else
                 <MudTd>@context.GitUrl</MudTd>
                 <MudTd>@context.DefaultBranch</MudTd>
                 <MudTd>
-                    <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo($"/repositories/{context.Id}"))">Open</MudButton>
+                    <MudButtonGroup Variant="Variant.Outlined">
+                        <MudButton Color="Color.Primary" OnClick="@(() => Nav.NavigateTo($"/repositories/{context.Id}"))">Open</MudButton>
+                        <MudButton Color="Color.Error" OnClick="@(() => ConfirmDeleteRepositoryAsync(context))">Delete</MudButton>
+                    </MudButtonGroup>
                 </MudTd>
             </RowTemplate>
         </MudTable>
@@ -79,5 +91,39 @@ else
     {
         _repositories.Clear();
         _repositories.AddRange(await Store.ListRepositoriesAsync(ProjectId, CancellationToken.None));
+    }
+
+    private async Task ConfirmDeleteProjectAsync()
+    {
+        if (_project is null) return;
+
+        var result = await DialogService.ShowMessageBox(
+            "Delete Project",
+            $"Are you sure you want to delete project '{_project.Name}'? This will also delete all repositories, tasks, and runs.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            using var httpClient = new HttpClient { BaseAddress = new Uri(Nav.BaseUri) };
+            await httpClient.DeleteAsync($"/api/projects/{_project.Id}");
+            Nav.NavigateTo("/projects");
+        }
+    }
+
+    private async Task ConfirmDeleteRepositoryAsync(RepositoryDocument repo)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete Repository",
+            $"Are you sure you want to delete repository '{repo.Name}'? This will also delete all tasks and runs.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            using var httpClient = new HttpClient { BaseAddress = new Uri(Nav.BaseUri) };
+            await httpClient.DeleteAsync($"/api/repositories/{repo.Id}");
+            await LoadRepositoriesAsync();
+        }
     }
 }

@@ -10,11 +10,59 @@ public sealed class JobProcessorService(
     WorkerEventBus eventBus,
     ILogger<JobProcessorService> logger) : BackgroundService
 {
+    private readonly List<Task> _runningJobs = [];
+    private readonly object _lock = new();
+    private readonly TimeSpan _shutdownTimeout = TimeSpan.FromSeconds(30);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await foreach (var queuedJob in queue.ReadAllAsync(stoppingToken))
         {
-            _ = ProcessOneAsync(queuedJob, stoppingToken);
+            var jobTask = ProcessOneAsync(queuedJob, stoppingToken);
+            lock (_lock)
+            {
+                _runningJobs.Add(jobTask);
+            }
+
+            _ = jobTask.ContinueWith(_ =>
+            {
+                lock (_lock)
+                {
+                    _runningJobs.Remove(jobTask);
+                }
+            }, TaskScheduler.Default);
+        }
+
+        try
+        {
+            List<Task> jobsToWait;
+            lock (_lock)
+            {
+                jobsToWait = _runningJobs.ToList();
+            }
+
+            if (jobsToWait.Count > 0)
+            {
+                logger.LogInformation("Waiting for {Count} running jobs to complete (timeout: {Timeout}s)...", 
+                    jobsToWait.Count, _shutdownTimeout.TotalSeconds);
+
+                var timeoutTask = Task.Delay(_shutdownTimeout, CancellationToken.None);
+                var allJobsTask = Task.WhenAll(jobsToWait);
+                var completedTask = await Task.WhenAny(allJobsTask, timeoutTask);
+
+                if (completedTask == timeoutTask)
+                {
+                    logger.LogWarning("Shutdown timeout reached, {Count} jobs still running", jobsToWait.Count);
+                }
+                else
+                {
+                    logger.LogInformation("All jobs completed gracefully");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error during graceful shutdown");
         }
     }
 

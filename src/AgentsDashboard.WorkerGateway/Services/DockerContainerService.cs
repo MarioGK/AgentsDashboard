@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using AgentsDashboard.WorkerGateway.Models;
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -313,21 +314,28 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         }
     }
 
-    public async Task<ContainerMetrics?> GetContainerStatsAsync(string containerId, CancellationToken cancellationToken)
+    public async Task<Contracts.Domain.ContainerMetrics?> GetContainerStatsAsync(string containerId, CancellationToken cancellationToken)
     {
         try
         {
-            var stats = await _client.Containers.GetContainerStatsAsync(
+            using var stream = await _client.Containers.GetContainerStatsAsync(
                 containerId,
                 new ContainerStatsParameters { Stream = false },
                 cancellationToken);
 
+            if (stream is null)
+                return null;
+
+            using var reader = new StreamReader(stream);
+            var json = await reader.ReadToEndAsync(cancellationToken);
+            var stats = JsonSerializer.Deserialize<ContainerStatsResponse>(json, s_jsonOptions);
+
             if (stats is null)
                 return null;
 
-            var cpuDelta = stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage;
-            var systemDelta = stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage;
-            var cpuPercent = systemDelta > 0 ? (double)cpuDelta / systemDelta * 100.0 * stats.CPUStats.OnlineCPUs : 0;
+            var cpuDelta = stats.CpuStats.CpuUsage.TotalUsage - stats.PreCpuStats.CpuUsage.TotalUsage;
+            var systemDelta = stats.CpuStats.SystemCpuUsage - stats.PreCpuStats.SystemCpuUsage;
+            var cpuPercent = systemDelta > 0 ? (double)cpuDelta / systemDelta * 100.0 * (stats.CpuStats.OnlineCpu ?? 1) : 0;
 
             long networkRx = 0;
             long networkTx = 0;
@@ -357,7 +365,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
             var memoryLimit = stats.MemoryStats.Limit;
             var memoryPercent = memoryLimit > 0 ? (double)memoryUsage / memoryLimit * 100.0 : 0;
 
-            return new ContainerMetrics
+            return new Contracts.Domain.ContainerMetrics
             {
                 CpuPercent = Math.Round(cpuPercent, 2),
                 MemoryUsageBytes = memoryUsage,
@@ -375,6 +383,56 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
             logger.LogWarning(ex, "Failed to get container stats for {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
             return null;
         }
+    }
+
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    };
+
+    private sealed class ContainerStatsResponse
+    {
+        public CpuStats CpuStats { get; set; } = new();
+        public CpuStats PreCpuStats { get; set; } = new();
+        public MemoryStats MemoryStats { get; set; } = new();
+        public BlkioStats BlkioStats { get; set; } = new();
+        public Dictionary<string, NetworkStats>? Networks { get; set; }
+    }
+
+    private sealed class CpuStats
+    {
+        public CpuUsage CpuUsage { get; set; } = new();
+        public long SystemCpuUsage { get; set; }
+        public int? OnlineCpu { get; set; }
+    }
+
+    private sealed class CpuUsage
+    {
+        public long TotalUsage { get; set; }
+    }
+
+    private sealed class MemoryStats
+    {
+        public long Usage { get; set; }
+        public long Limit { get; set; }
+    }
+
+    private sealed class BlkioStats
+    {
+        public List<BlockIoEntry>? IoServiceBytesRecursive { get; set; }
+    }
+
+    private sealed class BlockIoEntry
+    {
+        public string Op { get; set; } = string.Empty;
+        public long Value { get; set; }
+    }
+
+    private sealed class NetworkStats
+    {
+        public long RxBytes { get; set; }
+        public long TxBytes { get; set; }
     }
 
     private static long ParseMemoryLimit(string memoryLimit)

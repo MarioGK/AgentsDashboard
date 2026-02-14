@@ -3,6 +3,8 @@
 @rendermode InteractiveServer
 @inject Data.OrchestratorStore Store
 @inject NavigationManager Nav
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthState
+@inject IDialogService DialogService
 
 <PageTitle>Projects</PageTitle>
 
@@ -36,9 +38,14 @@
             <MudTd>@context.Description</MudTd>
             <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
             <MudTd>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick='@(() => Nav.NavigateTo($"/projects/{context.Id}"))'>
-                    Open
-                </MudButton>
+                <MudButtonGroup Variant="Variant.Outlined">
+                    <MudButton Color="Color.Primary" OnClick='@(() => Nav.NavigateTo($"/projects/{context.Id}"))'>
+                        Open
+                    </MudButton>
+                    <MudButton Color="Color.Error" OnClick="@(() => ConfirmDeleteProjectAsync(context))">
+                        Delete
+                    </MudButton>
+                </MudButtonGroup>
             </MudTd>
         </RowTemplate>
     </MudTable>
@@ -71,5 +78,21 @@
     {
         _projects.Clear();
         _projects.AddRange(await Store.ListProjectsAsync(CancellationToken.None));
+    }
+
+    private async Task ConfirmDeleteProjectAsync(ProjectDocument project)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Delete Project",
+            $"Are you sure you want to delete project '{project.Name}'? This will also delete all repositories, tasks, and runs associated with this project.",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            using var httpClient = new HttpClient { BaseAddress = new Uri(Nav.BaseUri) };
+            await httpClient.DeleteAsync($"/api/projects/{project.Id}");
+            await LoadAsync();
+        }
     }
 }

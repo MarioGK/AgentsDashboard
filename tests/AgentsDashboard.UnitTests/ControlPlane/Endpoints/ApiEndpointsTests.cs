@@ -1,7 +1,11 @@
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
+using Microsoft.Extensions.Options;
+using MongoDB.Bson;
+using MongoDB.Driver;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Endpoints;
 
@@ -15,10 +19,23 @@ public class ApiEndpointsTests
 
     public ApiEndpointsTests()
     {
-        // Note: CallBase = false prevents the real constructor/methods from being called
-        // Constructor still needs to be invoked by Moq proxy, but won't execute real logic
-        _mockStore = new Mock<OrchestratorStore>(MockBehavior.Loose, null!, null!) { CallBase = false };
-        _mockWorkflowExecutor = new Mock<WorkflowExecutor>(MockBehavior.Loose, null!, null!, null!) { CallBase = false };
+        var mongoClient = new Mock<IMongoClient>();
+        var mongoDatabase = new Mock<IMongoDatabase>();
+        mongoClient.Setup(c => c.GetDatabase(It.IsAny<string>(), null)).Returns(mongoDatabase.Object);
+        
+        foreach (var collectionName in new[] { "projects", "repositories", "tasks", "runs", "findings", 
+             "run_events", "provider_secrets", "workers", "webhooks", "proxy_audits", "settings",
+             "workflows", "workflow_executions", "alert_rules", "alert_events", "repository_instructions",
+             "harness_provider_settings" })
+        {
+            var collectionMock = new Mock<IMongoCollection<BsonDocument>>();
+            mongoDatabase.Setup(d => d.GetCollection<BsonDocument>(collectionName, null)).Returns(collectionMock.Object);
+        }
+        
+        var options = Options.Create(new OrchestratorOptions());
+        _mockStore = new Mock<OrchestratorStore>(MockBehavior.Loose, mongoClient.Object, options) { CallBase = false };
+        var mockContainerReaper = new Mock<IContainerReaper>();
+        _mockWorkflowExecutor = new Mock<WorkflowExecutor>(MockBehavior.Loose, _mockStore.Object, null!, mockContainerReaper.Object, options, null!) { CallBase = false };
         _mockImageBuilder = new Mock<ImageBuilderService>(MockBehavior.Loose, null!) { CallBase = false };
         _mockHarnessHealth = new Mock<HarnessHealthService>(MockBehavior.Loose, null!) { CallBase = false };
     }

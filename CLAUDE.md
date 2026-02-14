@@ -264,6 +264,29 @@ dotnet test
   - Fixed AsyncUnaryCall constructor parameters
   - Replaced `with` expressions with helper methods for class types
 
+## Additional Improvements (2026-02-14)
+
+### New Models Added
+- **HarnessType enum**: Codex, OpenCode, ClaudeCode, Zai - standardized harness type identifiers
+- **ContainerMetrics**: CPU percent, memory usage/limit/percent, network RX/TX, block read/write, timestamp
+- **ArtifactDocument**: Persistent artifact metadata with run ID, file name, path, content type, size, SHA256, artifact type
+
+### API Enhancements
+- **Alert Rules**: Added `CooldownMinutes` to `CreateAlertRuleRequest` and `UpdateAlertRuleRequest` (default: 15 minutes)
+- **Container Stats**: Added `GetContainerStatsAsync` method to `IDockerContainerService` for real-time container metrics
+
+### UI Improvements
+- **Projects page**: Added delete button with confirmation dialog for project deletion
+- **Project Detail page**: Added delete buttons for project and repositories with confirmation dialogs
+- Delete operations use MudBlazor DialogService for user confirmation
+
+### Worker Gateway Improvements
+- **Graceful shutdown**: JobProcessorService now tracks running jobs and waits for completion (30s timeout) during shutdown
+- **Container metrics**: DockerContainerService implements container stats collection (CPU, memory, network, block I/O)
+
+### Known Issues Updated
+- DockerContainerService now has `IDockerContainerService` interface for mocking in tests
+
 ## Build Commands
 
 ```bash

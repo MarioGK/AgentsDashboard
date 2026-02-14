@@ -170,6 +170,8 @@ public sealed class HarnessExecutor(
                 {
                 }
 
+                var metrics = await dockerService.GetContainerStatsAsync(containerId, CancellationToken.None);
+
                 var finalLogs = logBuilder.Length > 0
                     ? logBuilder.ToString()
                     : await dockerService.GetLogsAsync(containerId, CancellationToken.None);
@@ -178,6 +180,18 @@ public sealed class HarnessExecutor(
                 var envelope = CreateEnvelope((int)exitCode, redactedLogs, string.Empty);
                 envelope.RunId = request.RunId;
                 envelope.TaskId = request.TaskId;
+
+                if (metrics is not null)
+                {
+                    envelope.Metrics["cpuPercent"] = metrics.CpuPercent;
+                    envelope.Metrics["memoryUsageBytes"] = metrics.MemoryUsageBytes;
+                    envelope.Metrics["memoryLimitBytes"] = metrics.MemoryLimitBytes;
+                    envelope.Metrics["memoryPercent"] = metrics.MemoryPercent;
+                    envelope.Metrics["networkRxBytes"] = metrics.NetworkRxBytes;
+                    envelope.Metrics["networkTxBytes"] = metrics.NetworkTxBytes;
+                    envelope.Metrics["blockReadBytes"] = metrics.BlockReadBytes;
+                    envelope.Metrics["blockWriteBytes"] = metrics.BlockWriteBytes;
+                }
 
                 if (!ValidateEnvelope(envelope))
                 {

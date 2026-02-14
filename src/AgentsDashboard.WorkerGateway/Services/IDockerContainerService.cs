@@ -26,5 +26,5 @@ public interface IDockerContainerService
     Task<List<OrchestratorContainerInfo>> ListOrchestratorContainersAsync(CancellationToken cancellationToken);
     Task<bool> RemoveContainerForceAsync(string containerId, CancellationToken cancellationToken);
     Task<ContainerKillResult> KillContainerByRunIdAsync(string runId, string reason, bool force, CancellationToken cancellationToken);
-    Task<ContainerMetrics?> GetContainerStatsAsync(string containerId, CancellationToken cancellationToken);
+    Task<Contracts.Domain.ContainerMetrics?> GetContainerStatsAsync(string containerId, CancellationToken cancellationToken);
 }
