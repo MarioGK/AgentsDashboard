@@ -19,6 +19,12 @@ public static class ApiEndpoints
         readApi.MapGet("/projects", async (OrchestratorStore store, CancellationToken ct) =>
             Results.Ok(await store.ListProjectsAsync(ct)));
 
+        readApi.MapGet("/projects/{projectId}", async (string projectId, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var project = await store.GetProjectAsync(projectId, ct);
+            return project is null ? Results.NotFound(new { message = "Project not found" }) : Results.Ok(project);
+        });
+
         writeApi.MapPost("/projects", async (CreateProjectRequest request, OrchestratorStore store, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -46,6 +52,12 @@ public static class ApiEndpoints
             Results.Ok(await store.ListRepositoriesAsync(projectId, ct)));
 
         // --- Repositories ---
+
+        readApi.MapGet("/repositories/{repositoryId}", async (string repositoryId, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var repository = await store.GetRepositoryAsync(repositoryId, ct);
+            return repository is null ? Results.NotFound(new { message = "Repository not found" }) : Results.Ok(repository);
+        });
 
         writeApi.MapPost("/repositories", async (CreateRepositoryRequest request, OrchestratorStore store, CancellationToken ct) =>
         {
@@ -117,6 +129,12 @@ public static class ApiEndpoints
 
         readApi.MapGet("/repositories/{repositoryId}/tasks", async (string repositoryId, OrchestratorStore store, CancellationToken ct) =>
             Results.Ok(await store.ListTasksAsync(repositoryId, ct)));
+
+        readApi.MapGet("/tasks/{taskId}", async (string taskId, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var task = await store.GetTaskAsync(taskId, ct);
+            return task is null ? Results.NotFound(new { message = "Task not found" }) : Results.Ok(task);
+        });
 
         writeApi.MapPost("/tasks", async (CreateTaskRequest request, OrchestratorStore store, CancellationToken ct) =>
         {
@@ -329,6 +347,12 @@ public static class ApiEndpoints
             return Results.Ok(retryRun);
         });
 
+        writeApi.MapDelete("/findings/{findingId}", async (string findingId, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var deleted = await store.DeleteFindingAsync(findingId, ct);
+            return deleted ? Results.Ok(new { message = "Finding deleted" }) : Results.NotFound(new { message = "Finding not found" });
+        });
+
         // --- Workers ---
 
         readApi.MapGet("/workers", async (OrchestratorStore store, CancellationToken ct) =>
@@ -400,6 +424,16 @@ public static class ApiEndpoints
             return Results.Ok(new { success, message });
         });
 
+        writeApi.MapDelete("/repositories/{repositoryId}/secrets/{provider}", async (
+            string repositoryId,
+            string provider,
+            OrchestratorStore store,
+            CancellationToken ct) =>
+        {
+            var deleted = await store.DeleteProviderSecretAsync(repositoryId, provider.Trim().ToLowerInvariant(), ct);
+            return deleted ? Results.Ok(new { message = "Secret deleted" }) : Results.NotFound(new { message = "Secret not found" });
+        });
+
         // --- Harness Provider Settings ---
 
         readApi.MapGet("/repositories/{repositoryId}/providers/{harness}", async (
@@ -443,6 +477,12 @@ public static class ApiEndpoints
 
         // --- Webhooks ---
 
+        readApi.MapGet("/webhooks/{webhookId}", async (string webhookId, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var webhook = await store.GetWebhookAsync(webhookId, ct);
+            return webhook is null ? Results.NotFound(new { message = "Webhook not found" }) : Results.Ok(webhook);
+        });
+
         readApi.MapGet("/repositories/{repositoryId}/webhooks", async (
             string repositoryId,
             OrchestratorStore store,
@@ -459,6 +499,12 @@ public static class ApiEndpoints
                 return Results.NotFound(new { message = "Repository not found" });
 
             return Results.Ok(await store.CreateWebhookAsync(request, ct));
+        });
+
+        writeApi.MapPut("/webhooks/{webhookId}", async (string webhookId, UpdateWebhookRequest request, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var webhook = await store.UpdateWebhookAsync(webhookId, request, ct);
+            return webhook is null ? Results.NotFound(new { message = "Webhook not found" }) : Results.Ok(webhook);
         });
 
         writeApi.MapDelete("/webhooks/{webhookId}", async (string webhookId, OrchestratorStore store, CancellationToken ct) =>
@@ -802,6 +848,12 @@ public static class ApiEndpoints
         readApi.MapGet("/alerts/rules", async (OrchestratorStore store, CancellationToken ct) =>
             Results.Ok(await store.ListAlertRulesAsync(ct)));
 
+        readApi.MapGet("/alerts/rules/{ruleId}", async (string ruleId, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var rule = await store.GetAlertRuleAsync(ruleId, ct);
+            return rule is null ? Results.NotFound(new { message = "Alert rule not found" }) : Results.Ok(rule);
+        });
+
         writeApi.MapPost("/alerts/rules", async (CreateAlertRuleRequest request, OrchestratorStore store, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -863,6 +915,12 @@ public static class ApiEndpoints
 
         readApi.MapGet("/alerts/events", async (OrchestratorStore store, CancellationToken ct) =>
             Results.Ok(await store.ListRecentAlertEventsAsync(100, ct)));
+
+        readApi.MapGet("/alerts/events/{eventId}", async (string eventId, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var alertEvent = await store.GetAlertEventAsync(eventId, ct);
+            return alertEvent is null ? Results.NotFound(new { message = "Alert event not found" }) : Results.Ok(alertEvent);
+        });
 
         writeApi.MapPost("/alerts/events/{eventId}/resolve", async (
             string eventId,

@@ -1,5 +1,5 @@
-using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.WorkerGateway.Adapters;
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Services;
@@ -196,6 +196,6 @@ public class HarnessAdapterFactoryTests
         public Task<HarnessResultEnvelope> ExecuteAsync(HarnessExecutionContext context, HarnessCommand command, CancellationToken cancellationToken) => Task.FromResult(new HarnessResultEnvelope());
         public HarnessResultEnvelope ParseEnvelope(string stdout, string stderr, int exitCode) => new();
         public IReadOnlyList<HarnessArtifact> MapArtifacts(HarnessResultEnvelope envelope) => [];
-        public FailureClassification ClassifyFailure(HarnessResultEnvelope envelope) => FailureClassification.Success();
+        public global::AgentsDashboard.WorkerGateway.Adapters.FailureClassification ClassifyFailure(HarnessResultEnvelope envelope) => global::AgentsDashboard.WorkerGateway.Adapters.FailureClassification.Success();
     }
 }
