@@ -368,6 +368,7 @@ public class TestableProxyAuditMiddleware
 
 public class FakeProxyAuditRecorder : IProxyAuditRecorder
 {
+    private readonly object _lock = new();
     public List<ProxyAuditDocument> RecordedAudits { get; } = [];
     public bool ShouldThrow { get; set; }
     public Exception? ThrowException { get; set; }
@@ -377,13 +378,19 @@ public class FakeProxyAuditRecorder : IProxyAuditRecorder
         if (ShouldThrow && ThrowException is not null)
             throw ThrowException;
 
-        RecordedAudits.Add(audit);
+        lock (_lock)
+        {
+            RecordedAudits.Add(audit);
+        }
         return Task.CompletedTask;
     }
 
     public void Reset()
     {
-        RecordedAudits.Clear();
+        lock (_lock)
+        {
+            RecordedAudits.Clear();
+        }
         ShouldThrow = false;
         ThrowException = null;
     }
