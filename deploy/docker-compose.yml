@@ -62,15 +62,43 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+    networks:
+      - orchestrator-backend
 
   victoria-metrics:
     image: victoriametrics/victoria-metrics:latest
     restart: unless-stopped
-    command: ["-storageDataPath=/victoria-metrics-data"]
+    command: ["-storageDataPath=/victoria-metrics-data", "-retentionPeriod=30d"]
     ports:
       - "8428:8428"
     volumes:
       - vm-data:/victoria-metrics-data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8428/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 128m
+    networks:
+      - orchestrator-backend
 
   vmui:
     image: victoriametrics/vmui:latest
@@ -80,7 +108,16 @@ services:
     environment:
       VMUI_BACKEND_URL: http://victoria-metrics:8428
     depends_on:
-      - victoria-metrics
+      victoria-metrics:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
+    networks:
+      - orchestrator-backend
 
   worker-gateway:
     build:
@@ -100,8 +137,25 @@ services:
       Z_AI_API_KEY: ${Z_AI_API_KEY:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - artifacts-data:/artifacts
+      - workspaces-data:/workspaces
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:5201"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+    networks:
+      - orchestrator-backend
 
   control-plane:
     build:
@@ -117,10 +171,37 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://victoria-metrics:8428
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - artifacts-data:/artifacts:ro
     depends_on:
-      - mongodb
-      - worker-gateway
+      mongodb:
+        condition: service_healthy
+      worker-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 256m
+    networks:
+      - orchestrator-backend
+      - orchestrator-frontend
 
 volumes:
   mongo-data:
   vm-data:
+  artifacts-data:
+  workspaces-data:
+
+networks:
+  orchestrator-backend:
+    driver: bridge
+    internal: false
+  orchestrator-frontend:
+    driver: bridge

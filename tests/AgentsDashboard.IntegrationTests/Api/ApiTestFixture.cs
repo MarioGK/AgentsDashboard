@@ -135,4 +135,26 @@ public sealed class MockWorkerClient : AgentsDashboard.Contracts.Worker.WorkerGa
             () => new Grpc.Core.Metadata(),
             () => { });
     }
+
+    public override Grpc.Core.AsyncUnaryCall<KillContainerReply> KillContainerAsync(KillContainerRequest request, Grpc.Core.Metadata? headers = null, DateTime? deadline = null, CancellationToken cancellationToken = default)
+    {
+        var reply = new KillContainerReply { Killed = true, ContainerId = "mock-container-id" };
+        return new Grpc.Core.AsyncUnaryCall<KillContainerReply>(
+            Task.FromResult(reply),
+            Task.FromResult(new Grpc.Core.Metadata()),
+            () => Grpc.Core.Status.DefaultSuccess,
+            () => new Grpc.Core.Metadata(),
+            () => { });
+    }
+
+    public override Grpc.Core.AsyncUnaryCall<ReconcileOrphanedContainersReply> ReconcileOrphanedContainersAsync(ReconcileOrphanedContainersRequest request, Grpc.Core.Metadata? headers = null, DateTime? deadline = null, CancellationToken cancellationToken = default)
+    {
+        var reply = new ReconcileOrphanedContainersReply { OrphanedCount = 0 };
+        return new Grpc.Core.AsyncUnaryCall<ReconcileOrphanedContainersReply>(
+            Task.FromResult(reply),
+            Task.FromResult(new Grpc.Core.Metadata()),
+            () => Grpc.Core.Status.DefaultSuccess,
+            () => new Grpc.Core.Metadata(),
+            () => { });
+    }
 }

@@ -216,6 +216,7 @@ dotnet test
 | Performance tests | Complete | 50 concurrent jobs, sub-2s p95 latency stress tests |
 | VMUI dashboards | Complete | Orchestrator + harness-specific metrics dashboards |
 | Per-stage timeout | Complete | Configurable timeouts per workflow stage with max caps |
+| Docker Compose hardening | Complete | Healthchecks, resource limits, network isolation, artifact persistence |
 
 ## UI Pages Summary
 
@@ -244,10 +245,24 @@ dotnet test
 
 - Some API endpoint tests require proper mock setup for OrchestratorStore virtual methods
 - Component tests require bunit package updates for .NET 10 compatibility
+- DockerContainerService is sealed and cannot be mocked with Moq - needs interface extraction
 
 ## Known Issues
 
+- Some unit tests fail due to Moq limitations (sealed classes like DockerContainerService cannot be mocked)
 - Component tests in `tests/AgentsDashboard.UnitTests/ControlPlane/Components/` require bunit API updates
+- Integration tests require running MongoDB and proper DI configuration
+
+## Recent Fixes (2026-02-14)
+
+- Fixed RunDispatcher.cs: Removed unnecessary FormatMemoryLimit call (MemoryLimit is already a string)
+- Fixed TaskTemplateService.cs: Changed memory limit values from long (4294967296L) to string format ("4g", "2g")
+- Fixed HarnessAdapterBase.cs: Added ArtifactsHostPath initialization using WorkerOptions.ArtifactStoragePath
+- Fixed multiple test files for compilation:
+  - Added using statements and type aliases for WorkerGatewayClient
+  - Fixed type names: ApprovalProfileConfig, TimeoutConfig, ArtifactPolicyConfig, DispatchJobReply
+  - Fixed AsyncUnaryCall constructor parameters
+  - Replaced `with` expressions with helper methods for class types
 
 ## Build Commands
 

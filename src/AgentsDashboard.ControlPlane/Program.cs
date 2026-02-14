@@ -57,6 +57,7 @@ builder.Services.AddSingleton<ImageBuilderService>();
 builder.Services.AddSingleton<CredentialValidationService>();
 builder.Services.AddSingleton<TaskTemplateService>();
 builder.Services.AddHostedService<TaskTemplateInitializationService>();
+builder.Services.AddSingleton<IContainerReaper, ContainerReaper>();
 builder.Services.AddHostedService<HarnessHealthService>();
 builder.Services.AddTransient<ProxyAuditMiddleware>();
 builder.Services.AddScoped<ProjectContext>();
