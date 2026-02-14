@@ -47,7 +47,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" \
-    && mv /root/.bun/bin/bun /usr/local/bin/bun \
+    && export BUN_INSTALL="$HOME/.bun" \
+    && cp $BUN_INSTALL/bin/bun /usr/local/bin/bun \
     && chmod +x /usr/local/bin/bun
 
 RUN add-apt-repository ppa:deadsnakes/ppa -y \
@@ -82,7 +83,7 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get install -y docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir \
+RUN pip3 install --no-cache-dir --break-system-packages \
     requests \
     httpx \
     pytest \
@@ -92,7 +93,7 @@ RUN pip3 install --no-cache-dir \
 
 RUN npx playwright@latest install --with-deps chromium || echo "Playwright installation skipped"
 
-RUN useradd -m -s /bin/bash -u 1000 agent \
+RUN id -u agent &>/dev/null || useradd -m -s /bin/bash agent \
     && echo "agent ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
     && usermod -aG docker agent || true
 

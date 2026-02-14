@@ -1,11 +1,10 @@
+using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Claims;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -33,8 +32,6 @@ public sealed class ApiTestFixture : IAsyncLifetime
     {
         await _mongoContainer.StartAsync();
         ConnectionString = _mongoContainer.GetConnectionString();
-
-        var controlPlaneAssembly = typeof(OrchestratorStore).Assembly;
 
         Factory = new WebApplicationFactory<AgentsDashboard.ControlPlane.Program>().WithWebHostBuilder(builder =>
         {
@@ -97,64 +94,19 @@ public sealed class ApiTestFixture : IAsyncLifetime
                     services.Remove(reaperDescriptor);
 
                 services.AddSingleton<IContainerReaper, MockContainerReaper>();
-
-                RemoveAllAuthenticationServices(services);
-
-                services.AddAuthentication("Test")
-                    .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
-
-                services.AddAuthorization(options =>
-                {
-                    options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder("Test")
-                        .RequireAuthenticatedUser()
-                        .Build();
-                    options.AddPolicy("viewer", policy => policy.RequireAuthenticatedUser().AddAuthenticationSchemes("Test"));
-                    options.AddPolicy("operator", policy => policy.RequireAuthenticatedUser().AddAuthenticationSchemes("Test"));
-                });
             });
 
             builder.UseEnvironment("Testing");
         });
 
-        Client = Factory.CreateClient();
-        Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test");
+        var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        Client = Factory.CreateClient(handler);
     }
 
     public async Task DisposeAsync()
     {
         await Factory.DisposeAsync();
         await _mongoContainer.DisposeAsync();
-    }
-
-    private static void RemoveAllAuthenticationServices(IServiceCollection services)
-    {
-        var authTypes = new[]
-        {
-            typeof(IAuthenticationService),
-            typeof(IAuthenticationSchemeProvider),
-            typeof(IAuthenticationHandlerProvider),
-            typeof(IAuthenticationRequestHandler),
-            typeof(Microsoft.AspNetCore.Authentication.IClaimsTransformation),
-            typeof(Microsoft.Extensions.Options.IConfigureOptions<Microsoft.AspNetCore.Authentication.AuthenticationOptions>),
-            typeof(Microsoft.Extensions.Options.IPostConfigureOptions<Microsoft.AspNetCore.Authentication.AuthenticationOptions>),
-        };
-
-        foreach (var type in authTypes)
-        {
-            var descriptors = services.Where(d => d.ServiceType == type).ToList();
-            foreach (var descriptor in descriptors)
-            {
-                services.Remove(descriptor);
-            }
-        }
-
-        var authHandlers = services.Where(d => 
-            d.ServiceType.IsAssignableTo(typeof(IAuthenticationHandler)) ||
-            (d.ImplementationType?.IsAssignableTo(typeof(IAuthenticationHandler)) ?? false)).ToList();
-        foreach (var descriptor in authHandlers)
-        {
-            services.Remove(descriptor);
-        }
     }
 }
 

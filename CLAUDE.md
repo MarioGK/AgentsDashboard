@@ -252,8 +252,8 @@ dotnet test
 
 - No Blazor component tests currently (bunit compatibility with .NET 10 pending)
 - Integration tests require running MongoDB and Docker infrastructure
-- Sealed classes (HarnessExecutor, JobProcessorService, DockerHealthCheckService, DockerContainerService) cannot be mocked with Moq
-- Unit test pass rate: 1054/1105 (95.4%)
+- Sealed classes (HarnessExecutor, JobProcessorService, DockerHealthCheckService) cannot be mocked with Moq
+- Unit test pass rate: 1053/1105 (95.3%)
 
 ## Recent Fixes (2026-02-14)
 
