@@ -253,7 +253,9 @@ dotnet test
 - **CliWrap 3.8.2** for git clone, GitHub PR, harness execution
 
 ### MongoDB Collections (18)
-projects, repositories, tasks, runs, run_events, findings, artifacts, workers, webhooks, proxy_audits, settings, workflows, workflow_executions, alert_rules, alert_events, repository_instructions, harness_provider_settings, task_templates, provider_secrets
+projects, repositories, tasks, runs, run_events, findings, workers, webhooks, proxy_audits, settings, workflows, workflow_executions, alert_rules, alert_events, repository_instructions, harness_provider_settings, task_templates, provider_secrets
+
+**Note:** Artifacts are stored on filesystem (`/data/artifacts/{runId}/`), not in MongoDB.
 
 ### Docker Images (6)
 - ai-harness-base: Ubuntu 24.04 + .NET 10 + Node.js 20 + Python 3.12 + Go 1.23 + Playwright
