@@ -285,3 +285,21 @@ networkPolicy:
   enabled: false
   ingress: []
   egress: []
+
+podDisruptionBudget:
+  enabled: true
+  controlPlane:
+    minAvailable: 1
+  workerGateway:
+    minAvailable: 1
+  mongodb:
+    minAvailable: 1
+
+certManager:
+  enabled: true
+  secretName: ai-orchestrator-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  duration: 2160h
+  renewBefore: 360h

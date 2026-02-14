@@ -1,0 +1,69 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ai-orchestrator.control-plane.fullname" . }}-pdb
+  namespace: {{ include "ai-orchestrator.namespace" . }}
+  labels:
+    {{- include "ai-orchestrator.control-plane.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.controlPlane.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.controlPlane.minAvailable }}
+  {{- else if .Values.podDisruptionBudget.controlPlane.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.controlPlane.maxUnavailable }}
+  {{- else }}
+  minAvailable: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ai-orchestrator.control-plane.selectorLabels" . | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ai-orchestrator.worker-gateway.fullname" . }}-pdb
+  namespace: {{ include "ai-orchestrator.namespace" . }}
+  labels:
+    {{- include "ai-orchestrator.worker-gateway.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.workerGateway.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.workerGateway.minAvailable }}
+  {{- else if .Values.podDisruptionBudget.workerGateway.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.workerGateway.maxUnavailable }}
+  {{- else }}
+  minAvailable: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ai-orchestrator.worker-gateway.selectorLabels" . | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ai-orchestrator.mongodb.fullname" . }}-pdb
+  namespace: {{ include "ai-orchestrator.namespace" . }}
+  labels:
+    {{- include "ai-orchestrator.mongodb.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.mongodb.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.mongodb.minAvailable }}
+  {{- else }}
+  minAvailable: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ai-orchestrator.mongodb.selectorLabels" . | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ai-orchestrator.victoriametrics.fullname" . }}-pdb
+  namespace: {{ include "ai-orchestrator.namespace" . }}
+  labels:
+    {{- include "ai-orchestrator.victoriametrics.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "ai-orchestrator.victoriametrics.selectorLabels" . | nindent 6 }}
+{{- end }}
