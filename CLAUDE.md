@@ -145,12 +145,21 @@ dotnet test
 
 | Test Project | Files | Tests | Coverage Area |
 |--------------|-------|-------|---------------|
-| UnitTests | 42 | 870 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping |
+| UnitTests | 44 | 1057 | Alerting, Cron, Templates, gRPC, Adapters, Executor, Queue, Redactor, Workflow, Proxy, Recovery, CredentialValidation, HarnessHealth, ArtifactExtractor, DockerContainer, JobProcessor, Heartbeat, HealthCheck, EventListener, EventPublisher, GlobalSelection, Envelope Validation, Dead-run Detection, Container Reaping, ContainerReaper, WorkerEventBus, ImagePrePull |
 | IntegrationTests | 30 | 180 | MongoDB store, Image allowlist, Secret redactor, API endpoints, Concurrency stress, Performance |
 | PlaywrightTests | 12 | 220 | Dashboard, Workflows, ImageBuilder, Alerts, Findings, Runs, Tasks, Repos, Settings |
 | Benchmarks | 4 | - | WorkerQueue, SignalR Publish, MongoDB Operations |
 
-**Total: 88 test files, 1,270+ tests**
+**Total: 90 test files, 1,457+ tests**
+
+### Test Notes
+
+- **RecoveryServiceTests**: Updated to use IContainerReaper interface instead of direct WorkerGatewayClient
+- **ContainerReaperTests**: Tests for container reaping via gRPC
+- **WorkerEventBusTests**: Tests for event bus channel operations
+- **DeadRunDetectionTests**: Timer-based dead run detection tests are skipped (require integration testing with actual timer)
+- **ImagePrePullServiceTests**: Tests for image pre-pull service
+- **ContainerOrphanReconcilerTests**: Tests for orphaned container reconciliation
 
 ## Implementation Status
 
