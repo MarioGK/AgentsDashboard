@@ -210,11 +210,11 @@ dotnet test
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
 | UnitTests | 47 | 1,139 | 100% (36 skipped, all pass) |
-| IntegrationTests | 40 | 232 | Requires MongoDB |
+| IntegrationTests | 40 | 230 | Requires MongoDB |
 | PlaywrightTests | 21 | 277 | Requires Running App |
 | Benchmarks | 7 | 4 | Performance |
 
-**Total: 115 test files, 1,652+ tests**
+**Total: 115 test files, 1,650+ tests**
 
 ### Test Coverage by Area
 
@@ -233,7 +233,7 @@ dotnet test
 ## Architecture Summary
 
 ### ControlPlane
-- **92 API endpoints** with authentication/authorization
+- **96 API endpoints** with authentication/authorization
 - **25 Blazor pages** with MudBlazor UI
 - **21 services** for business logic
 - **SignalR hub** with 5 event types
@@ -396,7 +396,7 @@ dotnet format
 |-----------|--------|---------|
 | Build | Passed | 0 Warnings, 0 Errors |
 | Unit Tests | Passed | 1,103/1,139 passed (36 skipped, 0 failed) |
-| API Endpoints | Complete | 92 endpoints across 23 groups |
+| API Endpoints | Complete | 96 endpoints across 22 categories |
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
 | Blazor Pages | Complete | 25 pages with full functionality |
 | Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
