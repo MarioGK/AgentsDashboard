@@ -1163,6 +1163,9 @@ public class OrchestratorStore : IOrchestratorStore
         return alertEvent;
     }
 
+    public virtual async Task<AlertEventDocument?> GetAlertEventAsync(string eventId, CancellationToken cancellationToken)
+        => await _alertEvents.Find(x => x.Id == eventId).FirstOrDefaultAsync(cancellationToken);
+
     public virtual Task<List<AlertEventDocument>> ListRecentAlertEventsAsync(int limit, CancellationToken cancellationToken)
         => _alertEvents.Find(FilterDefinition<AlertEventDocument>.Empty)
             .SortByDescending(x => x.FiredAtUtc)
