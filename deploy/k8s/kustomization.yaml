@@ -26,6 +26,8 @@ images:
     newName: ghcr.io/your-org/ai-orchestrator/worker-gateway
     newTag: latest
 
+# To override defaults, copy config.env.example to config.env and modify:
+# cp config.env.example config.env
 configMapGenerator:
   - name: orchestrator-config-env
     behavior: merge
