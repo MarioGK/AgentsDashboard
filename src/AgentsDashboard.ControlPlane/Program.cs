@@ -165,8 +165,8 @@ if (builder.Environment.IsEnvironment("Testing"))
 
     builder.Services.AddAuthorization(options =>
     {
-        options.AddPolicy("viewer", policy => policy.RequireAuthenticatedUser());
-        options.AddPolicy("operator", policy => policy.RequireAuthenticatedUser());
+        options.AddPolicy("viewer", policy => policy.RequireRole("viewer", "operator", "admin"));
+        options.AddPolicy("operator", policy => policy.RequireRole("operator", "admin"));
     });
 }
 else

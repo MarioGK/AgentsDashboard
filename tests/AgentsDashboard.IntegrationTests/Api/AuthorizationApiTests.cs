@@ -1,8 +1,5 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Configuration;
@@ -10,15 +7,12 @@ using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Proxy;
 using AgentsDashboard.ControlPlane.Services;
 using FluentAssertions;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -70,27 +64,13 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
                 if (reaperDescriptor != null)
                     services.Remove(reaperDescriptor);
                 services.AddSingleton<IContainerReaper, MockContainerReaper>();
-
-                services.AddAuthentication(options =>
-                    {
-                        options.DefaultScheme = "RoleTest";
-                        options.DefaultAuthenticateScheme = "RoleTest";
-                        options.DefaultChallengeScheme = "RoleTest";
-                    })
-                    .AddScheme<AuthenticationSchemeOptions, RoleTestAuthHandler>("RoleTest", _ => { });
-
-                services.AddAuthorization(options =>
-                {
-                    options.AddPolicy("viewer", policy => policy.RequireAuthenticatedUser());
-                    options.AddPolicy("operator", policy => policy.RequireRole("operator", "admin"));
-                });
             });
 
             builder.UseEnvironment("Testing");
         });
 
         var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Test", role);
+        client.DefaultRequestHeaders.Add("X-Test-Auth", role);
         return client;
     }
 
@@ -111,31 +91,6 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Orchestrator__SqliteConnectionString", null);
         if (File.Exists(_databasePath))
             File.Delete(_databasePath);
-    }
-}
-
-public class RoleTestAuthHandler(
-    IOptionsMonitor<AuthenticationSchemeOptions> options,
-    ILoggerFactory logger,
-    UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
-{
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        var authHeader = Request.Headers.Authorization.ToString();
-        var role = authHeader.StartsWith("Test ") ? authHeader["Test ".Length..].Trim() : "viewer";
-
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.Name, "test-user"),
-            new Claim(ClaimTypes.NameIdentifier, "test-user-id"),
-            new Claim(ClaimTypes.Role, role),
-        };
-
-        var identity = new ClaimsIdentity(claims, Scheme.Name);
-        var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, Scheme.Name);
-
-        return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 }
 

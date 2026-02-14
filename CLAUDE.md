@@ -60,6 +60,10 @@ Centralized build configuration using:
 3. **Task** - Runnable object (OneShot, Cron, EventDriven)
 4. **Run** - Execution instance with logs, artifacts, status
 5. **Finding** - Triage item from failed runs, QA issues, approvals
+6. **Agent** - Reusable agent definition scoped to a repository (harness, prompt, retry policy)
+7. **WorkflowV2** - Graph-based (DAG) workflow with nodes, edges, and triggers
+8. **WorkflowExecutionV2** - Execution instance of a graph workflow with node results and context
+9. **WorkflowDeadLetter** - Preserved failure for replay from dead-lettered nodes
 
 ## Key Conventions
 
@@ -186,6 +190,16 @@ dotnet test
 | Harness adapters (4) | Complete |
 | Docker execution | Complete |
 | Workflows with visual editor | Complete |
+| Graph Agent Workflows (DAG) | Complete |
+| - Reusable Agent definitions | Complete |
+| - DAG execution engine | Complete |
+| - Edge condition routing | Complete |
+| - Context mapping (input/output) | Complete |
+| - Retry/timeout/dead-letter | Complete |
+| - DAG validation (cycle detection) | Complete |
+| - Graph workflow visual editor | Complete |
+| - Dead letter replay | Complete |
+| - Webhook triggers for graph workflows | Complete |
 | Alerting (5 rule types) | Complete |
 | Built-in templates (4) | Complete |
 | - QA Browser Sweep | Complete |
@@ -206,22 +220,25 @@ dotnet test
 
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
-| UnitTests | 47 | 1,139 | 100% (36 skipped, all pass) |
-| IntegrationTests | 40 | 230 | Requires external test infrastructure |
-| PlaywrightTests | 21 | 277 | Requires Running App |
+| UnitTests | 54 | 1,260 | 100% (36 skipped, all pass) |
+| IntegrationTests | 45 | 270 | Requires external test infrastructure |
+| PlaywrightTests | 26 | 317 | Requires Running App |
 | Benchmarks | 7 | 4 | Performance |
 
-**Total: 115 test files, 1,650+ tests**
+**Total: 132 test files, 1,851+ tests**
 
 ### Test Coverage by Area
 
 | Area | Unit | Integration | E2E |
 |------|------|-------------|-----|
 | ControlPlane Services | 312 | - | - |
+| Graph Workflow Services | 121 | - | - |
 | WorkerGateway Services | 200 | - | - |
 | Harness Adapters (4) | 90 | - | - |
 | API Endpoints | 92 | 210 | - |
-| UI Pages (21) | - | - | 274 |
+| Graph Workflow APIs | - | 40 | - |
+| UI Pages (25) | - | - | 274 |
+| Graph Workflow UI (8) | - | - | 40 |
 | Proxy/YARP | 68 | - | - |
 | SignalR Hub | 40 | 10 | - |
 | Rate Limiting | - | 22 | - |
@@ -230,18 +247,20 @@ dotnet test
 ## Architecture Summary
 
 ### ControlPlane
-- **96 API endpoints** with authentication/authorization
-- **25 Blazor pages** with MudBlazor UI
-- **21 services** for business logic
-- **SignalR hub** with 5 event types
+- **116 API endpoints** with authentication/authorization
+- **33 Blazor pages/dialogs** with MudBlazor UI
+- **26 services** for business logic
+- **SignalR hub** with 7 event types
 - **YARP proxy** with dynamic routes and audit
 
-### SignalR Event DTOs (5)
+### SignalR Event DTOs (7)
 - `RunStatusChangedEvent`: runId, state, summary, startedAt, endedAt
 - `RunLogChunkEvent`: runId, level, message, timestamp
 - `FindingUpdatedEvent`: findingId, repositoryId, state, severity, title
 - `WorkerHeartbeatEvent`: workerId, hostName, activeSlots, maxSlots, timestamp
 - `RouteAvailableEvent`: runId, routePath, timestamp
+- `WorkflowV2ExecutionStateChangedEvent`: executionId, workflowId, state, currentNodeId, failureReason, timestamp
+- `WorkflowV2NodeStateChangedEvent`: executionId, nodeId, nodeName, nodeState, runId, summary, timestamp
 
 ### WorkerGateway
 - **6 gRPC RPCs**: DispatchJob, CancelJob, SubscribeEvents, Heartbeat, KillContainer, ReconcileOrphanedContainers
@@ -249,8 +268,8 @@ dotnet test
 - **7 interface methods** per adapter: PrepareContext, BuildCommand, Execute, ParseEnvelope, MapArtifacts, ClassifyFailure, HarnessName
 - **CliWrap 3.8.2** for git clone, GitHub PR, harness execution
 
-### EF Core Entities (18)
-projects, repositories, tasks, runs, run_events, findings, workers, webhooks, proxy_audits, settings, workflows, workflow_executions, alert_rules, alert_events, repository_instructions, harness_provider_settings, task_templates, provider_secrets
+### EF Core Entities (22)
+projects, repositories, tasks, runs, run_events, findings, workers, webhooks, proxy_audits, settings, workflows, workflow_executions, alert_rules, alert_events, repository_instructions, harness_provider_settings, task_templates, provider_secrets, agents, workflows_v2, workflow_executions_v2, workflow_dead_letters
 
 **Note:** Artifacts are stored on filesystem (`/data/artifacts/{runId}/`), not in SQLite.
 
@@ -259,7 +278,7 @@ projects, repositories, tasks, runs, run_events, findings, workers, webhooks, pr
 - harness-codex, harness-opencode, harness-claudecode, harness-zai
 - ai-harness (all-in-one)
 
-## UI Pages (25)
+## UI Pages (33)
 
 | Page | Route |
 |------|-------|
@@ -276,8 +295,16 @@ projects, repositories, tasks, runs, run_events, findings, workers, webhooks, pr
 | Schedules | `/schedules` |
 | Schedule Dialog | dialog component |
 | Workers | `/workers` |
-| Workflows | `/workflows` |
+| Workflows (Stages) | `/workflows` |
 | Workflow Editor | `/workflows/{id}` |
+| Agents | `/agents` |
+| Agent Dialog | dialog component |
+| Graph Workflows | `/workflows-v2` |
+| Graph Workflow Editor | `/workflows-v2/{id}` |
+| Graph Node Dialog | dialog component |
+| Graph Edge Dialog | dialog component |
+| Graph Execution View | `/workflows-v2/executions/{id}` |
+| Dead Letters | `/workflow-deadletters` |
 | Templates | `/templates` |
 | Create Template Dialog | dialog component |
 | Image Builder | `/image-builder` |
@@ -302,7 +329,7 @@ dotnet format
 - No Blazor component tests (bunit compatibility with .NET 10 pending)
 - Docker-dependent tests skipped (36 tests) due to Docker.DotNet version mismatch and BackgroundService testability
 - Integration tests require running external test infrastructure
-- Unit test pass rate: 1,103/1,139 (100% of non-skipped tests pass)
+- Unit test pass rate: 1,224/1,260 (100% of non-skipped tests pass)
 
 ## Deployment Options
 
@@ -320,7 +347,7 @@ dotnet format
 - **test-integration**: Integration tests with external service containers
 - **test-e2e**: Playwright E2E tests with running application
 
-## API Endpoints (96 total)
+## API Endpoints (116 total)
 
 | Category | Count | Key Endpoints |
 |----------|-------|---------------|
@@ -329,7 +356,12 @@ dotnet format
 | Tasks | 5 | CRUD |
 | Runs | 10 | CRUD + cancel/retry/approve/reject + bulk + artifacts |
 | Findings | 8 | CRUD + retry/assign/create-task |
-| Workflows | 10 | CRUD + execute + approvals |
+| Workflows (Stages) | 10 | CRUD + execute + approvals |
+| Agents | 5 | CRUD by repository |
+| Graph Workflows | 6 | CRUD + DAG validation |
+| Graph Executions | 5 | Execute + cancel + approve + list + get |
+| Dead Letters | 3 | List + get + replay |
+| Graph Webhook | 1 | Anonymous trigger with token |
 | Alerts | 9 | Rules + Events + bulk-resolve |
 | Webhooks | 7 | CRUD + token + event receiver |
 | Templates | 5 | CRUD |
@@ -343,14 +375,15 @@ dotnet format
 | Component | Status | Details |
 |-----------|--------|---------|
 | Build | Passed | 0 Errors, 0 Warnings |
-| Unit Tests | Passed | 1,103/1,139 passed (36 skipped, 0 failed) |
-| API Endpoints | Complete | 96 endpoints across 22 categories |
+| Unit Tests | Passed | 1,224/1,260 passed (36 skipped, 0 failed) |
+| API Endpoints | Complete | 116 endpoints across 27 categories |
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
-| Blazor Pages | Complete | 25 pages with full functionality |
+| Blazor Pages | Complete | 33 pages/dialogs with full functionality |
 | Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
 | Deployment | Complete | Docker Compose |
 | gRPC Services | Complete | 6 RPCs implemented |
 | Built-in Templates | Complete | 4 templates (QA, UnitTest, Deps, Regression) |
 | Rate Limiting | Complete | 4 policies (Global, Auth, Webhook, Burst) |
 | CI/CD | Complete | GitHub Actions (ci.yml) |
+| Graph Agent Workflows | Complete | DAG engine, agents, dead letters, visual editor |
 | DTO Completeness | Fixed | Added ArtifactPatterns, LinkedFailureRuns to template DTOs; TimeoutMinutes to WorkflowStageConfigRequest |

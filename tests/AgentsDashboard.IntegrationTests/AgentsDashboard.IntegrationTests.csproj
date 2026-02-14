@@ -12,6 +12,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Moq" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
