@@ -82,6 +82,7 @@ public interface IOrchestratorStore
 
     Task<WebhookRegistration> CreateWebhookAsync(CreateWebhookRequest request, CancellationToken cancellationToken);
     Task<List<WebhookRegistration>> ListWebhooksAsync(string repositoryId, CancellationToken cancellationToken);
+    Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken);
 
     Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken);
     Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken);

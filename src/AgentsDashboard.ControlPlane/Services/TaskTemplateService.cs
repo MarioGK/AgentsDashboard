@@ -16,7 +16,7 @@ public record TaskTemplate(
 
 public sealed class TaskTemplateService
 {
-    private readonly OrchestratorStore _store;
+    private readonly IOrchestratorStore _store;
     private readonly IMongoCollection<TaskTemplateDocument> _templates;
     private bool _seeded;
 
@@ -62,7 +62,7 @@ public sealed class TaskTemplateService
 
     public static IReadOnlyList<TaskTemplate> GetTemplates() => BuiltInTemplates;
 
-    public TaskTemplateService(OrchestratorStore store, IMongoClient mongoClient)
+    public TaskTemplateService(IOrchestratorStore store, IMongoClient mongoClient)
     {
         _store = store;
         var database = mongoClient.GetDatabase("orchestrator");

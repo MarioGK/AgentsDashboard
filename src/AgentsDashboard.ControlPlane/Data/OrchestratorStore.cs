@@ -853,6 +853,12 @@ public class OrchestratorStore : IOrchestratorStore
     public virtual Task<List<WebhookRegistration>> ListWebhooksAsync(string repositoryId, CancellationToken cancellationToken)
         => _webhooks.Find(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
 
+    public virtual async Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken)
+    {
+        var result = await _webhooks.DeleteOneAsync(x => x.Id == webhookId, cancellationToken);
+        return result.DeletedCount > 0;
+    }
+
     // --- Finding Assignment ---
 
     public virtual async Task<FindingDocument?> AssignFindingAsync(string findingId, string assignedTo, CancellationToken cancellationToken)
@@ -977,6 +983,33 @@ public class OrchestratorStore : IOrchestratorStore
             update,
             new FindOneAndUpdateOptions<AlertEventDocument> { ReturnDocument = ReturnDocument.After },
             cancellationToken);
+    }
+
+    public virtual async Task<int> ResolveAlertEventsAsync(List<string> eventIds, CancellationToken cancellationToken)
+    {
+        if (eventIds.Count == 0) return 0;
+
+        var update = Builders<AlertEventDocument>.Update.Set(x => x.Resolved, true);
+        var result = await _alertEvents.UpdateManyAsync(
+            x => eventIds.Contains(x.Id),
+            update,
+            cancellationToken: cancellationToken);
+        return (int)result.ModifiedCount;
+    }
+
+    public virtual async Task<int> BulkCancelRunsAsync(List<string> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0) return 0;
+
+        var update = Builders<RunDocument>.Update
+            .Set(x => x.State, RunState.Cancelled)
+            .Set(x => x.EndedAtUtc, DateTime.UtcNow);
+
+        var result = await _runs.UpdateManyAsync(
+            x => runIds.Contains(x.Id) && (x.State == RunState.Queued || x.State == RunState.Running || x.State == RunState.PendingApproval),
+            update,
+            cancellationToken: cancellationToken);
+        return (int)result.ModifiedCount;
     }
 
     public virtual async Task<WorkflowExecutionDocument?> GetWorkflowExecutionAsync(string executionId, CancellationToken cancellationToken)

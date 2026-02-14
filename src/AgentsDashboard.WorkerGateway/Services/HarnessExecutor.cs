@@ -528,7 +528,7 @@ public sealed class HarnessExecutor(
                 PipeTarget.ToStringBuilder(stdoutBuf),
                 PipeTarget.Create(async (chunk, ct) =>
                 {
-                    var str = chunk.ToString();
+                    var str = chunk.ToString() ?? string.Empty;
                     stdoutBuf.Append(str);
                     var redacted = secretRedactor.Redact(str, request.Env);
                     await onLogChunk(redacted, ct);
@@ -540,7 +540,7 @@ public sealed class HarnessExecutor(
                 PipeTarget.ToStringBuilder(stderrBuf),
                 PipeTarget.Create(async (chunk, ct) =>
                 {
-                    var str = chunk.ToString();
+                    var str = chunk.ToString() ?? string.Empty;
                     stderrBuf.Append(str);
                     var redacted = secretRedactor.Redact(str, request.Env);
                     await onLogChunk(redacted, ct);

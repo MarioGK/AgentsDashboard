@@ -22,7 +22,7 @@ public sealed class AlertingService(
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
 
                 await using var scope = scopeFactory.CreateAsyncScope();
-                var store = scope.ServiceProvider.GetRequiredService<OrchestratorStore>();
+                var store = scope.ServiceProvider.GetRequiredService<IOrchestratorStore>();
 
                 var rules = await store.ListEnabledAlertRulesAsync(stoppingToken);
 
@@ -42,7 +42,7 @@ public sealed class AlertingService(
         }
     }
 
-    private async Task CheckRuleAsync(AlertRuleDocument rule, OrchestratorStore store, CancellationToken cancellationToken)
+    private async Task CheckRuleAsync(AlertRuleDocument rule, IOrchestratorStore store, CancellationToken cancellationToken)
     {
         try
         {
@@ -80,7 +80,7 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckMissingHeartbeatAsync(
         AlertRuleDocument rule,
-        OrchestratorStore store,
+        IOrchestratorStore store,
         CancellationToken cancellationToken)
     {
         var workers = await store.ListWorkersAsync(cancellationToken);
@@ -101,7 +101,7 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckFailureRateSpikeAsync(
         AlertRuleDocument rule,
-        OrchestratorStore store,
+        IOrchestratorStore store,
         CancellationToken cancellationToken)
     {
         var failedRuns = await store.ListRunsByStateAsync(RunState.Failed, cancellationToken);
@@ -118,7 +118,7 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckQueueBacklogAsync(
         AlertRuleDocument rule,
-        OrchestratorStore store,
+        IOrchestratorStore store,
         CancellationToken cancellationToken)
     {
         var queuedCount = await store.CountActiveRunsAsync(cancellationToken);
@@ -133,7 +133,7 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckRepeatedPrFailuresAsync(
         AlertRuleDocument rule,
-        OrchestratorStore store,
+        IOrchestratorStore store,
         CancellationToken cancellationToken)
     {
         var failedRuns = await store.ListRunsByStateAsync(RunState.Failed, cancellationToken);
@@ -157,7 +157,7 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckRouteLeakDetectionAsync(
         AlertRuleDocument rule,
-        OrchestratorStore store,
+        IOrchestratorStore store,
         CancellationToken cancellationToken)
     {
         var windowStart = DateTime.UtcNow.AddMinutes(-rule.WindowMinutes);
@@ -182,7 +182,7 @@ public sealed class AlertingService(
     private async Task FireAlertAsync(
         AlertRuleDocument rule,
         string message,
-        OrchestratorStore store,
+        IOrchestratorStore store,
         CancellationToken cancellationToken)
     {
         var alertEvent = new AlertEventDocument

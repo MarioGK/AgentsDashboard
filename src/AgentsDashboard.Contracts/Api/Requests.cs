@@ -93,6 +93,10 @@ public sealed record UpdateHarnessProviderSettingsRequest(
     int MaxTokens,
     Dictionary<string, string>? AdditionalSettings = null);
 
+public sealed record BulkCancelRunsRequest(List<string> RunIds);
+public sealed record BulkResolveAlertsRequest(List<string> EventIds);
+public sealed record BulkOperationResult(int AffectedCount, List<string> Errors);
+
 public sealed record ReliabilityMetrics(
     double SuccessRate7Days,
     double SuccessRate30Days,

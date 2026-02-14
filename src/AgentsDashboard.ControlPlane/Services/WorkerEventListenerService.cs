@@ -9,7 +9,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class WorkerEventListenerService(
     WorkerGateway.WorkerGatewayClient workerClient,
-    OrchestratorStore store,
+    IOrchestratorStore store,
     IRunEventPublisher publisher,
     InMemoryYarpConfigProvider yarpProvider,
     RunDispatcher dispatcher,

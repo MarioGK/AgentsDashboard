@@ -346,7 +346,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    private static Mock<OrchestratorStore> CreateMockStore()
+    private static Mock<IOrchestratorStore> CreateMockStore()
     {
         var mockClient = new Mock<IMongoClient>();
         var mockDatabase = new Mock<IMongoDatabase>();
@@ -355,6 +355,6 @@ public class RecoveryServiceTests
         mockClient.Setup(c => c.GetDatabase(It.IsAny<string>(), null))
             .Returns(mockDatabase.Object);
         
-        return new Mock<OrchestratorStore>(mockClient.Object, options);
+        return new Mock<IOrchestratorStore>(mockClient.Object, options);
     }
 }

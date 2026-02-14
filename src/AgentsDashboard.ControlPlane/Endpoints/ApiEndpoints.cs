@@ -442,6 +442,15 @@ public static class ApiEndpoints
 
         // --- Webhooks ---
 
+        readApi.MapGet("/repositories/{repositoryId}/webhooks", async (
+            string repositoryId,
+            OrchestratorStore store,
+            CancellationToken ct) =>
+        {
+            var webhooks = await store.ListWebhooksAsync(repositoryId, ct);
+            return Results.Ok(webhooks);
+        });
+
         writeApi.MapPost("/webhooks", async (CreateWebhookRequest request, OrchestratorStore store, CancellationToken ct) =>
         {
             var repo = await store.GetRepositoryAsync(request.RepositoryId, ct);
@@ -449,6 +458,12 @@ public static class ApiEndpoints
                 return Results.NotFound(new { message = "Repository not found" });
 
             return Results.Ok(await store.CreateWebhookAsync(request, ct));
+        });
+
+        writeApi.MapDelete("/webhooks/{webhookId}", async (string webhookId, OrchestratorStore store, CancellationToken ct) =>
+        {
+            var deleted = await store.DeleteWebhookAsync(webhookId, ct);
+            return deleted ? Results.Ok(new { message = "Webhook deleted" }) : Results.NotFound(new { message = "Webhook not found" });
         });
 
         writeApi.MapPost("/repositories/{repositoryId}/webhooks/token", async (
@@ -845,6 +860,46 @@ public static class ApiEndpoints
             return resolved is null
                 ? Results.NotFound(new { message = "Alert event not found" })
                 : Results.Ok(resolved);
+        });
+
+        writeApi.MapPost("/alerts/events/bulk-resolve", async (
+            BulkResolveAlertsRequest request,
+            OrchestratorStore store,
+            CancellationToken ct) =>
+        {
+            if (request.EventIds.Count == 0)
+                return Results.BadRequest(new { message = "No event IDs provided" });
+
+            var count = await store.ResolveAlertEventsAsync(request.EventIds, ct);
+            return Results.Ok(new BulkOperationResult(count, []));
+        });
+
+        // --- Bulk Operations ---
+
+        writeApi.MapPost("/runs/bulk-cancel", async (
+            BulkCancelRunsRequest request,
+            OrchestratorStore store,
+            RunDispatcher dispatcher,
+            CancellationToken ct) =>
+        {
+            if (request.RunIds.Count == 0)
+                return Results.BadRequest(new { message = "No run IDs provided" });
+
+            var errors = new List<string>();
+            foreach (var runId in request.RunIds)
+            {
+                try
+                {
+                    await dispatcher.CancelAsync(runId, ct);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Run {runId}: {ex.Message}");
+                }
+            }
+
+            var count = await store.BulkCancelRunsAsync(request.RunIds, ct);
+            return Results.Ok(new BulkOperationResult(count, errors));
         });
 
         // --- Credential Validation ---

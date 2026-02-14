@@ -318,10 +318,12 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
     {
         try
         {
+#pragma warning disable CS0618
             using var stream = await _client.Containers.GetContainerStatsAsync(
                 containerId,
                 new ContainerStatsParameters { Stream = false },
                 cancellationToken);
+#pragma warning restore CS0618
 
             if (stream is null)
                 return null;

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class CronSchedulerService(
-    OrchestratorStore store,
+    IOrchestratorStore store,
     RunDispatcher dispatcher,
     IOptions<OrchestratorOptions> options,
     ILogger<CronSchedulerService> logger) : BackgroundService

@@ -35,21 +35,6 @@ public class ProjectContextTests
         return new ProjectContext(_storeMock.Object, _jsRuntimeMock.Object);
     }
 
-    private void SetupJsRuntimeForGetItem(params string?[] returnValues)
-    {
-        var sequence = _jsRuntimeMock.SetupSequence(j => j.InvokeAsync<string?>("localStorage.getItem", It.IsAny<object[]>()));
-        foreach (var value in returnValues)
-        {
-            sequence.ReturnsAsync(value);
-        }
-    }
-
-    private void SetupJsRuntimeForSetItem()
-    {
-        _jsRuntimeMock.Setup(j => j.InvokeAsync<ValueTuple>("localStorage.setItem", It.IsAny<object[]>()))
-            .ReturnsAsync(ValueTuple.Create);
-    }
-
     [Fact]
     public async Task InitializeAsync_WhenAlreadyInitialized_SkipsReload()
     {
@@ -57,8 +42,6 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        SetupJsRuntimeForGetItem(null);
-        SetupJsRuntimeForSetItem();
 
         var context = CreateContext();
         await context.InitializeAsync(CancellationToken.None);
@@ -72,7 +55,6 @@ public class ProjectContextTests
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProjectDocument>());
-        SetupJsRuntimeForGetItem(null, null);
 
         var context = CreateContext();
 
@@ -90,8 +72,6 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        SetupJsRuntimeForGetItem(null);
-        SetupJsRuntimeForSetItem();
 
         var context = CreateContext();
 
@@ -112,8 +92,8 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-2", It.IsAny<CancellationToken>()))
             .ReturnsAsync(proj2Repos);
-        SetupJsRuntimeForGetItem("proj-2", null);
-        SetupJsRuntimeForSetItem();
+        
+        SetupJsGetItemSequence("proj-2", null);
 
         var context = CreateContext();
 
@@ -130,8 +110,8 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        SetupJsRuntimeForGetItem("non-existent-proj", null);
-        SetupJsRuntimeForSetItem();
+        
+        SetupJsGetItemSequence("non-existent-proj", null);
 
         var context = CreateContext();
 
@@ -147,7 +127,8 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        SetupJsRuntimeForGetItem("proj-1", "repo-2");
+        
+        SetupJsGetItemSequence("proj-1", "repo-2");
 
         var context = CreateContext();
 
@@ -164,7 +145,8 @@ public class ProjectContextTests
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        SetupJsRuntimeForGetItem("proj-1", "non-existent-repo");
+        
+        SetupJsGetItemSequence("proj-1", "non-existent-repo");
 
         var context = CreateContext();
 
@@ -183,7 +165,6 @@ public class ProjectContextTests
         };
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-2", It.IsAny<CancellationToken>()))
             .ReturnsAsync(proj2Repos);
-        SetupJsRuntimeForSetItem();
 
         var context = CreateContext();
 
@@ -197,8 +178,6 @@ public class ProjectContextTests
     [Fact]
     public async Task SelectProjectAsync_WithNullId_ClearsSelection()
     {
-        SetupJsRuntimeForSetItem();
-
         var context = CreateContext();
 
         await context.SelectProjectAsync(null, CancellationToken.None);
@@ -213,7 +192,6 @@ public class ProjectContextTests
     {
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<RepositoryDocument>());
-        SetupJsRuntimeForSetItem();
 
         var context = CreateContext();
 
@@ -229,7 +207,6 @@ public class ProjectContextTests
     {
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_testRepositories);
-        SetupJsRuntimeForSetItem();
 
         var context = CreateContext();
 
@@ -241,8 +218,6 @@ public class ProjectContextTests
     [Fact]
     public async Task SelectRepositoryAsync_WithValidId_UpdatesSelection()
     {
-        SetupJsRuntimeForSetItem();
-
         var context = CreateContext();
 
         await context.SelectRepositoryAsync("repo-2", CancellationToken.None);
@@ -253,12 +228,22 @@ public class ProjectContextTests
     [Fact]
     public async Task SelectRepositoryAsync_WithNullId_ClearsSelection()
     {
-        SetupJsRuntimeForSetItem();
-
         var context = CreateContext();
 
         await context.SelectRepositoryAsync(null, CancellationToken.None);
 
         context.SelectedRepositoryId.Should().BeNull();
+    }
+
+    private void SetupJsGetItemSequence(params string?[] returnValues)
+    {
+        var sequence = _jsRuntimeMock.SetupSequence(j => j.InvokeAsync<string?>(
+            "localStorage.getItem", 
+            It.IsAny<object?[]>()));
+        
+        foreach (var value in returnValues)
+        {
+            sequence.ReturnsAsync(value);
+        }
     }
 }

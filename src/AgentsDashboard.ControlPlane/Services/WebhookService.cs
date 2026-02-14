@@ -4,7 +4,7 @@ using AgentsDashboard.ControlPlane.Data;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed class WebhookService(OrchestratorStore store, ILogger<WebhookService> logger)
+public sealed class WebhookService(IOrchestratorStore store, ILogger<WebhookService> logger)
 {
     public async Task<WebhookRegistration> RegisterAsync(CreateWebhookRequest request, CancellationToken cancellationToken)
     {

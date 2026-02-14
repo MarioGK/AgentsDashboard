@@ -11,7 +11,7 @@ public class WebhookServiceTests
     [Fact]
     public async Task RegisterAsync_DelegatesToStore()
     {
-        var store = new Mock<OrchestratorStore>() { CallBase = false };
+        var store = new Mock<IOrchestratorStore>() { CallBase = false };
         var request = new CreateWebhookRequest("repo-1", "task-1", "push", "secret123");
         var expected = new WebhookRegistration
         {
@@ -35,7 +35,7 @@ public class WebhookServiceTests
     [Fact]
     public async Task ListAsync_DelegatesToStore()
     {
-        var store = new Mock<OrchestratorStore>() { CallBase = false };
+        var store = new Mock<IOrchestratorStore>() { CallBase = false };
         var webhooks = new List<WebhookRegistration>
         {
             new() { RepositoryId = "repo-1", TaskId = "task-1" },
@@ -56,7 +56,7 @@ public class WebhookServiceTests
     [Fact]
     public async Task ListAsync_EmptyRepository_ReturnsEmpty()
     {
-        var store = new Mock<OrchestratorStore>() { CallBase = false };
+        var store = new Mock<IOrchestratorStore>() { CallBase = false };
         store.Setup(s => s.ListWebhooksAsync("empty-repo", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<WebhookRegistration>());
 
