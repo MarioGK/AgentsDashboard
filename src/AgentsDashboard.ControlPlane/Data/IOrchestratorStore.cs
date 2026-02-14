@@ -57,6 +57,7 @@ public interface IOrchestratorStore
     Task<RunDocument?> MarkRunPendingApprovalAsync(string runId, CancellationToken cancellationToken);
     Task<RunDocument?> ApproveRunAsync(string runId, CancellationToken cancellationToken);
     Task<RunDocument?> RejectRunAsync(string runId, CancellationToken cancellationToken);
+    Task<int> BulkCancelRunsAsync(List<string> runIds, CancellationToken cancellationToken);
 
     Task SaveArtifactAsync(string runId, string fileName, Stream stream, CancellationToken cancellationToken);
     Task<List<string>> ListArtifactsAsync(string runId, CancellationToken cancellationToken);
@@ -120,6 +121,7 @@ public interface IOrchestratorStore
     Task<List<AlertEventDocument>> ListRecentAlertEventsAsync(int limit, CancellationToken cancellationToken);
     Task<List<AlertEventDocument>> ListAlertEventsByRuleAsync(string ruleId, CancellationToken cancellationToken);
     Task<AlertEventDocument?> ResolveAlertEventAsync(string eventId, CancellationToken cancellationToken);
+    Task<int> ResolveAlertEventsAsync(List<string> eventIds, CancellationToken cancellationToken);
 
     Task<ReliabilityMetrics> GetReliabilityMetricsAsync(CancellationToken cancellationToken);
 }
