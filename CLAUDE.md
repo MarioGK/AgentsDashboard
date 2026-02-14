@@ -197,29 +197,32 @@ dotnet test
 | CI/CD (GitHub Actions) | Complete |
 | Rate limiting (4 policies) | Complete |
 | MongoDB backup/recovery | Complete |
+| PodDisruptionBudget | Complete |
+| cert-manager TLS | Complete |
 
 ## Test Coverage Summary
 
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
-| UnitTests | 43 | 1,139 | 97.0% (36 skipped, all pass) |
-| IntegrationTests | 25 | 173 | Requires MongoDB |
-| PlaywrightTests | 17 | 274 | Requires Running App |
-| Benchmarks | 7 | - | Performance |
+| UnitTests | 47 | 832 | 97.0% (36 skipped, all pass) |
+| IntegrationTests | 36 | 210 | Requires MongoDB |
+| PlaywrightTests | 21 | 274 | Requires Running App |
+| Benchmarks | 4 | - | Performance |
 
-**Total: 92 test files, 1,586+ tests**
+**Total: 108 test files, 1,316+ tests**
 
 ### Test Coverage by Area
 
 | Area | Unit | Integration | E2E |
 |------|------|-------------|-----|
-| ControlPlane Services | 332 | - | - |
-| WorkerGateway Services | 83 | - | - |
-| Harness Adapters (4) | 109 | - | - |
-| API Endpoints | 92 | 173 | - |
+| ControlPlane Services | 312 | - | - |
+| WorkerGateway Services | 200 | - | - |
+| Harness Adapters (4) | 90 | - | - |
+| API Endpoints | 92 | 210 | - |
 | UI Pages (21) | - | - | 274 |
-| Proxy/YARP | 67 | - | - |
-| SignalR Hub | 40 | - | - |
+| Proxy/YARP | 68 | - | - |
+| SignalR Hub | 40 | 10 | - |
+| Rate Limiting | - | 10 | - |
 | Contracts | 40 | - | - |
 
 ## Architecture Summary
@@ -364,3 +367,5 @@ dotnet format
 | PVC | `pvc.yaml` | PersistentVolumeClaims |
 | NetworkPolicy | `networkpolicy.yaml` | Network policies for all components |
 | Namespace | `namespace.yaml` | Conditional namespace creation |
+| PodDisruptionBudget | `pdb.yaml` | PDB for control-plane, worker-gateway, mongodb |
+| Certificate | `certificate.yaml` | cert-manager TLS certificate |

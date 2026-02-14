@@ -13,6 +13,8 @@ resources:
   - worker-gateway.yaml
   - control-plane.yaml
   - nginx.yaml
+  - pdb.yaml
+  - certificate.yaml
 
 commonLabels:
   app.kubernetes.io/managed-by: kustomize
