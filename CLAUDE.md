@@ -233,9 +233,9 @@ dotnet test
 ## Architecture Summary
 
 ### ControlPlane
-- **88 API endpoints** with authentication/authorization
-- **22 Blazor pages** with MudBlazor UI
-- **18 services** for business logic
+- **92 API endpoints** with authentication/authorization
+- **25 Blazor pages** with MudBlazor UI
+- **21 services** for business logic
 - **SignalR hub** with 5 event types
 - **YARP proxy** with dynamic routes and audit
 
@@ -266,7 +266,7 @@ projects, repositories, tasks, runs, run_events, findings, workers, webhooks, pr
 - Orchestrator Dashboard: 31 panels - throughput, latency, errors, queue, workers, runs, findings, proxy
 - Harness Metrics Dashboard: 39 panels - per-harness execution, duration, success rate, failures, container metrics
 
-## UI Pages (22)
+## UI Pages (25)
 
 | Page | Route |
 |------|-------|
@@ -281,13 +281,16 @@ projects, repositories, tasks, runs, run_events, findings, workers, webhooks, pr
 | Findings List | `/findings` |
 | Finding Detail | `/findings/{id}` |
 | Schedules | `/schedules` |
+| Schedule Dialog | dialog component |
 | Workers | `/workers` |
 | Workflows | `/workflows` |
 | Workflow Editor | `/workflows/{id}` |
 | Templates | `/templates` |
+| Create Template Dialog | dialog component |
 | Image Builder | `/image-builder` |
 | Provider Settings | `/providers` |
 | Alert Settings | `/alerts` |
+| Alert Rule Dialog | dialog component |
 | Proxy Audits | `/proxy-audits` |
 | System Settings | `/settings` |
 | Error | `/Error` |
@@ -306,7 +309,7 @@ dotnet format
 - No Blazor component tests (bunit compatibility with .NET 10 pending)
 - Docker-dependent tests skipped (36 tests) due to Docker.DotNet version mismatch and BackgroundService testability
 - Integration tests require running MongoDB infrastructure
-- Unit test pass rate: 1,102/1,139 (100% of non-skipped tests pass)
+- Unit test pass rate: 1,103/1,139 (100% of non-skipped tests pass)
 
 ## Deployment Options
 
@@ -350,21 +353,21 @@ dotnet format
 | control-plane | Blazor Server control plane | ghcr.io |
 | worker-gateway | gRPC worker gateway | ghcr.io |
 
-## API Endpoints (92 total)
+## API Endpoints (96 total)
 
 | Category | Count | Key Endpoints |
 |----------|-------|---------------|
 | Projects | 6 | CRUD + repositories |
 | Repositories | 4 | CRUD |
 | Tasks | 5 | CRUD |
-| Runs | 9 | CRUD + cancel/retry/approve/reject + bulk |
+| Runs | 10 | CRUD + cancel/retry/approve/reject + bulk + artifacts |
 | Findings | 8 | CRUD + retry/assign/create-task |
 | Workflows | 10 | CRUD + execute + approvals |
 | Alerts | 9 | Rules + Events + bulk-resolve |
 | Webhooks | 7 | CRUD + token + event receiver |
 | Templates | 5 | CRUD |
 | Images | 3 | List/build/delete |
-| Other | 26 | Workers, Secrets, Instructions, Settings, Health, Proxy |
+| Other | 29 | Workers, Secrets, Instructions, Settings, Health, Proxy, Auth, Artifacts, Schedules, Providers |
 
 ## Helm Chart Components
 
@@ -395,8 +398,10 @@ dotnet format
 | Unit Tests | Passed | 1,103/1,139 passed (36 skipped, 0 failed) |
 | API Endpoints | Complete | 92 endpoints across 23 groups |
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
-| Blazor Pages | Complete | 22 pages with full functionality |
+| Blazor Pages | Complete | 25 pages with full functionality |
 | Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
 | Deployment | Complete | Docker Compose, Helm (14 templates), K8s |
 | gRPC Services | Complete | 6 RPCs implemented |
 | Built-in Templates | Complete | 4 templates (QA, UnitTest, Deps, Regression) |
+| Rate Limiting | Complete | 4 policies (Global, Auth, Webhook, Burst) |
+| CI/CD | Complete | GitHub Actions (ci.yml, deploy.yml) |
