@@ -31,6 +31,8 @@ RUN apt-get update && apt-get install -y \
     apt-transport-https \
     build-essential \
     sudo \
+    ripgrep \
+    fd-find \
     && rm -rf /var/lib/apt/lists/*
 
 RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \

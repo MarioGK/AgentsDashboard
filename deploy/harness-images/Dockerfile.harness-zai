@@ -14,7 +14,7 @@ RUN npm install -g cc-mirror 2>/dev/null || echo "cc-mirror installation attempt
 
 RUN mkdir -p /home/agent/.zai /home/agent/.config/zai && chown -R agent:agent /home/agent/.zai /home/agent/.config/zai
 
-RUN npx cc-mirror quick --provider zai --help 2>/dev/null || echo "cc-mirror help check completed"
+RUN npx cc-mirror quick --provider zai --api-key "$Z_AI_API_KEY" 2>/dev/null || echo "cc-mirror quick setup attempted - Z_AI_API_KEY should be set at runtime"
 
 COPY --chmod=755 <<'EOF' /usr/local/bin/zai
 #!/bin/bash

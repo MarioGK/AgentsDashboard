@@ -98,7 +98,8 @@ public sealed class RunDispatcher(
         request.Env.Add("AUTO_CREATE_PR", task.AutoCreatePullRequest ? "true" : "false");
         request.Env.Add("HARNESS_NAME", task.Harness);
         request.Env.Add("GH_REPO", ParseGitHubRepoSlug(repository.GitUrl));
-        request.Env.Add("PR_BRANCH", $"agent/{repository.Name}/{task.Name}/{run.Id[..8]}".ToLowerInvariant().Replace(' ', '-'));
+        var runIdShort = string.IsNullOrEmpty(run.Id) ? "unknown" : run.Id.Length >= 8 ? run.Id[..8] : run.Id;
+        request.Env.Add("PR_BRANCH", $"agent/{repository.Name}/{task.Name}/{runIdShort}".ToLowerInvariant().Replace(' ', '-'));
         request.Env.Add("PR_TITLE", $"[{task.Harness}] {task.Name} automated update");
         request.Env.Add("PR_BODY", $"Automated change from run {run.Id} for task {task.Name}.");
 
