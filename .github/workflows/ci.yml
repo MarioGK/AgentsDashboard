@@ -130,14 +130,11 @@ jobs:
 
       - name: Run unit tests
         run: |
-          dotnet test ${{ env.SOLUTION_PATH }} \
+          dotnet test tests/AgentsDashboard.UnitTests \
             --configuration Release \
-            --no-restore \
-            --filter "FullyQualifiedName!~IntegrationTests&FullyQualifiedName!~PlaywrightTests" \
             --collect:"XPlat Code Coverage" \
             --results-directory TestResults/unit \
-            --logger "trx;LogFileName=unit-tests.trx" \
-            --logger "GitHubActions;summary.includeSource=true"
+            --logger "trx;LogFileName=unit-tests.trx"
 
       - name: Upload unit test results
         if: failure()
@@ -192,11 +189,9 @@ jobs:
         run: |
           dotnet test tests/AgentsDashboard.IntegrationTests \
             --configuration Release \
-            --no-restore \
             --collect:"XPlat Code Coverage" \
             --results-directory TestResults/integration \
-            --logger "trx;LogFileName=integration-tests.trx" \
-            --logger "GitHubActions;summary.includeSource=true"
+            --logger "trx;LogFileName=integration-tests.trx"
 
       - name: Upload integration test results
         if: failure()
@@ -247,15 +242,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Setup Playwright
-        run: |
-          dotnet restore ${{ env.SOLUTION_PATH }}
-          dotnet tool install --global Microsoft.Playwright.CLI 2>/dev/null || true
-          ~/.dotnet/tools/playwright install --with-deps chromium
+      - name: Build Playwright tests
+        run: dotnet build tests/AgentsDashboard.PlaywrightTests --configuration Release
+
+      - name: Install Playwright browsers
+        run: pwsh tests/AgentsDashboard.PlaywrightTests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
 
       - name: Start ControlPlane
         run: |
-          dotnet run --project src/AgentsDashboard.ControlPlane --urls=http://localhost:5266 &
+          dotnet run --project src/AgentsDashboard.ControlPlane --configuration Release --urls=http://localhost:5266 &
           echo "Waiting for ControlPlane to start..."
           for i in {1..30}; do
             if curl -s http://localhost:5266/health > /dev/null 2>&1; then
@@ -269,9 +264,8 @@ jobs:
         run: |
           dotnet test tests/AgentsDashboard.PlaywrightTests \
             --configuration Release \
-            --no-restore \
+            --no-build \
             --logger "trx;LogFileName=e2e-tests.trx" \
-            --logger "GitHubActions;summary.includeSource=true" \
             --results-directory TestResults/e2e
 
       - name: Upload e2e test results
