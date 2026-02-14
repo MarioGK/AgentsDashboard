@@ -23,19 +23,24 @@ builder.Services.AddOptions<OrchestratorOptions>()
     .ValidateOnStart();
 builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSection(DashboardAuthOptions.SectionName));
 
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/login";
-        options.AccessDeniedPath = "/login";
-        options.SlidingExpiration = true;
-    });
+var isTesting = builder.Environment.IsEnvironment("Testing");
 
-builder.Services.AddAuthorization(options =>
+if (!isTesting)
 {
-    options.AddPolicy("viewer", policy => policy.RequireRole("viewer", "operator", "admin"));
-    options.AddPolicy("operator", policy => policy.RequireRole("operator", "admin"));
-});
+    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+        .AddCookie(options =>
+        {
+            options.LoginPath = "/login";
+            options.AccessDeniedPath = "/login";
+            options.SlidingExpiration = true;
+        });
+
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy("viewer", policy => policy.RequireRole("viewer", "operator", "admin"));
+        options.AddPolicy("operator", policy => policy.RequireRole("operator", "admin"));
+    });
+}
 
 builder.Services.AddSingleton<IMongoClient>(sp =>
 {

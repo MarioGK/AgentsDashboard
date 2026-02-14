@@ -14,7 +14,70 @@
         Build custom Docker images for use with harness execution. Images are built on the local Docker daemon.
     </MudText>
 
-    <MudPaper Elevation="2" Class="pa-4 mb-4">
+    <MudExpansionPanels>
+        <MudExpansionPanel Text="AI-Assisted Dockerfile Generation" Icon="@Icons.Material.Filled.AutoAwesome" InitiallyExpanded="false">
+            <MudGrid Class="mt-2">
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_aiDescription"
+                                  Label="Describe your container requirements"
+                                  Variant="Variant.Outlined"
+                                  HelperText="E.g., 'Python 3.12 with Claude Code and Playwright for web testing'"
+                                  Lines="2" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect @bind-Value="_aiBaseImage" Label="Base Image" Variant="Variant.Outlined" T="string">
+                        <MudSelectItem Value="@("ubuntu:24.04")">Ubuntu 24.04</MudSelectItem>
+                        <MudSelectItem Value="@("alpine:3.19")">Alpine 3.19 (Minimal)</MudSelectItem>
+                        <MudSelectItem Value="@("node:20-slim")">Node 20 Slim</MudSelectItem>
+                        <MudSelectItem Value="@("python:3.12-slim")">Python 3.12 Slim</MudSelectItem>
+                        <MudSelectItem Value="@("mcr.microsoft.com/dotnet/sdk:10.0")">.NET 10 SDK</MudSelectItem>
+                        <MudSelectItem Value="@("golang:1.23-alpine")">Go 1.23 Alpine</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect SelectedValues="_aiRuntimes" SelectedValuesChanged="v => _aiRuntimes = v.ToList()" Label="Runtimes" Variant="Variant.Outlined" T="string" MultiSelection="true">
+                        <MudSelectItem Value="@("node")">Node.js</MudSelectItem>
+                        <MudSelectItem Value="@("python")">Python</MudSelectItem>
+                        <MudSelectItem Value="@("dotnet")">.NET</MudSelectItem>
+                        <MudSelectItem Value="@("go")">Go</MudSelectItem>
+                        <MudSelectItem Value="@("bun")">Bun</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect SelectedValues="_aiHarnesses" SelectedValuesChanged="v => _aiHarnesses = v.ToList()" Label="Harnesses" Variant="Variant.Outlined" T="string" MultiSelection="true">
+                        <MudSelectItem Value="@("claude-code")">Claude Code</MudSelectItem>
+                        <MudSelectItem Value="@("codex")">Codex (OpenAI)</MudSelectItem>
+                        <MudSelectItem Value="@("opencode")">OpenCode</MudSelectItem>
+                        <MudSelectItem Value="@("zai")">Zai (GLM-5)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect SelectedValues="_aiTools" SelectedValuesChanged="v => _aiTools = v.ToList()" Label="Dev Tools" Variant="Variant.Outlined" T="string" MultiSelection="true">
+                        <MudSelectItem Value="@("git")">Git</MudSelectItem>
+                        <MudSelectItem Value="@("ripgrep")">Ripgrep</MudSelectItem>
+                        <MudSelectItem Value="@("fd-find")">fd-find</MudSelectItem>
+                        <MudSelectItem Value="@("jq")">jq</MudSelectItem>
+                        <MudSelectItem Value="@("build-essential")">Build Essential</MudSelectItem>
+                        <MudSelectItem Value="@("playwright")">Playwright</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSwitch @bind-Value="_aiIncludeDockerCli" Label="Include Docker CLI" Color="Color.Primary" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.AutoAwesome"
+                               OnClick="GenerateDockerfileAsync"
+                               Disabled="string.IsNullOrWhiteSpace(_aiDescription)">
+                        Generate Dockerfile
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+
+    <MudPaper Elevation="2" Class="pa-4 mb-4 mt-4">
         <MudGrid>
             <MudItem xs="12" md="6">
                 <MudSelect @bind-Value="_selectedTemplate"
@@ -155,6 +218,13 @@
     private ImageBuildResult? _buildResult;
     private List<string> _buildLogs = new();
     private List<ImageInfo> _images = new();
+
+    private string _aiDescription = string.Empty;
+    private string _aiBaseImage = "ubuntu:24.04";
+    private List<string> _aiRuntimes = new();
+    private List<string> _aiHarnesses = new();
+    private List<string> _aiTools = new();
+    private bool _aiIncludeDockerCli = false;
 
     private readonly Dictionary<string, string> _templates = new()
     {
@@ -347,6 +417,32 @@ CMD [""/bin/bash""]"
         {
             Snackbar.Add($"Error deleting image: {ex.Message}", Severity.Error);
         }
+    }
+
+    private Task GenerateDockerfileAsync()
+    {
+        try
+        {
+            var request = new DockerfileGenerationRequest(
+                _aiDescription,
+                _aiBaseImage,
+                _aiRuntimes.ToArray(),
+                _aiTools.ToArray(),
+                _aiHarnesses.ToArray(),
+                _aiTools.Contains("git"),
+                _aiIncludeDockerCli,
+                0);
+
+            _dockerfileContent = ImageBuilderService.GenerateDockerfile(request);
+            _selectedTemplate = string.Empty;
+            Snackbar.Add("Dockerfile generated successfully! Review and customize as needed.", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to generate Dockerfile: {ex.Message}", Severity.Error);
+        }
+        return Task.CompletedTask;
     }
 
     private static string FormatBytes(long bytes)

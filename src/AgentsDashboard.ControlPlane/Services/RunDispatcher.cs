@@ -273,7 +273,7 @@ public sealed class RunDispatcher(
 
         foreach (var (key, value) in settings.AdditionalSettings)
         {
-            var envKey = $"HARNESS_{key.ToUpperInvariant().Replace(' ', '_')}";
+            var envKey = $"HARNESS_{key.ToUpperInvariant().Replace(' ', '_').Replace('-', '_')}";
             request.Env[envKey] = value;
         }
     }

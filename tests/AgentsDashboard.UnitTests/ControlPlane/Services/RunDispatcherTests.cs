@@ -271,7 +271,11 @@ public class RunDispatcherDispatchTests
 
         SetupSuccessfulConcurrencyChecks();
         SetupSuccessfulInstructionRetrieval();
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
+        _storeMock.Setup(s => s.ListProviderSecretsAsync(repo.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((HarnessProviderSettingsDocument?)null);
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = false, Reason = "Worker busy" }),
                 Task.FromResult(new Metadata()),
@@ -298,7 +302,7 @@ public class RunDispatcherDispatchTests
 
         SetupSuccessfulConcurrencyChecks();
         SetupSuccessfulInstructionRetrieval();
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -339,7 +343,7 @@ public class RunDispatcherDispatchTests
         _secretCryptoMock.Setup(s => s.Decrypt("encrypted-codex")).Returns("codex-key-456");
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -350,8 +354,8 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -393,8 +397,8 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -435,8 +439,8 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -471,8 +475,8 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -509,8 +513,8 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -548,8 +552,8 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -592,8 +596,8 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<CallOptions>()))
-            .Callback<DispatchJobRequest, CallOptions>((req, _) => capturedRequest = req)
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
             .Returns(new AsyncUnaryCall<DispatchJobReply>(
                 Task.FromResult(new DispatchJobReply { Accepted = true }),
                 Task.FromResult(new Metadata()),
@@ -616,7 +620,7 @@ public class RunDispatcherDispatchTests
         var dispatcher = CreateDispatcher();
         var runId = "run-to-cancel";
 
-        _workerClientMock.Setup(c => c.CancelJobAsync(It.IsAny<CancelJobRequest>(), It.IsAny<CallOptions>()))
+        _workerClientMock.Setup(c => c.CancelJobAsync(It.IsAny<CancelJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .Returns(new AsyncUnaryCall<CancelJobReply>(
                 Task.FromResult(new CancelJobReply()),
                 Task.FromResult(new Metadata()),
@@ -628,7 +632,9 @@ public class RunDispatcherDispatchTests
 
         _workerClientMock.Verify(c => c.CancelJobAsync(
             It.Is<CancelJobRequest>(r => r.RunId == runId),
-            It.IsAny<CallOptions>()), Times.Once);
+            It.IsAny<Metadata>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private void SetupSuccessfulConcurrencyChecks()
@@ -781,7 +787,7 @@ public class TestableRunDispatcher
             AddHarnessSettingsEnvironmentVariables(request, task.Harness, harnessSettings);
         }
 
-        var response = await _workerClient.DispatchJobAsync(request);
+        var response = await _workerClient.DispatchJobAsync(request, cancellationToken: cancellationToken);
 
         if (!response.Accepted)
         {
@@ -808,7 +814,7 @@ public class TestableRunDispatcher
     {
         try
         {
-            await _workerClient.CancelJobAsync(new CancelJobRequest { RunId = runId });
+            await _workerClient.CancelJobAsync(new CancelJobRequest { RunId = runId }, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -920,7 +926,7 @@ public class TestableRunDispatcher
 
         foreach (var (key, value) in settings.AdditionalSettings)
         {
-            var envKey = $"HARNESS_{key.ToUpperInvariant().Replace(' ', '_')}";
+            var envKey = $"HARNESS_{key.ToUpperInvariant().Replace(' ', '_').Replace('-', '_')}";
             request.Env[envKey] = value;
         }
     }

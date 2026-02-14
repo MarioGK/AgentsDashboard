@@ -25,6 +25,7 @@ public sealed class ApiTestFixture : IAsyncLifetime
 
     public HttpClient Client { get; private set; } = null!;
     public WebApplicationFactory<AgentsDashboard.ControlPlane.Program> Factory { get; private set; } = null!;
+    public IServiceProvider Services => Factory.Services;
     public string ConnectionString { get; private set; } = string.Empty;
     public string DatabaseName { get; } = $"test_api_{Guid.NewGuid():N}";
 
@@ -43,6 +44,10 @@ public sealed class ApiTestFixture : IAsyncLifetime
                 if (mongoClientDescriptor != null)
                     services.Remove(mongoClientDescriptor);
 
+                var storeInterfaceDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IOrchestratorStore));
+                if (storeInterfaceDescriptor != null)
+                    services.Remove(storeInterfaceDescriptor);
+
                 var storeDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(OrchestratorStore));
                 if (storeDescriptor != null)
                     services.Remove(storeDescriptor);
@@ -59,6 +64,14 @@ public sealed class ApiTestFixture : IAsyncLifetime
                     });
                     return new OrchestratorStore(client, options);
                 });
+
+                services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<OrchestratorStore>());
+
+                var hostedServices = services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService)).ToList();
+                foreach (var service in hostedServices)
+                {
+                    services.Remove(service);
+                }
 
                 var dispatcherDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(RunDispatcher));
                 if (dispatcherDescriptor != null)
@@ -85,13 +98,18 @@ public sealed class ApiTestFixture : IAsyncLifetime
 
                 services.AddSingleton<IContainerReaper, MockContainerReaper>();
 
+                RemoveAllAuthenticationServices(services);
+
                 services.AddAuthentication("Test")
                     .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
 
                 services.AddAuthorization(options =>
                 {
-                    options.AddPolicy("viewer", policy => policy.RequireAuthenticatedUser());
-                    options.AddPolicy("operator", policy => policy.RequireAuthenticatedUser());
+                    options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder("Test")
+                        .RequireAuthenticatedUser()
+                        .Build();
+                    options.AddPolicy("viewer", policy => policy.RequireAuthenticatedUser().AddAuthenticationSchemes("Test"));
+                    options.AddPolicy("operator", policy => policy.RequireAuthenticatedUser().AddAuthenticationSchemes("Test"));
                 });
             });
 
@@ -106,6 +124,37 @@ public sealed class ApiTestFixture : IAsyncLifetime
     {
         await Factory.DisposeAsync();
         await _mongoContainer.DisposeAsync();
+    }
+
+    private static void RemoveAllAuthenticationServices(IServiceCollection services)
+    {
+        var authTypes = new[]
+        {
+            typeof(IAuthenticationService),
+            typeof(IAuthenticationSchemeProvider),
+            typeof(IAuthenticationHandlerProvider),
+            typeof(IAuthenticationRequestHandler),
+            typeof(Microsoft.AspNetCore.Authentication.IClaimsTransformation),
+            typeof(Microsoft.Extensions.Options.IConfigureOptions<Microsoft.AspNetCore.Authentication.AuthenticationOptions>),
+            typeof(Microsoft.Extensions.Options.IPostConfigureOptions<Microsoft.AspNetCore.Authentication.AuthenticationOptions>),
+        };
+
+        foreach (var type in authTypes)
+        {
+            var descriptors = services.Where(d => d.ServiceType == type).ToList();
+            foreach (var descriptor in descriptors)
+            {
+                services.Remove(descriptor);
+            }
+        }
+
+        var authHandlers = services.Where(d => 
+            d.ServiceType.IsAssignableTo(typeof(IAuthenticationHandler)) ||
+            (d.ImplementationType?.IsAssignableTo(typeof(IAuthenticationHandler)) ?? false)).ToList();
+        foreach (var descriptor in authHandlers)
+        {
+            services.Remove(descriptor);
+        }
     }
 }
 

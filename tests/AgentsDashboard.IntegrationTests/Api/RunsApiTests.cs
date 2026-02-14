@@ -164,4 +164,59 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task BulkCancelRuns_ReturnsOk_WithValidRunIds()
+    {
+        var (_, _, task) = await SetupAsync();
+        var run1Response = await _client.PostAsJsonAsync("/api/runs", new CreateRunRequest(task.Id));
+        var run1 = await run1Response.Content.ReadFromJsonAsync<RunDocument>();
+        var run2Response = await _client.PostAsJsonAsync("/api/runs", new CreateRunRequest(task.Id));
+        var run2 = await run2Response.Content.ReadFromJsonAsync<RunDocument>();
+
+        var request = new BulkCancelRunsRequest([run1!.Id, run2!.Id]);
+        var response = await _client.PostAsJsonAsync("/api/runs/bulk-cancel", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<BulkOperationResult>();
+        result!.AffectedCount.Should().Be(2);
+        result.Errors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task BulkCancelRuns_ReturnsPartialSuccess_WithMixedRunIds()
+    {
+        var (_, _, task) = await SetupAsync();
+        var runResponse = await _client.PostAsJsonAsync("/api/runs", new CreateRunRequest(task.Id));
+        var run = await runResponse.Content.ReadFromJsonAsync<RunDocument>();
+
+        var request = new BulkCancelRunsRequest([run!.Id, "nonexistent-run"]);
+        var response = await _client.PostAsJsonAsync("/api/runs/bulk-cancel", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<BulkOperationResult>();
+        result!.AffectedCount.Should().Be(1);
+        result.Errors.Should().Contain(e => e.Contains("nonexistent-run"));
+    }
+
+    [Fact]
+    public async Task BulkCancelRuns_ReturnsBadRequest_WhenNoRunIdsProvided()
+    {
+        var request = new BulkCancelRunsRequest([]);
+        var response = await _client.PostAsJsonAsync("/api/runs/bulk-cancel", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task BulkCancelRuns_ReturnsOk_WithOnlyInvalidRunIds()
+    {
+        var request = new BulkCancelRunsRequest(["nonexistent1", "nonexistent2"]);
+        var response = await _client.PostAsJsonAsync("/api/runs/bulk-cancel", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<BulkOperationResult>();
+        result!.AffectedCount.Should().Be(0);
+        result.Errors.Should().HaveCount(2);
+    }
 }

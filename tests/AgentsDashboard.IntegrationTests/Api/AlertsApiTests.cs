@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.ControlPlane.Data;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
@@ -122,5 +124,63 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
     {
         var response = await _client.GetAsync("/api/alerts/events");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task BulkResolveAlerts_ReturnsOk_WithValidEventIds()
+    {
+        var createRequest = new CreateAlertRuleRequest("Test Rule", AlertRuleType.FailureRateSpike, 5, 30);
+        var createResponse = await _client.PostAsJsonAsync("/api/alerts/rules", createRequest);
+        var rule = await createResponse.Content.ReadFromJsonAsync<AlertRuleDocument>();
+
+        var store = fixture.Services.GetRequiredService<OrchestratorStore>();
+        var event1 = await store.RecordAlertEventAsync(new AlertEventDocument { RuleId = rule!.Id, RuleName = rule.Name, Message = "Test 1" }, CancellationToken.None);
+        var event2 = await store.RecordAlertEventAsync(new AlertEventDocument { RuleId = rule.Id, RuleName = rule.Name, Message = "Test 2" }, CancellationToken.None);
+
+        var request = new BulkResolveAlertsRequest([event1.Id, event2.Id]);
+        var response = await _client.PostAsJsonAsync("/api/alerts/events/bulk-resolve", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<BulkOperationResult>();
+        result!.AffectedCount.Should().Be(2);
+        result.Errors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task BulkResolveAlerts_ReturnsPartialSuccess_WithMixedEventIds()
+    {
+        var createRequest = new CreateAlertRuleRequest("Test Rule", AlertRuleType.FailureRateSpike, 5, 30);
+        var createResponse = await _client.PostAsJsonAsync("/api/alerts/rules", createRequest);
+        var rule = await createResponse.Content.ReadFromJsonAsync<AlertRuleDocument>();
+
+        var store = fixture.Services.GetRequiredService<OrchestratorStore>();
+        var evt = await store.RecordAlertEventAsync(new AlertEventDocument { RuleId = rule!.Id, RuleName = rule.Name, Message = "Test" }, CancellationToken.None);
+
+        var request = new BulkResolveAlertsRequest([evt.Id, "nonexistent-event"]);
+        var response = await _client.PostAsJsonAsync("/api/alerts/events/bulk-resolve", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<BulkOperationResult>();
+        result!.AffectedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task BulkResolveAlerts_ReturnsBadRequest_WhenNoEventIdsProvided()
+    {
+        var request = new BulkResolveAlertsRequest([]);
+        var response = await _client.PostAsJsonAsync("/api/alerts/events/bulk-resolve", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task BulkResolveAlerts_ReturnsOk_WithOnlyInvalidEventIds()
+    {
+        var request = new BulkResolveAlertsRequest(["nonexistent1", "nonexistent2"]);
+        var response = await _client.PostAsJsonAsync("/api/alerts/events/bulk-resolve", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<BulkOperationResult>();
+        result!.AffectedCount.Should().Be(0);
     }
 }
