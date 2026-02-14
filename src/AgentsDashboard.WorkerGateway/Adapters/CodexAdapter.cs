@@ -53,7 +53,7 @@ public sealed class CodexAdapter(
         var error = string.IsNullOrEmpty(envelope.Error) ? (envelope.Summary ?? string.Empty) : envelope.Error;
         var lowerError = error.ToLowerInvariant();
 
-        if (ContainsAny(lowerError, "codeex", "sandbox", "execution environment"))
+        if (ContainsAny(lowerError, "codex", "sandbox", "execution environment"))
         {
             return FailureClassification.FromClass(
                 FailureClass.InternalError,

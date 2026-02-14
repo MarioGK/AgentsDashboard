@@ -746,6 +746,8 @@ public class RunEventsHubLifecycleTests
     private readonly Mock<IHubClients> _mockClients;
     private readonly Mock<IClientProxy> _mockClientProxy;
     private readonly Mock<IGroupManager> _mockGroups;
+    private readonly Mock<IOrchestratorMetrics> _mockMetrics;
+    private readonly Mock<ILogger<RunEventsHub>> _mockLogger;
 
     public RunEventsHubLifecycleTests()
     {
@@ -753,14 +755,18 @@ public class RunEventsHubLifecycleTests
         _mockClients = new Mock<IHubClients>();
         _mockClientProxy = new Mock<IClientProxy>();
         _mockGroups = new Mock<IGroupManager>();
+        _mockMetrics = new Mock<IOrchestratorMetrics>();
+        _mockLogger = new Mock<ILogger<RunEventsHub>>();
 
         _mockContext.Setup(x => x.ConnectionId).Returns("connection-123");
     }
 
+    private RunEventsHub CreateHub() => new(_mockMetrics.Object, _mockLogger.Object);
+
     [Fact]
     public async Task OnConnectedAsync_WithAuthenticatedUser_CompletesSuccessfully()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         SetupHubContext(hub, isAuthenticated: true);
 
         await hub.OnConnectedAsync();
@@ -771,7 +777,7 @@ public class RunEventsHubLifecycleTests
     [Fact]
     public async Task OnDisconnectedAsync_WithNullException_CompletesSuccessfully()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         SetupHubContext(hub, isAuthenticated: true);
 
         await hub.OnDisconnectedAsync(null);
@@ -782,7 +788,7 @@ public class RunEventsHubLifecycleTests
     [Fact]
     public async Task OnDisconnectedAsync_WithException_CompletesSuccessfully()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         SetupHubContext(hub, isAuthenticated: true);
         var exception = new InvalidOperationException("Connection lost");
 
@@ -794,7 +800,7 @@ public class RunEventsHubLifecycleTests
     [Fact]
     public void Hub_HasCorrectContext_AfterSetup()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         SetupHubContext(hub, isAuthenticated: true);
 
         hub.Context.Should().NotBeNull();
@@ -804,7 +810,7 @@ public class RunEventsHubLifecycleTests
     [Fact]
     public void Hub_HasGroups_AfterSetup()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         SetupHubContext(hub, isAuthenticated: true);
 
         hub.Groups.Should().NotBeNull();
@@ -813,7 +819,7 @@ public class RunEventsHubLifecycleTests
     [Fact]
     public void Hub_HasClients_AfterSetup()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         SetupHubContext(hub, isAuthenticated: true);
 
         hub.Clients.Should().NotBeNull();
@@ -822,7 +828,7 @@ public class RunEventsHubLifecycleTests
     [Fact]
     public async Task MultipleLifecycleCalls_DoNotThrow()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         SetupHubContext(hub, isAuthenticated: true);
 
         await hub.OnConnectedAsync();
@@ -834,7 +840,7 @@ public class RunEventsHubLifecycleTests
     [Fact]
     public async Task OnDisconnectedAsync_WithCancelledToken_Completes()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         SetupHubContext(hub, isAuthenticated: true);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -863,6 +869,13 @@ public class RunEventsHubLifecycleTests
 
 public class RunEventsHubAuthorizationTests
 {
+    private static RunEventsHub CreateHub()
+    {
+        var metrics = new Mock<IOrchestratorMetrics>();
+        var logger = new Mock<ILogger<RunEventsHub>>();
+        return new RunEventsHub(metrics.Object, logger.Object);
+    }
+
     [Fact]
     public void Hub_RequiresAuthorization_AccordingToConfiguration()
     {
@@ -875,28 +888,28 @@ public class RunEventsHubAuthorizationTests
     [Fact]
     public void Hub_CanBeInstantiatedWithNullContext()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         hub.Context.Should().BeNull();
     }
 
     [Fact]
     public void Hub_CanBeInstantiatedWithNullClients()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         hub.Clients.Should().BeNull();
     }
 
     [Fact]
     public void Hub_CanBeInstantiatedWithNullGroups()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         hub.Groups.Should().BeNull();
     }
 
     [Fact]
     public async Task OnConnectedAsync_WithNullContext_ThrowsNullReferenceException()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         hub.Context = null;
 
         var act = () => hub.OnConnectedAsync();
@@ -906,7 +919,7 @@ public class RunEventsHubAuthorizationTests
     [Fact]
     public async Task OnDisconnectedAsync_WithNullContext_DoesNotThrow()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         hub.Context = null;
 
         var act = () => hub.OnDisconnectedAsync(null);
@@ -953,7 +966,7 @@ public class RunEventsHubGroupTests
     [Fact]
     public async Task Hub_WithMockedGroups_CanJoinRunGroup()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         var mockContext = new Mock<HubCallerContext>();
         var mockClients = new Mock<IHubCallerClients>();
         var mockGroups = new Mock<IGroupManager>();
@@ -975,7 +988,7 @@ public class RunEventsHubGroupTests
     [Fact]
     public async Task Hub_WithMockedGroups_CanLeaveRunGroup()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         var mockContext = new Mock<HubCallerContext>();
         var mockClients = new Mock<IHubCallerClients>();
         var mockGroups = new Mock<IGroupManager>();
@@ -1144,7 +1157,7 @@ public class RunEventsHubConcurrencyTests
     public async Task MultipleHubs_CanBeCreatedConcurrently()
     {
         var tasks = Enumerable.Range(0, 10)
-            .Select(_ => Task.Run(() => new RunEventsHub()))
+            .Select(_ => Task.Run(() => CreateHub()))
             .ToList();
 
         var hubs = await Task.WhenAll(tasks);
@@ -1183,7 +1196,7 @@ public class RunEventsHubConcurrencyTests
         var tasks = Enumerable.Range(0, 5)
             .Select(async _ =>
             {
-                var hub = new RunEventsHub();
+                var hub = CreateHub();
                 var mockContext = new Mock<HubCallerContext>();
                 var mockClients = new Mock<IHubCallerClients>();
                 var mockGroups = new Mock<IGroupManager>();
@@ -1208,7 +1221,7 @@ public class RunEventsHubDisposeTests
     [Fact]
     public async Task Hub_CanBeDisposedAfterUse()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         var mockContext = new Mock<HubCallerContext>();
         var mockClients = new Mock<IHubCallerClients>();
         var mockGroups = new Mock<IGroupManager>();
@@ -1227,7 +1240,7 @@ public class RunEventsHubDisposeTests
     [Fact]
     public void Hub_Dispose_CalledMultipleTimes_DoesNotThrow()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
 
         var act = () =>
         {
@@ -1242,7 +1255,7 @@ public class RunEventsHubDisposeTests
     [Fact]
     public async Task Hub_OnDisconnectedAsync_CalledBeforeDispose()
     {
-        var hub = new RunEventsHub();
+        var hub = CreateHub();
         var mockContext = new Mock<HubCallerContext>();
         mockContext.Setup(x => x.ConnectionId).Returns("conn-order");
 

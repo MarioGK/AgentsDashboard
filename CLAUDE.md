@@ -204,12 +204,12 @@ dotnet test
 
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
-| UnitTests | 43 | 1,103 | 100% (36 skipped, all pass) |
-| IntegrationTests | 35 | 210 | Requires MongoDB |
-| PlaywrightTests | 18 | 274 | Requires Running App |
-| Benchmarks | 4 | 4 | Performance |
+| UnitTests | 47 | 1,139 | 100% (36 skipped, all pass) |
+| IntegrationTests | 40 | 232 | Requires MongoDB |
+| PlaywrightTests | 21 | 277 | Requires Running App |
+| Benchmarks | 7 | 4 | Performance |
 
-**Total: 100 test files, 1,591+ tests**
+**Total: 115 test files, 1,652+ tests**
 
 ### Test Coverage by Area
 
@@ -228,7 +228,7 @@ dotnet test
 ## Architecture Summary
 
 ### ControlPlane
-- **79+ API endpoints** with authentication/authorization
+- **83+ API endpoints** with authentication/authorization
 - **21 Blazor pages** with MudBlazor UI
 - **18 services** for business logic
 - **SignalR hub** with 5 event types
@@ -335,7 +335,7 @@ dotnet format
 | control-plane | Blazor Server control plane | ghcr.io |
 | worker-gateway | gRPC worker gateway | ghcr.io |
 
-## API Endpoints (79 total)
+## API Endpoints (83 total)
 
 | Category | Count | Key Endpoints |
 |----------|-------|---------------|
@@ -376,9 +376,9 @@ dotnet format
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| Build | Passed | 0 Warnings, 0 Errors |
-| Unit Tests | Passed | 1,103/1,139 (36 skipped) |
-| API Endpoints | Complete | 79 endpoints across 23 groups |
+| Build | Passed | 13 Warnings, 0 Errors |
+| Unit Tests | Passed | 1,103/1,139 passed (36 skipped) |
+| API Endpoints | Complete | 83 endpoints across 23 groups |
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
 | Blazor Pages | Complete | 21 pages with full functionality |
 | Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
