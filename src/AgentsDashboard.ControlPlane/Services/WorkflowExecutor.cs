@@ -6,11 +6,11 @@ using Microsoft.Extensions.Options;
 namespace AgentsDashboard.ControlPlane.Services;
 
 public class WorkflowExecutor(
-    OrchestratorStore store,
+    IOrchestratorStore store,
     RunDispatcher dispatcher,
     IContainerReaper containerReaper,
     IOptions<OrchestratorOptions> options,
-    ILogger<WorkflowExecutor> logger)
+    ILogger<WorkflowExecutor> logger) : IWorkflowExecutor
 {
     private readonly StageTimeoutConfig _timeoutConfig = options.Value.StageTimeout;
 

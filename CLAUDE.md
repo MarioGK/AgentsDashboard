@@ -243,18 +243,31 @@ dotnet test
 
 ## Missing Test Coverage
 
-- Some API endpoint tests require OrchestratorStore methods to be made virtual for Moq
 - MongoInitializationService, ProjectContext lack dedicated tests
 - No Blazor component tests currently (bunit compatibility with .NET 10 pending)
+- Some sealed classes (HarnessExecutor, JobProcessorService) cannot be mocked with Moq
 
 ## Known Issues
 
-- Some unit tests fail due to Moq limitations (non-virtual methods in OrchestratorStore cannot be mocked)
+- ~78 unit tests fail due to sealed classes (HarnessExecutor, JobProcessorService) that cannot be mocked with Moq
 - No Blazor component tests currently (bunit compatibility with .NET 10 pending)
 - Integration tests require running MongoDB and Docker infrastructure
-- ImagePrePullServiceTests and ContainerOrphanReconcilerTests have Docker-dependent tests that are skipped in unit test environment
+- Some GlobalSelectionService tests fail due to IJSRuntime extension method mocking limitations
 
 ## Recent Fixes (2026-02-14)
+
+### Test Improvements
+- Added `virtual` keyword to all public Task-returning methods in OrchestratorStore.cs for Moq compatibility
+- Fixed WorkerGatewayGrpcServiceTests to use IDockerContainerService interface instead of sealed class
+- Fixed ApiEndpointsTests to properly mock OrchestratorStore with MongoDB mocks
+- Restored ContainerMetrics class in WorkerGateway.Models namespace
+- Resolved ambiguous type references between WorkerGateway.Models.ContainerMetrics and Contracts.Domain.ContainerMetrics
+- Unit test pass rate improved from 914/1057 to 985/1076 (91.5% pass rate)
+
+### Bug Fixes
+- Fixed IDockerContainerService.cs: Removed ambiguous ContainerMetrics reference
+- Fixed DockerContainerService.cs: Uses Models.ContainerMetrics consistently
+- Fixed OrchestratorContainerInfo.cs: Restored ContainerMetrics class definition
 
 - Fixed RunDispatcher.cs: Removed unnecessary FormatMemoryLimit call (MemoryLimit is already a string)
 - Fixed TaskTemplateService.cs: Changed memory limit values from long (4294967296L) to string format ("4g", "2g")

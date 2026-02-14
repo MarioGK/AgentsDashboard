@@ -394,14 +394,14 @@ public sealed class HarnessExecutor(
         }
     }
 
-    private static string BuildExpectedBranchPrefix(string repository, string taskId)
+    internal static string BuildExpectedBranchPrefix(string repository, string taskId)
     {
         var repoName = repository.Contains('/') ? repository.Split('/')[1] : repository;
         var taskSegment = taskId[..Math.Min(8, taskId.Length)];
         return $"agent/{repoName}/{taskSegment}";
     }
 
-    private static bool ValidateBranchName(string branch, string expectedPrefix, string runId, out string error)
+    internal static bool ValidateBranchName(string branch, string expectedPrefix, string runId, out string error)
     {
         error = string.Empty;
 
