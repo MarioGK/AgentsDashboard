@@ -204,12 +204,12 @@ dotnet test
 
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
-| UnitTests | 47 | 832 | 97.0% (36 skipped, all pass) |
-| IntegrationTests | 36 | 210 | Requires MongoDB |
-| PlaywrightTests | 21 | 274 | Requires Running App |
-| Benchmarks | 4 | - | Performance |
+| UnitTests | 43 | 1,139 | 97.0% (36 skipped, all pass) |
+| IntegrationTests | 25 | 210 | Requires MongoDB |
+| PlaywrightTests | 17 | 274 | Requires Running App |
+| Benchmarks | 7 | 4 | Performance |
 
-**Total: 108 test files, 1,316+ tests**
+**Total: 92 test files, 1,627+ tests**
 
 ### Test Coverage by Area
 
