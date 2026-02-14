@@ -4,11 +4,11 @@ using AgentsDashboard.WorkerGateway.Models;
 
 namespace AgentsDashboard.WorkerGateway.Services;
 
-public sealed class JobProcessorService(
+public class JobProcessorService(
     WorkerQueue queue,
-    HarnessExecutor executor,
+    IHarnessExecutor executor,
     WorkerEventBus eventBus,
-    ILogger<JobProcessorService> logger) : BackgroundService
+    ILogger<JobProcessorService> logger) : BackgroundService, IJobProcessorService
 {
     private readonly List<Task> _runningJobs = [];
     private readonly object _lock = new();

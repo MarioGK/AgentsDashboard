@@ -17,7 +17,7 @@ public sealed class HarnessExecutor(
     SecretRedactor secretRedactor,
     DockerContainerService dockerService,
     IArtifactExtractor artifactExtractor,
-    ILogger<HarnessExecutor> logger)
+    ILogger<HarnessExecutor> logger) : IHarnessExecutor
 {
     public async Task<HarnessResultEnvelope> ExecuteAsync(
         QueuedJob job,

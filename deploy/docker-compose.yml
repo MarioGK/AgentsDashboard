@@ -60,10 +60,13 @@ services:
     restart: unless-stopped
     ports:
       - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-changeme}
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "-u", "${MONGO_INITDB_ROOT_USERNAME:-admin}", "-p", "${MONGO_INITDB_ROOT_PASSWORD:-changeme}", "--authenticationDatabase", "admin"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -131,6 +134,8 @@ services:
       Worker__HarnessImages__opencode: "ghcr.io/mariogk/harness-opencode:latest"
       Worker__HarnessImages__claude-code: "ghcr.io/mariogk/harness-claudecode:latest"
       Worker__HarnessImages__zai: "ghcr.io/mariogk/harness-zai:latest"
+      Orchestrator__MongoConnectionString: mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-changeme}@mongodb:27017?authSource=admin
+      Orchestrator__MongoDatabase: ${MONGODB_DATABASE:-agentsdashboard}
       CODEX_API_KEY: ${CODEX_API_KEY:-}
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -165,8 +170,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      Orchestrator__MongoConnectionString: mongodb://mongodb:27017
-      Orchestrator__MongoDatabase: agentsdashboard
+      Orchestrator__MongoConnectionString: mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-changeme}@mongodb:27017?authSource=admin
+      Orchestrator__MongoDatabase: ${MONGODB_DATABASE:-agentsdashboard}
       Orchestrator__WorkerGrpcAddress: http://worker-gateway:5201
       OTEL_EXPORTER_OTLP_ENDPOINT: http://victoria-metrics:8428
     volumes:
@@ -193,11 +198,40 @@ services:
       - orchestrator-backend
       - orchestrator-frontend
 
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - certbot-www:/var/www/certbot:ro
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "-T", "5", "http://localhost:80/nginx_health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
+    networks:
+      - orchestrator-frontend
+
 volumes:
   mongo-data:
   vm-data:
   artifacts-data:
   workspaces-data:
+  certbot-www:
 
 networks:
   orchestrator-backend:

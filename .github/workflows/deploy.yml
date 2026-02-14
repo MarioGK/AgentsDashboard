@@ -1,0 +1,283 @@
+name: Deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+      skip_approval:
+        description: 'Skip production approval gate'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_release: ${{ steps.version.outputs.is_release }}
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION}"
+
+  build-base:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./deploy/harness-images
+          file: ./deploy/harness-images/Dockerfile.harness-base
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-harness-base:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-harness-base:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-harness-base:${{ needs.prepare.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results-base.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results-base.sarif'
+          category: 'base-image'
+
+  build-harnesses:
+    needs: [prepare, build-base]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        harness:
+          - name: codex
+            dockerfile: Dockerfile.harness-codex
+          - name: opencode
+            dockerfile: Dockerfile.harness-opencode
+          - name: claudecode
+            dockerfile: Dockerfile.harness-claudecode
+          - name: zai
+            dockerfile: Dockerfile.harness-zai
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.harness.name }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./deploy/harness-images
+          file: ./deploy/harness-images/${{ matrix.harness.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/harness-${{ matrix.harness.name }}:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/harness-${{ matrix.harness.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/harness-${{ matrix.harness.name }}:${{ needs.prepare.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.harness.name }}.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results-${{ matrix.harness.name }}.sarif'
+          category: '${{ matrix.harness.name }}-image'
+
+  build-all-in-one:
+    needs: [prepare, build-harnesses]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push all-in-one image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./deploy/harness-image
+          file: ./deploy/harness-image/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-harness:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-harness:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ai-harness:${{ needs.prepare.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results-all-in-one.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results-all-in-one.sarif'
+          category: 'all-in-one-image'
+
+  production-approval:
+    needs: [prepare, build-all-in-one]
+    if: ${{ needs.prepare.outputs.is_release == 'true' && github.event.inputs.skip_approval != 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Approval gate
+        run: echo "Production deployment approved for version ${{ needs.prepare.outputs.version }}"
+
+  update-compose:
+    needs: [prepare, production-approval]
+    if: ${{ needs.prepare.outputs.is_release == 'true' || always() && github.event.inputs.skip_approval == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update docker-compose.yml image tags
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          COMPOSE_FILE="deploy/docker-compose.yml"
+          
+          sed -i "s|ghcr.io/${{ env.IMAGE_PREFIX }}/ai-harness:.*|ghcr.io/${{ env.IMAGE_PREFIX }}/ai-harness:${VERSION}|g" "$COMPOSE_FILE"
+          sed -i "s|ghcr.io/${{ env.IMAGE_PREFIX }}/ai-harness-base:.*|ghcr.io/${{ env.IMAGE_PREFIX }}/ai-harness-base:${VERSION}|g" "$COMPOSE_FILE"
+          sed -i "s|ghcr.io/${{ env.IMAGE_PREFIX }}/harness-codex:.*|ghcr.io/${{ env.IMAGE_PREFIX }}/harness-codex:${VERSION}|g" "$COMPOSE_FILE"
+          sed -i "s|ghcr.io/${{ env.IMAGE_PREFIX }}/harness-opencode:.*|ghcr.io/${{ env.IMAGE_PREFIX }}/harness-opencode:${VERSION}|g" "$COMPOSE_FILE"
+          sed -i "s|ghcr.io/${{ env.IMAGE_PREFIX }}/harness-claudecode:.*|ghcr.io/${{ env.IMAGE_PREFIX }}/harness-claudecode:${VERSION}|g" "$COMPOSE_FILE"
+          sed -i "s|ghcr.io/${{ env.IMAGE_PREFIX }}/harness-zai:.*|ghcr.io/${{ env.IMAGE_PREFIX }}/harness-zai:${VERSION}|g" "$COMPOSE_FILE"
+          
+          echo "Updated image tags to version ${VERSION}"
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update docker-compose image tags to ${{ needs.prepare.outputs.version }}"
+          title: "Update docker-compose image tags to ${{ needs.prepare.outputs.version }}"
+          body: |
+            Automated update of docker-compose.yml image tags for release ${{ needs.prepare.outputs.version }}.
+            
+            Images updated:
+            - ai-harness:${{ needs.prepare.outputs.version }}
+            - ai-harness-base:${{ needs.prepare.outputs.version }}
+            - harness-codex:${{ needs.prepare.outputs.version }}
+            - harness-opencode:${{ needs.prepare.outputs.version }}
+            - harness-claudecode:${{ needs.prepare.outputs.version }}
+            - harness-zai:${{ needs.prepare.outputs.version }}
+          branch: chore/update-compose-tags-${{ needs.prepare.outputs.version }}
+          base: main
+          labels: |
+            chore
+            automated
+
+  summary:
+    needs: [prepare, build-base, build-harnesses, build-all-in-one]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| ai-harness-base | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| harness-codex | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| harness-opencode | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| harness-claudecode | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| harness-zai | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| ai-harness | \`${{ needs.prepare.outputs.version }}\`, \`latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Base Image: ${{ needs.build-base.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Harness Images: ${{ needs.build-harnesses.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- All-in-One Image: ${{ needs.build-all-in-one.result }}" >> $GITHUB_STEP_SUMMARY

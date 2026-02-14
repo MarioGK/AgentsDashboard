@@ -130,9 +130,9 @@ public class RunDispatcherDispatchTests
         ArtifactPolicy = new ArtifactPolicyConfig()
     };
 
-    private static RunDocument CreateRun(string id = "run-1", string taskId = "task-1") => new()
+    private static RunDocument CreateRun(string? id = null, string taskId = "task-1") => new()
     {
-        Id = id,
+        Id = id ?? Guid.NewGuid().ToString("N"),
         TaskId = taskId,
         State = RunState.Queued,
         Attempt = 1
@@ -654,7 +654,7 @@ public class TestableRunDispatcher
 {
     private readonly WorkerGatewayClient _workerClient;
     private readonly IOrchestratorStore _store;
-    private readonly SecretCryptoService _secretCrypto;
+    private readonly ISecretCryptoService _secretCrypto;
     private readonly IRunEventPublisher _publisher;
     private readonly OrchestratorOptions _options;
     private readonly ILogger<TestableRunDispatcher> _logger;
@@ -662,7 +662,7 @@ public class TestableRunDispatcher
     public TestableRunDispatcher(
         WorkerGatewayClient workerClient,
         IOrchestratorStore store,
-        SecretCryptoService secretCrypto,
+        ISecretCryptoService secretCrypto,
         IRunEventPublisher publisher,
         IOptions<OrchestratorOptions> orchestratorOptions,
         ILogger<TestableRunDispatcher> logger)
