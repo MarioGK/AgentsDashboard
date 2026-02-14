@@ -29,10 +29,6 @@ LICENSE
 docker-compose*.yml
 Dockerfile*
 
-# Helm and K8s
-helm/
-k8s/
-
 # Other
 **/.env
 **/.env.*

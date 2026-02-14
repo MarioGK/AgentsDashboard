@@ -8,6 +8,6 @@ public class Program
     {
         var summary = BenchmarkRunner.Run<WorkerQueueBenchmarks>();
         BenchmarkRunner.Run<SignalRPublishBenchmarks>();
-        BenchmarkRunner.Run<MongoOperationsBenchmarks>();
+        BenchmarkRunner.Run<SqliteOperationsBenchmarks>();
     }
 }

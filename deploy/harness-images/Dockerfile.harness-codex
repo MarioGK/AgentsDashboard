@@ -2,7 +2,8 @@
 # OpenAI Codex/GPT CLI harness
 # Build: docker build -f Dockerfile.harness-codex -t ghcr.io/mariogk/harness-codex:latest .
 
-FROM ghcr.io/mariogk/ai-harness-base:latest
+ARG BASE_IMAGE=ghcr.io/mariogk/ai-harness-base:latest
+FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.source=https://github.com/mariogk/AgentsDashboard \
       org.opencontainers.image.description="Codex harness for AI Orchestrator" \

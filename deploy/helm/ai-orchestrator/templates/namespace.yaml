@@ -1,9 +1,0 @@
-{{- if and .Values.global.createNamespace (not (lookup "v1" "Namespace" "" .Values.global.namespace)) }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ .Values.global.namespace }}
-  labels:
-    {{- include "ai-orchestrator.selectorLabels" . | nindent 4 }}
-    name: {{ .Values.global.namespace }}
-{{- end }}

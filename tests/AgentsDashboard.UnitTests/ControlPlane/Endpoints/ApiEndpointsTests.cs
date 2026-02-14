@@ -4,8 +4,6 @@ using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
 using Microsoft.Extensions.Options;
-using MongoDB.Bson;
-using MongoDB.Driver;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Endpoints;
 

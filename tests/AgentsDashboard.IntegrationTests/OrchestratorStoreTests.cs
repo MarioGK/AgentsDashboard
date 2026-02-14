@@ -6,10 +6,10 @@ using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests;
 
-[Collection("Mongo")]
-public class OrchestratorStoreTests(MongoFixture mongo)
+[Collection("Sqlite")]
+public class OrchestratorStoreTests(SqliteFixture sqlite)
 {
-    private OrchestratorStore CreateStore() => TestOrchestratorStore.Create(mongo.ConnectionString);
+    private OrchestratorStore CreateStore() => TestOrchestratorStore.Create(sqlite.ConnectionString);
 
     [Fact]
     public async Task CreateProject_RoundTrips()

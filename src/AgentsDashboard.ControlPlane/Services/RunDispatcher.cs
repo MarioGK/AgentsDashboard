@@ -10,6 +10,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 public sealed class RunDispatcher(
     WorkerGateway.WorkerGatewayClient workerClient,
     IOrchestratorStore store,
+    IWorkerLifecycleManager workerLifecycleManager,
     ISecretCryptoService secretCrypto,
     IRunEventPublisher publisher,
     InMemoryYarpConfigProvider yarpProvider,
@@ -35,6 +36,13 @@ public sealed class RunDispatcher(
         }
 
         var opts = orchestratorOptions.Value;
+
+        var workerReady = await workerLifecycleManager.EnsureWorkerRunningAsync(cancellationToken);
+        if (!workerReady)
+        {
+            logger.LogWarning("Worker container is not available; leaving run {RunId} queued", run.Id);
+            return false;
+        }
 
         var globalActive = await store.CountActiveRunsAsync(cancellationToken);
         if (globalActive >= opts.MaxGlobalConcurrentRuns)
@@ -138,6 +146,8 @@ public sealed class RunDispatcher(
             }
             return false;
         }
+
+        await workerLifecycleManager.RecordDispatchActivityAsync(cancellationToken);
 
         var started = await store.MarkRunStartedAsync(run.Id, cancellationToken);
         if (started is not null)

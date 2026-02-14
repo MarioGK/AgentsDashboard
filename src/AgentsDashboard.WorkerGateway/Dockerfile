@@ -13,8 +13,15 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
+ARG TARGETARCH
+
 RUN apt-get update && apt-get install -y --no-install-recommends docker.io gh wget ca-certificates && rm -rf /var/lib/apt/lists/* \
-    && wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.24/grpc_health_probe-linux-amd64 \
+    && case "${TARGETARCH}" in \
+         amd64) PROBE_ARCH="amd64" ;; \
+         arm64) PROBE_ARCH="arm64" ;; \
+         *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+       esac \
+    && wget -qO/bin/grpc_health_probe "https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.24/grpc_health_probe-linux-${PROBE_ARCH}" \
     && chmod +x /bin/grpc_health_probe
 
 EXPOSE 5201

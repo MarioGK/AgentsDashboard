@@ -9,63 +9,42 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MongoDB.Driver;
-using Testcontainers.MongoDb;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
 public sealed class ApiTestFixture : IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder()
-        .WithImage("mongo:8.0")
-        .Build();
+    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"agentsdashboard-api-{Guid.NewGuid():N}.db");
 
     public HttpClient Client { get; private set; } = null!;
     public WebApplicationFactory<AgentsDashboard.ControlPlane.Program> Factory { get; private set; } = null!;
     public IServiceProvider Services => Factory.Services;
     public string ConnectionString { get; private set; } = string.Empty;
-    public string DatabaseName { get; } = $"test_api_{Guid.NewGuid():N}";
 
     public async Task InitializeAsync()
     {
-        await _mongoContainer.StartAsync();
-        ConnectionString = _mongoContainer.GetConnectionString();
+        ConnectionString = $"Data Source={_databasePath}";
+
+        var dbOptions = new DbContextOptionsBuilder<OrchestratorDbContext>()
+            .UseSqlite(ConnectionString)
+            .Options;
+        await using (var dbContext = new OrchestratorDbContext(dbOptions))
+        {
+            await dbContext.Database.MigrateAsync();
+        }
+
+        Environment.SetEnvironmentVariable("Orchestrator__SqliteConnectionString", ConnectionString);
 
         Factory = new WebApplicationFactory<AgentsDashboard.ControlPlane.Program>().WithWebHostBuilder(builder =>
         {
             builder.ConfigureTestServices(services =>
             {
-                var mongoClientDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IMongoClient));
-                if (mongoClientDescriptor != null)
-                    services.Remove(mongoClientDescriptor);
-
-                var storeInterfaceDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IOrchestratorStore));
-                if (storeInterfaceDescriptor != null)
-                    services.Remove(storeInterfaceDescriptor);
-
-                var storeDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(OrchestratorStore));
-                if (storeDescriptor != null)
-                    services.Remove(storeDescriptor);
-
-                services.AddSingleton<IMongoClient>(_ => new MongoClient(ConnectionString));
-
-                services.AddSingleton<OrchestratorStore>(sp =>
-                {
-                    var client = sp.GetRequiredService<IMongoClient>();
-                    var options = Options.Create(new OrchestratorOptions
-                    {
-                        MongoConnectionString = ConnectionString,
-                        MongoDatabase = DatabaseName,
-                    });
-                    return new OrchestratorStore(client, options);
-                });
-
-                services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<OrchestratorStore>());
-
-                var hostedServices = services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService)).ToList();
+                var hostedServices = services.Where(d => d.ServiceType == typeof(IHostedService)).ToList();
                 foreach (var service in hostedServices)
                 {
                     services.Remove(service);
@@ -82,9 +61,11 @@ public sealed class ApiTestFixture : IAsyncLifetime
                     var logger = sp.GetService<ILogger<RunDispatcher>>() ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RunDispatcher>.Instance;
                     var publisher = sp.GetService<IRunEventPublisher>() ?? new NullRunEventPublisher();
                     var yarpProvider = sp.GetService<AgentsDashboard.ControlPlane.Proxy.InMemoryYarpConfigProvider>() ?? new AgentsDashboard.ControlPlane.Proxy.InMemoryYarpConfigProvider();
+                    var lifecycle = sp.GetService<IWorkerLifecycleManager>() ?? new MockWorkerLifecycleManager();
                     return new RunDispatcher(
                         new MockWorkerClient(),
                         store,
+                        lifecycle,
                         sp.GetService<ISecretCryptoService>()!,
                         publisher,
                         yarpProvider,
@@ -122,7 +103,9 @@ public sealed class ApiTestFixture : IAsyncLifetime
     public async Task DisposeAsync()
     {
         await Factory.DisposeAsync();
-        await _mongoContainer.DisposeAsync();
+        Environment.SetEnvironmentVariable("Orchestrator__SqliteConnectionString", null);
+        if (File.Exists(_databasePath))
+            File.Delete(_databasePath);
     }
 }
 
@@ -196,6 +179,15 @@ public sealed class MockContainerReaper : IContainerReaper
     {
         return Task.FromResult(0);
     }
+}
+
+public sealed class MockWorkerLifecycleManager : IWorkerLifecycleManager
+{
+    public Task<bool> EnsureWorkerRunningAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+
+    public Task RecordDispatchActivityAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StopWorkerIfIdleAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 public sealed class MockSecretCryptoService : SecretCryptoService

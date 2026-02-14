@@ -1,7 +1,7 @@
 services:
   control-plane:
     build:
-      context: ..
+      context: .
       dockerfile: src/AgentsDashboard.ControlPlane/Dockerfile
     restart: unless-stopped
     ports:
@@ -20,9 +20,9 @@ services:
       Z_AI_API_KEY: ${Z_AI_API_KEY:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - sqlite-data:/data
-      - artifacts-data:/artifacts
-      - workspaces-data:/workspaces
+      - ./data:/data
+      - ./data/artifacts:/artifacts
+      - ./data/workspaces:/workspaces
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -31,11 +31,6 @@ services:
       start_period: 30s
     networks:
       - agentsdashboard
-
-volumes:
-  sqlite-data:
-  artifacts-data:
-  workspaces-data:
 
 networks:
   agentsdashboard:

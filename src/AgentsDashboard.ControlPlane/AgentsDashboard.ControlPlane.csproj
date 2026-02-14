@@ -12,7 +12,12 @@
     <PackageReference Include="Docker.DotNet.Enhanced" />
     <PackageReference Include="Grpc.Net.ClientFactory" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
-    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="MudBlazor" />
     <PackageReference Include="SharpZipLib" />
     <PackageReference Include="Swashbuckle.AspNetCore" />

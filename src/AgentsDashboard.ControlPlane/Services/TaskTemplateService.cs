@@ -2,7 +2,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
-using MongoDB.Driver;
+using Microsoft.EntityFrameworkCore;
 
 public record TaskTemplate(
     string Id,
@@ -16,8 +16,7 @@ public record TaskTemplate(
 
 public sealed class TaskTemplateService
 {
-    private readonly IOrchestratorStore _store;
-    private readonly IMongoCollection<TaskTemplateDocument> _templates;
+    private readonly IDbContextFactory<OrchestratorDbContext> _dbContextFactory;
     private bool _seeded;
 
     private static readonly IReadOnlyList<TaskTemplate> BuiltInTemplates =
@@ -62,24 +61,13 @@ public sealed class TaskTemplateService
 
     public static IReadOnlyList<TaskTemplate> GetTemplates() => BuiltInTemplates;
 
-    public TaskTemplateService(IOrchestratorStore store, IMongoClient mongoClient)
+    public TaskTemplateService(IDbContextFactory<OrchestratorDbContext> dbContextFactory)
     {
-        _store = store;
-        var database = mongoClient.GetDatabase("orchestrator");
-        _templates = database.GetCollection<TaskTemplateDocument>("task_templates");
+        _dbContextFactory = dbContextFactory;
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        await _templates.Indexes.CreateManyAsync(
-        [
-            new CreateIndexModel<TaskTemplateDocument>(
-                Builders<TaskTemplateDocument>.IndexKeys.Ascending(x => x.TemplateId),
-                new CreateIndexOptions { Unique = true }),
-            new CreateIndexModel<TaskTemplateDocument>(
-                Builders<TaskTemplateDocument>.IndexKeys.Ascending(x => x.Name)),
-        ], cancellationToken: cancellationToken);
-
         await SeedBuiltInTemplatesAsync(cancellationToken);
     }
 
@@ -89,36 +77,41 @@ public sealed class TaskTemplateService
             return;
 
         var builtInTemplates = GetBuiltInTemplateDefinitions();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
         foreach (var template in builtInTemplates)
         {
-            var existing = await _templates.Find(x => x.TemplateId == template.TemplateId).FirstOrDefaultAsync(cancellationToken);
+            var existing = await db.TaskTemplates.FirstOrDefaultAsync(x => x.TemplateId == template.TemplateId, cancellationToken);
             if (existing is null)
             {
-                await _templates.InsertOneAsync(template, cancellationToken: cancellationToken);
+                db.TaskTemplates.Add(template);
             }
         }
 
+        await db.SaveChangesAsync(cancellationToken);
         _seeded = true;
     }
 
     public async Task<List<TaskTemplateDocument>> ListTemplatesAsync(CancellationToken cancellationToken)
     {
         await SeedBuiltInTemplatesAsync(cancellationToken);
-        return await _templates.Find(FilterDefinition<TaskTemplateDocument>.Empty)
-            .SortBy(x => x.Name)
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.TaskTemplates
+            .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
     }
 
     public async Task<TaskTemplateDocument?> GetTemplateByTemplateIdAsync(string templateId, CancellationToken cancellationToken)
     {
         await SeedBuiltInTemplatesAsync(cancellationToken);
-        return await _templates.Find(x => x.TemplateId == templateId).FirstOrDefaultAsync(cancellationToken);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.TaskTemplates.FirstOrDefaultAsync(x => x.TemplateId == templateId, cancellationToken);
     }
 
     public async Task<TaskTemplateDocument?> UpdateTemplateAsync(string templateId, TaskTemplateDocument updated, CancellationToken cancellationToken)
     {
-        var existing = await _templates.Find(x => x.TemplateId == templateId).FirstOrDefaultAsync(cancellationToken);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.TaskTemplates.FirstOrDefaultAsync(x => x.TemplateId == templateId, cancellationToken);
         if (existing is null)
             return null;
         if (!existing.IsEditable)
@@ -130,35 +123,36 @@ public sealed class TaskTemplateService
         updated.IsEditable = true;
         updated.UpdatedAtUtc = DateTime.UtcNow;
 
-        var result = await _templates.ReplaceOneAsync(
-            x => x.TemplateId == templateId,
-            updated,
-            cancellationToken: cancellationToken);
-
-        return result.ModifiedCount > 0 ? updated : null;
+        db.Entry(existing).CurrentValues.SetValues(updated);
+        await db.SaveChangesAsync(cancellationToken);
+        return updated;
     }
 
     public async Task<bool> DeleteTemplateAsync(string templateId, CancellationToken cancellationToken)
     {
-        var existing = await _templates.Find(x => x.TemplateId == templateId).FirstOrDefaultAsync(cancellationToken);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.TaskTemplates.FirstOrDefaultAsync(x => x.TemplateId == templateId, cancellationToken);
         if (existing is null)
             return false;
         if (existing.IsBuiltIn)
             return false;
 
-        var result = await _templates.DeleteOneAsync(x => x.TemplateId == templateId, cancellationToken);
-        return result.DeletedCount > 0;
+        db.TaskTemplates.Remove(existing);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<TaskTemplateDocument> CreateCustomTemplateAsync(TaskTemplateDocument template, CancellationToken cancellationToken)
     {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         template.TemplateId = $"custom-{Guid.NewGuid():N}"[..16];
         template.IsBuiltIn = false;
         template.IsEditable = true;
         template.CreatedAtUtc = DateTime.UtcNow;
         template.UpdatedAtUtc = DateTime.UtcNow;
 
-        await _templates.InsertOneAsync(template, cancellationToken: cancellationToken);
+        db.TaskTemplates.Add(template);
+        await db.SaveChangesAsync(cancellationToken);
         return template;
     }
 

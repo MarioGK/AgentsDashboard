@@ -23,10 +23,7 @@ tests/
 deploy/
 ├── docker-compose.yml              # Full stack deployment
 ├── harness-image/Dockerfile        # All-in-one harness execution image
-├── helm/                           # Kubernetes Helm chart
-├── k8s/                            # Raw Kubernetes manifests
-├── backup/                         # MongoDB backup/restore scripts
-├── nginx/                          # NGINX reverse proxy config
+├── backup/                         # Database backup/restore scripts
 ├── vm-dashboards/                  # Pre-configured VMUI dashboards
 │   ├── orchestrator-dashboard.json # Main orchestrator metrics
 │   └── harness-metrics-dashboard.json # Per-harness metrics
@@ -43,7 +40,7 @@ deploy/
 
 - **.NET 10** with ASP.NET Core
 - **Blazor Server** with MudBlazor 8.x UI and BlazorMonaco 3.x editors
-- **MongoDB 8.0** as system of record
+- **SQLite + EF Core** as system of record
 - **gRPC** for control-plane <-> worker communication
 - **YARP 2.3.x** for reverse proxy (dynamic routes for runs)
 - **SignalR** for real-time run status/log updates
@@ -79,6 +76,16 @@ Centralized build configuration using:
 - No comments unless explicitly requested
 - Async suffix on async methods
 
+### EF Core Rules (Mandatory)
+- Database access must be async-only (`*Async` APIs). Do not use synchronous EF Core query/save APIs.
+- All request-handling paths must remain safe under concurrent access:
+  - one scoped `DbContext` per request/operation
+  - never share `DbContext` across threads
+  - use optimistic concurrency tokens for mutable hot-path entities
+  - use transactions for multi-step state transitions
+- Cancellation tokens must be threaded through data-access calls.
+- Startup should auto-apply migrations and idempotent seed data.
+
 ### Authentication
 - Cookie-based auth with roles: viewer, operator, admin
 - Policies enforced on API endpoints and Blazor pages
@@ -91,8 +98,8 @@ Centralized build configuration using:
 - CreateTaskFromFindingRequest includes: LinkedFailureRuns (defaults to source finding run)
 
 ### Database
-- MongoDB with typed collections (18 collections)
-- TTL indexes for logs (30d) and runs (90d)
+- SQLite via EF Core (`OrchestratorDbContext` + migrations)
+- Auto-migrations applied on startup
 - Encrypted secrets via Data Protection API
 
 ### Execution Model
@@ -106,7 +113,7 @@ Centralized build configuration using:
 
 1. Start infrastructure:
 ```bash
-docker compose -f deploy/docker-compose.yml up -d mongodb victoria-metrics vmui
+docker compose -f deploy/docker-compose.yml up -d
 ```
 
 2. Run via Aspire:
@@ -194,12 +201,9 @@ dotnet test
 | - Regression Replay | Complete |
 | AI-assisted Dockerfile generation | Complete |
 | OpenAPI/Swagger | Complete |
-| Kubernetes/Helm deployment | Complete |
 | CI/CD (GitHub Actions) | Complete |
 | Rate limiting (4 policies) | Complete |
-| MongoDB backup/recovery | Complete |
-| PodDisruptionBudget | Complete |
-| cert-manager TLS | Complete |
+| SQLite persistence + migration | Complete |
 | Task artifact patterns | Complete |
 | Linked failure runs for regression replay | Complete |
 | Webhook event type enum | Complete |
@@ -210,7 +214,7 @@ dotnet test
 | Test Project | Files | Tests | Pass Rate |
 |--------------|-------|-------|-----------|
 | UnitTests | 47 | 1,139 | 100% (36 skipped, all pass) |
-| IntegrationTests | 40 | 230 | Requires MongoDB |
+| IntegrationTests | 40 | 230 | Requires external test infrastructure |
 | PlaywrightTests | 21 | 277 | Requires Running App |
 | Benchmarks | 7 | 4 | Performance |
 
@@ -252,10 +256,10 @@ dotnet test
 - **7 interface methods** per adapter: PrepareContext, BuildCommand, Execute, ParseEnvelope, MapArtifacts, ClassifyFailure, HarnessName
 - **CliWrap 3.8.2** for git clone, GitHub PR, harness execution
 
-### MongoDB Collections (18)
+### EF Core Entities (18)
 projects, repositories, tasks, runs, run_events, findings, workers, webhooks, proxy_audits, settings, workflows, workflow_executions, alert_rules, alert_events, repository_instructions, harness_provider_settings, task_templates, provider_secrets
 
-**Note:** Artifacts are stored on filesystem (`/data/artifacts/{runId}/`), not in MongoDB.
+**Note:** Artifacts are stored on filesystem (`/data/artifacts/{runId}/`), not in SQLite.
 
 ### Docker Images (6)
 - ai-harness-base: Ubuntu 24.04 + .NET 10 + Node.js 20 + Python 3.12 + Go 1.23 + Playwright
@@ -308,7 +312,7 @@ dotnet format
 
 - No Blazor component tests (bunit compatibility with .NET 10 pending)
 - Docker-dependent tests skipped (36 tests) due to Docker.DotNet version mismatch and BackgroundService testability
-- Integration tests require running MongoDB infrastructure
+- Integration tests require running external test infrastructure
 - Unit test pass rate: 1,103/1,139 (100% of non-skipped tests pass)
 
 ## Deployment Options
@@ -316,8 +320,6 @@ dotnet format
 | Option | Command |
 |--------|---------|
 | Docker Compose | `docker compose -f deploy/docker-compose.yml up -d` |
-| Helm | `helm install ai-orchestrator deploy/helm/ai-orchestrator` |
-| Kustomize | `kubectl apply -k deploy/k8s/` |
 
 ## CI/CD Pipeline
 
@@ -326,19 +328,9 @@ dotnet format
 - **security-scan**: CodeQL analysis and vulnerable package check
 - **build**: Compile solution with .NET 10
 - **test-unit**: Unit tests with code coverage
-- **test-integration**: Integration tests with MongoDB service container
+- **test-integration**: Integration tests with external service containers
 - **test-e2e**: Playwright E2E tests with running application
 - **trivy-scan**: Container vulnerability scanning for all harness images
-
-### Deploy Workflow (`.github/workflows/deploy.yml`)
-- **prepare**: Determine version from release tag or input
-- **build-base**: Build and push `ai-harness-base` image
-- **build-harnesses**: Build and push 4 harness images (codex, opencode, claudecode, zai)
-- **build-all-in-one**: Build and push `ai-harness` all-in-one image
-- **build-applications**: Build and push `control-plane` and `worker-gateway` images
-- **production-approval**: Manual approval gate for production deployments
-- **helm-deploy**: Deploy to Kubernetes using Helm
-- **update-compose**: Create PR with updated docker-compose image tags
 
 ### Container Images
 
@@ -369,25 +361,6 @@ dotnet format
 | Images | 3 | List/build/delete |
 | Other | 29 | Workers, Secrets, Instructions, Settings, Health, Proxy, Auth, Artifacts, Schedules, Providers |
 
-## Helm Chart Components
-
-| Component | Template | Description |
-|-----------|----------|-------------|
-| ControlPlane | `control-plane.yaml` | Deployment + Service (2 replicas) |
-| WorkerGateway | `worker-gateway.yaml` | Deployment + Service (3 replicas) |
-| MongoDB | `mongodb.yaml` | StatefulSet + Headless Service |
-| VictoriaMetrics | `victoriametrics.yaml` | Deployment + PVC |
-| VMUI | `vmui.yaml` | Deployment + Service |
-| ConfigMaps | `configmap.yaml` | 5 ConfigMaps |
-| Secrets | `secrets.yaml` | 3 Secrets |
-| Ingress | `ingress.yaml` | 2 Ingress resources with TLS |
-| HPA | `hpa.yaml` | HorizontalPodAutoscalers |
-| PVC | `pvc.yaml` | PersistentVolumeClaims |
-| NetworkPolicy | `networkpolicy.yaml` | Network policies for all components |
-| Namespace | `namespace.yaml` | Conditional namespace creation |
-| PodDisruptionBudget | `pdb.yaml` | PDB for control-plane, worker-gateway, mongodb |
-| Certificate | `certificate.yaml` | cert-manager TLS certificate |
-
 ## Verification Status
 
 **Last Verified:** 2026-02-14
@@ -400,7 +373,7 @@ dotnet format
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
 | Blazor Pages | Complete | 25 pages with full functionality |
 | Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
-| Deployment | Complete | Docker Compose, Helm (14 templates), K8s |
+| Deployment | Complete | Docker Compose |
 | gRPC Services | Complete | 6 RPCs implemented |
 | Built-in Templates | Complete | 4 templates (QA, UnitTest, Deps, Regression) |
 | Rate Limiting | Complete | 4 policies (Global, Auth, Webhook, Burst) |

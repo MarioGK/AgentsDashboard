@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions:
+  contents: read
+
 env:
   DOTNET_VERSION: '10.0.x'
   SOLUTION_PATH: 'src/AgentsDashboard.slnx'
@@ -27,10 +30,13 @@ jobs:
         run: dotnet restore ${{ env.SOLUTION_PATH }}
 
       - name: Format check
-        run: dotnet format ${{ env.SOLUTION_PATH }} --verify-no-changes --verbosity diagnostic
+        run: dotnet format ${{ env.SOLUTION_PATH }} --verify-no-changes --severity error --verbosity diagnostic
 
   security-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -159,18 +165,6 @@ jobs:
   test-integration:
     needs: build
     runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:8.0
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      MongoDB__ConnectionString: mongodb://localhost:27017
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -231,18 +225,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    services:
-      mongodb:
-        image: mongo:8.0
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     env:
-      MongoDB__ConnectionString: mongodb://localhost:27017
       ASPNETCORE_ENVIRONMENT: Testing
     steps:
       - name: Checkout
@@ -314,6 +297,9 @@ jobs:
   trivy-scan:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       matrix:
         include:

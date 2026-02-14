@@ -6,12 +6,12 @@ Production-oriented AI orchestration control plane built with .NET 10.
 - Blazor Server control plane with MudBlazor UI and BlazorMonaco editors
 - Worker gateway over gRPC with channel-based dispatch
 - Harness-only execution (`codex`, `opencode`, `claude-code`)
-- MongoDB persistence
+- SQLite persistence via EF Core
 - YARP embedded in control plane
 - Aspire app host + OpenTelemetry-ready services
 - VictoriaMetrics + VMUI for metrics
 - Cookie auth + RBAC (`viewer`, `operator`, `admin`)
-- Encrypted provider secret vault (Data Protection + MongoDB)
+- Encrypted provider secret vault (Data Protection + SQLite)
 
 ## Solution
 - `src/AgentsDashboard.ControlPlane`: UI, API, scheduler, SignalR, YARP
@@ -20,11 +20,11 @@ Production-oriented AI orchestration control plane built with .NET 10.
 - `src/AgentsDashboard.AppHost`: Aspire composition for local orchestration
 
 ## Local run (recommended)
-1. Start infrastructure:
+1. Start control plane container:
 ```bash
-docker compose -f deploy/docker-compose.yml up -d mongodb victoria-metrics vmui
+docker compose -f deploy/docker-compose.yml up -d
 ```
-2. Run worker:
+2. (Optional) Run worker gateway directly for local dev:
 ```bash
 dotnet run --project src/AgentsDashboard.WorkerGateway
 ```

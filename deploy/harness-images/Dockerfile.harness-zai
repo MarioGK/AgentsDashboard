@@ -2,7 +2,8 @@
 # ZhipuAI GLM-5 harness configured through cc-mirror
 # Build: docker build -f Dockerfile.harness-zai -t ghcr.io/mariogk/harness-zai:latest .
 
-FROM ghcr.io/mariogk/ai-harness-base:latest
+ARG BASE_IMAGE=ghcr.io/mariogk/ai-harness-base:latest
+FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.source=https://github.com/mariogk/AgentsDashboard \
       org.opencontainers.image.description="Zai (GLM-5) harness for AI Orchestrator" \

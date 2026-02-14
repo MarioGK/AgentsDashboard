@@ -13,23 +13,18 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MongoDB.Driver;
-using Testcontainers.MongoDb;
 using Xunit;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
 public sealed class AuthorizationTestFixture : IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder()
-        .WithImage("mongo:8.0")
-        .Build();
-
     public string ConnectionString { get; private set; } = string.Empty;
-    public string DatabaseName { get; } = $"test_auth_{Guid.NewGuid():N}";
+    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"agentsdashboard-auth-{Guid.NewGuid():N}.db");
 
     public HttpClient CreateClientWithRole(string role)
     {
@@ -39,27 +34,6 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
 
             builder.ConfigureTestServices(services =>
             {
-                var mongoClientDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IMongoClient));
-                if (mongoClientDescriptor != null)
-                    services.Remove(mongoClientDescriptor);
-
-                var storeDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(OrchestratorStore));
-                if (storeDescriptor != null)
-                    services.Remove(storeDescriptor);
-
-                services.AddSingleton<IMongoClient>(_ => new MongoClient(ConnectionString));
-
-                services.AddSingleton<OrchestratorStore>(sp =>
-                {
-                    var client = sp.GetRequiredService<IMongoClient>();
-                    var options = Options.Create(new OrchestratorOptions
-                    {
-                        MongoConnectionString = ConnectionString,
-                        MongoDatabase = DatabaseName,
-                    });
-                    return new OrchestratorStore(client, options);
-                });
-
                 var dispatcherDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(RunDispatcher));
                 if (dispatcherDescriptor != null)
                     services.Remove(dispatcherDescriptor);
@@ -67,6 +41,7 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
                 services.AddSingleton<RunDispatcher>(_ => new RunDispatcher(
                     new MockWorkerClient(),
                     null!,
+                    new MockWorkerLifecycleManager(),
                     null!,
                     null!,
                     null!,
@@ -93,13 +68,21 @@ public sealed class AuthorizationTestFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await _mongoContainer.StartAsync();
-        ConnectionString = _mongoContainer.GetConnectionString();
+        ConnectionString = $"Data Source={_databasePath}";
+        Environment.SetEnvironmentVariable("Orchestrator__SqliteConnectionString", ConnectionString);
+        var dbOptions = new DbContextOptionsBuilder<OrchestratorDbContext>()
+            .UseSqlite(ConnectionString)
+            .Options;
+        await using var dbContext = new OrchestratorDbContext(dbOptions);
+        await dbContext.Database.MigrateAsync();
     }
 
     public async Task DisposeAsync()
     {
-        await _mongoContainer.DisposeAsync();
+        await Task.CompletedTask;
+        Environment.SetEnvironmentVariable("Orchestrator__SqliteConnectionString", null);
+        if (File.Exists(_databasePath))
+            File.Delete(_databasePath);
     }
 }
 

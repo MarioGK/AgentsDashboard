@@ -7,17 +7,17 @@ using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Hubs;
 using AgentsDashboard.ControlPlane.Services;
+using AgentsDashboard.IntegrationTests.Infrastructure;
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Models;
 using AgentsDashboard.WorkerGateway.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MongoDB.Driver;
 using Moq;
-using Testcontainers.MongoDb;
 using Xunit;
 
 namespace AgentsDashboard.IntegrationTests.Performance;
@@ -26,33 +26,30 @@ namespace AgentsDashboard.IntegrationTests.Performance;
 [Collection("Performance")]
 public sealed class ConcurrencyStressTests : IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder()
-        .WithImage("mongo:8.0")
-        .Build();
-
-    private IMongoClient _mongoClient = null!;
     private OrchestratorStore _store = null!;
-    private string _connectionString = null!;
-    private readonly string _databaseName = $"perf_test_{Guid.NewGuid():N}";
+    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"agentsdashboard-perf-{Guid.NewGuid():N}.db");
+    private string _connectionString = string.Empty;
 
     public async Task InitializeAsync()
     {
-        await _mongoContainer.StartAsync();
-        _connectionString = _mongoContainer.GetConnectionString();
-        _mongoClient = new MongoClient(_connectionString);
-
-        var options = Options.Create(new OrchestratorOptions
+        _connectionString = $"Data Source={_databasePath}";
+        var dbOptions = new DbContextOptionsBuilder<OrchestratorDbContext>()
+            .UseSqlite(_connectionString)
+            .Options;
+        await using (var dbContext = new OrchestratorDbContext(dbOptions))
         {
-            MongoConnectionString = _connectionString,
-            MongoDatabase = _databaseName,
-        });
-        _store = new OrchestratorStore(_mongoClient, options);
+            await dbContext.Database.MigrateAsync();
+        }
+
+        _store = TestOrchestratorStore.Create(_connectionString);
         await _store.InitializeAsync(CancellationToken.None);
     }
 
     public async Task DisposeAsync()
     {
-        await _mongoContainer.DisposeAsync();
+        await Task.CompletedTask;
+        if (File.Exists(_databasePath))
+            File.Delete(_databasePath);
     }
 
     [Fact]
@@ -66,8 +63,6 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
 
         var options = Options.Create(new OrchestratorOptions
         {
-            MongoConnectionString = _connectionString,
-            MongoDatabase = _databaseName,
             MaxGlobalConcurrentRuns = 100,
             PerProjectConcurrencyLimit = 100,
             PerRepoConcurrencyLimit = 100,
@@ -78,6 +73,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         var dispatcher = new RunDispatcher(
             mockWorkerClient,
             _store,
+            new MockWorkerLifecycleManager(),
             mockCrypto,
             mockPublisher,
             yarpProvider,
@@ -425,7 +421,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task MongoWriteThroughput_MultipleRuns_CompletesEfficiently()
+    public async Task SqliteWriteThroughput_MultipleRuns_CompletesEfficiently()
     {
         const int runCount = 100;
         var (_, _, task) = await SetupPrerequisitesAsync();
@@ -440,9 +436,9 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         sw.Stop();
 
         var throughput = runCount / sw.Elapsed.TotalSeconds;
-        OutputMetrics($"MongoDB write throughput", runCount, sw.Elapsed, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, 0);
+        OutputMetrics($"SQLite write throughput", runCount, sw.Elapsed, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, 0);
 
-        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30), $"{runCount} MongoDB writes should complete in reasonable time");
+        sw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30), $"{runCount} SQLite writes should complete in reasonable time");
     }
 
     private async Task<(ProjectDocument Project, RepositoryDocument Repo, TaskDocument Task)> SetupPrerequisitesAsync()
@@ -622,6 +618,15 @@ public sealed class NullLogger<T> : ILogger<T>
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     public bool IsEnabled(LogLevel logLevel) => false;
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
+}
+
+public sealed class MockWorkerLifecycleManager : IWorkerLifecycleManager
+{
+    public Task<bool> EnsureWorkerRunningAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+
+    public Task RecordDispatchActivityAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StopWorkerIfIdleAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 [CollectionDefinition("Performance", DisableParallelization = true)]

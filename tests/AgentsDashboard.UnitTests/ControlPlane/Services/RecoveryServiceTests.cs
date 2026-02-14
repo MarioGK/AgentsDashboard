@@ -6,7 +6,6 @@ using FluentAssertions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using MongoDB.Driver;
 using Moq;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;

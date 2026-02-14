@@ -1,5 +1,5 @@
-using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.WorkerGateway.Adapters;
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Services;

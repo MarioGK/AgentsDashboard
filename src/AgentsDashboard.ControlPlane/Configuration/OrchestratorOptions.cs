@@ -6,9 +6,13 @@ public sealed class OrchestratorOptions : IValidatableObject
 {
     public const string SectionName = "Orchestrator";
 
-    public string MongoConnectionString { get; set; } = "mongodb://localhost:27017";
-    public string MongoDatabase { get; set; } = "agentsdashboard";
-    public string WorkerGrpcAddress { get; set; } = "http://localhost:5201";
+    public string SqliteConnectionString { get; set; } = "Data Source=/data/orchestrator.db";
+    public string WorkerGrpcAddress { get; set; } = "http://worker-gateway:5201";
+    public string WorkerContainerImage { get; set; } = "agentsdashboard-worker-gateway:latest";
+    public string WorkerContainerName { get; set; } = "worker-gateway";
+    public string WorkerDockerNetwork { get; set; } = "agentsdashboard";
+    public int WorkerIdleTimeoutMinutes { get; set; } = 5;
+    public int WorkerStartupTimeoutSeconds { get; set; } = 60;
     public int SchedulerIntervalSeconds { get; set; } = 10;
     public int MaxGlobalConcurrentRuns { get; set; } = 50;
     public int PerProjectConcurrencyLimit { get; set; } = 10;
@@ -21,11 +25,8 @@ public sealed class OrchestratorOptions : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (string.IsNullOrWhiteSpace(MongoConnectionString))
-            yield return new ValidationResult("MongoConnectionString is required", [nameof(MongoConnectionString)]);
-
-        if (string.IsNullOrWhiteSpace(MongoDatabase))
-            yield return new ValidationResult("MongoDatabase is required", [nameof(MongoDatabase)]);
+        if (string.IsNullOrWhiteSpace(SqliteConnectionString))
+            yield return new ValidationResult("SqliteConnectionString is required", [nameof(SqliteConnectionString)]);
 
         if (string.IsNullOrWhiteSpace(WorkerGrpcAddress))
             yield return new ValidationResult("WorkerGrpcAddress is required", [nameof(WorkerGrpcAddress)]);

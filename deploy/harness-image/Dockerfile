@@ -5,7 +5,7 @@
 # Must build harness-base first from deploy/harness-images/
 # For local builds: docker build -f deploy/harness-images/Dockerfile.harness-base -t ai-harness-base:latest .
 # For CI/CD: Use ghcr.io/mariogk/ai-harness-base:latest
-ARG BASE_IMAGE=ai-harness-base:latest
+ARG BASE_IMAGE=ghcr.io/mariogk/ai-harness-base:latest
 FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.source=https://github.com/mariogk/AgentsDashboard \

@@ -14,8 +14,8 @@ using AgentsDashboard.ControlPlane.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using MongoDB.Driver;
 using MudBlazor.Services;
 using Swashbuckle.AspNetCore.SwaggerUI;
 using Yarp.ReverseProxy.Configuration;
@@ -154,23 +154,29 @@ else
     });
 }
 
-builder.Services.AddSingleton<IMongoClient>(sp =>
+builder.Services.AddDbContext<OrchestratorDbContext>((sp, options) =>
 {
-    var options = sp.GetRequiredService<IOptions<OrchestratorOptions>>().Value;
-    return new MongoClient(options.MongoConnectionString);
+    var orchestratorOptions = sp.GetRequiredService<IOptions<OrchestratorOptions>>().Value;
+    options.UseSqlite(orchestratorOptions.SqliteConnectionString);
+});
+builder.Services.AddDbContextFactory<OrchestratorDbContext>((sp, options) =>
+{
+    var orchestratorOptions = sp.GetRequiredService<IOptions<OrchestratorOptions>>().Value;
+    options.UseSqlite(orchestratorOptions.SqliteConnectionString);
 });
 
 builder.Services.AddSingleton<IOrchestratorStore, OrchestratorStore>();
 builder.Services.AddSingleton<OrchestratorStore>(sp => (OrchestratorStore)sp.GetRequiredService<IOrchestratorStore>());
 builder.Services.AddSingleton<RunDispatcher>();
+builder.Services.AddSingleton<IWorkerLifecycleManager, DockerWorkerLifecycleManager>();
 builder.Services.AddSingleton<ISecretCryptoService, SecretCryptoService>();
 builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddSingleton<IRunEventPublisher, SignalRRunEventPublisher>();
 builder.Services.AddSingleton<IOrchestratorMetrics, OrchestratorMetrics>();
-builder.Services.AddHostedService<MongoInitializationService>();
 builder.Services.AddHostedService<RecoveryService>();
 builder.Services.AddHostedService<CronSchedulerService>();
 builder.Services.AddHostedService<WorkerEventListenerService>();
+builder.Services.AddHostedService<WorkerIdleShutdownService>();
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<AlertingService>();
 builder.Services.AddSingleton<IWorkflowExecutor, WorkflowExecutor>();
@@ -179,6 +185,7 @@ builder.Services.AddSingleton<ImageBuilderService>();
 builder.Services.AddSingleton<CredentialValidationService>();
 builder.Services.AddSingleton<TaskTemplateService>();
 builder.Services.AddHostedService<TaskTemplateInitializationService>();
+builder.Services.AddHostedService<DbMigrationHostedService>();
 builder.Services.AddSingleton<IContainerReaper, ContainerReaper>();
 builder.Services.AddHostedService<HarnessHealthService>();
 builder.Services.AddTransient<ProxyAuditMiddleware>();

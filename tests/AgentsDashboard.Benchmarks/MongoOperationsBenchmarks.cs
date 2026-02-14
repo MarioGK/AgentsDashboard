@@ -1,25 +1,23 @@
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Environments;
 using BenchmarkDotNet.Jobs;
-using Microsoft.Extensions.Options;
-using MongoDB.Driver;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace AgentsDashboard.Benchmarks;
 
 [MemoryDiagnoser]
 [RankColumn]
 [LongRunJob]
-public class MongoOperationsBenchmarks
+public class SqliteOperationsBenchmarks
 {
-    private const string ConnectionString = "mongodb://localhost:27017";
-    private const string DatabaseName = "benchmark_db";
+    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"agentsdashboard-benchmark-{Guid.NewGuid():N}.db");
+    private string ConnectionString => $"Data Source={_databasePath}";
 
-    private MongoClient _client = null!;
     private OrchestratorStore _store = null!;
     private ProjectDocument _project = null!;
     private RepositoryDocument _repo = null!;
@@ -31,14 +29,16 @@ public class MongoOperationsBenchmarks
     [GlobalSetup]
     public async Task GlobalSetup()
     {
-        _client = new MongoClient(ConnectionString);
-        var options = Options.Create(new OrchestratorOptions
+        var dbOptions = new DbContextOptionsBuilder<OrchestratorDbContext>()
+            .UseSqlite(ConnectionString)
+            .Options;
+        await using (var dbContext = new OrchestratorDbContext(dbOptions))
         {
-            MongoConnectionString = ConnectionString,
-            MongoDatabase = DatabaseName,
-        });
+            await dbContext.Database.MigrateAsync();
+        }
 
-        _store = new OrchestratorStore(_client, options);
+        var dbContextFactory = new StaticDbContextFactory(dbOptions);
+        _store = new OrchestratorStore(dbContextFactory);
         await _store.InitializeAsync(CancellationToken.None);
 
         _project = await _store.CreateProjectAsync(
@@ -66,14 +66,19 @@ public class MongoOperationsBenchmarks
     [GlobalCleanup]
     public void GlobalCleanup()
     {
-        _client.DropDatabase(DatabaseName);
+        if (File.Exists(_databasePath))
+            File.Delete(_databasePath);
     }
 
     [IterationCleanup]
-    public void IterationCleanup()
+    public async Task IterationCleanup()
     {
-        var db = _client.GetDatabase(DatabaseName);
-        db.GetCollection<RunDocument>("runs").DeleteMany(Builders<RunDocument>.Filter.Empty);
+        var dbOptions = new DbContextOptionsBuilder<OrchestratorDbContext>()
+            .UseSqlite(ConnectionString)
+            .Options;
+        await using var dbContext = new OrchestratorDbContext(dbOptions);
+        dbContext.Runs.RemoveRange(dbContext.Runs);
+        await dbContext.SaveChangesAsync();
     }
 
     [Benchmark(Description = "Create single run")]
@@ -150,5 +155,13 @@ public class MongoOperationsBenchmarks
     public async Task<List<RunLogEvent>> ListRunLogs()
     {
         return await _store.ListRunLogsAsync(_task.Id, CancellationToken.None);
+    }
+
+    private sealed class StaticDbContextFactory(DbContextOptions<OrchestratorDbContext> options) : IDbContextFactory<OrchestratorDbContext>
+    {
+        public OrchestratorDbContext CreateDbContext() => new(options);
+
+        public Task<OrchestratorDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new OrchestratorDbContext(options));
     }
 }

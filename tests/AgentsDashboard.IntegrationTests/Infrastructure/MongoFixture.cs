@@ -1,25 +1,31 @@
-using Testcontainers.MongoDb;
+using AgentsDashboard.ControlPlane.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgentsDashboard.IntegrationTests.Infrastructure;
 
-public sealed class MongoFixture : IAsyncLifetime
+public sealed class SqliteFixture : IAsyncLifetime
 {
-    private readonly MongoDbContainer _container = new MongoDbBuilder()
-        .WithImage("mongo:8.0")
-        .Build();
+    private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"agentsdashboard-integration-{Guid.NewGuid():N}.db");
 
-    public string ConnectionString => _container.GetConnectionString();
+    public string ConnectionString => $"Data Source={_databasePath}";
 
     public async Task InitializeAsync()
     {
-        await _container.StartAsync();
+        var options = new DbContextOptionsBuilder<OrchestratorDbContext>()
+            .UseSqlite(ConnectionString)
+            .Options;
+
+        await using var dbContext = new OrchestratorDbContext(options);
+        await dbContext.Database.MigrateAsync();
     }
 
     public async Task DisposeAsync()
     {
-        await _container.DisposeAsync();
+        await Task.CompletedTask;
+        if (File.Exists(_databasePath))
+            File.Delete(_databasePath);
     }
 }
 
-[CollectionDefinition("Mongo")]
-public class MongoCollection : ICollectionFixture<MongoFixture>;
+[CollectionDefinition("Sqlite")]
+public class SqliteCollection : ICollectionFixture<SqliteFixture>;

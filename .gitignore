@@ -416,3 +416,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Runtime data (SQLite DB, artifacts, workspaces)
+/data/

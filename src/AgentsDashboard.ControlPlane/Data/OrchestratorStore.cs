@@ -1,238 +1,70 @@
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Configuration;
 using Cronos;
-using Microsoft.Extensions.Options;
-using MongoDB.Driver;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
-public class OrchestratorStore : IOrchestratorStore
+public sealed class OrchestratorStore(IDbContextFactory<OrchestratorDbContext> dbContextFactory) : IOrchestratorStore
 {
-    private readonly IMongoCollection<ProjectDocument> _projects;
-    private readonly IMongoCollection<RepositoryDocument> _repositories;
-    private readonly IMongoCollection<TaskDocument> _tasks;
-    private readonly IMongoCollection<RunDocument> _runs;
-    private readonly IMongoCollection<FindingDocument> _findings;
-    private readonly IMongoCollection<RunLogEvent> _runEvents;
-    private readonly IMongoCollection<ProviderSecretDocument> _providerSecrets;
-    private readonly IMongoCollection<WorkerRegistration> _workers;
-    private readonly IMongoCollection<WebhookRegistration> _webhooks;
-    private readonly IMongoCollection<ProxyAuditDocument> _proxyAudits;
-    private readonly IMongoCollection<SystemSettingsDocument> _settings;
-    private readonly IMongoCollection<WorkflowDocument> _workflows;
-    private readonly IMongoCollection<WorkflowExecutionDocument> _workflowExecutions;
-    private readonly IMongoCollection<AlertRuleDocument> _alertRules;
-    private readonly IMongoCollection<AlertEventDocument> _alertEvents;
-    private readonly IMongoCollection<RepositoryInstructionDocument> _repositoryInstructions;
-    private readonly IMongoCollection<HarnessProviderSettingsDocument> _harnessProviderSettings;
-    private readonly OrchestratorOptions _options;
+    private static readonly RunState[] ActiveStates = [RunState.Queued, RunState.Running, RunState.PendingApproval];
 
-    public OrchestratorStore(IMongoClient mongoClient, IOptions<OrchestratorOptions> options)
+    public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public async Task<ProjectDocument> CreateProjectAsync(CreateProjectRequest request, CancellationToken cancellationToken)
     {
-        _options = options.Value;
-        var database = mongoClient.GetDatabase(_options.MongoDatabase);
-        _projects = database.GetCollection<ProjectDocument>("projects");
-        _repositories = database.GetCollection<RepositoryDocument>("repositories");
-        _tasks = database.GetCollection<TaskDocument>("tasks");
-        _runs = database.GetCollection<RunDocument>("runs");
-        _findings = database.GetCollection<FindingDocument>("findings");
-        _runEvents = database.GetCollection<RunLogEvent>("run_events");
-        _providerSecrets = database.GetCollection<ProviderSecretDocument>("provider_secrets");
-        _workers = database.GetCollection<WorkerRegistration>("workers");
-        _webhooks = database.GetCollection<WebhookRegistration>("webhooks");
-        _proxyAudits = database.GetCollection<ProxyAuditDocument>("proxy_audits");
-        _settings = database.GetCollection<SystemSettingsDocument>("settings");
-        _workflows = database.GetCollection<WorkflowDocument>("workflows");
-        _workflowExecutions = database.GetCollection<WorkflowExecutionDocument>("workflow_executions");
-        _alertRules = database.GetCollection<AlertRuleDocument>("alert_rules");
-        _alertEvents = database.GetCollection<AlertEventDocument>("alert_events");
-        _repositoryInstructions = database.GetCollection<RepositoryInstructionDocument>("repository_instructions");
-        _harnessProviderSettings = database.GetCollection<HarnessProviderSettingsDocument>("harness_provider_settings");
-    }
-
-    public virtual async Task InitializeAsync(CancellationToken cancellationToken)
-    {
-        await _projects.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<ProjectDocument>(Builders<ProjectDocument>.IndexKeys.Ascending(x => x.Name)),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _repositories.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<RepositoryDocument>(Builders<RepositoryDocument>.IndexKeys.Ascending(x => x.ProjectId)),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _tasks.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<TaskDocument>(Builders<TaskDocument>.IndexKeys.Ascending(x => x.RepositoryId)),
-                new CreateIndexModel<TaskDocument>(Builders<TaskDocument>.IndexKeys.Ascending(x => x.NextRunAtUtc)),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _runs.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<RunDocument>(Builders<RunDocument>.IndexKeys.Ascending(x => x.RepositoryId).Descending(x => x.CreatedAtUtc)),
-                new CreateIndexModel<RunDocument>(Builders<RunDocument>.IndexKeys.Ascending(x => x.State)),
-                new CreateIndexModel<RunDocument>(Builders<RunDocument>.IndexKeys.Ascending(x => x.ProjectId).Ascending(x => x.State)),
-                new CreateIndexModel<RunDocument>(Builders<RunDocument>.IndexKeys.Ascending(x => x.TaskId).Ascending(x => x.State)),
-                new CreateIndexModel<RunDocument>(
-                    Builders<RunDocument>.IndexKeys.Ascending(x => x.CreatedAtUtc),
-                    new CreateIndexOptions { ExpireAfter = TimeSpan.FromDays(_options.TtlDays.Runs) }),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _findings.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<FindingDocument>(Builders<FindingDocument>.IndexKeys.Ascending(x => x.RepositoryId).Descending(x => x.CreatedAtUtc)),
-                new CreateIndexModel<FindingDocument>(Builders<FindingDocument>.IndexKeys.Ascending(x => x.State)),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _runEvents.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<RunLogEvent>(
-                    Builders<RunLogEvent>.IndexKeys.Ascending(x => x.RunId).Ascending(x => x.TimestampUtc)),
-                new CreateIndexModel<RunLogEvent>(
-                    Builders<RunLogEvent>.IndexKeys.Ascending(x => x.TimestampUtc),
-                    new CreateIndexOptions { ExpireAfter = TimeSpan.FromDays(_options.TtlDays.Logs) }),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _providerSecrets.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<ProviderSecretDocument>(
-                    Builders<ProviderSecretDocument>.IndexKeys.Ascending(x => x.RepositoryId).Ascending(x => x.Provider),
-                    new CreateIndexOptions { Unique = true }),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _workers.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<WorkerRegistration>(
-                    Builders<WorkerRegistration>.IndexKeys.Ascending(x => x.WorkerId),
-                    new CreateIndexOptions { Unique = true }),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _webhooks.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<WebhookRegistration>(
-                    Builders<WebhookRegistration>.IndexKeys.Ascending(x => x.RepositoryId)),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _proxyAudits.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<ProxyAuditDocument>(
-                    Builders<ProxyAuditDocument>.IndexKeys.Ascending(x => x.RunId).Descending(x => x.TimestampUtc)),
-                new CreateIndexModel<ProxyAuditDocument>(
-                    Builders<ProxyAuditDocument>.IndexKeys.Ascending(x => x.TimestampUtc),
-                    new CreateIndexOptions { ExpireAfter = TimeSpan.FromDays(_options.TtlDays.Logs) }),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _workflows.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<WorkflowDocument>(
-                    Builders<WorkflowDocument>.IndexKeys.Ascending(x => x.RepositoryId)),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _workflowExecutions.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<WorkflowExecutionDocument>(
-                    Builders<WorkflowExecutionDocument>.IndexKeys.Ascending(x => x.WorkflowId).Descending(x => x.CreatedAtUtc)),
-                new CreateIndexModel<WorkflowExecutionDocument>(
-                    Builders<WorkflowExecutionDocument>.IndexKeys.Ascending(x => x.State)),
-                new CreateIndexModel<WorkflowExecutionDocument>(
-                    Builders<WorkflowExecutionDocument>.IndexKeys.Ascending(x => x.CreatedAtUtc),
-                    new CreateIndexOptions { ExpireAfter = TimeSpan.FromDays(_options.TtlDays.Runs) }),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _alertRules.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<AlertRuleDocument>(
-                    Builders<AlertRuleDocument>.IndexKeys.Ascending(x => x.Enabled)),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _alertEvents.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<AlertEventDocument>(
-                    Builders<AlertEventDocument>.IndexKeys.Descending(x => x.FiredAtUtc)),
-                new CreateIndexModel<AlertEventDocument>(
-                    Builders<AlertEventDocument>.IndexKeys.Ascending(x => x.RuleId)),
-                new CreateIndexModel<AlertEventDocument>(
-                    Builders<AlertEventDocument>.IndexKeys.Ascending(x => x.FiredAtUtc),
-                    new CreateIndexOptions { ExpireAfter = TimeSpan.FromDays(_options.TtlDays.Logs) }),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _repositoryInstructions.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<RepositoryInstructionDocument>(
-                    Builders<RepositoryInstructionDocument>.IndexKeys.Ascending(x => x.RepositoryId)),
-                new CreateIndexModel<RepositoryInstructionDocument>(
-                    Builders<RepositoryInstructionDocument>.IndexKeys.Ascending(x => x.RepositoryId).Ascending(x => x.Priority)),
-            ],
-            cancellationToken: cancellationToken);
-
-        await _harnessProviderSettings.Indexes.CreateManyAsync(
-            [
-                new CreateIndexModel<HarnessProviderSettingsDocument>(
-                    Builders<HarnessProviderSettingsDocument>.IndexKeys.Ascending(x => x.RepositoryId).Ascending(x => x.Harness),
-                    new CreateIndexOptions { Unique = true }),
-            ],
-            cancellationToken: cancellationToken);
-    }
-
-    // --- Projects ---
-
-    public virtual async Task<ProjectDocument> CreateProjectAsync(CreateProjectRequest request, CancellationToken cancellationToken)
-    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var project = new ProjectDocument
         {
             Name = request.Name,
             Description = request.Description,
         };
 
-        await _projects.InsertOneAsync(project, cancellationToken: cancellationToken);
+        db.Projects.Add(project);
+        await db.SaveChangesAsync(cancellationToken);
         return project;
     }
 
-    public virtual Task<List<ProjectDocument>> ListProjectsAsync(CancellationToken cancellationToken)
-        => _projects.Find(FilterDefinition<ProjectDocument>.Empty).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-
-    public virtual async Task<ProjectDocument?> GetProjectAsync(string projectId, CancellationToken cancellationToken)
-        => await _projects.Find(x => x.Id == projectId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual async Task<ProjectDocument?> UpdateProjectAsync(string projectId, UpdateProjectRequest request, CancellationToken cancellationToken)
+    public async Task<List<ProjectDocument>> ListProjectsAsync(CancellationToken cancellationToken)
     {
-        var update = Builders<ProjectDocument>.Update
-            .Set(x => x.Name, request.Name)
-            .Set(x => x.Description, request.Description);
-
-        return await _projects.FindOneAndUpdateAsync(
-            x => x.Id == projectId,
-            update,
-            new FindOneAndUpdateOptions<ProjectDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Projects.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
-    public virtual async Task<bool> DeleteProjectAsync(string projectId, CancellationToken cancellationToken)
+    public async Task<ProjectDocument?> GetProjectAsync(string projectId, CancellationToken cancellationToken)
     {
-        var result = await _projects.DeleteOneAsync(x => x.Id == projectId, cancellationToken);
-        return result.DeletedCount > 0;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Projects.AsNoTracking().FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
     }
 
-    // --- Repositories ---
-
-    public virtual async Task<RepositoryDocument> CreateRepositoryAsync(CreateRepositoryRequest request, CancellationToken cancellationToken)
+    public async Task<ProjectDocument?> UpdateProjectAsync(string projectId, UpdateProjectRequest request, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var project = await db.Projects.FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
+        if (project is null)
+            return null;
+
+        project.Name = request.Name;
+        project.Description = request.Description;
+        await db.SaveChangesAsync(cancellationToken);
+        return project;
+    }
+
+    public async Task<bool> DeleteProjectAsync(string projectId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var project = await db.Projects.FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
+        if (project is null)
+            return false;
+
+        db.Projects.Remove(project);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<RepositoryDocument> CreateRepositoryAsync(CreateRepositoryRequest request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var repository = new RepositoryDocument
         {
             ProjectId = request.ProjectId,
@@ -241,107 +73,143 @@ public class OrchestratorStore : IOrchestratorStore
             DefaultBranch = string.IsNullOrWhiteSpace(request.DefaultBranch) ? "main" : request.DefaultBranch,
         };
 
-        await _repositories.InsertOneAsync(repository, cancellationToken: cancellationToken);
+        db.Repositories.Add(repository);
+        await db.SaveChangesAsync(cancellationToken);
         return repository;
     }
 
-    public virtual Task<List<RepositoryDocument>> ListRepositoriesAsync(string projectId, CancellationToken cancellationToken)
-        => _repositories.Find(x => x.ProjectId == projectId).SortBy(x => x.Name).ToListAsync(cancellationToken);
-
-    public virtual async Task<RepositoryDocument?> GetRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
-        => await _repositories.Find(x => x.Id == repositoryId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual async Task<RepositoryDocument?> UpdateRepositoryAsync(string repositoryId, UpdateRepositoryRequest request, CancellationToken cancellationToken)
+    public async Task<List<RepositoryDocument>> ListRepositoriesAsync(string projectId, CancellationToken cancellationToken)
     {
-        var update = Builders<RepositoryDocument>.Update
-            .Set(x => x.Name, request.Name)
-            .Set(x => x.GitUrl, request.GitUrl)
-            .Set(x => x.DefaultBranch, string.IsNullOrWhiteSpace(request.DefaultBranch) ? "main" : request.DefaultBranch);
-
-        return await _repositories.FindOneAndUpdateAsync(
-            x => x.Id == repositoryId,
-            update,
-            new FindOneAndUpdateOptions<RepositoryDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Repositories.AsNoTracking().Where(x => x.ProjectId == projectId).OrderBy(x => x.Name).ToListAsync(cancellationToken);
     }
 
-    public virtual async Task<bool> DeleteRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
+    public async Task<RepositoryDocument?> GetRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        var result = await _repositories.DeleteOneAsync(x => x.Id == repositoryId, cancellationToken);
-        return result.DeletedCount > 0;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Repositories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
     }
 
-    public virtual async Task<List<InstructionFile>> GetRepositoryInstructionFilesAsync(string repositoryId, CancellationToken cancellationToken)
+    public async Task<RepositoryDocument?> UpdateRepositoryAsync(string repositoryId, UpdateRepositoryRequest request, CancellationToken cancellationToken)
     {
-        var repo = await _repositories.Find(x => x.Id == repositoryId).FirstOrDefaultAsync(cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
+        if (repository is null)
+            return null;
+
+        repository.Name = request.Name;
+        repository.GitUrl = request.GitUrl;
+        repository.DefaultBranch = string.IsNullOrWhiteSpace(request.DefaultBranch) ? "main" : request.DefaultBranch;
+        await db.SaveChangesAsync(cancellationToken);
+        return repository;
+    }
+
+    public async Task<bool> DeleteRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
+        if (repository is null)
+            return false;
+
+        db.Repositories.Remove(repository);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<List<InstructionFile>> GetRepositoryInstructionFilesAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var repo = await db.Repositories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
         return repo?.InstructionFiles ?? [];
     }
 
-    public virtual async Task<RepositoryDocument?> UpdateRepositoryInstructionFilesAsync(string repositoryId, List<InstructionFile> instructionFiles, CancellationToken cancellationToken)
+    public async Task<RepositoryDocument?> UpdateRepositoryInstructionFilesAsync(string repositoryId, List<InstructionFile> instructionFiles, CancellationToken cancellationToken)
     {
-        var update = Builders<RepositoryDocument>.Update
-            .Set(x => x.InstructionFiles, instructionFiles);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var repo = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
+        if (repo is null)
+            return null;
 
-        return await _repositories.FindOneAndUpdateAsync(
-            x => x.Id == repositoryId,
-            update,
-            new FindOneAndUpdateOptions<RepositoryDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        repo.InstructionFiles = instructionFiles;
+        await db.SaveChangesAsync(cancellationToken);
+        return repo;
     }
 
-    public virtual async Task<List<RepositoryInstructionDocument>> GetInstructionsAsync(string repositoryId, CancellationToken cancellationToken)
-        => await _repositoryInstructions.Find(x => x.RepositoryId == repositoryId)
-            .SortBy(x => x.Priority)
-            .ToListAsync(cancellationToken);
-
-    public virtual async Task<RepositoryInstructionDocument?> GetInstructionAsync(string instructionId, CancellationToken cancellationToken)
-        => await _repositoryInstructions.Find(x => x.Id == instructionId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual async Task<RepositoryInstructionDocument> UpsertInstructionAsync(
-        string repositoryId,
-        string? instructionId,
-        CreateRepositoryInstructionRequest request,
-        CancellationToken cancellationToken)
+    public async Task<List<RepositoryInstructionDocument>> GetInstructionsAsync(string repositoryId, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RepositoryInstructions.AsNoTracking()
+            .Where(x => x.RepositoryId == repositoryId)
+            .OrderBy(x => x.Priority)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RepositoryInstructionDocument?> GetInstructionAsync(string instructionId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RepositoryInstructions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == instructionId, cancellationToken);
+    }
+
+    public async Task<RepositoryInstructionDocument> UpsertInstructionAsync(string repositoryId, string? instructionId, CreateRepositoryInstructionRequest request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var now = DateTime.UtcNow;
-        var id = instructionId ?? Guid.NewGuid().ToString("N");
+
+        if (!string.IsNullOrWhiteSpace(instructionId))
+        {
+            var existing = await db.RepositoryInstructions.FirstOrDefaultAsync(
+                x => x.Id == instructionId && x.RepositoryId == repositoryId,
+                cancellationToken);
+
+            if (existing is not null)
+            {
+                existing.Name = request.Name;
+                existing.Content = request.Content;
+                existing.Priority = request.Priority;
+                existing.Enabled = request.Enabled;
+                existing.UpdatedAtUtc = now;
+                await db.SaveChangesAsync(cancellationToken);
+                return existing;
+            }
+        }
 
         var instruction = new RepositoryInstructionDocument
         {
-            Id = id,
             RepositoryId = repositoryId,
             Name = request.Name,
             Content = request.Content,
             Priority = request.Priority,
             Enabled = request.Enabled,
+            CreatedAtUtc = now,
             UpdatedAtUtc = now,
-            CreatedAtUtc = string.IsNullOrEmpty(instructionId) ? now : (await GetInstructionAsync(id, cancellationToken))?.CreatedAtUtc ?? now
         };
 
-        var filter = Builders<RepositoryInstructionDocument>.Filter.And(
-            Builders<RepositoryInstructionDocument>.Filter.Eq(x => x.Id, id),
-            Builders<RepositoryInstructionDocument>.Filter.Eq(x => x.RepositoryId, repositoryId));
-
-        var options = new ReplaceOptions { IsUpsert = true };
-        await _repositoryInstructions.ReplaceOneAsync(filter, instruction, options, cancellationToken);
-
+        db.RepositoryInstructions.Add(instruction);
+        await db.SaveChangesAsync(cancellationToken);
         return instruction;
     }
 
-    public virtual async Task<bool> DeleteInstructionAsync(string instructionId, CancellationToken cancellationToken)
+    public async Task<bool> DeleteInstructionAsync(string instructionId, CancellationToken cancellationToken)
     {
-        var result = await _repositoryInstructions.DeleteOneAsync(x => x.Id == instructionId, cancellationToken);
-        return result.DeletedCount > 0;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var instruction = await db.RepositoryInstructions.FirstOrDefaultAsync(x => x.Id == instructionId, cancellationToken);
+        if (instruction is null)
+            return false;
+
+        db.RepositoryInstructions.Remove(instruction);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
-    public virtual async Task<HarnessProviderSettingsDocument?> GetHarnessProviderSettingsAsync(
-        string repositoryId,
-        string harness,
-        CancellationToken cancellationToken)
-        => await _harnessProviderSettings.Find(x => x.RepositoryId == repositoryId && x.Harness == harness)
-            .FirstOrDefaultAsync(cancellationToken);
+    public async Task<HarnessProviderSettingsDocument?> GetHarnessProviderSettingsAsync(string repositoryId, string harness, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.HarnessProviderSettings.AsNoTracking().FirstOrDefaultAsync(
+            x => x.RepositoryId == repositoryId && x.Harness == harness,
+            cancellationToken);
+    }
 
-    public virtual async Task<HarnessProviderSettingsDocument> UpsertHarnessProviderSettingsAsync(
+    public async Task<HarnessProviderSettingsDocument> UpsertHarnessProviderSettingsAsync(
         string repositoryId,
         string harness,
         string model,
@@ -350,37 +218,34 @@ public class OrchestratorStore : IOrchestratorStore
         Dictionary<string, string>? additionalSettings,
         CancellationToken cancellationToken)
     {
-        var filter = Builders<HarnessProviderSettingsDocument>.Filter.And(
-            Builders<HarnessProviderSettingsDocument>.Filter.Eq(x => x.RepositoryId, repositoryId),
-            Builders<HarnessProviderSettingsDocument>.Filter.Eq(x => x.Harness, harness));
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var settings = await db.HarnessProviderSettings.FirstOrDefaultAsync(
+            x => x.RepositoryId == repositoryId && x.Harness == harness,
+            cancellationToken);
 
-        var settings = new HarnessProviderSettingsDocument
+        if (settings is null)
         {
-            RepositoryId = repositoryId,
-            Harness = harness,
-            Model = model,
-            Temperature = temperature,
-            MaxTokens = maxTokens,
-            AdditionalSettings = additionalSettings ?? [],
-            UpdatedAtUtc = DateTime.UtcNow
-        };
-
-        var existing = await _harnessProviderSettings.Find(filter).FirstOrDefaultAsync(cancellationToken);
-        if (existing is not null)
-        {
-            settings.Id = existing.Id;
+            settings = new HarnessProviderSettingsDocument
+            {
+                RepositoryId = repositoryId,
+                Harness = harness,
+            };
+            db.HarnessProviderSettings.Add(settings);
         }
 
-        var options = new ReplaceOptions { IsUpsert = true };
-        await _harnessProviderSettings.ReplaceOneAsync(filter, settings, options, cancellationToken);
+        settings.Model = model;
+        settings.Temperature = temperature;
+        settings.MaxTokens = maxTokens;
+        settings.AdditionalSettings = additionalSettings ?? [];
+        settings.UpdatedAtUtc = DateTime.UtcNow;
 
+        await db.SaveChangesAsync(cancellationToken);
         return settings;
     }
 
-    // --- Tasks ---
-
-    public virtual async Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken)
+    public async Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var task = new TaskDocument
         {
             RepositoryId = request.RepositoryId,
@@ -404,99 +269,117 @@ public class OrchestratorStore : IOrchestratorStore
         };
 
         task.NextRunAtUtc = ComputeNextRun(task, DateTime.UtcNow);
-
-        await _tasks.InsertOneAsync(task, cancellationToken: cancellationToken);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync(cancellationToken);
         return task;
     }
 
-    public virtual Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken)
-        => _tasks.Find(x => x.RepositoryId == repositoryId).SortBy(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
+    public async Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Tasks.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderBy(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
+    }
 
-    public virtual Task<List<TaskDocument>> ListEventDrivenTasksAsync(string repositoryId, CancellationToken cancellationToken)
-        => _tasks.Find(x => x.RepositoryId == repositoryId && x.Enabled && x.Kind == TaskKind.EventDriven)
-            .SortBy(x => x.CreatedAtUtc)
+    public async Task<List<TaskDocument>> ListEventDrivenTasksAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Tasks.AsNoTracking()
+            .Where(x => x.RepositoryId == repositoryId && x.Enabled && x.Kind == TaskKind.EventDriven)
+            .OrderBy(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
+    }
 
-    public virtual async Task<TaskDocument?> GetTaskAsync(string taskId, CancellationToken cancellationToken)
-        => await _tasks.Find(x => x.Id == taskId).FirstOrDefaultAsync(cancellationToken);
+    public async Task<TaskDocument?> GetTaskAsync(string taskId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Tasks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
+    }
 
-    public virtual Task<List<TaskDocument>> ListScheduledTasksAsync(CancellationToken cancellationToken)
-        => _tasks.Find(x => x.Enabled && x.Kind == TaskKind.Cron)
-            .SortBy(x => x.NextRunAtUtc)
+    public async Task<List<TaskDocument>> ListScheduledTasksAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Tasks.AsNoTracking()
+            .Where(x => x.Enabled && x.Kind == TaskKind.Cron)
+            .OrderBy(x => x.NextRunAtUtc)
             .ToListAsync(cancellationToken);
-
-    public virtual async Task<List<TaskDocument>> ListDueTasksAsync(DateTime utcNow, int limit, CancellationToken cancellationToken)
-    {
-        var filter = Builders<TaskDocument>.Filter.And(
-            Builders<TaskDocument>.Filter.Eq(x => x.Enabled, true),
-            Builders<TaskDocument>.Filter.Or(
-                Builders<TaskDocument>.Filter.Eq(x => x.Kind, TaskKind.OneShot),
-                Builders<TaskDocument>.Filter.And(
-                    Builders<TaskDocument>.Filter.Eq(x => x.Kind, TaskKind.Cron),
-                    Builders<TaskDocument>.Filter.Lte(x => x.NextRunAtUtc, utcNow))));
-
-        return await _tasks.Find(filter).Limit(limit).ToListAsync(cancellationToken);
     }
 
-    public virtual Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken)
-        => _tasks.UpdateOneAsync(
-            x => x.Id == taskId,
-            Builders<TaskDocument>.Update.Set(x => x.Enabled, false),
-            cancellationToken: cancellationToken);
-
-    public virtual Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken)
-        => _tasks.UpdateOneAsync(
-            x => x.Id == taskId,
-            Builders<TaskDocument>.Update.Set(x => x.NextRunAtUtc, nextRunAtUtc),
-            cancellationToken: cancellationToken);
-
-    public virtual async Task<TaskDocument?> UpdateTaskAsync(string taskId, UpdateTaskRequest request, CancellationToken cancellationToken)
+    public async Task<List<TaskDocument>> ListDueTasksAsync(DateTime utcNow, int limit, CancellationToken cancellationToken)
     {
-        var task = new TaskDocument
-        {
-            Kind = request.Kind,
-            Enabled = request.Enabled,
-            CronExpression = request.CronExpression,
-        };
-        var nextRun = ComputeNextRun(task, DateTime.UtcNow);
-
-        var update = Builders<TaskDocument>.Update
-            .Set(x => x.Name, request.Name)
-            .Set(x => x.Kind, request.Kind)
-            .Set(x => x.Harness, request.Harness.Trim().ToLowerInvariant())
-            .Set(x => x.Prompt, request.Prompt)
-            .Set(x => x.Command, request.Command)
-            .Set(x => x.AutoCreatePullRequest, request.AutoCreatePullRequest)
-            .Set(x => x.CronExpression, request.CronExpression)
-            .Set(x => x.Enabled, request.Enabled)
-            .Set(x => x.RetryPolicy, request.RetryPolicy ?? new RetryPolicyConfig())
-            .Set(x => x.Timeouts, request.Timeouts ?? new TimeoutConfig())
-            .Set(x => x.SandboxProfile, request.SandboxProfile ?? new SandboxProfileConfig())
-            .Set(x => x.ArtifactPolicy, request.ArtifactPolicy ?? new ArtifactPolicyConfig())
-            .Set(x => x.ApprovalProfile, request.ApprovalProfile ?? new ApprovalProfileConfig())
-            .Set(x => x.ConcurrencyLimit, request.ConcurrencyLimit ?? 0)
-            .Set(x => x.InstructionFiles, request.InstructionFiles ?? [])
-            .Set(x => x.ArtifactPatterns, request.ArtifactPatterns ?? [])
-            .Set(x => x.LinkedFailureRuns, request.LinkedFailureRuns ?? [])
-            .Set(x => x.NextRunAtUtc, nextRun);
-
-        return await _tasks.FindOneAndUpdateAsync(
-            x => x.Id == taskId,
-            update,
-            new FindOneAndUpdateOptions<TaskDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Tasks.AsNoTracking()
+            .Where(x => x.Enabled && (x.Kind == TaskKind.OneShot || (x.Kind == TaskKind.Cron && x.NextRunAtUtc != null && x.NextRunAtUtc <= utcNow)))
+            .Take(limit)
+            .ToListAsync(cancellationToken);
     }
 
-    public virtual async Task<bool> DeleteTaskAsync(string taskId, CancellationToken cancellationToken)
+    public async Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken)
     {
-        var result = await _tasks.DeleteOneAsync(x => x.Id == taskId, cancellationToken);
-        return result.DeletedCount > 0;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
+        if (task is null)
+            return;
+
+        task.Enabled = false;
+        await db.SaveChangesAsync(cancellationToken);
     }
 
-    // --- Runs ---
-
-    public virtual async Task<RunDocument> CreateRunAsync(TaskDocument task, string projectId, CancellationToken cancellationToken, int attempt = 1)
+    public async Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
+        if (task is null)
+            return;
+
+        task.NextRunAtUtc = nextRunAtUtc;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<TaskDocument?> UpdateTaskAsync(string taskId, UpdateTaskRequest request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
+        if (task is null)
+            return null;
+
+        task.Name = request.Name;
+        task.Kind = request.Kind;
+        task.Harness = request.Harness.Trim().ToLowerInvariant();
+        task.Prompt = request.Prompt;
+        task.Command = request.Command;
+        task.AutoCreatePullRequest = request.AutoCreatePullRequest;
+        task.CronExpression = request.CronExpression;
+        task.Enabled = request.Enabled;
+        task.RetryPolicy = request.RetryPolicy ?? new RetryPolicyConfig();
+        task.Timeouts = request.Timeouts ?? new TimeoutConfig();
+        task.SandboxProfile = request.SandboxProfile ?? new SandboxProfileConfig();
+        task.ArtifactPolicy = request.ArtifactPolicy ?? new ArtifactPolicyConfig();
+        task.ApprovalProfile = request.ApprovalProfile ?? new ApprovalProfileConfig();
+        task.ConcurrencyLimit = request.ConcurrencyLimit ?? 0;
+        task.InstructionFiles = request.InstructionFiles ?? [];
+        task.ArtifactPatterns = request.ArtifactPatterns ?? [];
+        task.LinkedFailureRuns = request.LinkedFailureRuns ?? [];
+        task.NextRunAtUtc = ComputeNextRun(task, DateTime.UtcNow);
+
+        await db.SaveChangesAsync(cancellationToken);
+        return task;
+    }
+
+    public async Task<bool> DeleteTaskAsync(string taskId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
+        if (task is null)
+            return false;
+
+        db.Tasks.Remove(task);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<RunDocument> CreateRunAsync(TaskDocument task, string projectId, CancellationToken cancellationToken, int attempt = 1)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var run = new RunDocument
         {
             ProjectId = projectId,
@@ -507,46 +390,60 @@ public class OrchestratorStore : IOrchestratorStore
             Attempt = attempt,
         };
 
-        await _runs.InsertOneAsync(run, cancellationToken: cancellationToken);
+        db.Runs.Add(run);
+        await db.SaveChangesAsync(cancellationToken);
         return run;
     }
 
-    public virtual Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
-        => _runs.Find(x => x.RepositoryId == repositoryId).SortByDescending(x => x.CreatedAtUtc).Limit(200).ToListAsync(cancellationToken);
-
-    public virtual Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken)
-        => _runs.Find(FilterDefinition<RunDocument>.Empty).SortByDescending(x => x.CreatedAtUtc).Limit(100).ToListAsync(cancellationToken);
-
-    public virtual Task<List<RunDocument>> ListRecentRunsByProjectAsync(string projectId, CancellationToken cancellationToken)
-        => _runs.Find(x => x.ProjectId == projectId).SortByDescending(x => x.CreatedAtUtc).Limit(100).ToListAsync(cancellationToken);
-
-    public virtual async Task<ReliabilityMetrics> GetReliabilityMetricsByProjectAsync(string projectId, CancellationToken cancellationToken)
+    public async Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderByDescending(x => x.CreatedAtUtc).Take(200).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(100).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<RunDocument>> ListRecentRunsByProjectAsync(string projectId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.AsNoTracking().Where(x => x.ProjectId == projectId).OrderByDescending(x => x.CreatedAtUtc).Take(100).ToListAsync(cancellationToken);
+    }
+
+    public async Task<ReliabilityMetrics> GetReliabilityMetricsByProjectAsync(string projectId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var sevenDaysAgo = now.AddDays(-7);
         var thirtyDaysAgo = now.AddDays(-30);
         var fourteenDaysAgo = now.AddDays(-14);
 
-        var recentRuns = await _runs.Find(x => x.ProjectId == projectId && x.CreatedAtUtc >= thirtyDaysAgo)
+        var recentRuns = await db.Runs.AsNoTracking()
+            .Where(x => x.ProjectId == projectId && x.CreatedAtUtc >= thirtyDaysAgo)
             .ToListAsync(cancellationToken);
 
         return CalculateMetricsFromRuns(recentRuns, sevenDaysAgo, thirtyDaysAgo, fourteenDaysAgo, now);
     }
 
-    public virtual async Task<ReliabilityMetrics> GetReliabilityMetricsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
+    public async Task<ReliabilityMetrics> GetReliabilityMetricsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var sevenDaysAgo = now.AddDays(-7);
         var thirtyDaysAgo = now.AddDays(-30);
         var fourteenDaysAgo = now.AddDays(-14);
 
-        var recentRuns = await _runs.Find(x => x.RepositoryId == repositoryId && x.CreatedAtUtc >= thirtyDaysAgo)
+        var recentRuns = await db.Runs.AsNoTracking()
+            .Where(x => x.RepositoryId == repositoryId && x.CreatedAtUtc >= thirtyDaysAgo)
             .ToListAsync(cancellationToken);
 
         return CalculateMetricsFromRuns(recentRuns, sevenDaysAgo, thirtyDaysAgo, fourteenDaysAgo, now);
     }
 
-    private ReliabilityMetrics CalculateMetricsFromRuns(List<RunDocument> recentRuns, DateTime sevenDaysAgo, DateTime thirtyDaysAgo, DateTime fourteenDaysAgo, DateTime now)
+    private static ReliabilityMetrics CalculateMetricsFromRuns(List<RunDocument> recentRuns, DateTime sevenDaysAgo, DateTime thirtyDaysAgo, DateTime fourteenDaysAgo, DateTime now)
     {
         var runs7Days = recentRuns.Where(r => r.CreatedAtUtc >= sevenDaysAgo).ToList();
         var runs30Days = recentRuns.ToList();
@@ -561,151 +458,168 @@ public class OrchestratorStore : IOrchestratorStore
         var failureTrend = CalculateFailureTrend(recentRuns.Where(r => r.CreatedAtUtc >= fourteenDaysAgo).ToList(), fourteenDaysAgo, now);
         var avgDuration = CalculateAverageDuration(recentRuns);
 
-        return new ReliabilityMetrics(
-            successRate7Days,
-            successRate30Days,
-            runs7Days.Count,
-            runs30Days.Count,
-            runsByState,
-            failureTrend,
-            avgDuration,
-            []);
+        return new ReliabilityMetrics(successRate7Days, successRate30Days, runs7Days.Count, runs30Days.Count, runsByState, failureTrend, avgDuration, []);
     }
 
-    public virtual async Task<RunDocument?> GetRunAsync(string runId, CancellationToken cancellationToken)
-        => await _runs.Find(x => x.Id == runId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual Task<List<RunDocument>> ListRunsByStateAsync(RunState state, CancellationToken cancellationToken)
-        => _runs.Find(x => x.State == state).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-
-    public virtual async Task<List<string>> ListAllRunIdsAsync(CancellationToken cancellationToken)
+    public async Task<RunDocument?> GetRunAsync(string runId, CancellationToken cancellationToken)
     {
-        var runs = await _runs.Find(FilterDefinition<RunDocument>.Empty)
-            .Project(x => x.Id)
-            .ToListAsync(cancellationToken);
-        return runs;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == runId, cancellationToken);
     }
 
-    public virtual async Task<long> CountActiveRunsAsync(CancellationToken cancellationToken)
-        => await _runs.CountDocumentsAsync(x => x.State == RunState.Queued || x.State == RunState.Running || x.State == RunState.PendingApproval, cancellationToken: cancellationToken);
-
-    public virtual async Task<long> CountActiveRunsByProjectAsync(string projectId, CancellationToken cancellationToken)
-        => await _runs.CountDocumentsAsync(x => x.ProjectId == projectId && (x.State == RunState.Queued || x.State == RunState.Running || x.State == RunState.PendingApproval), cancellationToken: cancellationToken);
-
-    public virtual async Task<long> CountActiveRunsByRepoAsync(string repositoryId, CancellationToken cancellationToken)
-        => await _runs.CountDocumentsAsync(x => x.RepositoryId == repositoryId && (x.State == RunState.Queued || x.State == RunState.Running || x.State == RunState.PendingApproval), cancellationToken: cancellationToken);
-
-    public virtual async Task<long> CountActiveRunsByTaskAsync(string taskId, CancellationToken cancellationToken)
-        => await _runs.CountDocumentsAsync(x => x.TaskId == taskId && (x.State == RunState.Queued || x.State == RunState.Running || x.State == RunState.PendingApproval), cancellationToken: cancellationToken);
-
-    public virtual async Task<RunDocument?> MarkRunStartedAsync(string runId, CancellationToken cancellationToken)
+    public async Task<List<RunDocument>> ListRunsByStateAsync(RunState state, CancellationToken cancellationToken)
     {
-        var update = Builders<RunDocument>.Update
-            .Set(x => x.State, RunState.Running)
-            .Set(x => x.StartedAtUtc, DateTime.UtcNow)
-            .Set(x => x.Summary, "Running");
-
-        return await _runs.FindOneAndUpdateAsync(
-            x => x.Id == runId,
-            update,
-            new FindOneAndUpdateOptions<RunDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.AsNoTracking().Where(x => x.State == state).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
-    public virtual async Task<RunDocument?> MarkRunCompletedAsync(
-        string runId,
-        bool succeeded,
-        string summary,
-        string outputJson,
-        CancellationToken cancellationToken,
-        string? failureClass = null,
-        string? prUrl = null)
+    public async Task<List<string>> ListAllRunIdsAsync(CancellationToken cancellationToken)
     {
-        var updateDef = Builders<RunDocument>.Update
-            .Set(x => x.State, succeeded ? RunState.Succeeded : RunState.Failed)
-            .Set(x => x.EndedAtUtc, DateTime.UtcNow)
-            .Set(x => x.Summary, summary)
-            .Set(x => x.OutputJson, outputJson);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.AsNoTracking().Select(x => x.Id).ToListAsync(cancellationToken);
+    }
+
+    public async Task<long> CountActiveRunsAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.LongCountAsync(x => ActiveStates.Contains(x.State), cancellationToken);
+    }
+
+    public async Task<long> CountActiveRunsByProjectAsync(string projectId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.LongCountAsync(x => x.ProjectId == projectId && ActiveStates.Contains(x.State), cancellationToken);
+    }
+
+    public async Task<long> CountActiveRunsByRepoAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.LongCountAsync(x => x.RepositoryId == repositoryId && ActiveStates.Contains(x.State), cancellationToken);
+    }
+
+    public async Task<long> CountActiveRunsByTaskAsync(string taskId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Runs.LongCountAsync(x => x.TaskId == taskId && ActiveStates.Contains(x.State), cancellationToken);
+    }
+
+    public async Task<RunDocument?> MarkRunStartedAsync(string runId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId, cancellationToken);
+        if (run is null)
+            return null;
+
+        run.State = RunState.Running;
+        run.StartedAtUtc = DateTime.UtcNow;
+        run.Summary = "Running";
+        await db.SaveChangesAsync(cancellationToken);
+        return run;
+    }
+
+    public async Task<RunDocument?> MarkRunCompletedAsync(string runId, bool succeeded, string summary, string outputJson, CancellationToken cancellationToken, string? failureClass = null, string? prUrl = null)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId, cancellationToken);
+        if (run is null)
+            return null;
+
+        run.State = succeeded ? RunState.Succeeded : RunState.Failed;
+        run.EndedAtUtc = DateTime.UtcNow;
+        run.Summary = summary;
+        run.OutputJson = outputJson;
 
         if (!string.IsNullOrEmpty(failureClass))
-            updateDef = updateDef.Set(x => x.FailureClass, failureClass);
+            run.FailureClass = failureClass;
         if (!string.IsNullOrEmpty(prUrl))
-            updateDef = updateDef.Set(x => x.PrUrl, prUrl);
+            run.PrUrl = prUrl;
 
-        return await _runs.FindOneAndUpdateAsync(
-            x => x.Id == runId,
-            updateDef,
-            new FindOneAndUpdateOptions<RunDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        return run;
     }
 
-    public virtual async Task<RunDocument?> MarkRunCancelledAsync(string runId, CancellationToken cancellationToken)
+    public async Task<RunDocument?> MarkRunCancelledAsync(string runId, CancellationToken cancellationToken)
     {
-        var update = Builders<RunDocument>.Update
-            .Set(x => x.State, RunState.Cancelled)
-            .Set(x => x.EndedAtUtc, DateTime.UtcNow)
-            .Set(x => x.Summary, "Cancelled");
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && ActiveStates.Contains(x.State), cancellationToken);
+        if (run is null)
+            return null;
 
-        return await _runs.FindOneAndUpdateAsync(
-            x => x.Id == runId && (x.State == RunState.Queued || x.State == RunState.Running || x.State == RunState.PendingApproval),
-            update,
-            new FindOneAndUpdateOptions<RunDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        run.State = RunState.Cancelled;
+        run.EndedAtUtc = DateTime.UtcNow;
+        run.Summary = "Cancelled";
+        await db.SaveChangesAsync(cancellationToken);
+        return run;
     }
 
-    public virtual async Task<RunDocument?> MarkRunPendingApprovalAsync(string runId, CancellationToken cancellationToken)
+    public async Task<RunDocument?> MarkRunPendingApprovalAsync(string runId, CancellationToken cancellationToken)
     {
-        var update = Builders<RunDocument>.Update
-            .Set(x => x.State, RunState.PendingApproval)
-            .Set(x => x.Summary, "Pending approval");
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId, cancellationToken);
+        if (run is null)
+            return null;
 
-        return await _runs.FindOneAndUpdateAsync(
-            x => x.Id == runId,
-            update,
-            new FindOneAndUpdateOptions<RunDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        run.State = RunState.PendingApproval;
+        run.Summary = "Pending approval";
+        await db.SaveChangesAsync(cancellationToken);
+        return run;
     }
 
-    public virtual async Task<RunDocument?> ApproveRunAsync(string runId, CancellationToken cancellationToken)
+    public async Task<RunDocument?> ApproveRunAsync(string runId, CancellationToken cancellationToken)
     {
-        var update = Builders<RunDocument>.Update
-            .Set(x => x.State, RunState.Queued)
-            .Set(x => x.Summary, "Approved and queued");
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State == RunState.PendingApproval, cancellationToken);
+        if (run is null)
+            return null;
 
-        return await _runs.FindOneAndUpdateAsync(
-            x => x.Id == runId && x.State == RunState.PendingApproval,
-            update,
-            new FindOneAndUpdateOptions<RunDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        run.State = RunState.Queued;
+        run.Summary = "Approved and queued";
+        await db.SaveChangesAsync(cancellationToken);
+        return run;
     }
 
-    public virtual async Task<RunDocument?> RejectRunAsync(string runId, CancellationToken cancellationToken)
+    public async Task<RunDocument?> RejectRunAsync(string runId, CancellationToken cancellationToken)
     {
-        var update = Builders<RunDocument>.Update
-            .Set(x => x.State, RunState.Cancelled)
-            .Set(x => x.EndedAtUtc, DateTime.UtcNow)
-            .Set(x => x.Summary, "Rejected");
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State == RunState.PendingApproval, cancellationToken);
+        if (run is null)
+            return null;
 
-        return await _runs.FindOneAndUpdateAsync(
-            x => x.Id == runId && x.State == RunState.PendingApproval,
-            update,
-            new FindOneAndUpdateOptions<RunDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        run.State = RunState.Cancelled;
+        run.EndedAtUtc = DateTime.UtcNow;
+        run.Summary = "Rejected";
+        await db.SaveChangesAsync(cancellationToken);
+        return run;
     }
 
-    // --- Artifacts ---
+    public async Task<int> BulkCancelRunsAsync(List<string> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+            return 0;
 
-    public virtual async Task SaveArtifactAsync(string runId, string fileName, Stream stream, CancellationToken cancellationToken)
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var runs = await db.Runs.Where(x => runIds.Contains(x.Id) && ActiveStates.Contains(x.State)).ToListAsync(cancellationToken);
+        foreach (var run in runs)
+        {
+            run.State = RunState.Cancelled;
+            run.EndedAtUtc = DateTime.UtcNow;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return runs.Count;
+    }
+
+    public async Task SaveArtifactAsync(string runId, string fileName, Stream stream, CancellationToken cancellationToken)
     {
         var artifactDir = Path.Combine("/data/artifacts", runId);
         Directory.CreateDirectory(artifactDir);
 
         var filePath = Path.Combine(artifactDir, fileName);
-        using var fileStream = File.Create(filePath);
+        await using var fileStream = File.Create(filePath);
         await stream.CopyToAsync(fileStream, cancellationToken);
     }
 
-    public virtual Task<List<string>> ListArtifactsAsync(string runId, CancellationToken cancellationToken)
+    public Task<List<string>> ListArtifactsAsync(string runId, CancellationToken cancellationToken)
     {
         var artifactDir = Path.Combine("/data/artifacts", runId);
         if (!Directory.Exists(artifactDir))
@@ -720,7 +634,7 @@ public class OrchestratorStore : IOrchestratorStore
         return Task.FromResult(files);
     }
 
-    public virtual Task<FileStream?> GetArtifactAsync(string runId, string fileName, CancellationToken cancellationToken)
+    public Task<FileStream?> GetArtifactAsync(string runId, string fileName, CancellationToken cancellationToken)
     {
         var artifactDir = Path.Combine("/data/artifacts", runId);
         var filePath = Path.Combine(artifactDir, fileName);
@@ -731,132 +645,183 @@ public class OrchestratorStore : IOrchestratorStore
         return Task.FromResult<FileStream?>(File.OpenRead(filePath));
     }
 
-    // --- Run Logs ---
-
-    public virtual Task AddRunLogAsync(RunLogEvent logEvent, CancellationToken cancellationToken)
-        => _runEvents.InsertOneAsync(logEvent, cancellationToken: cancellationToken);
-
-    public virtual Task<List<RunLogEvent>> ListRunLogsAsync(string runId, CancellationToken cancellationToken)
-        => _runEvents.Find(x => x.RunId == runId).SortBy(x => x.TimestampUtc).ToListAsync(cancellationToken);
-
-    // --- Findings ---
-
-    public virtual Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken)
-        => _findings.Find(x => x.RepositoryId == repositoryId).SortByDescending(x => x.CreatedAtUtc).Limit(200).ToListAsync(cancellationToken);
-
-    public virtual Task<List<FindingDocument>> ListAllFindingsAsync(CancellationToken cancellationToken)
-        => _findings.Find(FilterDefinition<FindingDocument>.Empty).SortByDescending(x => x.CreatedAtUtc).Limit(500).ToListAsync(cancellationToken);
-
-    public virtual async Task<FindingDocument?> GetFindingAsync(string findingId, CancellationToken cancellationToken)
-        => await _findings.Find(x => x.Id == findingId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual async Task<FindingDocument> CreateFindingFromFailureAsync(RunDocument run, string description, CancellationToken cancellationToken)
+    public async Task AddRunLogAsync(RunLogEvent logEvent, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.RunEvents.Add(logEvent);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<List<RunLogEvent>> ListRunLogsAsync(string runId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RunEvents.AsNoTracking().Where(x => x.RunId == runId).OrderBy(x => x.TimestampUtc).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Findings.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderByDescending(x => x.CreatedAtUtc).Take(200).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<FindingDocument>> ListAllFindingsAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Findings.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(500).ToListAsync(cancellationToken);
+    }
+
+    public async Task<FindingDocument?> GetFindingAsync(string findingId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Findings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
+    }
+
+    public async Task<FindingDocument> CreateFindingFromFailureAsync(RunDocument run, string description, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var shortRun = run.Id.Length >= 8 ? run.Id[..8] : run.Id;
         var finding = new FindingDocument
         {
             RepositoryId = run.RepositoryId,
             RunId = run.Id,
-            Title = $"Run {run.Id[..8]} failed",
+            Title = $"Run {shortRun} failed",
             Description = description,
             Severity = FindingSeverity.High,
             State = FindingState.New,
         };
 
-        await _findings.InsertOneAsync(finding, cancellationToken: cancellationToken);
+        db.Findings.Add(finding);
+        await db.SaveChangesAsync(cancellationToken);
         return finding;
     }
 
-    public virtual async Task<FindingDocument?> UpdateFindingStateAsync(string findingId, FindingState state, CancellationToken cancellationToken)
+    public async Task<FindingDocument?> UpdateFindingStateAsync(string findingId, FindingState state, CancellationToken cancellationToken)
     {
-        var update = Builders<FindingDocument>.Update.Set(x => x.State, state);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
+        if (finding is null)
+            return null;
 
-        return await _findings.FindOneAndUpdateAsync(
-            x => x.Id == findingId,
-            update,
-            new FindOneAndUpdateOptions<FindingDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        finding.State = state;
+        await db.SaveChangesAsync(cancellationToken);
+        return finding;
     }
 
-    public virtual async Task<bool> DeleteFindingAsync(string findingId, CancellationToken cancellationToken)
+    public async Task<FindingDocument?> AssignFindingAsync(string findingId, string assignedTo, CancellationToken cancellationToken)
     {
-        var result = await _findings.DeleteOneAsync(x => x.Id == findingId, cancellationToken);
-        return result.DeletedCount > 0;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
+        if (finding is null)
+            return null;
+
+        finding.AssignedTo = assignedTo;
+        finding.State = FindingState.InProgress;
+        await db.SaveChangesAsync(cancellationToken);
+        return finding;
     }
 
-    // --- Provider Secrets ---
-
-    public virtual async Task UpsertProviderSecretAsync(
-        string repositoryId,
-        string provider,
-        string encryptedValue,
-        CancellationToken cancellationToken)
+    public async Task<bool> DeleteFindingAsync(string findingId, CancellationToken cancellationToken)
     {
-        var filter = Builders<ProviderSecretDocument>.Filter.And(
-            Builders<ProviderSecretDocument>.Filter.Eq(x => x.RepositoryId, repositoryId),
-            Builders<ProviderSecretDocument>.Filter.Eq(x => x.Provider, provider));
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
+        if (finding is null)
+            return false;
 
-        var update = Builders<ProviderSecretDocument>.Update
-            .Set(x => x.EncryptedValue, encryptedValue)
-            .Set(x => x.UpdatedAtUtc, DateTime.UtcNow)
-            .SetOnInsert(x => x.RepositoryId, repositoryId)
-            .SetOnInsert(x => x.Provider, provider);
-
-        await _providerSecrets.UpdateOneAsync(
-            filter,
-            update,
-            new UpdateOptions { IsUpsert = true },
-            cancellationToken);
+        db.Findings.Remove(finding);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
-    public virtual Task<List<ProviderSecretDocument>> ListProviderSecretsAsync(string repositoryId, CancellationToken cancellationToken)
-        => _providerSecrets.Find(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
-
-    public virtual async Task<ProviderSecretDocument?> GetProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
-        => await _providerSecrets.Find(x => x.RepositoryId == repositoryId && x.Provider == provider)
-            .FirstOrDefaultAsync(cancellationToken);
-
-    public virtual async Task<bool> DeleteProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
+    public async Task UpsertProviderSecretAsync(string repositoryId, string provider, string encryptedValue, CancellationToken cancellationToken)
     {
-        var result = await _providerSecrets.DeleteOneAsync(
-            x => x.RepositoryId == repositoryId && x.Provider == provider,
-            cancellationToken);
-        return result.DeletedCount > 0;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var secret = await db.ProviderSecrets.FirstOrDefaultAsync(x => x.RepositoryId == repositoryId && x.Provider == provider, cancellationToken);
+        if (secret is null)
+        {
+            secret = new ProviderSecretDocument
+            {
+                RepositoryId = repositoryId,
+                Provider = provider,
+            };
+            db.ProviderSecrets.Add(secret);
+        }
+
+        secret.EncryptedValue = encryptedValue;
+        secret.UpdatedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
     }
 
-    // --- Workers ---
-
-    public virtual Task<List<WorkerRegistration>> ListWorkersAsync(CancellationToken cancellationToken)
-        => _workers.Find(FilterDefinition<WorkerRegistration>.Empty).SortBy(x => x.WorkerId).ToListAsync(cancellationToken);
-
-    public virtual async Task UpsertWorkerHeartbeatAsync(string workerId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken)
+    public async Task<List<ProviderSecretDocument>> ListProviderSecretsAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        var filter = Builders<WorkerRegistration>.Filter.Eq(x => x.WorkerId, workerId);
-        var update = Builders<WorkerRegistration>.Update
-            .Set(x => x.Endpoint, endpoint)
-            .Set(x => x.ActiveSlots, activeSlots)
-            .Set(x => x.MaxSlots, maxSlots)
-            .Set(x => x.Online, true)
-            .Set(x => x.LastHeartbeatUtc, DateTime.UtcNow)
-            .SetOnInsert(x => x.Id, Guid.NewGuid().ToString("N"))
-            .SetOnInsert(x => x.WorkerId, workerId)
-            .SetOnInsert(x => x.RegisteredAtUtc, DateTime.UtcNow);
-
-        await _workers.UpdateOneAsync(filter, update, new UpdateOptions { IsUpsert = true }, cancellationToken: cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.ProviderSecrets.AsNoTracking().Where(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
     }
 
-    public virtual async Task MarkStaleWorkersOfflineAsync(TimeSpan threshold, CancellationToken cancellationToken)
+    public async Task<ProviderSecretDocument?> GetProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.ProviderSecrets.AsNoTracking().FirstOrDefaultAsync(x => x.RepositoryId == repositoryId && x.Provider == provider, cancellationToken);
+    }
+
+    public async Task<bool> DeleteProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var secret = await db.ProviderSecrets.FirstOrDefaultAsync(x => x.RepositoryId == repositoryId && x.Provider == provider, cancellationToken);
+        if (secret is null)
+            return false;
+
+        db.ProviderSecrets.Remove(secret);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<List<WorkerRegistration>> ListWorkersAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Workers.AsNoTracking().OrderBy(x => x.WorkerId).ToListAsync(cancellationToken);
+    }
+
+    public async Task UpsertWorkerHeartbeatAsync(string workerId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var worker = await db.Workers.FirstOrDefaultAsync(x => x.WorkerId == workerId, cancellationToken);
+        if (worker is null)
+        {
+            worker = new WorkerRegistration
+            {
+                WorkerId = workerId,
+                RegisteredAtUtc = DateTime.UtcNow,
+            };
+            db.Workers.Add(worker);
+        }
+
+        worker.Endpoint = endpoint;
+        worker.ActiveSlots = activeSlots;
+        worker.MaxSlots = maxSlots;
+        worker.Online = true;
+        worker.LastHeartbeatUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task MarkStaleWorkersOfflineAsync(TimeSpan threshold, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var cutoff = DateTime.UtcNow - threshold;
-        await _workers.UpdateManyAsync(
-            x => x.Online && x.LastHeartbeatUtc < cutoff,
-            Builders<WorkerRegistration>.Update.Set(x => x.Online, false),
-            cancellationToken: cancellationToken);
+        var stale = await db.Workers.Where(x => x.Online && x.LastHeartbeatUtc < cutoff).ToListAsync(cancellationToken);
+        if (stale.Count == 0)
+            return;
+
+        foreach (var worker in stale)
+        {
+            worker.Online = false;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
     }
 
-    // --- Webhooks ---
-
-    public virtual async Task<WebhookRegistration> CreateWebhookAsync(CreateWebhookRequest request, CancellationToken cancellationToken)
+    public async Task<WebhookRegistration> CreateWebhookAsync(CreateWebhookRequest request, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var webhook = new WebhookRegistration
         {
             RepositoryId = request.RepositoryId,
@@ -865,330 +830,369 @@ public class OrchestratorStore : IOrchestratorStore
             Secret = request.Secret,
         };
 
-        await _webhooks.InsertOneAsync(webhook, cancellationToken: cancellationToken);
+        db.Webhooks.Add(webhook);
+        await db.SaveChangesAsync(cancellationToken);
         return webhook;
     }
 
-    public virtual async Task<WebhookRegistration?> GetWebhookAsync(string webhookId, CancellationToken cancellationToken)
-        => await _webhooks.Find(x => x.Id == webhookId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual Task<List<WebhookRegistration>> ListWebhooksAsync(string repositoryId, CancellationToken cancellationToken)
-        => _webhooks.Find(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
-
-    public virtual async Task<WebhookRegistration?> UpdateWebhookAsync(string webhookId, UpdateWebhookRequest request, CancellationToken cancellationToken)
+    public async Task<WebhookRegistration?> GetWebhookAsync(string webhookId, CancellationToken cancellationToken)
     {
-        var update = Builders<WebhookRegistration>.Update
-            .Set(x => x.TaskId, request.TaskId)
-            .Set(x => x.EventFilter, request.EventFilter)
-            .Set(x => x.Secret, request.Secret)
-            .Set(x => x.Enabled, request.Enabled);
-
-        return await _webhooks.FindOneAndUpdateAsync(
-            x => x.Id == webhookId,
-            update,
-            new FindOneAndUpdateOptions<WebhookRegistration> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Webhooks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == webhookId, cancellationToken);
     }
 
-    public virtual async Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken)
+    public async Task<List<WebhookRegistration>> ListWebhooksAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        var result = await _webhooks.DeleteOneAsync(x => x.Id == webhookId, cancellationToken);
-        return result.DeletedCount > 0;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Webhooks.AsNoTracking().Where(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
     }
 
-    // --- Finding Assignment ---
-
-    public virtual async Task<FindingDocument?> AssignFindingAsync(string findingId, string assignedTo, CancellationToken cancellationToken)
+    public async Task<WebhookRegistration?> UpdateWebhookAsync(string webhookId, UpdateWebhookRequest request, CancellationToken cancellationToken)
     {
-        var update = Builders<FindingDocument>.Update
-            .Set(x => x.AssignedTo, assignedTo)
-            .Set(x => x.State, FindingState.InProgress);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var webhook = await db.Webhooks.FirstOrDefaultAsync(x => x.Id == webhookId, cancellationToken);
+        if (webhook is null)
+            return null;
 
-        return await _findings.FindOneAndUpdateAsync(
-            x => x.Id == findingId,
-            update,
-            new FindOneAndUpdateOptions<FindingDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        webhook.TaskId = request.TaskId;
+        webhook.EventFilter = request.EventFilter;
+        webhook.Secret = request.Secret;
+        webhook.Enabled = request.Enabled;
+        await db.SaveChangesAsync(cancellationToken);
+        return webhook;
     }
 
-    // --- Proxy Audits ---
-
-    public virtual Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken)
-        => _proxyAudits.InsertOneAsync(audit, cancellationToken: cancellationToken);
-
-    public virtual Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken)
-        => _proxyAudits.Find(x => x.RunId == runId).SortByDescending(x => x.TimestampUtc).Limit(200).ToListAsync(cancellationToken);
-
-    public virtual async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(
-        string? projectId,
-        string? repoId,
-        string? taskId,
-        string? runId,
-        int limit,
-        CancellationToken cancellationToken)
+    public async Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken)
     {
-        var filterBuilder = Builders<ProxyAuditDocument>.Filter;
-        var filters = new List<FilterDefinition<ProxyAuditDocument>>();
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var webhook = await db.Webhooks.FirstOrDefaultAsync(x => x.Id == webhookId, cancellationToken);
+        if (webhook is null)
+            return false;
 
-        if (!string.IsNullOrEmpty(projectId))
-            filters.Add(filterBuilder.Eq(x => x.ProjectId, projectId));
-        if (!string.IsNullOrEmpty(repoId))
-            filters.Add(filterBuilder.Eq(x => x.RepoId, repoId));
-        if (!string.IsNullOrEmpty(taskId))
-            filters.Add(filterBuilder.Eq(x => x.TaskId, taskId));
-        if (!string.IsNullOrEmpty(runId))
-            filters.Add(filterBuilder.Eq(x => x.RunId, runId));
-
-        var filter = filters.Count > 0 ? filterBuilder.And(filters) : FilterDefinition<ProxyAuditDocument>.Empty;
-
-        return await _proxyAudits
-            .Find(filter)
-            .SortByDescending(x => x.TimestampUtc)
-            .Limit(limit)
-            .ToListAsync(cancellationToken);
+        db.Webhooks.Remove(webhook);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
-    // --- System Settings ---
-
-    public virtual async Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken)
+    public async Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken)
     {
-        var settings = await _settings.Find(x => x.Id == "singleton").FirstOrDefaultAsync(cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.ProxyAudits.Add(audit);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.ProxyAudits.AsNoTracking().Where(x => x.RunId == runId).OrderByDescending(x => x.TimestampUtc).Take(200).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? projectId, string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var query = db.ProxyAudits.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(projectId))
+            query = query.Where(x => x.ProjectId == projectId);
+        if (!string.IsNullOrWhiteSpace(repoId))
+            query = query.Where(x => x.RepoId == repoId);
+        if (!string.IsNullOrWhiteSpace(taskId))
+            query = query.Where(x => x.TaskId == taskId);
+        if (!string.IsNullOrWhiteSpace(runId))
+            query = query.Where(x => x.RunId == runId);
+
+        return await query.OrderByDescending(x => x.TimestampUtc).Take(limit).ToListAsync(cancellationToken);
+    }
+
+    public async Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var settings = await db.Settings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == "singleton", cancellationToken);
         return settings ?? new SystemSettingsDocument();
     }
 
-    public virtual async Task<SystemSettingsDocument> UpdateSettingsAsync(SystemSettingsDocument settings, CancellationToken cancellationToken)
+    public async Task<SystemSettingsDocument> UpdateSettingsAsync(SystemSettingsDocument settings, CancellationToken cancellationToken)
     {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         settings.Id = "singleton";
         settings.UpdatedAtUtc = DateTime.UtcNow;
-        await _settings.ReplaceOneAsync(
-            x => x.Id == "singleton",
-            settings,
-            new ReplaceOptions { IsUpsert = true },
-            cancellationToken);
-        return settings;
+
+        var existing = await db.Settings.FirstOrDefaultAsync(x => x.Id == "singleton", cancellationToken);
+        if (existing is null)
+        {
+            db.Settings.Add(settings);
+            await db.SaveChangesAsync(cancellationToken);
+            return settings;
+        }
+
+        db.Entry(existing).CurrentValues.SetValues(settings);
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
     }
 
-    // --- Workflows ---
-
-    public virtual async Task<WorkflowDocument> CreateWorkflowAsync(WorkflowDocument workflow, CancellationToken cancellationToken)
+    public async Task<WorkflowDocument> CreateWorkflowAsync(WorkflowDocument workflow, CancellationToken cancellationToken)
     {
-        await _workflows.InsertOneAsync(workflow, cancellationToken: cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.Workflows.Add(workflow);
+        await db.SaveChangesAsync(cancellationToken);
         return workflow;
     }
 
-    public virtual Task<List<WorkflowDocument>> ListWorkflowsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
-        => _workflows.Find(x => x.RepositoryId == repositoryId).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-
-    public virtual Task<List<WorkflowDocument>> ListAllWorkflowsAsync(CancellationToken cancellationToken)
-        => _workflows.Find(FilterDefinition<WorkflowDocument>.Empty).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-
-    public virtual async Task<WorkflowDocument?> GetWorkflowAsync(string workflowId, CancellationToken cancellationToken)
-        => await _workflows.Find(x => x.Id == workflowId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual async Task<WorkflowDocument?> UpdateWorkflowAsync(string workflowId, WorkflowDocument workflow, CancellationToken cancellationToken)
+    public async Task<List<WorkflowDocument>> ListWorkflowsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        var result = await _workflows.ReplaceOneAsync(x => x.Id == workflowId, workflow, cancellationToken: cancellationToken);
-        return result.ModifiedCount > 0 ? workflow : null;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Workflows.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
-    public virtual async Task<bool> DeleteWorkflowAsync(string workflowId, CancellationToken cancellationToken)
+    public async Task<List<WorkflowDocument>> ListAllWorkflowsAsync(CancellationToken cancellationToken)
     {
-        var result = await _workflows.DeleteOneAsync(x => x.Id == workflowId, cancellationToken);
-        return result.DeletedCount > 0;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Workflows.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
-    // --- Workflow Executions ---
-
-    public virtual async Task<WorkflowExecutionDocument> CreateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken)
+    public async Task<WorkflowDocument?> GetWorkflowAsync(string workflowId, CancellationToken cancellationToken)
     {
-        await _workflowExecutions.InsertOneAsync(execution, cancellationToken: cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Workflows.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
+    }
+
+    public async Task<WorkflowDocument?> UpdateWorkflowAsync(string workflowId, WorkflowDocument workflow, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.Workflows.FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
+        if (existing is null)
+            return null;
+
+        workflow.Id = existing.Id;
+        db.Entry(existing).CurrentValues.SetValues(workflow);
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<bool> DeleteWorkflowAsync(string workflowId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var workflow = await db.Workflows.FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
+        if (workflow is null)
+            return false;
+
+        db.Workflows.Remove(workflow);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<WorkflowExecutionDocument> CreateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.WorkflowExecutions.Add(execution);
+        await db.SaveChangesAsync(cancellationToken);
         return execution;
     }
 
-    public virtual Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsAsync(string workflowId, CancellationToken cancellationToken)
-        => _workflowExecutions.Find(x => x.WorkflowId == workflowId).SortByDescending(x => x.CreatedAtUtc).Limit(100).ToListAsync(cancellationToken);
-
-    public virtual Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsByStateAsync(WorkflowExecutionState state, CancellationToken cancellationToken)
-        => _workflowExecutions.Find(x => x.State == state).SortByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-
-    public virtual async Task<AlertEventDocument?> ResolveAlertEventAsync(string eventId, CancellationToken cancellationToken)
+    public async Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsAsync(string workflowId, CancellationToken cancellationToken)
     {
-        var update = Builders<AlertEventDocument>.Update.Set(x => x.Resolved, true);
-
-        return await _alertEvents.FindOneAndUpdateAsync(
-            x => x.Id == eventId,
-            update,
-            new FindOneAndUpdateOptions<AlertEventDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowExecutions.AsNoTracking()
+            .Where(x => x.WorkflowId == workflowId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(100)
+            .ToListAsync(cancellationToken);
     }
 
-    public virtual async Task<int> ResolveAlertEventsAsync(List<string> eventIds, CancellationToken cancellationToken)
+    public async Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsByStateAsync(WorkflowExecutionState state, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowExecutions.AsNoTracking().Where(x => x.State == state).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
+    }
+
+    public async Task<WorkflowExecutionDocument?> GetWorkflowExecutionAsync(string executionId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.WorkflowExecutions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
+    }
+
+    public async Task<WorkflowExecutionDocument?> UpdateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == execution.Id, cancellationToken);
+        if (existing is null)
+            return null;
+
+        db.Entry(existing).CurrentValues.SetValues(execution);
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<WorkflowExecutionDocument?> MarkWorkflowExecutionCompletedAsync(string executionId, WorkflowExecutionState finalState, string failureReason, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
+        if (execution is null)
+            return null;
+
+        execution.State = finalState;
+        execution.EndedAtUtc = DateTime.UtcNow;
+        execution.FailureReason = failureReason;
+        await db.SaveChangesAsync(cancellationToken);
+        return execution;
+    }
+
+    public async Task<WorkflowExecutionDocument?> MarkWorkflowExecutionPendingApprovalAsync(string executionId, string pendingApprovalStageId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
+        if (execution is null)
+            return null;
+
+        execution.State = WorkflowExecutionState.PendingApproval;
+        execution.PendingApprovalStageId = pendingApprovalStageId;
+        await db.SaveChangesAsync(cancellationToken);
+        return execution;
+    }
+
+    public async Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(string executionId, string approvedBy, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(
+            x => x.Id == executionId && x.State == WorkflowExecutionState.PendingApproval,
+            cancellationToken);
+        if (execution is null)
+            return null;
+
+        execution.State = WorkflowExecutionState.Running;
+        execution.ApprovedBy = approvedBy;
+        execution.PendingApprovalStageId = string.Empty;
+        await db.SaveChangesAsync(cancellationToken);
+        return execution;
+    }
+
+    public async Task<WorkflowExecutionDocument?> GetWorkflowExecutionByRunIdAsync(string runId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var executions = await db.WorkflowExecutions.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(500).ToListAsync(cancellationToken);
+        return executions.FirstOrDefault(x => x.StageResults.Any(stage => stage.RunIds.Contains(runId)));
+    }
+
+    public async Task<WorkflowDocument?> GetWorkflowForExecutionAsync(string workflowId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Workflows.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
+    }
+
+    public async Task<AlertRuleDocument> CreateAlertRuleAsync(AlertRuleDocument rule, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.AlertRules.Add(rule);
+        await db.SaveChangesAsync(cancellationToken);
+        return rule;
+    }
+
+    public async Task<List<AlertRuleDocument>> ListAlertRulesAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.AlertRules.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<AlertRuleDocument>> ListEnabledAlertRulesAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.AlertRules.AsNoTracking().Where(x => x.Enabled).ToListAsync(cancellationToken);
+    }
+
+    public async Task<AlertRuleDocument?> GetAlertRuleAsync(string ruleId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.AlertRules.AsNoTracking().FirstOrDefaultAsync(x => x.Id == ruleId, cancellationToken);
+    }
+
+    public async Task<AlertRuleDocument?> UpdateAlertRuleAsync(string ruleId, AlertRuleDocument rule, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.AlertRules.FirstOrDefaultAsync(x => x.Id == ruleId, cancellationToken);
+        if (existing is null)
+            return null;
+
+        rule.Id = existing.Id;
+        db.Entry(existing).CurrentValues.SetValues(rule);
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<bool> DeleteAlertRuleAsync(string ruleId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var rule = await db.AlertRules.FirstOrDefaultAsync(x => x.Id == ruleId, cancellationToken);
+        if (rule is null)
+            return false;
+
+        db.AlertRules.Remove(rule);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<AlertEventDocument> RecordAlertEventAsync(AlertEventDocument alertEvent, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.AlertEvents.Add(alertEvent);
+        await db.SaveChangesAsync(cancellationToken);
+        return alertEvent;
+    }
+
+    public async Task<AlertEventDocument?> GetAlertEventAsync(string eventId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.AlertEvents.AsNoTracking().FirstOrDefaultAsync(x => x.Id == eventId, cancellationToken);
+    }
+
+    public async Task<List<AlertEventDocument>> ListRecentAlertEventsAsync(int limit, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.AlertEvents.AsNoTracking().OrderByDescending(x => x.FiredAtUtc).Take(limit).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<AlertEventDocument>> ListAlertEventsByRuleAsync(string ruleId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.AlertEvents.AsNoTracking().Where(x => x.RuleId == ruleId).OrderByDescending(x => x.FiredAtUtc).Take(50).ToListAsync(cancellationToken);
+    }
+
+    public async Task<AlertEventDocument?> ResolveAlertEventAsync(string eventId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var alertEvent = await db.AlertEvents.FirstOrDefaultAsync(x => x.Id == eventId, cancellationToken);
+        if (alertEvent is null)
+            return null;
+
+        alertEvent.Resolved = true;
+        await db.SaveChangesAsync(cancellationToken);
+        return alertEvent;
+    }
+
+    public async Task<int> ResolveAlertEventsAsync(List<string> eventIds, CancellationToken cancellationToken)
     {
         if (eventIds.Count == 0)
             return 0;
 
-        var update = Builders<AlertEventDocument>.Update.Set(x => x.Resolved, true);
-        var result = await _alertEvents.UpdateManyAsync(
-            x => eventIds.Contains(x.Id),
-            update,
-            cancellationToken: cancellationToken);
-        return (int)result.ModifiedCount;
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var events = await db.AlertEvents.Where(x => eventIds.Contains(x.Id) && !x.Resolved).ToListAsync(cancellationToken);
+        foreach (var alertEvent in events)
+        {
+            alertEvent.Resolved = true;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return events.Count;
     }
 
-    public virtual async Task<int> BulkCancelRunsAsync(List<string> runIds, CancellationToken cancellationToken)
+    public async Task<ReliabilityMetrics> GetReliabilityMetricsAsync(CancellationToken cancellationToken)
     {
-        if (runIds.Count == 0)
-            return 0;
-
-        var update = Builders<RunDocument>.Update
-            .Set(x => x.State, RunState.Cancelled)
-            .Set(x => x.EndedAtUtc, DateTime.UtcNow);
-
-        var result = await _runs.UpdateManyAsync(
-            x => runIds.Contains(x.Id) && (x.State == RunState.Queued || x.State == RunState.Running || x.State == RunState.PendingApproval),
-            update,
-            cancellationToken: cancellationToken);
-        return (int)result.ModifiedCount;
-    }
-
-    public virtual async Task<WorkflowExecutionDocument?> GetWorkflowExecutionAsync(string executionId, CancellationToken cancellationToken)
-        => await _workflowExecutions.Find(x => x.Id == executionId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual async Task<WorkflowExecutionDocument?> UpdateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken)
-    {
-        var result = await _workflowExecutions.ReplaceOneAsync(x => x.Id == execution.Id, execution, cancellationToken: cancellationToken);
-        return result.ModifiedCount > 0 ? execution : null;
-    }
-
-    public virtual async Task<WorkflowExecutionDocument?> MarkWorkflowExecutionCompletedAsync(
-        string executionId,
-        WorkflowExecutionState finalState,
-        string failureReason,
-        CancellationToken cancellationToken)
-    {
-        var update = Builders<WorkflowExecutionDocument>.Update
-            .Set(x => x.State, finalState)
-            .Set(x => x.EndedAtUtc, DateTime.UtcNow)
-            .Set(x => x.FailureReason, failureReason);
-
-        return await _workflowExecutions.FindOneAndUpdateAsync(
-            x => x.Id == executionId,
-            update,
-            new FindOneAndUpdateOptions<WorkflowExecutionDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
-    }
-
-    public virtual async Task<WorkflowExecutionDocument?> MarkWorkflowExecutionPendingApprovalAsync(
-        string executionId,
-        string pendingApprovalStageId,
-        CancellationToken cancellationToken)
-    {
-        var update = Builders<WorkflowExecutionDocument>.Update
-            .Set(x => x.State, WorkflowExecutionState.PendingApproval)
-            .Set(x => x.PendingApprovalStageId, pendingApprovalStageId);
-
-        return await _workflowExecutions.FindOneAndUpdateAsync(
-            x => x.Id == executionId,
-            update,
-            new FindOneAndUpdateOptions<WorkflowExecutionDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
-    }
-
-    public virtual async Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(
-        string executionId,
-        string approvedBy,
-        CancellationToken cancellationToken)
-    {
-        var update = Builders<WorkflowExecutionDocument>.Update
-            .Set(x => x.State, WorkflowExecutionState.Running)
-            .Set(x => x.ApprovedBy, approvedBy)
-            .Set(x => x.PendingApprovalStageId, string.Empty);
-
-        return await _workflowExecutions.FindOneAndUpdateAsync(
-            x => x.Id == executionId && x.State == WorkflowExecutionState.PendingApproval,
-            update,
-            new FindOneAndUpdateOptions<WorkflowExecutionDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
-    }
-
-    public virtual async Task<WorkflowExecutionDocument?> GetWorkflowExecutionByRunIdAsync(string runId, CancellationToken cancellationToken)
-    {
-        var filter = Builders<WorkflowExecutionDocument>.Filter.ElemMatch(
-            x => x.StageResults,
-            stage => stage.RunIds.Contains(runId));
-
-        return await _workflowExecutions.Find(filter).FirstOrDefaultAsync(cancellationToken);
-    }
-
-    public virtual async Task<WorkflowDocument?> GetWorkflowForExecutionAsync(string workflowId, CancellationToken cancellationToken)
-    {
-        return await _workflows.Find(x => x.Id == workflowId).FirstOrDefaultAsync(cancellationToken);
-    }
-
-    // --- Alert Rules ---
-
-    public virtual async Task<AlertRuleDocument> CreateAlertRuleAsync(AlertRuleDocument rule, CancellationToken cancellationToken)
-    {
-        await _alertRules.InsertOneAsync(rule, cancellationToken: cancellationToken);
-        return rule;
-    }
-
-    public virtual Task<List<AlertRuleDocument>> ListAlertRulesAsync(CancellationToken cancellationToken)
-        => _alertRules.Find(FilterDefinition<AlertRuleDocument>.Empty).SortBy(x => x.Name).ToListAsync(cancellationToken);
-
-    public virtual Task<List<AlertRuleDocument>> ListEnabledAlertRulesAsync(CancellationToken cancellationToken)
-        => _alertRules.Find(x => x.Enabled).ToListAsync(cancellationToken);
-
-    public virtual async Task<AlertRuleDocument?> GetAlertRuleAsync(string ruleId, CancellationToken cancellationToken)
-        => await _alertRules.Find(x => x.Id == ruleId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual async Task<AlertRuleDocument?> UpdateAlertRuleAsync(string ruleId, AlertRuleDocument rule, CancellationToken cancellationToken)
-    {
-        rule.Id = ruleId;
-        var result = await _alertRules.ReplaceOneAsync(x => x.Id == ruleId, rule, cancellationToken: cancellationToken);
-        return result.ModifiedCount > 0 ? rule : null;
-    }
-
-    public virtual async Task<bool> DeleteAlertRuleAsync(string ruleId, CancellationToken cancellationToken)
-    {
-        var result = await _alertRules.DeleteOneAsync(x => x.Id == ruleId, cancellationToken);
-        return result.DeletedCount > 0;
-    }
-
-    // --- Alert Events ---
-
-    public virtual async Task<AlertEventDocument> RecordAlertEventAsync(AlertEventDocument alertEvent, CancellationToken cancellationToken)
-    {
-        await _alertEvents.InsertOneAsync(alertEvent, cancellationToken: cancellationToken);
-        return alertEvent;
-    }
-
-    public virtual async Task<AlertEventDocument?> GetAlertEventAsync(string eventId, CancellationToken cancellationToken)
-        => await _alertEvents.Find(x => x.Id == eventId).FirstOrDefaultAsync(cancellationToken);
-
-    public virtual Task<List<AlertEventDocument>> ListRecentAlertEventsAsync(int limit, CancellationToken cancellationToken)
-        => _alertEvents.Find(FilterDefinition<AlertEventDocument>.Empty)
-            .SortByDescending(x => x.FiredAtUtc)
-            .Limit(limit)
-            .ToListAsync(cancellationToken);
-
-    public virtual Task<List<AlertEventDocument>> ListAlertEventsByRuleAsync(string ruleId, CancellationToken cancellationToken)
-        => _alertEvents.Find(x => x.RuleId == ruleId)
-            .SortByDescending(x => x.FiredAtUtc)
-            .Limit(50)
-            .ToListAsync(cancellationToken);
-
-    // --- Reliability Metrics ---
-
-    public virtual async Task<ReliabilityMetrics> GetReliabilityMetricsAsync(CancellationToken cancellationToken)
-    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var sevenDaysAgo = now.AddDays(-7);
         var thirtyDaysAgo = now.AddDays(-30);
         var fourteenDaysAgo = now.AddDays(-14);
 
-        var recentRuns = await _runs.Find(x => x.CreatedAtUtc >= thirtyDaysAgo)
-            .ToListAsync(cancellationToken);
+        var recentRuns = await db.Runs.AsNoTracking().Where(x => x.CreatedAtUtc >= thirtyDaysAgo).ToListAsync(cancellationToken);
 
         var runs7Days = recentRuns.Where(r => r.CreatedAtUtc >= sevenDaysAgo).ToList();
         var runs30Days = recentRuns.ToList();
@@ -1201,21 +1205,12 @@ public class OrchestratorStore : IOrchestratorStore
             .ToDictionary(g => g.Key, g => g.Count());
 
         var failureTrend = CalculateFailureTrend(recentRuns.Where(r => r.CreatedAtUtc >= fourteenDaysAgo).ToList(), fourteenDaysAgo, now);
-
         var avgDuration = CalculateAverageDuration(recentRuns);
 
-        var projects = await _projects.Find(FilterDefinition<ProjectDocument>.Empty).ToListAsync(cancellationToken);
+        var projects = await db.Projects.AsNoTracking().ToListAsync(cancellationToken);
         var projectMetrics = CalculateProjectMetrics(recentRuns, projects);
 
-        return new ReliabilityMetrics(
-            successRate7Days,
-            successRate30Days,
-            runs7Days.Count,
-            runs30Days.Count,
-            runsByState,
-            failureTrend,
-            avgDuration,
-            projectMetrics);
+        return new ReliabilityMetrics(successRate7Days, successRate30Days, runs7Days.Count, runs30Days.Count, runsByState, failureTrend, avgDuration, projectMetrics);
     }
 
     private static double CalculateSuccessRate(List<RunDocument> runs)
@@ -1223,7 +1218,7 @@ public class OrchestratorStore : IOrchestratorStore
         if (runs.Count == 0)
             return 0;
 
-        var completed = runs.Where(r => r.State == RunState.Succeeded || r.State == RunState.Failed).ToList();
+        var completed = runs.Where(r => r.State is RunState.Succeeded or RunState.Failed).ToList();
         if (completed.Count == 0)
             return 0;
 
@@ -1247,16 +1242,11 @@ public class OrchestratorStore : IOrchestratorStore
 
     private static double? CalculateAverageDuration(List<RunDocument> runs)
     {
-        var completedRuns = runs
-            .Where(r => r.StartedAtUtc.HasValue && r.EndedAtUtc.HasValue)
-            .ToList();
-
+        var completedRuns = runs.Where(r => r.StartedAtUtc.HasValue && r.EndedAtUtc.HasValue).ToList();
         if (completedRuns.Count == 0)
             return null;
 
-        var avgSeconds = completedRuns
-            .Average(r => (r.EndedAtUtc!.Value - r.StartedAtUtc!.Value).TotalSeconds);
-
+        var avgSeconds = completedRuns.Average(r => (r.EndedAtUtc!.Value - r.StartedAtUtc!.Value).TotalSeconds);
         return Math.Round(avgSeconds, 1);
     }
 
@@ -1283,24 +1273,16 @@ public class OrchestratorStore : IOrchestratorStore
         }).OrderByDescending(p => p.TotalRuns).ToList();
     }
 
-    // --- Helpers ---
-
     public static DateTime? ComputeNextRun(TaskDocument task, DateTime nowUtc)
     {
         if (!task.Enabled)
-        {
             return null;
-        }
 
         if (task.Kind == TaskKind.OneShot)
-        {
             return nowUtc;
-        }
 
         if (task.Kind != TaskKind.Cron || string.IsNullOrWhiteSpace(task.CronExpression))
-        {
             return null;
-        }
 
         var expression = CronExpression.Parse(task.CronExpression, CronFormat.Standard);
         return expression.GetNextOccurrence(nowUtc, TimeZoneInfo.Utc);

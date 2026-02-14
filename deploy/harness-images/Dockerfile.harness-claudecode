@@ -2,7 +2,8 @@
 # Anthropic Claude Code CLI harness
 # Build: docker build -f Dockerfile.harness-claudecode -t ghcr.io/mariogk/harness-claudecode:latest .
 
-FROM ghcr.io/mariogk/ai-harness-base:latest
+ARG BASE_IMAGE=ghcr.io/mariogk/ai-harness-base:latest
+FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.source=https://github.com/mariogk/AgentsDashboard \
       org.opencontainers.image.description="Claude Code harness for AI Orchestrator" \
