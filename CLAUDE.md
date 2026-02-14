@@ -394,7 +394,7 @@ dotnet format
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| Build | Passed | 0 Warnings, 0 Errors |
+| Build | Passed | 0 Errors, 13 Warnings (pre-existing in tests) |
 | Unit Tests | Passed | 1,103/1,139 passed (36 skipped, 0 failed) |
 | API Endpoints | Complete | 96 endpoints across 22 categories |
 | Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
@@ -405,3 +405,4 @@ dotnet format
 | Built-in Templates | Complete | 4 templates (QA, UnitTest, Deps, Regression) |
 | Rate Limiting | Complete | 4 policies (Global, Auth, Webhook, Burst) |
 | CI/CD | Complete | GitHub Actions (ci.yml, deploy.yml) |
+| DTO Completeness | Fixed | Added ArtifactPatterns, LinkedFailureRuns to template DTOs; TimeoutMinutes to WorkflowStageConfigRequest |
