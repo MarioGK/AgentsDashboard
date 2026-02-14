@@ -3,7 +3,7 @@
 # Build: docker build -t ghcr.io/mariogk/ai-harness:latest .
 
 # Must build harness-base first from deploy/harness-images/
-FROM ghcr.io/mariogk/ai-harness-base:latest
+FROM ai-harness-base:latest
 
 LABEL org.opencontainers.image.source=https://github.com/mariogk/AgentsDashboard \
       org.opencontainers.image.description="All-in-one harness execution environment for AI Orchestrator" \

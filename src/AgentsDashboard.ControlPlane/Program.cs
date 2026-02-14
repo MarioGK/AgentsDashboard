@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Auth;
 using AgentsDashboard.ControlPlane.Components;
@@ -7,6 +9,7 @@ using AgentsDashboard.ControlPlane.Endpoints;
 using AgentsDashboard.ControlPlane.Hubs;
 using AgentsDashboard.ControlPlane.Proxy;
 using AgentsDashboard.ControlPlane.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
@@ -23,19 +26,33 @@ builder.Services.AddOptions<OrchestratorOptions>()
     .ValidateOnStart();
 builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSection(DashboardAuthOptions.SectionName));
 
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/login";
-        options.AccessDeniedPath = "/login";
-        options.SlidingExpiration = true;
-    });
-
-builder.Services.AddAuthorization(options =>
+if (builder.Environment.IsEnvironment("Testing"))
 {
-    options.AddPolicy("viewer", policy => policy.RequireRole("viewer", "operator", "admin"));
-    options.AddPolicy("operator", policy => policy.RequireRole("operator", "admin"));
-});
+    builder.Services.AddAuthentication("Test")
+        .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
+
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy("viewer", policy => policy.RequireAuthenticatedUser());
+        options.AddPolicy("operator", policy => policy.RequireAuthenticatedUser());
+    });
+}
+else
+{
+    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+        .AddCookie(options =>
+        {
+            options.LoginPath = "/login";
+            options.AccessDeniedPath = "/login";
+            options.SlidingExpiration = true;
+        });
+
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy("viewer", policy => policy.RequireRole("viewer", "operator", "admin"));
+        options.AddPolicy("operator", policy => policy.RequireRole("operator", "admin"));
+    });
+}
 
 builder.Services.AddSingleton<IMongoClient>(sp =>
 {

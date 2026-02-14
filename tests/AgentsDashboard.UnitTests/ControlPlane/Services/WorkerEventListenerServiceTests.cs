@@ -594,7 +594,7 @@ public class WorkerEventListenerServiceBackgroundServiceTests
         var parameters = constructors[0].GetParameters();
         parameters.Should().HaveCount(6);
         parameters[0].ParameterType.Name.Should().Be("WorkerGatewayClient");
-        parameters[1].ParameterType.Name.Should().Be("OrchestratorStore");
+        parameters[1].ParameterType.Name.Should().Be("IOrchestratorStore");
         parameters[2].ParameterType.Name.Should().Be("IRunEventPublisher");
         parameters[3].ParameterType.Name.Should().Be("InMemoryYarpConfigProvider");
         parameters[4].ParameterType.Name.Should().Be("RunDispatcher");

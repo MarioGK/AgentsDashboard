@@ -7,6 +7,7 @@ using AgentsDashboard.WorkerGateway.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
 
@@ -22,7 +23,7 @@ public class HarnessExecutorTests
             => Task.FromResult(new List<ExtractedArtifact>());
     }
 
-    private static HarnessExecutor CreateExecutor(WorkerOptions? options = null)
+    private static HarnessExecutor CreateExecutor(WorkerOptions? options = null, IDockerContainerService? dockerService = null)
     {
         var opts = Options.Create(options ?? new WorkerOptions());
         var redactor = new SecretRedactor(opts);
@@ -30,9 +31,29 @@ public class HarnessExecutorTests
         services.AddLogging();
         var serviceProvider = services.BuildServiceProvider();
         var factory = new HarnessAdapterFactory(opts, redactor, serviceProvider);
-        var dockerService = new DockerContainerService(NullLogger<DockerContainerService>.Instance);
+        var docker = dockerService ?? CreateMockDockerService().Object;
         var artifactExtractor = new FakeArtifactExtractor();
-        return new HarnessExecutor(opts, factory, redactor, dockerService, artifactExtractor, NullLogger<HarnessExecutor>.Instance);
+        return new HarnessExecutor(opts, factory, redactor, docker, artifactExtractor, NullLogger<HarnessExecutor>.Instance);
+    }
+
+    private static Mock<IDockerContainerService> CreateMockDockerService()
+    {
+        var mock = new Mock<IDockerContainerService>();
+        mock.Setup(x => x.CreateContainerAsync(
+            It.IsAny<string>(), It.IsAny<IList<string>>(), It.IsAny<IDictionary<string, string>>(),
+            It.IsAny<IDictionary<string, string>>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<double>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync("container-123");
+        mock.Setup(x => x.StartAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        mock.Setup(x => x.WaitForExitAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+        mock.Setup(x => x.GetLogsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("{\"status\":\"succeeded\",\"summary\":\"Test completed\"}");
+        mock.Setup(x => x.GetContainerStatsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ContainerMetrics?)null);
+        return mock;
     }
 
     private static QueuedJob CreateJob(string command = "echo test", string harness = "codex")
@@ -93,7 +114,7 @@ public class HarnessExecutorTests
         result.Error.Should().Contain("not in the configured allowlist");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ExecuteAsync_AllowlistedImage_PassesCheck()
     {
         var options = new WorkerOptions
@@ -113,7 +134,7 @@ public class HarnessExecutorTests
         result.Error.Should().NotContain("not in the configured allowlist");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ExecuteAsync_EmptyAllowlist_AcceptsAnyImage()
     {
         var options = new WorkerOptions
@@ -131,7 +152,7 @@ public class HarnessExecutorTests
         result.Error.Should().NotContain("not in the configured allowlist");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ExecuteAsync_WildcardAllowlist_MatchesPrefix()
     {
         var options = new WorkerOptions
@@ -151,7 +172,7 @@ public class HarnessExecutorTests
         result.Error.Should().NotContain("not in the configured allowlist");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ExecuteAsync_ExactAllowlistMatch_AcceptsImage()
     {
         var options = new WorkerOptions
@@ -171,7 +192,7 @@ public class HarnessExecutorTests
         result.Error.Should().NotContain("not in the configured allowlist");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ExecuteAsync_CancelledJob_ReturnsFailedEnvelope()
     {
         var options = new WorkerOptions { UseDocker = false };
@@ -187,7 +208,7 @@ public class HarnessExecutorTests
         result.Error.Should().Contain("cancelled");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ExecuteAsync_DirectExecution_WithValidCommand_ReturnsSucceeded()
     {
         var options = new WorkerOptions { UseDocker = false };
@@ -199,7 +220,7 @@ public class HarnessExecutorTests
         result.Should().NotBeNull();
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ExecuteAsync_DirectExecution_WithEnvelopeOutput_ParsesEnvelope()
     {
         var options = new WorkerOptions { UseDocker = false };
@@ -212,7 +233,7 @@ public class HarnessExecutorTests
         result.Summary.Should().Be("All done");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ExecuteAsync_DirectExecution_WithNonEnvelopeOutput_CreatesFallback()
     {
         var options = new WorkerOptions { UseDocker = false };

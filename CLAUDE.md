@@ -552,3 +552,31 @@ All implementation items from the plan are complete:
 - 70-panel VMUI dashboards
 - CI/CD with GitHub Actions
 
+## Additional Improvements (2026-02-14 - Session 10)
+
+### Bug Fixes
+- **Environment Variable Key Normalization**: Fixed `RunDispatcher.cs` to normalize hyphens to underscores in additional settings keys
+  - Changed from `$"HARNESS_{key.ToUpperInvariant().Replace(' ', '_')}"` 
+  - To `$"HARNESS_{key.ToUpperInvariant().Replace(' ', '_').Replace('-', '_')}"`
+  - Fixes test `DispatchAsync_AddsHarnessSettingsToEnvironment`
+
+### Test Infrastructure
+- **TestAuthHandler**: Added `TestAuthHandler.cs` in global namespace for testing mode authentication
+- **Program.cs Testing Mode**: Added conditional authentication setup for "Testing" environment
+  - Uses TestAuthHandler with "Test" scheme
+  - Simplified authorization policies that only require authenticated user (no role checks)
+- **ApiTestFixture**: Simplified to not override authentication/authorization services
+  - Added `Services` property for accessing DI container
+  - Removed hosted services to prevent startup issues
+
+### Known Issues
+- **API Integration Tests**: WebApplicationFactory tests failing due to authorization middleware initialization issues
+  - Root cause: AuthorizationPolicyCache construction during endpoint building
+  - Workaround: Unit tests and store integration tests work correctly
+  - Impact: API endpoint tests require investigation of ASP.NET Core testing patterns
+
+### Unit Test Status
+- Current pass rate: ~1050/1105 (~95%)
+- Remaining failures primarily due to:
+  - Sealed class mocking limitations (DockerHealthCheckService)
+  - API integration test infrastructure issues

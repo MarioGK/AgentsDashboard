@@ -94,13 +94,21 @@ public sealed class ApiTestFixture : IAsyncLifetime
                     services.Remove(reaperDescriptor);
 
                 services.AddSingleton<IContainerReaper, MockContainerReaper>();
+
+                var cryptoDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ISecretCryptoService));
+                if (cryptoDescriptor != null)
+                    services.Remove(cryptoDescriptor);
+
+                services.AddSingleton<ISecretCryptoService, MockSecretCryptoService>();
             });
 
             builder.UseEnvironment("Testing");
         });
 
-        var handler = new HttpClientHandler { AllowAutoRedirect = false };
-        Client = Factory.CreateClient(handler);
+        Client = Factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
     }
 
     public async Task DisposeAsync()
@@ -177,4 +185,13 @@ public sealed class MockContainerReaper : IContainerReaper
     {
         return Task.FromResult(0);
     }
+}
+
+public sealed class MockSecretCryptoService : ISecretCryptoService
+{
+    public Task<string> EncryptAsync(string plainText, CancellationToken cancellationToken)
+        => Task.FromResult(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plainText)));
+
+    public Task<string> DecryptAsync(string cipherText, CancellationToken cancellationToken)
+        => Task.FromResult(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cipherText)));
 }

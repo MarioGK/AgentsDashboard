@@ -15,7 +15,7 @@ public sealed class HarnessExecutor(
     IOptions<WorkerOptions> options,
     HarnessAdapterFactory adapterFactory,
     SecretRedactor secretRedactor,
-    DockerContainerService dockerService,
+    IDockerContainerService dockerService,
     IArtifactExtractor artifactExtractor,
     ILogger<HarnessExecutor> logger) : IHarnessExecutor
 {

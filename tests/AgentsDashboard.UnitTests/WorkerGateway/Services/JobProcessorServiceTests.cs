@@ -8,6 +8,7 @@ using AgentsDashboard.WorkerGateway.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
 
@@ -62,6 +63,26 @@ public class JobProcessorServiceTests
         };
     }
 
+    private static Mock<IDockerContainerService> CreateMockDockerService()
+    {
+        var mock = new Mock<IDockerContainerService>();
+        mock.Setup(x => x.CreateContainerAsync(
+            It.IsAny<string>(), It.IsAny<IList<string>>(), It.IsAny<IDictionary<string, string>>(),
+            It.IsAny<IDictionary<string, string>>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<double>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>(),
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync("container-123");
+        mock.Setup(x => x.StartAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        mock.Setup(x => x.WaitForExitAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0);
+        mock.Setup(x => x.GetLogsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("{\"status\":\"succeeded\",\"summary\":\"Test completed\"}");
+        mock.Setup(x => x.GetContainerStatsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ContainerMetrics?)null);
+        return mock;
+    }
+
     private static HarnessExecutor CreateExecutor(WorkerOptions? options = null)
     {
         var opts = Options.Create(options ?? CreateDefaultOptions());
@@ -70,9 +91,9 @@ public class JobProcessorServiceTests
         services.AddLogging();
         var serviceProvider = services.BuildServiceProvider();
         var factory = new HarnessAdapterFactory(opts, redactor, serviceProvider);
-        var dockerService = new DockerContainerService(NullLogger<DockerContainerService>.Instance);
+        var docker = CreateMockDockerService().Object;
         var artifactExtractor = new FakeArtifactExtractor();
-        return new HarnessExecutor(opts, factory, redactor, dockerService, artifactExtractor, NullLogger<HarnessExecutor>.Instance);
+        return new HarnessExecutor(opts, factory, redactor, docker, artifactExtractor, NullLogger<HarnessExecutor>.Instance);
     }
 
     private sealed class FakeArtifactExtractor : IArtifactExtractor
@@ -99,7 +120,7 @@ public class JobProcessorServiceTests
         };
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_EmptyCommand_PublishesFailedCompleted()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -149,7 +170,7 @@ public class JobProcessorServiceTests
         envelope!.Status.Should().Be("failed");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_ValidCommand_PublishesJobStartedAndCompleted()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -194,7 +215,7 @@ public class JobProcessorServiceTests
         completedEvent.RunId.Should().Be("test-run-id");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_AfterCompletion_MarksJobAsCompleted()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -229,7 +250,7 @@ public class JobProcessorServiceTests
         queue.ActiveSlots.Should().Be(0);
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_MultipleJobs_ProcessesAllSequentially()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -272,7 +293,7 @@ public class JobProcessorServiceTests
         completedEvents.Should().Contain(e => e.RunId == "run-3");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_JobCancelledViaQueue_HandlesGracefully()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -309,7 +330,7 @@ public class JobProcessorServiceTests
         }
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_EventTimestamps_ArePopulated()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -342,7 +363,7 @@ public class JobProcessorServiceTests
         collector.Events.Should().AllSatisfy(e => e.TimestampUnixMs.Should().BeGreaterThan(0));
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_CompletedEventPayload_ContainsValidJson()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -388,7 +409,7 @@ public class JobProcessorServiceTests
         payload!.RunId.Should().Be("test-run-id");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_NoJobs_DoesNotPublishEvents()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -418,7 +439,7 @@ public class JobProcessorServiceTests
         collector.Events.Should().BeEmpty();
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_ServiceStopsImmediately_HandlesGracefully()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -433,7 +454,7 @@ public class JobProcessorServiceTests
         await action.Should().NotThrowAsync();
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Fact]
     public async Task ProcessJobs_AllJobsComplete_QueueBecomesEmpty()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
