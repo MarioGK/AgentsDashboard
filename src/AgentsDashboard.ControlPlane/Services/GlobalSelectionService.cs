@@ -33,7 +33,7 @@ public interface IGlobalSelectionService
 
 public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposable
 {
-    private readonly OrchestratorStore _store;
+    private readonly IOrchestratorStore _store;
     private readonly IJSRuntime _jsRuntime;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly List<Action<SelectionChangedEventArgs>> _subscribers = [];
@@ -53,7 +53,7 @@ public sealed class GlobalSelectionService : IGlobalSelectionService, IDisposabl
 
     public event EventHandler<SelectionChangedEventArgs>? SelectionChanged;
 
-    public GlobalSelectionService(OrchestratorStore store, IJSRuntime jsRuntime)
+    public GlobalSelectionService(IOrchestratorStore store, IJSRuntime jsRuntime)
     {
         _store = store;
         _jsRuntime = jsRuntime;

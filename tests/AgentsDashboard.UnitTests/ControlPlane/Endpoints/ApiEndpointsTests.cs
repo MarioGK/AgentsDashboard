@@ -11,31 +11,17 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Endpoints;
 
 public class ApiEndpointsTests
 {
-    private readonly Mock<OrchestratorStore> _mockStore;
-    private readonly Mock<WorkflowExecutor> _mockWorkflowExecutor;
+    private readonly Mock<IOrchestratorStore> _mockStore;
+    private readonly Mock<IWorkflowExecutor> _mockWorkflowExecutor;
     private readonly Mock<ImageBuilderService> _mockImageBuilder;
     private readonly Mock<HarnessHealthService> _mockHarnessHealth;
     private readonly CancellationToken _ct = CancellationToken.None;
 
     public ApiEndpointsTests()
     {
-        var mongoClient = new Mock<IMongoClient>();
-        var mongoDatabase = new Mock<IMongoDatabase>();
-        mongoClient.Setup(c => c.GetDatabase(It.IsAny<string>(), null)).Returns(mongoDatabase.Object);
-        
-        foreach (var collectionName in new[] { "projects", "repositories", "tasks", "runs", "findings", 
-             "run_events", "provider_secrets", "workers", "webhooks", "proxy_audits", "settings",
-             "workflows", "workflow_executions", "alert_rules", "alert_events", "repository_instructions",
-             "harness_provider_settings" })
-        {
-            var collectionMock = new Mock<IMongoCollection<BsonDocument>>();
-            mongoDatabase.Setup(d => d.GetCollection<BsonDocument>(collectionName, null)).Returns(collectionMock.Object);
-        }
-        
-        var options = Options.Create(new OrchestratorOptions());
-        _mockStore = new Mock<OrchestratorStore>(MockBehavior.Loose, mongoClient.Object, options) { CallBase = false };
+        _mockStore = new Mock<IOrchestratorStore>(MockBehavior.Loose);
         var mockContainerReaper = new Mock<IContainerReaper>();
-        _mockWorkflowExecutor = new Mock<WorkflowExecutor>(MockBehavior.Loose, _mockStore.Object, null!, mockContainerReaper.Object, options, null!) { CallBase = false };
+        _mockWorkflowExecutor = new Mock<IWorkflowExecutor>(MockBehavior.Loose);
         _mockImageBuilder = new Mock<ImageBuilderService>(MockBehavior.Loose, null!) { CallBase = false };
         _mockHarnessHealth = new Mock<HarnessHealthService>(MockBehavior.Loose, null!) { CallBase = false };
     }

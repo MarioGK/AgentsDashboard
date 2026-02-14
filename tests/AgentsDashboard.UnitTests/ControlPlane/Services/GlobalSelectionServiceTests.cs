@@ -8,14 +8,14 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class GlobalSelectionServiceTests
 {
-    private readonly Mock<OrchestratorStore> _storeMock;
+    private readonly Mock<IOrchestratorStore> _storeMock;
     private readonly Mock<IJSRuntime> _jsRuntimeMock;
     private readonly List<ProjectDocument> _testProjects;
     private readonly List<RepositoryDocument> _testRepositories;
 
     public GlobalSelectionServiceTests()
     {
-        _storeMock = new Mock<OrchestratorStore>(MockBehavior.Loose);
+        _storeMock = new Mock<IOrchestratorStore>(MockBehavior.Loose);
         _jsRuntimeMock = new Mock<IJSRuntime>(MockBehavior.Strict);
         _testProjects =
         [
