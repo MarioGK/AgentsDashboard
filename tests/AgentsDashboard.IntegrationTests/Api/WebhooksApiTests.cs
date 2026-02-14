@@ -94,7 +94,8 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
     [Fact]
     public async Task TriggerWebhook_DispatchesEventDrivenTask()
     {
-        var (_, repo, _) = await SetupAsync();
+        var (_, repo, task) = await SetupAsync();
+        await _client.PostAsJsonAsync("/api/webhooks", new CreateWebhookRequest(repo.Id, task.Id, "push", "secret"));
         var token = await GenerateTokenAsync(repo.Id);
 
         var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", null);

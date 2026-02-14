@@ -315,7 +315,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 app.UseMiddleware<RateLimitHeadersMiddleware>();
-app.UseAntiforgery();
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    app.UseAntiforgery();
+}
 
 app.MapStaticAssets();
 app.MapHub<RunEventsHub>("/hubs/runs").RequireAuthorization("viewer");
