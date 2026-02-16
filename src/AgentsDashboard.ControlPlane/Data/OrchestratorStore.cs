@@ -1,7 +1,11 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Configuration;
 using Cronos;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -12,69 +16,20 @@ public sealed class OrchestratorStore(
     IOptions<OrchestratorOptions> orchestratorOptions) : IOrchestratorStore
 {
     private static readonly RunState[] ActiveStates = [RunState.Queued, RunState.Running, RunState.PendingApproval];
+    private static readonly Regex PromptSkillTriggerRegex = new("^[a-z0-9-]+$", RegexOptions.Compiled);
+    private const string GlobalRepositoryScope = "global";
     private readonly string _artifactsRootPath = orchestratorOptions.Value.ArtifactsRootPath;
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public async Task<ProjectDocument> CreateProjectAsync(CreateProjectRequest request, CancellationToken cancellationToken)
-    {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var project = new ProjectDocument
-        {
-            Name = request.Name,
-            Description = request.Description,
-        };
-
-        db.Projects.Add(project);
-        await db.SaveChangesAsync(cancellationToken);
-        return project;
-    }
-
-    public async Task<List<ProjectDocument>> ListProjectsAsync(CancellationToken cancellationToken)
-    {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Projects.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-    }
-
-    public async Task<ProjectDocument?> GetProjectAsync(string projectId, CancellationToken cancellationToken)
-    {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Projects.AsNoTracking().FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
-    }
-
-    public async Task<ProjectDocument?> UpdateProjectAsync(string projectId, UpdateProjectRequest request, CancellationToken cancellationToken)
-    {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var project = await db.Projects.FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
-        if (project is null)
-            return null;
-
-        project.Name = request.Name;
-        project.Description = request.Description;
-        await db.SaveChangesAsync(cancellationToken);
-        return project;
-    }
-
-    public async Task<bool> DeleteProjectAsync(string projectId, CancellationToken cancellationToken)
-    {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var project = await db.Projects.FirstOrDefaultAsync(x => x.Id == projectId, cancellationToken);
-        if (project is null)
-            return false;
-
-        db.Projects.Remove(project);
-        await db.SaveChangesAsync(cancellationToken);
-        return true;
-    }
 
     public async Task<RepositoryDocument> CreateRepositoryAsync(CreateRepositoryRequest request, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var repository = new RepositoryDocument
         {
-            ProjectId = request.ProjectId,
             Name = request.Name,
             GitUrl = request.GitUrl,
+            LocalPath = request.LocalPath,
             DefaultBranch = string.IsNullOrWhiteSpace(request.DefaultBranch) ? "main" : request.DefaultBranch,
         };
 
@@ -83,10 +38,10 @@ public sealed class OrchestratorStore(
         return repository;
     }
 
-    public async Task<List<RepositoryDocument>> ListRepositoriesAsync(string projectId, CancellationToken cancellationToken)
+    public async Task<List<RepositoryDocument>> ListRepositoriesAsync(CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Repositories.AsNoTracking().Where(x => x.ProjectId == projectId).OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        return await db.Repositories.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
     }
 
     public async Task<RepositoryDocument?> GetRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
@@ -104,7 +59,43 @@ public sealed class OrchestratorStore(
 
         repository.Name = request.Name;
         repository.GitUrl = request.GitUrl;
+        repository.LocalPath = request.LocalPath;
         repository.DefaultBranch = string.IsNullOrWhiteSpace(request.DefaultBranch) ? "main" : request.DefaultBranch;
+        await db.SaveChangesAsync(cancellationToken);
+        return repository;
+    }
+
+
+    public async Task<RepositoryDocument?> UpdateRepositoryGitStateAsync(string repositoryId, RepositoryGitStatus gitStatus, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
+        if (repository is null)
+            return null;
+
+        repository.CurrentBranch = gitStatus.CurrentBranch;
+        repository.CurrentCommit = gitStatus.CurrentCommit;
+        repository.AheadCount = gitStatus.AheadCount;
+        repository.BehindCount = gitStatus.BehindCount;
+        repository.ModifiedCount = gitStatus.ModifiedCount;
+        repository.StagedCount = gitStatus.StagedCount;
+        repository.UntrackedCount = gitStatus.UntrackedCount;
+        repository.LastScannedAtUtc = gitStatus.ScannedAtUtc;
+        repository.LastFetchedAtUtc = gitStatus.FetchedAtUtc;
+        repository.LastSyncError = gitStatus.LastSyncError;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return repository;
+    }
+
+    public async Task<RepositoryDocument?> TouchRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
+        if (repository is null)
+            return null;
+
+        repository.LastViewedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
         return repository;
     }
@@ -248,6 +239,118 @@ public sealed class OrchestratorStore(
         return settings;
     }
 
+    public async Task<PromptSkillDocument> CreatePromptSkillAsync(CreatePromptSkillRequest request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var repositoryId = NormalizePromptSkillScope(request.RepositoryId);
+        var trigger = NormalizePromptSkillTrigger(request.Trigger);
+        var name = NormalizeRequiredValue(request.Name, nameof(request.Name));
+        var content = NormalizeRequiredValue(request.Content, nameof(request.Content));
+        var description = request.Description?.Trim() ?? string.Empty;
+
+        var exists = await db.PromptSkills.AnyAsync(
+            x => x.RepositoryId == repositoryId && x.Trigger == trigger,
+            cancellationToken);
+
+        if (exists)
+        {
+            throw new InvalidOperationException($"A skill with trigger '/{trigger}' already exists in this scope.");
+        }
+
+        var now = DateTime.UtcNow;
+        var skill = new PromptSkillDocument
+        {
+            RepositoryId = repositoryId,
+            Name = name,
+            Trigger = trigger,
+            Content = content,
+            Description = description,
+            Enabled = request.Enabled,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        };
+
+        db.PromptSkills.Add(skill);
+        await db.SaveChangesAsync(cancellationToken);
+        return skill;
+    }
+
+    public async Task<List<PromptSkillDocument>> ListPromptSkillsAsync(string repositoryId, bool includeGlobal, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var scope = NormalizePromptSkillScope(repositoryId);
+
+        IQueryable<PromptSkillDocument> query = db.PromptSkills.AsNoTracking();
+
+        if (includeGlobal && !string.Equals(scope, GlobalRepositoryScope, StringComparison.Ordinal))
+        {
+            query = query.Where(x => x.RepositoryId == scope || x.RepositoryId == GlobalRepositoryScope);
+            return await query
+                .OrderBy(x => x.RepositoryId == scope ? 0 : 1)
+                .ThenBy(x => x.Trigger)
+                .ToListAsync(cancellationToken);
+        }
+
+        return await query
+            .Where(x => x.RepositoryId == scope)
+            .OrderBy(x => x.Trigger)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PromptSkillDocument?> GetPromptSkillAsync(string skillId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.PromptSkills.AsNoTracking().FirstOrDefaultAsync(x => x.Id == skillId, cancellationToken);
+    }
+
+    public async Task<PromptSkillDocument?> UpdatePromptSkillAsync(string skillId, UpdatePromptSkillRequest request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.PromptSkills.FirstOrDefaultAsync(x => x.Id == skillId, cancellationToken);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var trigger = NormalizePromptSkillTrigger(request.Trigger);
+        var name = NormalizeRequiredValue(request.Name, nameof(request.Name));
+        var content = NormalizeRequiredValue(request.Content, nameof(request.Content));
+        var description = request.Description?.Trim() ?? string.Empty;
+
+        var duplicate = await db.PromptSkills.AnyAsync(
+            x => x.Id != skillId && x.RepositoryId == existing.RepositoryId && x.Trigger == trigger,
+            cancellationToken);
+
+        if (duplicate)
+        {
+            throw new InvalidOperationException($"A skill with trigger '/{trigger}' already exists in this scope.");
+        }
+
+        existing.Name = name;
+        existing.Trigger = trigger;
+        existing.Content = content;
+        existing.Description = description;
+        existing.Enabled = request.Enabled;
+        existing.UpdatedAtUtc = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<bool> DeletePromptSkillAsync(string skillId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.PromptSkills.FirstOrDefaultAsync(x => x.Id == skillId, cancellationToken);
+        if (existing is null)
+        {
+            return false;
+        }
+
+        db.PromptSkills.Remove(existing);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -382,12 +485,11 @@ public sealed class OrchestratorStore(
         return true;
     }
 
-    public async Task<RunDocument> CreateRunAsync(TaskDocument task, string projectId, CancellationToken cancellationToken, int attempt = 1)
+    public async Task<RunDocument> CreateRunAsync(TaskDocument task, CancellationToken cancellationToken, int attempt = 1)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var run = new RunDocument
         {
-            ProjectId = projectId,
             RepositoryId = task.RepositoryId,
             TaskId = task.Id,
             State = RunState.Queued,
@@ -412,25 +514,416 @@ public sealed class OrchestratorStore(
         return await db.Runs.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(100).ToListAsync(cancellationToken);
     }
 
-    public async Task<List<RunDocument>> ListRecentRunsByProjectAsync(string projectId, CancellationToken cancellationToken)
+    public async Task<List<RepositoryDocument>> ListRepositoriesWithRecentTasksAsync(int limit, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Runs.AsNoTracking().Where(x => x.ProjectId == projectId).OrderByDescending(x => x.CreatedAtUtc).Take(100).ToListAsync(cancellationToken);
-    }
+        var normalizedLimit = Math.Clamp(limit, 1, 500);
 
-    public async Task<ReliabilityMetrics> GetReliabilityMetricsByProjectAsync(string projectId, CancellationToken cancellationToken)
-    {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var now = DateTime.UtcNow;
-        var sevenDaysAgo = now.AddDays(-7);
-        var thirtyDaysAgo = now.AddDays(-30);
-        var fourteenDaysAgo = now.AddDays(-14);
-
-        var recentRuns = await db.Runs.AsNoTracking()
-            .Where(x => x.ProjectId == projectId && x.CreatedAtUtc >= thirtyDaysAgo)
+        var repositoriesWithTasks = await db.Tasks.AsNoTracking()
+            .GroupBy(x => x.RepositoryId)
+            .Select(group => new
+            {
+                RepositoryId = group.Key,
+                LastTaskAtUtc = group.Max(x => x.CreatedAtUtc)
+            })
+            .OrderByDescending(x => x.LastTaskAtUtc)
+            .Take(normalizedLimit)
             .ToListAsync(cancellationToken);
 
-        return CalculateMetricsFromRuns(recentRuns, sevenDaysAgo, thirtyDaysAgo, fourteenDaysAgo, now);
+        var orderedRepositoryIds = repositoriesWithTasks.Select(x => x.RepositoryId).ToList();
+        if (orderedRepositoryIds.Count == 0)
+        {
+            return await db.Repositories.AsNoTracking()
+                .OrderByDescending(x => x.LastViewedAtUtc)
+                .ThenBy(x => x.Name)
+                .Take(normalizedLimit)
+                .ToListAsync(cancellationToken);
+        }
+
+        var repositories = await db.Repositories.AsNoTracking()
+            .Where(x => orderedRepositoryIds.Contains(x.Id))
+            .ToListAsync(cancellationToken);
+
+        var byRepositoryId = repositories.ToDictionary(x => x.Id, StringComparer.Ordinal);
+        var orderedRepositories = orderedRepositoryIds
+            .Select(id => byRepositoryId.GetValueOrDefault(id))
+            .Where(x => x is not null)
+            .Cast<RepositoryDocument>()
+            .ToList();
+
+        if (orderedRepositories.Count >= normalizedLimit)
+        {
+            return orderedRepositories;
+        }
+
+        var remainingLimit = normalizedLimit - orderedRepositories.Count;
+        var alreadyIncluded = orderedRepositories.Select(x => x.Id).ToList();
+        var remainingRepositories = await db.Repositories.AsNoTracking()
+            .Where(x => !alreadyIncluded.Contains(x.Id))
+            .OrderByDescending(x => x.LastViewedAtUtc)
+            .ThenBy(x => x.Name)
+            .Take(remainingLimit)
+            .ToListAsync(cancellationToken);
+
+        orderedRepositories.AddRange(remainingRepositories);
+        return orderedRepositories;
+    }
+
+    public async Task<List<RunDocument>> ListRunsByTaskAsync(string taskId, int limit, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var normalizedLimit = Math.Clamp(limit, 1, 500);
+
+        return await db.Runs.AsNoTracking()
+            .Where(x => x.TaskId == taskId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(normalizedLimit)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Dictionary<string, RunState>> GetLatestRunStatesByTaskIdsAsync(List<string> taskIds, CancellationToken cancellationToken)
+    {
+        if (taskIds.Count == 0)
+        {
+            return [];
+        }
+
+        var normalizedTaskIds = taskIds
+            .Where(taskId => !string.IsNullOrWhiteSpace(taskId))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (normalizedTaskIds.Count == 0)
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var latestRunCandidates = await (
+            from run in db.Runs.AsNoTracking()
+            where normalizedTaskIds.Contains(run.TaskId)
+            join latestRun in (
+                from candidate in db.Runs.AsNoTracking()
+                where normalizedTaskIds.Contains(candidate.TaskId)
+                group candidate by candidate.TaskId into grouped
+                select new
+                {
+                    TaskId = grouped.Key,
+                    LatestCreatedAtUtc = grouped.Max(x => x.CreatedAtUtc)
+                })
+                on new { run.TaskId, run.CreatedAtUtc } equals new { latestRun.TaskId, CreatedAtUtc = latestRun.LatestCreatedAtUtc }
+            select new
+            {
+                run.TaskId,
+                run.State,
+                run.Id
+            })
+            .ToListAsync(cancellationToken);
+
+        return latestRunCandidates
+            .GroupBy(x => x.TaskId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(x => x.Id, StringComparer.Ordinal)
+                    .First()
+                    .State,
+                StringComparer.Ordinal);
+    }
+
+    public async Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptHistoryAsync(string taskId, int limit, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var normalizedLimit = Math.Clamp(limit, 1, 1000);
+
+        return await db.WorkspacePromptEntries.AsNoTracking()
+            .Where(x => x.TaskId == taskId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(normalizedLimit)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<WorkspacePromptEntryDocument> AppendWorkspacePromptEntryAsync(WorkspacePromptEntryDocument promptEntry, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(promptEntry.TaskId))
+        {
+            throw new ArgumentException("TaskId is required.", nameof(promptEntry));
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(promptEntry.Id))
+        {
+            promptEntry.Id = Guid.NewGuid().ToString("N");
+        }
+
+        if (promptEntry.CreatedAtUtc == default)
+        {
+            promptEntry.CreatedAtUtc = DateTime.UtcNow;
+        }
+
+        if (string.IsNullOrWhiteSpace(promptEntry.RepositoryId))
+        {
+            promptEntry.RepositoryId = await db.Tasks.AsNoTracking()
+                .Where(x => x.Id == promptEntry.TaskId)
+                .Select(x => x.RepositoryId)
+                .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+        }
+
+        db.WorkspacePromptEntries.Add(promptEntry);
+        await db.SaveChangesAsync(cancellationToken);
+        return promptEntry;
+    }
+
+    public async Task<RunAiSummaryDocument> UpsertRunAiSummaryAsync(RunAiSummaryDocument summary, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(summary.RunId))
+        {
+            throw new ArgumentException("RunId is required.", nameof(summary));
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+
+        var runMetadata = await db.Runs.AsNoTracking()
+            .Where(x => x.Id == summary.RunId)
+            .Select(x => new
+            {
+                x.RepositoryId,
+                x.TaskId,
+                SourceUpdatedAtUtc = x.EndedAtUtc ?? x.CreatedAtUtc
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (runMetadata is not null)
+        {
+            if (string.IsNullOrWhiteSpace(summary.RepositoryId))
+            {
+                summary.RepositoryId = runMetadata.RepositoryId;
+            }
+
+            if (string.IsNullOrWhiteSpace(summary.TaskId))
+            {
+                summary.TaskId = runMetadata.TaskId;
+            }
+
+            if (summary.SourceUpdatedAtUtc == default)
+            {
+                summary.SourceUpdatedAtUtc = runMetadata.SourceUpdatedAtUtc;
+            }
+        }
+
+        if (summary.GeneratedAtUtc == default)
+        {
+            summary.GeneratedAtUtc = now;
+        }
+
+        var existing = await db.RunAiSummaries.FirstOrDefaultAsync(x => x.RunId == summary.RunId, cancellationToken);
+        if (existing is null)
+        {
+            db.RunAiSummaries.Add(summary);
+            await db.SaveChangesAsync(cancellationToken);
+            return summary;
+        }
+
+        existing.RepositoryId = summary.RepositoryId;
+        existing.TaskId = summary.TaskId;
+        existing.Title = summary.Title;
+        existing.Summary = summary.Summary;
+        existing.Model = summary.Model;
+        existing.SourceFingerprint = summary.SourceFingerprint;
+        existing.SourceUpdatedAtUtc = summary.SourceUpdatedAtUtc;
+        existing.GeneratedAtUtc = summary.GeneratedAtUtc;
+        existing.ExpiresAtUtc = summary.ExpiresAtUtc;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<RunAiSummaryDocument?> GetRunAiSummaryAsync(string runId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RunAiSummaries.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.RunId == runId, cancellationToken);
+    }
+
+    public async Task UpsertSemanticChunksAsync(string taskId, List<SemanticChunkDocument> chunks, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId) || chunks.Count == 0)
+        {
+            return;
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        var repositoryId = await db.Tasks.AsNoTracking()
+            .Where(x => x.Id == taskId)
+            .Select(x => x.RepositoryId)
+            .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+
+        var normalizedChunks = chunks
+            .Where(x => !string.IsNullOrWhiteSpace(x.Content))
+            .Select(x =>
+            {
+                x.TaskId = taskId;
+                x.RepositoryId = string.IsNullOrWhiteSpace(x.RepositoryId) ? repositoryId : x.RepositoryId;
+                x.ChunkKey = string.IsNullOrWhiteSpace(x.ChunkKey) ? $"{x.SourceRef}:{x.ChunkIndex}" : x.ChunkKey;
+                x.Id = string.IsNullOrWhiteSpace(x.Id) ? Guid.NewGuid().ToString("N") : x.Id;
+                x.CreatedAtUtc = x.CreatedAtUtc == default ? now : x.CreatedAtUtc;
+                x.UpdatedAtUtc = now;
+
+                if (x.EmbeddingDimensions <= 0)
+                {
+                    var parsedEmbedding = ParseEmbeddingPayload(x.EmbeddingPayload);
+                    if (parsedEmbedding is not null)
+                    {
+                        x.EmbeddingDimensions = parsedEmbedding.Length;
+                    }
+                }
+
+                return x;
+            })
+            .ToList();
+
+        if (normalizedChunks.Count == 0)
+        {
+            return;
+        }
+
+        var normalizedChunksByKey = normalizedChunks
+            .GroupBy(x => x.ChunkKey, StringComparer.Ordinal)
+            .Select(group => group.Last())
+            .ToList();
+        var chunkKeys = normalizedChunksByKey.Select(x => x.ChunkKey).ToList();
+        var existingChunks = await db.SemanticChunks
+            .Where(x => x.TaskId == taskId && chunkKeys.Contains(x.ChunkKey))
+            .ToListAsync(cancellationToken);
+        var existingByChunkKey = existingChunks.ToDictionary(x => x.ChunkKey, StringComparer.Ordinal);
+
+        foreach (var chunk in normalizedChunksByKey)
+        {
+            if (existingByChunkKey.TryGetValue(chunk.ChunkKey, out var existing))
+            {
+                existing.RepositoryId = chunk.RepositoryId;
+                existing.TaskId = chunk.TaskId;
+                existing.RunId = chunk.RunId;
+                existing.SourceType = chunk.SourceType;
+                existing.SourceRef = chunk.SourceRef;
+                existing.ChunkIndex = chunk.ChunkIndex;
+                existing.Content = chunk.Content;
+                existing.ContentHash = chunk.ContentHash;
+                existing.TokenCount = chunk.TokenCount;
+                existing.EmbeddingModel = chunk.EmbeddingModel;
+                existing.EmbeddingDimensions = chunk.EmbeddingDimensions;
+                existing.EmbeddingPayload = chunk.EmbeddingPayload;
+                existing.UpdatedAtUtc = now;
+                continue;
+            }
+
+            db.SemanticChunks.Add(chunk);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<List<SemanticChunkDocument>> SearchWorkspaceSemanticAsync(string taskId, string queryText, string? queryEmbeddingPayload, int limit, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var normalizedLimit = Math.Clamp(limit, 1, 200);
+        var chunks = db.SemanticChunks.AsNoTracking().Where(x => x.TaskId == taskId);
+        if (!string.IsNullOrWhiteSpace(queryEmbeddingPayload))
+        {
+            try
+            {
+                var semanticIds = new List<string>(normalizedLimit);
+                var connection = (SqliteConnection)db.Database.GetDbConnection();
+                if (connection.State != System.Data.ConnectionState.Open)
+                {
+                    await connection.OpenAsync(cancellationToken);
+                }
+
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    """
+                    SELECT Id
+                    FROM SemanticChunks
+                    WHERE TaskId = $taskId
+                      AND EmbeddingPayload <> ''
+                    ORDER BY vec_distance_cosine(vec_f32(EmbeddingPayload), vec_f32($embedding)) ASC, UpdatedAtUtc DESC
+                    LIMIT $limit;
+                    """;
+                command.Parameters.AddWithValue("$taskId", taskId);
+                command.Parameters.AddWithValue("$embedding", queryEmbeddingPayload);
+                command.Parameters.AddWithValue("$limit", normalizedLimit);
+
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    semanticIds.Add(reader.GetString(0));
+                }
+
+                if (semanticIds.Count > 0)
+                {
+                    var candidates = await chunks
+                        .Where(x => semanticIds.Contains(x.Id))
+                        .ToListAsync(cancellationToken);
+                    var byId = candidates.ToDictionary(x => x.Id, StringComparer.Ordinal);
+                    return semanticIds
+                        .Select(id => byId.GetValueOrDefault(id))
+                        .Where(chunk => chunk is not null)
+                        .Cast<SemanticChunkDocument>()
+                        .ToList();
+                }
+            }
+            catch (SqliteException ex)
+            {
+                // sqlite-vec unavailable or vector function not loaded; fallback to text ranking below.
+                _ = ex;
+            }
+        }
+
+        var normalizedQuery = queryText.Trim();
+        if (normalizedQuery.Length == 0)
+        {
+            return await chunks
+                .OrderByDescending(x => x.UpdatedAtUtc)
+                .Take(normalizedLimit)
+                .ToListAsync(cancellationToken);
+        }
+
+        var likeQuery = $"%{normalizedQuery}%";
+        var textMatches = await chunks
+            .Where(x =>
+                EF.Functions.Like(x.Content, likeQuery) ||
+                EF.Functions.Like(x.SourceRef, likeQuery) ||
+                EF.Functions.Like(x.ChunkKey, likeQuery))
+            .OrderByDescending(x => x.UpdatedAtUtc)
+            .Take(normalizedLimit)
+            .ToListAsync(cancellationToken);
+
+        if (textMatches.Count > 0)
+        {
+            return textMatches;
+        }
+
+        return await chunks
+            .OrderByDescending(x => x.UpdatedAtUtc)
+            .Take(normalizedLimit)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<ReliabilityMetrics> GetReliabilityMetricsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
@@ -496,12 +989,6 @@ public sealed class OrchestratorStore(
         return await db.Runs.LongCountAsync(x => ActiveStates.Contains(x.State), cancellationToken);
     }
 
-    public async Task<long> CountActiveRunsByProjectAsync(string projectId, CancellationToken cancellationToken)
-    {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Runs.LongCountAsync(x => x.ProjectId == projectId && ActiveStates.Contains(x.State), cancellationToken);
-    }
-
     public async Task<long> CountActiveRunsByRepoAsync(string repositoryId, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -523,7 +1010,7 @@ public sealed class OrchestratorStore(
         string? workerImageSource = null)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId, cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State != RunState.Obsolete, cancellationToken);
         if (run is null)
             return null;
 
@@ -553,7 +1040,7 @@ public sealed class OrchestratorStore(
     public async Task<RunDocument?> MarkRunCompletedAsync(string runId, bool succeeded, string summary, string outputJson, CancellationToken cancellationToken, string? failureClass = null, string? prUrl = null)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId, cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State != RunState.Obsolete, cancellationToken);
         if (run is null)
             return null;
 
@@ -585,10 +1072,24 @@ public sealed class OrchestratorStore(
         return run;
     }
 
+    public async Task<RunDocument?> MarkRunObsoleteAsync(string runId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && ActiveStates.Contains(x.State), cancellationToken);
+        if (run is null)
+            return null;
+
+        run.State = RunState.Obsolete;
+        run.EndedAtUtc = DateTime.UtcNow;
+        run.Summary = "Obsolete";
+        await db.SaveChangesAsync(cancellationToken);
+        return run;
+    }
+
     public async Task<RunDocument?> MarkRunPendingApprovalAsync(string runId, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId, cancellationToken);
+        var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State != RunState.Obsolete, cancellationToken);
         if (run is null)
             return null;
 
@@ -920,13 +1421,11 @@ public sealed class OrchestratorStore(
         return await db.ProxyAudits.AsNoTracking().Where(x => x.RunId == runId).OrderByDescending(x => x.TimestampUtc).Take(200).ToListAsync(cancellationToken);
     }
 
-    public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? projectId, string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken)
+    public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var query = db.ProxyAudits.AsNoTracking().AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(projectId))
-            query = query.Where(x => x.ProjectId == projectId);
         if (!string.IsNullOrWhiteSpace(repoId))
             query = query.Where(x => x.RepoId == repoId);
         if (!string.IsNullOrWhiteSpace(taskId))
@@ -1308,10 +1807,10 @@ public sealed class OrchestratorStore(
         var failureTrend = CalculateFailureTrend(recentRuns.Where(r => r.CreatedAtUtc >= fourteenDaysAgo).ToList(), fourteenDaysAgo, now);
         var avgDuration = CalculateAverageDuration(recentRuns);
 
-        var projects = await db.Projects.AsNoTracking().ToListAsync(cancellationToken);
-        var projectMetrics = CalculateProjectMetrics(recentRuns, projects);
+        var repositories = await db.Repositories.AsNoTracking().ToListAsync(cancellationToken);
+        var repositoryMetrics = CalculateRepositoryMetrics(recentRuns, repositories);
 
-        return new ReliabilityMetrics(successRate7Days, successRate30Days, runs7Days.Count, runs30Days.Count, runsByState, failureTrend, avgDuration, projectMetrics);
+        return new ReliabilityMetrics(successRate7Days, successRate30Days, runs7Days.Count, runs30Days.Count, runsByState, failureTrend, avgDuration, repositoryMetrics);
     }
 
     private static double CalculateSuccessRate(List<RunDocument> runs)
@@ -1319,12 +1818,13 @@ public sealed class OrchestratorStore(
         if (runs.Count == 0)
             return 0;
 
-        var completed = runs.Where(r => r.State is RunState.Succeeded or RunState.Failed).ToList();
-        if (completed.Count == 0)
+        var succeeded = runs.Count(r => IsTerminalSuccessState(r.State));
+        var failed = runs.Count(r => IsTerminalErrorState(r.State));
+        var successEligibleCount = succeeded + failed;
+        if (successEligibleCount == 0)
             return 0;
 
-        var succeeded = completed.Count(r => r.State == RunState.Succeeded);
-        return Math.Round((double)succeeded / completed.Count * 100, 1);
+        return Math.Round((double)succeeded / successEligibleCount * 100, 1);
     }
 
     private static List<DailyFailureCount> CalculateFailureTrend(List<RunDocument> runs, DateTime start, DateTime end)
@@ -1351,27 +1851,126 @@ public sealed class OrchestratorStore(
         return Math.Round(avgSeconds, 1);
     }
 
-    private static List<ProjectReliabilityMetrics> CalculateProjectMetrics(List<RunDocument> runs, List<ProjectDocument> projects)
+    private static List<RepositoryReliabilityMetrics> CalculateRepositoryMetrics(List<RunDocument> runs, List<RepositoryDocument> repositories)
     {
-        var projectDict = projects.ToDictionary(p => p.Id, p => p.Name);
-        var projectRuns = runs.GroupBy(r => r.ProjectId).ToList();
+        var repositoryDict = repositories.ToDictionary(r => r.Id, r => r.Name);
+        var repositoryRuns = runs.GroupBy(r => r.RepositoryId).ToList();
 
-        return projectRuns.Select(g =>
+        return repositoryRuns.Select(g =>
         {
-            var projectRunsList = g.ToList();
-            var total = projectRunsList.Count;
-            var succeeded = projectRunsList.Count(r => r.State == RunState.Succeeded);
-            var failed = projectRunsList.Count(r => r.State == RunState.Failed);
-            var rate = total > 0 ? Math.Round((double)succeeded / total * 100, 1) : 0;
+            var repositoryRunsList = g.ToList();
+            var total = repositoryRunsList.Count;
+            var succeeded = repositoryRunsList.Count(r => IsTerminalSuccessState(r.State));
+            var failed = repositoryRunsList.Count(r => IsTerminalErrorState(r.State));
+            var successEligibleCount = succeeded + failed;
+            var rate = successEligibleCount > 0 ? Math.Round((double)succeeded / successEligibleCount * 100, 1) : 0;
 
-            return new ProjectReliabilityMetrics(
+            return new RepositoryReliabilityMetrics(
                 g.Key,
-                projectDict.GetValueOrDefault(g.Key, "Unknown"),
+                repositoryDict.GetValueOrDefault(g.Key, "Unknown"),
                 total,
                 succeeded,
                 failed,
                 rate);
         }).OrderByDescending(p => p.TotalRuns).ToList();
+    }
+
+    private static bool IsTerminalState(RunState state)
+    {
+        return state is RunState.Succeeded or RunState.Failed or RunState.Cancelled or RunState.Obsolete;
+    }
+
+    private static bool IsTerminalErrorState(RunState state)
+    {
+        return IsTerminalState(state) && state == RunState.Failed;
+    }
+
+    private static bool IsTerminalSuccessState(RunState state)
+    {
+        return IsTerminalState(state) && state == RunState.Succeeded;
+    }
+
+    private static string NormalizePromptSkillScope(string repositoryId)
+    {
+        var normalized = repositoryId.Trim();
+        if (normalized.Length == 0)
+        {
+            throw new ArgumentException("Repository scope is required.", nameof(repositoryId));
+        }
+
+        return string.Equals(normalized, GlobalRepositoryScope, StringComparison.OrdinalIgnoreCase)
+            ? GlobalRepositoryScope
+            : normalized;
+    }
+
+    private static string NormalizePromptSkillTrigger(string trigger)
+    {
+        var normalized = NormalizeRequiredValue(trigger, nameof(trigger))
+            .TrimStart('/')
+            .ToLowerInvariant();
+
+        if (!PromptSkillTriggerRegex.IsMatch(normalized))
+        {
+            throw new ArgumentException("Trigger must match [a-z0-9-]+.", nameof(trigger));
+        }
+
+        return normalized;
+    }
+
+    private static string NormalizeRequiredValue(string value, string parameterName)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (normalized.Length == 0)
+        {
+            throw new ArgumentException("Value is required.", parameterName);
+        }
+
+        return normalized;
+    }
+
+    private static double[]? ParseEmbeddingPayload(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return null;
+        }
+
+        var trimmed = payload.Trim();
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        if (trimmed.StartsWith("[", StringComparison.Ordinal))
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<double[]>(trimmed, (JsonSerializerOptions?)null);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        var parts = trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return null;
+        }
+
+        var result = new double[parts.Length];
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+            {
+                return null;
+            }
+
+            result[i] = parsed;
+        }
+
+        return result;
     }
 
     public static DateTime? ComputeNextRun(TaskDocument task, DateTime nowUtc)

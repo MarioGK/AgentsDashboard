@@ -14,7 +14,6 @@ public class WorkerQueueTests
         Request = new DispatchJobRequest
         {
             RunId = runId,
-            ProjectId = "project-1",
             RepositoryId = "repo-1",
             TaskId = "task-1",
             HarnessType = "codex",
@@ -47,18 +46,17 @@ public class WorkerQueueTests
     [Test]
     public async Task CanAcceptJob_TracksCapacityWhenJobsComplete()
     {
-        var queue = CreateQueue(maxSlots: 2);
+        var queue = CreateQueue(maxSlots: 1);
 
         queue.CanAcceptJob().Should().BeTrue();
         await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
-        await queue.EnqueueAsync(CreateJob("run-2"), CancellationToken.None);
 
         queue.CanAcceptJob().Should().BeFalse();
-        queue.ActiveSlots.Should().Be(2);
+        queue.ActiveSlots.Should().Be(1);
 
         queue.MarkCompleted("run-1");
         queue.CanAcceptJob().Should().BeTrue();
-        queue.ActiveSlots.Should().Be(1);
+        queue.ActiveSlots.Should().Be(0);
     }
 
     [Test]

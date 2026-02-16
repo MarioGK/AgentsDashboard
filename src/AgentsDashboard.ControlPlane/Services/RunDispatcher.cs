@@ -19,13 +19,26 @@ public sealed class RunDispatcher(
     ILogger<RunDispatcher> logger,
     IOrchestratorRuntimeSettingsProvider? runtimeSettingsProvider = null)
 {
+    private const int TaskRunWindowLimit = 500;
+
     public async Task<bool> DispatchAsync(
-        ProjectDocument project,
         RepositoryDocument repository,
         TaskDocument task,
         RunDocument run,
         CancellationToken cancellationToken)
     {
+        var taskQueueHead = await GetTaskQueueHeadAsync(task.Id, cancellationToken);
+        if (taskQueueHead is not null &&
+            !string.Equals(taskQueueHead.Id, run.Id, StringComparison.Ordinal))
+        {
+            logger.LogInformation(
+                "Task queue head is run {HeadRunId} for task {TaskId}; leaving run {RunId} queued",
+                taskQueueHead.Id,
+                task.Id,
+                run.Id);
+            return false;
+        }
+
         if (task.ApprovalProfile.RequireApproval)
         {
             var pendingRun = await store.MarkRunPendingApprovalAsync(run.Id, cancellationToken);
@@ -69,28 +82,11 @@ public sealed class RunDispatcher(
             return false;
         }
 
-        var projectActive = await store.CountActiveRunsByProjectAsync(project.Id, cancellationToken);
-        if (projectActive >= opts.PerProjectConcurrencyLimit)
-        {
-            logger.LogWarning("Project concurrency limit reached for {ProjectId}, leaving run {RunId} queued", project.Id, run.Id);
-            return false;
-        }
-
         var repoActive = await store.CountActiveRunsByRepoAsync(repository.Id, cancellationToken);
         if (repoActive >= opts.PerRepoConcurrencyLimit)
         {
             logger.LogWarning("Repo concurrency limit reached for {RepositoryId}, leaving run {RunId} queued", repository.Id, run.Id);
             return false;
-        }
-
-        if (task.ConcurrencyLimit > 0)
-        {
-            var taskActive = await store.CountActiveRunsByTaskAsync(task.Id, cancellationToken);
-            if (taskActive >= task.ConcurrencyLimit)
-            {
-                logger.LogWarning("Task concurrency limit reached for {TaskId} ({Limit}), leaving run {RunId} queued", task.Id, task.ConcurrencyLimit, run.Id);
-                return false;
-            }
         }
 
         var workerLease = await workerLifecycleManager.AcquireWorkerForDispatchAsync(cancellationToken);
@@ -204,7 +200,6 @@ public sealed class RunDispatcher(
         var request = new DispatchJobRequest
         {
             RunId = run.Id,
-            ProjectId = project.Id,
             RepositoryId = repository.Id,
             TaskId = task.Id,
             HarnessType = task.Harness,
@@ -224,7 +219,7 @@ public sealed class RunDispatcher(
             LinkedFailureRuns = linkedFailureRuns,
             CustomArgs = task.Command,
             DispatchedAt = DateTimeOffset.UtcNow,
-            ContainerLabels = BuildContainerLabels(project, repository, task, run),
+            ContainerLabels = BuildContainerLabels(repository, task, run),
             Attempt = run.Attempt,
             SandboxProfileCpuLimit = task.SandboxProfile.CpuLimit > 0 ? task.SandboxProfile.CpuLimit : null,
             SandboxProfileMemoryLimit = ParseMemoryLimitToBytes(task.SandboxProfile.MemoryLimit),
@@ -268,7 +263,6 @@ public sealed class RunDispatcher(
                 routePath,
                 workerLease.ProxyEndpoint,
                 TimeSpan.FromHours(2),
-                project.Id,
                 repository.Id,
                 task.Id,
                 run.Id);
@@ -276,6 +270,40 @@ public sealed class RunDispatcher(
         }
 
         return true;
+    }
+
+    public async Task<bool> DispatchNextQueuedRunForTaskAsync(string taskId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return false;
+        }
+
+        var task = await store.GetTaskAsync(taskId, cancellationToken);
+        if (task is null)
+        {
+            return false;
+        }
+
+        var repository = await store.GetRepositoryAsync(task.RepositoryId, cancellationToken);
+        if (repository is null)
+        {
+            return false;
+        }
+
+        var taskRuns = await store.ListRunsByTaskAsync(taskId, TaskRunWindowLimit, cancellationToken) ?? [];
+        var nextQueuedRun = taskRuns
+            .Where(x => x.State == RunState.Queued)
+            .OrderBy(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        if (nextQueuedRun is null)
+        {
+            return false;
+        }
+
+        return await DispatchAsync(repository, task, nextQueuedRun, cancellationToken);
     }
 
     public async Task CancelAsync(string runId, CancellationToken cancellationToken)
@@ -305,8 +333,27 @@ public sealed class RunDispatcher(
         }
     }
 
+    private async Task<RunDocument?> GetTaskQueueHeadAsync(string taskId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return null;
+        }
+
+        var taskRuns = await store.ListRunsByTaskAsync(taskId, TaskRunWindowLimit, cancellationToken) ?? [];
+        return taskRuns
+            .Where(x => IsTaskQueueState(x.State))
+            .OrderBy(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    private static bool IsTaskQueueState(RunState state)
+    {
+        return state is RunState.Queued or RunState.Running or RunState.PendingApproval;
+    }
+
     private static Dictionary<string, string> BuildContainerLabels(
-        ProjectDocument project,
         RepositoryDocument repository,
         TaskDocument task,
         RunDocument run)
@@ -316,7 +363,6 @@ public sealed class RunDispatcher(
             ["orchestrator.run-id"] = run.Id,
             ["orchestrator.task-id"] = task.Id,
             ["orchestrator.repo-id"] = repository.Id,
-            ["orchestrator.project-id"] = project.Id,
         };
     }
 

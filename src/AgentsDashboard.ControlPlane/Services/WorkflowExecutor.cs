@@ -18,14 +18,12 @@ public class WorkflowExecutor(
 
     public virtual async Task<WorkflowExecutionDocument> ExecuteWorkflowAsync(
         WorkflowDocument workflow,
-        string projectId,
         CancellationToken cancellationToken)
     {
         var execution = new WorkflowExecutionDocument
         {
             WorkflowId = workflow.Id,
             RepositoryId = workflow.RepositoryId,
-            ProjectId = projectId,
             State = WorkflowExecutionState.Running,
             CurrentStageIndex = 0,
             StartedAtUtc = _timeProvider.GetUtcNow().UtcDateTime
@@ -99,8 +97,7 @@ public class WorkflowExecutor(
 
             try
             {
-                await ExecuteStageWithTimeoutAsync(
-                    stage, stageResult, execution, projectId: execution.ProjectId, linkedCts.Token, stageCts);
+                await ExecuteStageWithTimeoutAsync(stage, stageResult, execution, linkedCts.Token);
 
                 stageResult.EndedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
                 execution.StageResults.Add(stageResult);
@@ -181,26 +178,21 @@ public class WorkflowExecutor(
         WorkflowStageConfig stage,
         WorkflowStageResult result,
         WorkflowExecutionDocument execution,
-        string projectId,
-        CancellationToken cancellationToken,
-        CancellationTokenSource timeoutCts)
+        CancellationToken cancellationToken)
     {
         switch (stage.Type)
         {
             case WorkflowStageType.Task:
-                await ExecuteTaskStageAsync(stage, result, projectId, cancellationToken);
+                await ExecuteTaskStageAsync(stage, result, cancellationToken);
                 break;
-
             case WorkflowStageType.Approval:
                 await ExecuteApprovalStageAsync(stage, result, execution, cancellationToken);
                 break;
-
             case WorkflowStageType.Delay:
                 await ExecuteDelayStageAsync(stage, result, cancellationToken);
                 break;
-
             case WorkflowStageType.Parallel:
-                await ExecuteParallelStageAsync(stage, result, projectId, cancellationToken);
+                await ExecuteParallelStageAsync(stage, result, cancellationToken);
                 break;
         }
     }
@@ -240,7 +232,6 @@ public class WorkflowExecutor(
     private async Task ExecuteTaskStageAsync(
         WorkflowStageConfig stage,
         WorkflowStageResult result,
-        string projectId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(stage.TaskId))
@@ -266,21 +257,13 @@ public class WorkflowExecutor(
             return;
         }
 
-        var project = await store.GetProjectAsync(repository.ProjectId, cancellationToken);
-        if (project is null)
-        {
-            result.Succeeded = false;
-            result.Summary = $"Project {repository.ProjectId} not found";
-            return;
-        }
-
-        var run = await store.CreateRunAsync(task, project.Id, cancellationToken);
+        var run = await store.CreateRunAsync(task, cancellationToken);
         result.RunIds.Add(run.Id);
 
         logger.LogInformation("Created run {RunId} for task stage {StageName} (task {TaskId})",
             run.Id, stage.Name, task.Id);
 
-        var dispatched = await dispatcher.DispatchAsync(project, repository, task, run, cancellationToken);
+        var dispatched = await dispatcher.DispatchAsync(repository, task, run, cancellationToken);
         if (!dispatched)
         {
             result.Succeeded = false;
@@ -289,11 +272,11 @@ public class WorkflowExecutor(
         }
 
         var pollingInterval = TimeSpan.FromSeconds(2);
-                var stageTimeout = GetStageTimeout(stage);
-                var startTime = _timeProvider.GetUtcNow().UtcDateTime;
+        var stageTimeout = GetStageTimeout(stage);
+        var startTime = _timeProvider.GetUtcNow().UtcDateTime;
 
-                while (_timeProvider.GetUtcNow().UtcDateTime - startTime < stageTimeout)
-                {
+        while (_timeProvider.GetUtcNow().UtcDateTime - startTime < stageTimeout)
+        {
             if (cancellationToken.IsCancellationRequested)
             {
                 result.Succeeded = false;
@@ -343,16 +326,15 @@ public class WorkflowExecutor(
         WorkflowExecutionDocument execution,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Stage {StageName} requires approval",
-            stage.Name);
+        logger.LogInformation("Stage {StageName} requires approval", stage.Name);
 
         await store.MarkWorkflowExecutionPendingApprovalAsync(execution.Id, stage.Id, cancellationToken);
 
-                var stageTimeout = GetStageTimeout(stage);
-                var pollingInterval = TimeSpan.FromSeconds(5);
-                var startTime = _timeProvider.GetUtcNow().UtcDateTime;
+        var stageTimeout = GetStageTimeout(stage);
+        var pollingInterval = TimeSpan.FromSeconds(5);
+        var startTime = _timeProvider.GetUtcNow().UtcDateTime;
 
-                while (_timeProvider.GetUtcNow().UtcDateTime - startTime < stageTimeout)
+        while (_timeProvider.GetUtcNow().UtcDateTime - startTime < stageTimeout)
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -426,7 +408,6 @@ public class WorkflowExecutor(
     private async Task ExecuteParallelStageAsync(
         WorkflowStageConfig stage,
         WorkflowStageResult result,
-        string projectId,
         CancellationToken cancellationToken)
     {
         var parallelTaskIds = stage.ParallelStageIds ?? [];
@@ -437,14 +418,13 @@ public class WorkflowExecutor(
             return;
         }
 
-        logger.LogInformation("Stage {StageName} executing {TaskCount} tasks in parallel",
-            stage.Name, parallelTaskIds.Count);
+        logger.LogInformation("Stage {StageName} executing {TaskCount} tasks in parallel", stage.Name, parallelTaskIds.Count);
 
         var tasks = new List<Task<(bool Success, string Summary, string RunId)>>();
 
         foreach (var taskId in parallelTaskIds)
         {
-            tasks.Add(ExecuteParallelTaskAsync(taskId, projectId, stage, cancellationToken));
+            tasks.Add(ExecuteParallelTaskAsync(taskId, stage, cancellationToken));
         }
 
         var results = await Task.WhenAll(tasks);
@@ -462,7 +442,6 @@ public class WorkflowExecutor(
 
     private async Task<(bool Success, string Summary, string RunId)> ExecuteParallelTaskAsync(
         string taskId,
-        string projectId,
         WorkflowStageConfig stage,
         CancellationToken cancellationToken)
     {
@@ -478,16 +457,10 @@ public class WorkflowExecutor(
             return (false, $"Repository {task.RepositoryId} not found", string.Empty);
         }
 
-        var project = await store.GetProjectAsync(repository.ProjectId, cancellationToken);
-        if (project is null)
-        {
-            return (false, $"Project {repository.ProjectId} not found", string.Empty);
-        }
-
-        var run = await store.CreateRunAsync(task, project.Id, cancellationToken);
+        var run = await store.CreateRunAsync(task, cancellationToken);
         logger.LogInformation("Created run {RunId} for parallel task {TaskId}", run.Id, taskId);
 
-        var dispatched = await dispatcher.DispatchAsync(project, repository, task, run, cancellationToken);
+        var dispatched = await dispatcher.DispatchAsync(repository, task, run, cancellationToken);
         if (!dispatched)
         {
             return (false, "Failed to dispatch run", run.Id);

@@ -66,12 +66,8 @@ public sealed class CronSchedulerService(
             if (repo is null)
                 continue;
 
-            var project = await store.GetProjectAsync(repo.ProjectId, cancellationToken);
-            if (project is null)
-                continue;
-
-            var run = await store.CreateRunAsync(task, project.Id, cancellationToken);
-            await dispatcher.DispatchAsync(project, repo, task, run, cancellationToken);
+            var run = await store.CreateRunAsync(task, cancellationToken);
+            await dispatcher.DispatchAsync(repo, task, run, cancellationToken);
 
             if (task.Kind == TaskKind.OneShot)
             {

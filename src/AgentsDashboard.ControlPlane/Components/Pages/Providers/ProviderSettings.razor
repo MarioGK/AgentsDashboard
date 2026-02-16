@@ -288,16 +288,12 @@
         try
         {
             _repositories.Clear();
-            var projects = await Store.ListProjectsAsync(CancellationToken.None);
-            foreach (var project in projects)
+            var repos = await Store.ListRepositoriesAsync(CancellationToken.None);
+            _repositories.AddRange(repos.Select(r => new RepositoryInfo
             {
-                var repos = await Store.ListRepositoriesAsync(project.Id, CancellationToken.None);
-                _repositories.AddRange(repos.Select(r => new RepositoryInfo
-                {
-                    Id = r.Id,
-                    Name = $"{project.Name} / {r.Name}"
-                }));
-            }
+                Id = r.Id,
+                Name = r.Name
+            }));
         }
         catch (Exception ex)
         {

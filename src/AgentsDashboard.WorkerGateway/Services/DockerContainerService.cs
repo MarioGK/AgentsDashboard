@@ -229,7 +229,6 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
 
             container.Labels.TryGetValue("orchestrator.task-id", out var taskId);
             container.Labels.TryGetValue("orchestrator.repo-id", out var repoId);
-            container.Labels.TryGetValue("orchestrator.project-id", out var projectId);
 
             result.Add(new OrchestratorContainerInfo
             {
@@ -237,7 +236,6 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
                 RunId = runId,
                 TaskId = taskId ?? string.Empty,
                 RepoId = repoId ?? string.Empty,
-                ProjectId = projectId ?? string.Empty,
                 State = container.State,
                 Image = container.Image,
                 CreatedAt = container.Created

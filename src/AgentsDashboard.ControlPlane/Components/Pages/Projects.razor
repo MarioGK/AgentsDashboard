@@ -1,53 +1,129 @@
 @page "/settings/projects"
+@page "/settings/repositories"
 @layout SettingsLayout
 @rendermode InteractiveServer
 @inject Data.IOrchestratorStore Store
+@inject Services.IGitWorkspaceService GitWorkspace
+@inject Services.IHostFileExplorerService FileExplorer
+@inject Services.SecretCryptoService Crypto
 @inject NavigationManager Nav
 @inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@using System.IO
+@using AgentsDashboard.ControlPlane.Services
 
-<PageTitle>Projects</PageTitle>
+<PageTitle>Repositories</PageTitle>
 
 <MudStack Spacing="2">
     <MudStack Row AlignItems="AlignItems.Center">
-        <MudText Typo="Typo.h4">Projects</MudText>
-        <MudSpacer />
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="StartNewProject">
-            New Project
-        </MudButton>
+        <MudText Typo="Typo.h4">Repositories</MudText>
     </MudStack>
 
     <MudPaper Class="pa-4">
-        <MudText Typo="Typo.h6" Class="mb-3">Create Project</MudText>
+        <MudText Typo="Typo.h6" Class="mb-3">Create Repository</MudText>
+
         <MudGrid>
-            <MudItem xs="12" md="4">
-                <MudTextField @bind-Value="_newProjectName" Label="Project Name" Placeholder="Project Name" Required="true" />
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_newRepositoryName" Label="Repository Name" Placeholder="Repository Name" Required="true" />
             </MudItem>
-            <MudItem xs="12" md="6">
-                <MudTextField @bind-Value="_newProjectDescription" Label="Description" />
+            <MudItem xs="12" md="5">
+                <MudTextField @bind-Value="_newRepositoryGitUrl" Label="Git URL" Placeholder="https://github.com/org/repo.git" Required="true" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudTextField @bind-Value="_newRepositoryDefaultBranch" Label="Default Branch" Placeholder="main" Required="true" />
             </MudItem>
             <MudItem xs="12" md="2" Class="d-flex align-center">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateProjectAsync">Create</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isCreating" OnClick="CreateRepositoryAsync">
+                    @if (_isCreating)
+                    {
+                        <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                        <span>Creating...</span>
+                    }
+                    else
+                    {
+                        <span>Create</span>
+                    }
+                </MudButton>
             </MudItem>
         </MudGrid>
+
+        <MudGrid Class="mt-2">
+            <MudItem xs="12" md="8">
+                <MudTextField @bind-Value="_newRepositoryLocalPath" Label="Local Folder" Placeholder="/absolute/path" Required="true" />
+            </MudItem>
+            <MudItem xs="12" md="4" Class="d-flex align-center">
+                <MudButton Variant="Variant.Outlined" Color="Color.Info" OnClick="LoadDirectoriesAsync" Class="mr-2">Browse</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="UseBrowserPath">Use Current Browser Path</MudButton>
+            </MudItem>
+        </MudGrid>
+        <MudGrid Class="mt-2">
+            <MudItem xs="12" md="8">
+                <MudTextField @bind-Value="_newRepositoryGithubToken" Label="GitHub Token (optional)" InputType="InputType.Password" />
+            </MudItem>
+        </MudGrid>
+
+        <MudPaper Class="pa-3 mt-3" Outlined>
+            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.subtitle2">Folder Explorer</MudText>
+                <MudText Typo="Typo.caption">@_browserPath</MudText>
+            </MudStack>
+
+            <MudStack Row Spacing="1" Class="mt-2">
+                <MudButton Variant="Variant.Text" OnClick="NavigateUpAsync">Up</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="LoadDirectoriesAsync">Refresh</MudButton>
+            </MudStack>
+
+            <MudGrid Class="mt-2">
+                <MudItem xs="12" md="8">
+                    <MudTextField @bind-Value="_newFolderName" Label="Create Folder" Placeholder="folder-name" />
+                </MudItem>
+                <MudItem xs="12" md="4" Class="d-flex align-center">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="CreateFolderAsync">Create Folder</MudButton>
+                </MudItem>
+            </MudGrid>
+
+            @if (_directories.Count == 0)
+            {
+                <MudText Typo="Typo.caption" Class="mt-2">No subfolders in current path.</MudText>
+            }
+            else
+            {
+                <MudChipSet T="string" Class="mt-2">
+                    @foreach (var dir in _directories)
+                    {
+                        <MudChip T="string" OnClick="() => EnterDirectoryAsync(dir.FullPath)">@dir.Name</MudChip>
+                    }
+                </MudChipSet>
+            }
+        </MudPaper>
     </MudPaper>
 
-    <MudTable Items="_projects" Dense Hover>
+    <MudTable Items="_repositories" Dense Hover>
         <HeaderContent>
             <MudTh>Name</MudTh>
-            <MudTh>Description</MudTh>
-            <MudTh>Created</MudTh>
+            <MudTh>Git URL</MudTh>
+            <MudTh>Local Path</MudTh>
+            <MudTh>Branch</MudTh>
+            <MudTh>Ahead/Behind</MudTh>
+            <MudTh>Staged/Modified/Untracked</MudTh>
             <MudTh></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd>@context.Name</MudTd>
-            <MudTd>@context.Description</MudTd>
-            <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+            <MudTd>@context.GitUrl</MudTd>
+            <MudTd>@context.LocalPath</MudTd>
+            <MudTd>@(string.IsNullOrWhiteSpace(context.CurrentBranch) ? "-" : context.CurrentBranch)</MudTd>
+            <MudTd>@context.AheadCount/@context.BehindCount</MudTd>
+            <MudTd>@context.StagedCount/@context.ModifiedCount/@context.UntrackedCount</MudTd>
             <MudTd>
                 <MudButtonGroup Variant="Variant.Outlined">
-                    <MudButton Color="Color.Primary" OnClick='@(() => Nav.NavigateTo($"/settings/projects/{context.Id}"))'>
+                    <MudButton Color="Color.Primary" OnClick='@(() => Nav.NavigateTo($"/settings/repositories/{context.Id}"))'>
                         Open
                     </MudButton>
-                    <MudButton Color="Color.Error" OnClick="@(() => ConfirmDeleteProjectAsync(context))">
+                    <MudButton Color="Color.Info" OnClick="() => RefreshRepositoryAsync(context, true)">
+                        Refresh
+                    </MudButton>
+                    <MudButton Color="Color.Error" OnClick="() => ConfirmDeleteRepositoryAsync(context)">
                         Delete
                     </MudButton>
                 </MudButtonGroup>
@@ -57,50 +133,199 @@
 </MudStack>
 
 @code {
-    private readonly List<ProjectDocument> _projects = [];
-    private string _newProjectName = string.Empty;
-    private string _newProjectDescription = string.Empty;
+    private readonly List<RepositoryDocument> _repositories = [];
+
+    private string _newRepositoryName = string.Empty;
+    private string _newRepositoryGitUrl = string.Empty;
+    private string _newRepositoryLocalPath = string.Empty;
+    private string _newRepositoryDefaultBranch = "main";
+    private string _newRepositoryGithubToken = string.Empty;
+    private bool _isCreating;
+
+    private string _browserPath = Path.GetPathRoot(System.Environment.CurrentDirectory) ?? "/";
+    private readonly List<HostDirectoryEntry> _directories = [];
+    private string _newFolderName = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        await LoadDirectoriesAsync();
     }
 
-    private async Task CreateProjectAsync()
+    private async Task CreateRepositoryAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newProjectName))
+        if (_isCreating)
         {
             return;
         }
 
-        await Store.CreateProjectAsync(new CreateProjectRequest(_newProjectName.Trim(), _newProjectDescription.Trim()), CancellationToken.None);
-        _newProjectName = string.Empty;
-        _newProjectDescription = string.Empty;
-        await LoadAsync();
+        if (string.IsNullOrWhiteSpace(_newRepositoryName) ||
+            string.IsNullOrWhiteSpace(_newRepositoryGitUrl) ||
+            string.IsNullOrWhiteSpace(_newRepositoryLocalPath))
+        {
+            Snackbar.Add("Repository name, git URL, and local folder are required.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _isCreating = true;
+            var gitStatus = await GitWorkspace.EnsureWorkspaceAsync(
+                _newRepositoryGitUrl.Trim(),
+                _newRepositoryLocalPath.Trim(),
+                string.IsNullOrWhiteSpace(_newRepositoryDefaultBranch) ? "main" : _newRepositoryDefaultBranch.Trim(),
+                githubToken: string.IsNullOrWhiteSpace(_newRepositoryGithubToken) ? null : _newRepositoryGithubToken.Trim(),
+                fetchRemote: true,
+                CancellationToken.None);
+
+            var created = await Store.CreateRepositoryAsync(
+                new CreateRepositoryRequest(
+                    _newRepositoryName.Trim(),
+                    _newRepositoryGitUrl.Trim(),
+                    _newRepositoryLocalPath.Trim(),
+                    string.IsNullOrWhiteSpace(_newRepositoryDefaultBranch) ? "main" : _newRepositoryDefaultBranch.Trim()),
+                CancellationToken.None);
+
+            if (!string.IsNullOrWhiteSpace(_newRepositoryGithubToken))
+            {
+                await Store.UpsertProviderSecretAsync(created.Id, "github", Crypto.Encrypt(_newRepositoryGithubToken.Trim()), CancellationToken.None);
+            }
+
+            await Store.UpdateRepositoryGitStateAsync(created.Id, gitStatus, CancellationToken.None);
+
+            _newRepositoryName = string.Empty;
+            _newRepositoryGitUrl = string.Empty;
+            _newRepositoryLocalPath = string.Empty;
+            _newRepositoryDefaultBranch = "main";
+            _newRepositoryGithubToken = string.Empty;
+
+            await LoadAsync();
+            Snackbar.Add("Repository created and cloned successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Repository create failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isCreating = false;
+        }
     }
 
     private async Task LoadAsync()
     {
-        _projects.Clear();
-        _projects.AddRange(await Store.ListProjectsAsync(CancellationToken.None));
+        _repositories.Clear();
+        _repositories.AddRange(await Store.ListRepositoriesAsync(CancellationToken.None));
     }
 
-    private void StartNewProject()
+    private async Task RefreshRepositoryAsync(RepositoryDocument repository, bool fetchRemote)
     {
+        try
+        {
+            var githubToken = await TryGetGithubTokenAsync(repository.Id);
+            var gitStatus = await GitWorkspace.RefreshStatusAsync(repository, githubToken, fetchRemote, CancellationToken.None);
+            await Store.UpdateRepositoryGitStateAsync(repository.Id, gitStatus, CancellationToken.None);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Refresh failed for {repository.Name}: {ex.Message}", Severity.Warning);
+        }
     }
 
-    private async Task ConfirmDeleteProjectAsync(ProjectDocument project)
+    private async Task<string?> TryGetGithubTokenAsync(string repositoryId)
+    {
+        var secret = await Store.GetProviderSecretAsync(repositoryId, "github", CancellationToken.None);
+        if (secret is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Crypto.Decrypt(secret.EncryptedValue);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task ConfirmDeleteRepositoryAsync(RepositoryDocument repo)
     {
         var result = await DialogService.ShowMessageBox(
-            "Delete Project",
-            $"Are you sure you want to delete project '{project.Name}'? This will also delete all repositories, tasks, and runs associated with this project.",
+            "Delete Repository",
+            $"Are you sure you want to delete repository '{repo.Name}'? This will also delete all tasks and runs.",
             yesText: "Delete",
             cancelText: "Cancel");
 
         if (result == true)
         {
-            await Store.DeleteProjectAsync(project.Id, CancellationToken.None);
+            await Store.DeleteRepositoryAsync(repo.Id, CancellationToken.None);
             await LoadAsync();
+        }
+    }
+
+    private async Task LoadDirectoriesAsync()
+    {
+        try
+        {
+            _directories.Clear();
+            _directories.AddRange(await FileExplorer.ListDirectoriesAsync(_browserPath, CancellationToken.None));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Browse failed: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task NavigateUpAsync()
+    {
+        try
+        {
+            var current = Path.GetFullPath(_browserPath);
+            var parent = Directory.GetParent(current)?.FullName;
+            if (!string.IsNullOrWhiteSpace(parent))
+            {
+                _browserPath = parent;
+                await LoadDirectoriesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Cannot navigate up: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task EnterDirectoryAsync(string path)
+    {
+        _browserPath = path;
+        await LoadDirectoriesAsync();
+    }
+
+    private void UseBrowserPath()
+    {
+        _newRepositoryLocalPath = _browserPath;
+    }
+
+    private async Task CreateFolderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newFolderName))
+        {
+            return;
+        }
+
+        try
+        {
+            var created = await FileExplorer.CreateDirectoryAsync(_browserPath, _newFolderName.Trim(), CancellationToken.None);
+            _browserPath = created;
+            _newFolderName = string.Empty;
+            await LoadDirectoriesAsync();
+            UseBrowserPath();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Create folder failed: {ex.Message}", Severity.Warning);
         }
     }
 }

@@ -39,8 +39,8 @@ else
         <MudGrid>
             <MudItem xs="12" md="4">
                 <MudPaper Class="overview-stat-card" Elevation="0">
-                    <MudText Typo="Typo.caption">Projects</MudText>
-                    <MudText Typo="Typo.h4">@_projects.Count</MudText>
+                    <MudText Typo="Typo.caption">Repositories</MudText>
+                    <MudText Typo="Typo.h4">@_repositories.Count</MudText>
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="4">
@@ -101,7 +101,9 @@ else
                                             <MudLink Href="@($"/settings/runs/{run.Id}")">@run.Id[..Math.Min(8, run.Id.Length)]</MudLink>
                                             <MudText Typo="Typo.caption">@run.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
                                         </MudStack>
-                                        <MudChip T="string" Size="Size.Small" Color="@StateColor(run.State)">@run.State</MudChip>
+                                        <MudChip T="string" Size="Size.Small" Color="@GetRunStateColor(run.State)">
+                                            @GetRunStateLabel(run.State)
+                                        </MudChip>
                                     </MudStack>
                                 </MudListItem>
                             }
@@ -119,7 +121,7 @@ else
         new("Runs", "Inspect queues, active and finished runs", "/settings/runs", Icons.Material.Filled.PlayCircle),
         new("Findings", "Triage failures and quality issues", "/settings/findings", Icons.Material.Filled.BugReport),
         new("Workflows", "Manage stage workflows", "/settings/workflows/stages", Icons.Material.Filled.AccountTree),
-        new("Projects", "Manage projects and repositories", "/settings/projects", Icons.Material.Filled.AccountTree),
+        new("Repositories", "Manage git-linked repositories", "/settings/projects", Icons.Material.Filled.AccountTree),
         new("Workers", "Inspect worker status and tool availability", "/settings/workers", Icons.Material.Filled.Engineering),
         new("Orchestrator", "Tune worker pool reliability and scaling", "/settings/orchestrator", Icons.Material.Filled.Memory),
         new("System", "Update retention and docker policies", "/settings/system", Icons.Material.Filled.Tune)
@@ -129,7 +131,7 @@ else
     private string _commandText = string.Empty;
     private int _openFindings;
     private int _activeRuns;
-    private List<ProjectDocument> _projects = [];
+    private List<RepositoryDocument> _repositories = [];
     private List<RunDocument> _runs = [];
     private IDisposable? _selectionSubscription;
 
@@ -146,18 +148,12 @@ else
 
         try
         {
-            _projects = await Store.ListProjectsAsync(CancellationToken.None);
+            _repositories = await Store.ListRepositoriesAsync(CancellationToken.None);
 
             if (SelectionService.SelectedRepositoryId is not null)
             {
                 _runs = await Store.ListRunsByRepositoryAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
                 var findings = await Store.ListFindingsAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
-                _openFindings = findings.Count(IsOpenFinding);
-            }
-            else if (SelectionService.SelectedProjectId is not null)
-            {
-                _runs = await Store.ListRecentRunsByProjectAsync(SelectionService.SelectedProjectId, CancellationToken.None);
-                var findings = await Store.ListAllFindingsAsync(CancellationToken.None);
                 _openFindings = findings.Count(IsOpenFinding);
             }
             else
@@ -167,7 +163,7 @@ else
                 _openFindings = findings.Count(IsOpenFinding);
             }
 
-            _activeRuns = _runs.Count(r => r.State is RunState.Running or RunState.Queued);
+            _activeRuns = _runs.Count(r => TaskRunStatusPresentation.FromRunState(r.State).IsWorking);
         }
         finally
         {
@@ -217,15 +213,9 @@ else
         return "/settings";
     }
 
-    private static Color StateColor(RunState state) => state switch
-    {
-        RunState.Succeeded => Color.Success,
-        RunState.Failed => Color.Error,
-        RunState.Running => Color.Info,
-        RunState.Queued => Color.Warning,
-        RunState.PendingApproval => Color.Warning,
-        _ => Color.Default
-    };
+    private static Color GetRunStateColor(RunState state) => TaskRunStatusPresentation.FromRunState(state).Color;
+
+    private static string GetRunStateLabel(RunState state) => TaskRunStatusPresentation.FromRunState(state).Label;
 
     private static bool IsOpenFinding(FindingDocument finding) => finding.State is FindingState.New or FindingState.Acknowledged or FindingState.InProgress;
 

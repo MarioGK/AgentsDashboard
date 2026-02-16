@@ -6,7 +6,6 @@ public interface IWorkflowExecutor
 {
     Task<WorkflowExecutionDocument> ExecuteWorkflowAsync(
         WorkflowDocument workflow,
-        string projectId,
         CancellationToken cancellationToken);
 
     Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(

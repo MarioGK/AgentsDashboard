@@ -1,8 +1,8 @@
+using System.Collections.Concurrent;
+using AgentsDashboard.Contracts.Worker;
+using Grpc.Net.Client;
 using MagicOnion;
 using MagicOnion.Client;
-using Grpc.Net.Client;
-using AgentsDashboard.Contracts.Worker;
-using System.Collections.Concurrent;
 
 namespace AgentsDashboard.ControlPlane.Services;
 

@@ -228,6 +228,8 @@ public sealed class WorkerEventListenerService(
                 }
             }
 
+            await TryDispatchNextQueuedRunAsync(completedRun.TaskId);
+
             if (!succeeded)
             {
                 await store.CreateFindingFromFailureAsync(completedRun, envelope.Error, CancellationToken.None);
@@ -305,10 +307,6 @@ public sealed class WorkerEventListenerService(
         if (repo is null)
             return;
 
-        var project = await store.GetProjectAsync(repo.ProjectId, CancellationToken.None);
-        if (project is null)
-            return;
-
         var nextAttempt = failedRun.Attempt + 1;
         var delaySeconds = task.RetryPolicy.BackoffBaseSeconds * Math.Pow(task.RetryPolicy.BackoffMultiplier, failedRun.Attempt - 1);
 
@@ -317,8 +315,29 @@ public sealed class WorkerEventListenerService(
 
         await Task.Delay(TimeSpan.FromSeconds(Math.Min(delaySeconds, 300)));
 
-        var retryRun = await store.CreateRunAsync(task, project.Id, CancellationToken.None, nextAttempt);
-        await dispatcher.DispatchAsync(project, repo, task, retryRun, CancellationToken.None);
+        var retryRun = await store.CreateRunAsync(task, CancellationToken.None, nextAttempt);
+        await dispatcher.DispatchAsync(repo, task, retryRun, CancellationToken.None);
+    }
+
+    private async Task TryDispatchNextQueuedRunAsync(string taskId)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return;
+        }
+
+        try
+        {
+            var dispatched = await dispatcher.DispatchNextQueuedRunForTaskAsync(taskId, CancellationToken.None);
+            if (dispatched)
+            {
+                logger.LogInformation("Dispatched next queued run for task {TaskId}", taskId);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed dispatching next queued run for task {TaskId}", taskId);
+        }
     }
 
     private static HarnessResultEnvelope ParseEnvelope(string? payloadJson)

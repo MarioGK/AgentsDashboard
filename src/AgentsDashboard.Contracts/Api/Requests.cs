@@ -2,10 +2,11 @@ using AgentsDashboard.Contracts.Domain;
 
 namespace AgentsDashboard.Contracts.Api;
 
-public sealed record CreateProjectRequest(string Name, string Description);
-public sealed record UpdateProjectRequest(string Name, string Description);
-public sealed record CreateRepositoryRequest(string ProjectId, string Name, string GitUrl, string DefaultBranch);
-public sealed record UpdateRepositoryRequest(string Name, string GitUrl, string DefaultBranch);
+public sealed record CreateRepositoryRequest(string Name, string GitUrl, string LocalPath, string DefaultBranch);
+public sealed record UpdateRepositoryRequest(string Name, string GitUrl, string LocalPath, string DefaultBranch);
+public sealed record RefreshRepositoryGitStateRequest(string RepositoryId, bool FetchRemote = false);
+public sealed record ListDirectoriesRequest(string Path);
+public sealed record CreateDirectoryRequest(string ParentPath, string Name);
 public sealed record CreateTaskRequest(
     string RepositoryId,
     string Name,
@@ -111,13 +112,13 @@ public sealed record ReliabilityMetrics(
     Dictionary<string, int> RunsByState,
     List<DailyFailureCount> FailureTrend14Days,
     double? AverageDurationSeconds,
-    List<ProjectReliabilityMetrics> PerProjectMetrics);
+    List<RepositoryReliabilityMetrics> PerRepositoryMetrics);
 
 public sealed record DailyFailureCount(DateTime Date, int Count);
 
-public sealed record ProjectReliabilityMetrics(
-    string ProjectId,
-    string ProjectName,
+public sealed record RepositoryReliabilityMetrics(
+    string RepositoryId,
+    string RepositoryName,
     int TotalRuns,
     int SuccessfulRuns,
     int FailedRuns,
@@ -155,3 +156,18 @@ public sealed record UpdateTaskTemplateRequest(
     ArtifactPolicyConfig? ArtifactPolicy = null,
     List<string>? ArtifactPatterns = null,
     List<string>? LinkedFailureRuns = null);
+
+public sealed record CreatePromptSkillRequest(
+    string RepositoryId,
+    string Name,
+    string Trigger,
+    string Content,
+    string Description,
+    bool Enabled = true);
+
+public sealed record UpdatePromptSkillRequest(
+    string Name,
+    string Trigger,
+    string Content,
+    string Description,
+    bool Enabled = true);

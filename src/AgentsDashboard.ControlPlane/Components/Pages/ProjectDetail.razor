@@ -1,127 +1,20 @@
 @page "/settings/projects/{ProjectId}"
 @layout SettingsLayout
 @rendermode InteractiveServer
-@inject Data.IOrchestratorStore Store
 @inject NavigationManager Nav
-@inject IDialogService DialogService
 
-<PageTitle>Project</PageTitle>
+<PageTitle>Repository Settings</PageTitle>
 
-@if (_project is null)
-{
-    <MudAlert Severity="Severity.Error">Project not found</MudAlert>
-}
-else
-{
-    <MudStack Spacing="2">
-        <MudStack Row AlignItems="AlignItems.Center">
-            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/settings/projects" />
-            <MudText Typo="Typo.h4">@_project.Name</MudText>
-            <MudSpacer />
-            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
-                       OnClick="ConfirmDeleteProjectAsync">
-                Delete Project
-            </MudButton>
-        </MudStack>
-        <MudText Typo="Typo.subtitle1">@_project.Description</MudText>
-
-        <MudPaper Class="pa-4">
-            <MudText Typo="Typo.h6" Class="mb-3">Add Repository</MudText>
-            <MudGrid>
-                <MudItem xs="12" md="3"><MudTextField @bind-Value="_repoName" Label="Repository Name" Placeholder="Repository Name" /></MudItem>
-                <MudItem xs="12" md="5"><MudTextField @bind-Value="_repoGitUrl" Label="Git URL" Placeholder="Git URL" /></MudItem>
-                <MudItem xs="12" md="2"><MudTextField @bind-Value="_repoBranch" Label="Default Branch" Placeholder="Branch" /></MudItem>
-                <MudItem xs="12" md="2" Class="d-flex align-center">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateRepositoryAsync">Add</MudButton>
-                </MudItem>
-            </MudGrid>
-        </MudPaper>
-
-        <MudTable Items="_repositories" Dense Hover>
-            <HeaderContent>
-                <MudTh>Name</MudTh>
-                <MudTh>Git URL</MudTh>
-                <MudTh>Branch</MudTh>
-                <MudTh></MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>@context.Name</MudTd>
-                <MudTd>@context.GitUrl</MudTd>
-                <MudTd>@context.DefaultBranch</MudTd>
-                <MudTd>
-                    <MudButtonGroup Variant="Variant.Outlined">
-                        <MudButton Color="Color.Primary" OnClick="@(() => Nav.NavigateTo($"/repositories/{context.Id}"))">Open</MudButton>
-                        <MudButton Color="Color.Error" OnClick="@(() => ConfirmDeleteRepositoryAsync(context))">Delete</MudButton>
-                    </MudButtonGroup>
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-    </MudStack>
-}
+<MudAlert Severity="Severity.Info">Projects were removed. Redirecting to repositories...</MudAlert>
 
 @code {
     [Parameter] public string ProjectId { get; set; } = string.Empty;
 
-    private ProjectDocument? _project;
-    private readonly List<RepositoryDocument> _repositories = [];
-    private string _repoName = string.Empty;
-    private string _repoGitUrl = string.Empty;
-    private string _repoBranch = "main";
-
-    protected override async Task OnParametersSetAsync()
+    protected override void OnAfterRender(bool firstRender)
     {
-        _project = await Store.GetProjectAsync(ProjectId, CancellationToken.None);
-        await LoadRepositoriesAsync();
-    }
-
-    private async Task CreateRepositoryAsync()
-    {
-        if (_project is null || string.IsNullOrWhiteSpace(_repoName))
+        if (firstRender)
         {
-            return;
-        }
-
-        await Store.CreateRepositoryAsync(new CreateRepositoryRequest(_project.Id, _repoName.Trim(), _repoGitUrl.Trim(), _repoBranch.Trim()), CancellationToken.None);
-        _repoName = string.Empty;
-        _repoGitUrl = string.Empty;
-        await LoadRepositoriesAsync();
-    }
-
-    private async Task LoadRepositoriesAsync()
-    {
-        _repositories.Clear();
-        _repositories.AddRange(await Store.ListRepositoriesAsync(ProjectId, CancellationToken.None));
-    }
-
-    private async Task ConfirmDeleteProjectAsync()
-    {
-        if (_project is null) return;
-
-        var result = await DialogService.ShowMessageBox(
-            "Delete Project",
-            $"Are you sure you want to delete project '{_project.Name}'? This will also delete all repositories, tasks, and runs.",
-            yesText: "Delete",
-            cancelText: "Cancel");
-
-        if (result == true)
-        {
-            await Store.DeleteProjectAsync(_project.Id, CancellationToken.None);
-            Nav.NavigateTo("/settings/projects");
-        }
-    }
-
-    private async Task ConfirmDeleteRepositoryAsync(RepositoryDocument repo)
-    {
-        var result = await DialogService.ShowMessageBox(
-            "Delete Repository",
-            $"Are you sure you want to delete repository '{repo.Name}'? This will also delete all tasks and runs.",
-            yesText: "Delete",
-            cancelText: "Cancel");
-
-        if (result == true)
-        {
-            await Store.DeleteRepositoryAsync(repo.Id, CancellationToken.None);
-            await LoadRepositoriesAsync();
+            Nav.NavigateTo("/settings/projects", replace: true);
         }
     }
 }

@@ -1,0 +1,20 @@
+@using AgentsDashboard.Contracts.Domain
+
+<MudTooltip Text="@Status.Tooltip">
+    <MudChip T="string" Size="@Size" Color="@Status.Color" Variant="@Variant">
+        @if (Status.IsWorking)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+        }
+        @Status.Label
+    </MudChip>
+</MudTooltip>
+
+@code {
+    [Parameter, EditorRequired] public TaskDocument Task { get; set; } = default!;
+    [Parameter] public RunDocument? LatestRun { get; set; }
+    [Parameter] public Size Size { get; set; } = Size.Small;
+    [Parameter] public Variant Variant { get; set; } = Variant.Filled;
+
+    private TaskStatusChipVisual Status => TaskRunStatusPresentation.FromTaskAndLatestRun(Task, LatestRun);
+}

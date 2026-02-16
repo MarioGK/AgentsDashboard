@@ -1,5 +1,5 @@
-using MessagePack;
 using System.Collections.Generic;
+using MessagePack;
 
 namespace AgentsDashboard.Contracts.Worker;
 
@@ -8,33 +8,32 @@ namespace AgentsDashboard.Contracts.Worker;
 public record DispatchJobRequest
 {
     [Key(0)] public required string RunId { get; init; }
-    [Key(1)] public required string ProjectId { get; init; }
-    [Key(2)] public required string RepositoryId { get; init; }
-    [Key(3)] public required string TaskId { get; init; }
-    [Key(4)] public required string HarnessType { get; init; }
-    [Key(5)] public required string ImageTag { get; init; }
-    [Key(6)] public required string CloneUrl { get; init; }
-    [Key(7)] public string? Branch { get; init; }
-    [Key(8)] public string? CommitSha { get; init; }
-    [Key(9)] public string? WorkingDirectory { get; init; }
-    [Key(10)] public required string Instruction { get; init; }
-    [Key(11)] public Dictionary<string, string>? EnvironmentVars { get; init; }
-    [Key(12)] public Dictionary<string, string>? Secrets { get; init; }
-    [Key(13)] public string? ConcurrencyKey { get; init; }
-    [Key(14)] public int TimeoutSeconds { get; init; }
-    [Key(15)] public int RetryCount { get; init; }
-    [Key(16)] public List<string>? ArtifactPatterns { get; init; }
-    [Key(17)] public List<string>? LinkedFailureRuns { get; init; }
-    [Key(18)] public string? CustomArgs { get; init; }
-    [Key(19)] public DateTimeOffset DispatchedAt { get; init; }
-    [Key(20)] public Dictionary<string, string>? ContainerLabels { get; init; }
-    [Key(21)] public int Attempt { get; set; } = 1;
-    [Key(22)] public double? SandboxProfileCpuLimit { get; init; }
-    [Key(23)] public long? SandboxProfileMemoryLimit { get; init; }
-    [Key(24)] public bool SandboxProfileNetworkDisabled { get; set; } = false;
-    [Key(25)] public bool SandboxProfileReadOnlyRootFs { get; set; } = false;
-    [Key(26)] public int? ArtifactPolicyMaxArtifacts { get; init; }
-    [Key(27)] public long? ArtifactPolicyMaxTotalSizeBytes { get; init; }
+    [Key(1)] public required string RepositoryId { get; init; }
+    [Key(2)] public required string TaskId { get; init; }
+    [Key(3)] public required string HarnessType { get; init; }
+    [Key(4)] public required string ImageTag { get; init; }
+    [Key(5)] public required string CloneUrl { get; init; }
+    [Key(6)] public string? Branch { get; init; }
+    [Key(7)] public string? CommitSha { get; init; }
+    [Key(8)] public string? WorkingDirectory { get; init; }
+    [Key(9)] public required string Instruction { get; init; }
+    [Key(10)] public Dictionary<string, string>? EnvironmentVars { get; init; }
+    [Key(11)] public Dictionary<string, string>? Secrets { get; init; }
+    [Key(12)] public string? ConcurrencyKey { get; init; }
+    [Key(13)] public int TimeoutSeconds { get; init; }
+    [Key(14)] public int RetryCount { get; init; }
+    [Key(15)] public List<string>? ArtifactPatterns { get; init; }
+    [Key(16)] public List<string>? LinkedFailureRuns { get; init; }
+    [Key(17)] public string? CustomArgs { get; init; }
+    [Key(18)] public DateTimeOffset DispatchedAt { get; init; }
+    [Key(19)] public Dictionary<string, string>? ContainerLabels { get; init; }
+    [Key(20)] public int Attempt { get; set; } = 1;
+    [Key(21)] public double? SandboxProfileCpuLimit { get; init; }
+    [Key(22)] public long? SandboxProfileMemoryLimit { get; init; }
+    [Key(23)] public bool SandboxProfileNetworkDisabled { get; set; } = false;
+    [Key(24)] public bool SandboxProfileReadOnlyRootFs { get; set; } = false;
+    [Key(25)] public int? ArtifactPolicyMaxArtifacts { get; init; }
+    [Key(26)] public long? ArtifactPolicyMaxTotalSizeBytes { get; init; }
 }
 
 [MessagePackObject]

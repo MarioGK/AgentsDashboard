@@ -26,7 +26,6 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
         string pathPattern,
         string destination,
         TimeSpan? ttl = null,
-        string? projectId = null,
         string? repoId = null,
         string? taskId = null,
         string? runId = null)
@@ -60,12 +59,11 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
         else
             _routeTtls.TryRemove(routeId, out _);
 
-        if (!string.IsNullOrEmpty(projectId) || !string.IsNullOrEmpty(repoId) ||
+        if (!string.IsNullOrEmpty(repoId) ||
             !string.IsNullOrEmpty(taskId) || !string.IsNullOrEmpty(runId))
         {
             _routeOwnership[routeId] = new RouteOwnership
             {
-                ProjectId = projectId ?? string.Empty,
                 RepoId = repoId ?? string.Empty,
                 TaskId = taskId ?? string.Empty,
                 RunId = runId ?? string.Empty
@@ -134,7 +132,6 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
 
 public sealed class RouteOwnership
 {
-    public string ProjectId { get; init; } = string.Empty;
     public string RepoId { get; init; } = string.Empty;
     public string TaskId { get; init; } = string.Empty;
     public string RunId { get; init; } = string.Empty;

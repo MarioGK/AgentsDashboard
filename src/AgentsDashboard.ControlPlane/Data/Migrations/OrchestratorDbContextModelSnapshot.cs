@@ -190,9 +190,13 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.ToTable("Leases");
                 });
 
-            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.ProjectDocument", b =>
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.PromptSkillDocument", b =>
                 {
                     b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -202,15 +206,32 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("Name");
+                    b.HasIndex("RepositoryId", "Trigger")
+                        .IsUnique();
 
-                    b.ToTable("Projects");
+                    b.HasIndex("RepositoryId", "UpdatedAtUtc");
+
+                    b.ToTable("PromptSkills");
                 });
 
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.ProviderSecretDocument", b =>
@@ -253,10 +274,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("RepoId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -291,7 +308,21 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("AheadCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BehindCount")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrentBranch")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrentCommit")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("DefaultBranch")
@@ -306,17 +337,44 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("LastCloneAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastFetchedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastScannedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastSyncError")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastViewedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LocalPath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ModifiedCount")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
+                    b.Property<int>("StagedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UntrackedCount")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId");
+                    b.HasIndex("LastViewedAtUtc");
+
+                    b.HasIndex("Name");
 
                     b.ToTable("Repositories");
                 });
@@ -359,6 +417,55 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.ToTable("RepositoryInstructions");
                 });
 
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.RunAiSummaryDocument", b =>
+                {
+                    b.Property<string>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("GeneratedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SourceUpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("RunId");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("GeneratedAtUtc");
+
+                    b.HasIndex("RepositoryId", "TaskId");
+
+                    b.ToTable("RunAiSummaries");
+                });
+
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.RunDocument", b =>
                 {
                     b.Property<string>("Id")
@@ -382,10 +489,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PrUrl")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProjectId")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -431,9 +534,9 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
 
                     b.HasIndex("State");
 
-                    b.HasIndex("ProjectId", "State");
-
                     b.HasIndex("RepositoryId", "CreatedAtUtc");
+
+                    b.HasIndex("TaskId", "CreatedAtUtc");
 
                     b.HasIndex("TaskId", "State");
 
@@ -465,6 +568,78 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.HasIndex("RunId", "TimestampUtc");
 
                     b.ToTable("RunEvents");
+                });
+
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.SemanticChunkDocument", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ChunkIndex")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChunkKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmbeddingDimensions")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EmbeddingModel")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmbeddingPayload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceRef")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TokenCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepositoryId", "RunId");
+
+                    b.HasIndex("TaskId", "ChunkKey")
+                        .IsUnique();
+
+                    b.HasIndex("TaskId", "UpdatedAtUtc");
+
+                    b.ToTable("SemanticChunks");
                 });
 
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.SystemSettingsDocument", b =>
@@ -550,6 +725,13 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("LastGitSyncAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastGitSyncError")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("LinkedFailureRuns")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -581,11 +763,25 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("WorktreeBranch")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorktreePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("LastGitSyncAtUtc");
 
                     b.HasIndex("NextRunAtUtc");
 
                     b.HasIndex("RepositoryId");
+
+                    b.HasIndex("RepositoryId", "WorktreeBranch");
+
+                    b.HasIndex("RepositoryId", "WorktreePath");
 
                     b.ToTable("Tasks");
                 });
@@ -878,10 +1074,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("RepositoryId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -907,6 +1099,43 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.HasIndex("WorkflowId", "CreatedAtUtc");
 
                     b.ToTable("WorkflowExecutions");
+                });
+
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.WorkspacePromptEntryDocument", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "CreatedAtUtc");
+
+                    b.HasIndex("TaskId", "CreatedAtUtc");
+
+                    b.ToTable("WorkspacePromptEntries");
                 });
 #pragma warning restore 612, 618
         }

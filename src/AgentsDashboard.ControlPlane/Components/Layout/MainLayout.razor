@@ -12,28 +12,19 @@
 
 <MudLayout Class="codex-shell">
     <MudAppBar Elevation="0" Dense="true" Class="codex-appbar">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.subtitle1" Class="ml-2 codex-brand">Agents Dashboard</MudText>
+        <MudText Typo="Typo.subtitle1" Class="codex-brand">Agents Dashboard</MudText>
+
+        <div class="codex-appbar-nav" role="navigation" aria-label="Primary">
+            <MudNavLink Href="/workspace" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard" Class="codex-appbar-nav-link codex-parent-workspace-link">Workspace</MudNavLink>
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Chat" Class="codex-appbar-nav-link">Overview</MudNavLink>
+            <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune" Class="codex-appbar-nav-link codex-parent-settings-link">Settings</MudNavLink>
+        </div>
 
         <MudSpacer />
 
         @if (SelectionService.IsInitialized)
         {
             <div class="codex-context-selectors">
-                <MudSelect T="string"
-                           Value="@SelectionService.SelectedProjectId"
-                           ValueChanged="OnProjectChanged"
-                           Label="Project"
-                           Variant="Variant.Outlined"
-                           Margin="Margin.Dense"
-                           Class="codex-context-select"
-                           Style="max-width: 220px;">
-                    @foreach (var project in SelectionService.Projects)
-                    {
-                        <MudSelectItem Value="@project.Id">@project.Name</MudSelectItem>
-                    }
-                </MudSelect>
-
                 <MudSelect T="string"
                            Value="@SelectionService.SelectedRepositoryId"
                            ValueChanged="OnRepositoryChanged"
@@ -71,18 +62,6 @@
         }
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen"
-               ClipMode="DrawerClipMode.Always"
-               Elevation="0"
-               Variant="DrawerVariant.Mini"
-               OpenMiniOnHover="true"
-               Class="codex-rail">
-        <MudNavMenu Dense="true" Class="codex-rail-nav">
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Chat">Overview</MudNavLink>
-            <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune" Class="codex-parent-settings-link">Settings</MudNavLink>
-        </MudNavMenu>
-    </MudDrawer>
-
     <MudMainContent Class="codex-main">
         <MudContainer MaxWidth="MaxWidth.False" Class="codex-main-container">
             @Body
@@ -91,7 +70,6 @@
 </MudLayout>
 
 @code {
-    private bool _drawerOpen = true;
     private bool _healthLoaded;
     private int _onlineWorkers;
     private int _totalWorkers;
@@ -133,8 +111,6 @@
             Divider = "#1A2230"
         }
     };
-
-    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
     protected override async Task OnInitializedAsync()
     {
@@ -196,11 +172,6 @@
             await SelectionService.InitializeAsync(_cts?.Token ?? CancellationToken.None);
             await InvokeAsync(StateHasChanged);
         }
-    }
-
-    private async Task OnProjectChanged(string? projectId)
-    {
-        await SelectionService.SelectProjectAsync(projectId, _cts?.Token ?? CancellationToken.None);
     }
 
     private async Task OnRepositoryChanged(string? repositoryId)

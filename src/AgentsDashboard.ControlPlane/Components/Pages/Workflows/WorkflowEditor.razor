@@ -123,9 +123,17 @@
                                         {
                                             case WorkflowStageType.Task:
                                                 var task = _tasks.FirstOrDefault(t => t.Id == stage.TaskId);
-                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                    Task: @(task?.Name ?? "Not selected")
-                                                </MudText>
+                                                if (task is null)
+                                                {
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Task: Not selected</MudText>
+                                                }
+                                                else
+                                                {
+                                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Task: @task.Name</MudText>
+                                                        <TaskStatusChip Task="task" LatestRun="@GetLatestRunForTask(task.Id)" Variant="Variant.Outlined" />
+                                                    </MudStack>
+                                                }
                                                 break;
                                             case WorkflowStageType.Delay:
                                                 <MudText Typo="Typo.caption" Color="Color.Secondary">
@@ -199,7 +207,12 @@
                                    Clearable Class="mb-4">
                             @foreach (var t in _tasks)
                             {
-                                <MudSelectItem Value="@t.Id">@t.Name</MudSelectItem>
+                                <MudSelectItem Value="@t.Id">
+                                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width: 100%;">
+                                        <MudText Typo="Typo.body2">@t.Name</MudText>
+                                        <TaskStatusChip Task="t" LatestRun="@GetLatestRunForTask(t.Id)" Variant="Variant.Outlined" />
+                                    </MudStack>
+                                </MudSelectItem>
                             }
                         </MudSelect>
                         <MudNumericField @bind-Value="selectedStage.TimeoutSeconds" Label="Timeout (seconds)"
@@ -334,6 +347,7 @@
 
     private List<AgentsDashboard.Contracts.Domain.RepositoryDocument> _repositories = [];
     private List<AgentsDashboard.Contracts.Domain.TaskDocument> _tasks = [];
+    private readonly Dictionary<string, RunDocument?> _latestRunsByTaskId = new(StringComparer.Ordinal);
 
     private List<StageItem> _stages = [];
 
@@ -550,10 +564,12 @@
         if (!string.IsNullOrEmpty(_repositoryId))
         {
             _tasks = await Store.ListTasksAsync(_repositoryId, CancellationToken.None);
+            await RefreshLatestRunsByTaskAsync();
         }
         else
         {
             _tasks.Clear();
+            _latestRunsByTaskId.Clear();
         }
     }
 
@@ -615,11 +631,7 @@
             var repo = await Store.GetRepositoryAsync(workflow.RepositoryId, CancellationToken.None);
             if (repo is null) return;
 
-            var projects = await Store.ListProjectsAsync(CancellationToken.None);
-            var project = projects.FirstOrDefault(p => p.Id == repo.ProjectId);
-            if (project is null) return;
-
-            await WorkflowExecutor.ExecuteWorkflowAsync(workflow, project.Id, CancellationToken.None);
+            await WorkflowExecutor.ExecuteWorkflowAsync(workflow, CancellationToken.None);
             
             _validationMessage = "Workflow execution started.";
             _validationSeverity = Severity.Success;
@@ -633,12 +645,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var projects = await Store.ListProjectsAsync(CancellationToken.None);
-        foreach (var p in projects)
-        {
-            var repos = await Store.ListRepositoriesAsync(p.Id, CancellationToken.None);
-            _repositories.AddRange(repos);
-        }
+        _repositories.AddRange(await Store.ListRepositoriesAsync(CancellationToken.None));
 
         if (!IsNew)
         {
@@ -666,6 +673,40 @@
         if (!string.IsNullOrEmpty(_repositoryId))
         {
             _tasks = await Store.ListTasksAsync(_repositoryId, CancellationToken.None);
+            await RefreshLatestRunsByTaskAsync();
+        }
+    }
+
+    private RunDocument? GetLatestRunForTask(string taskId)
+        => _latestRunsByTaskId.GetValueOrDefault(taskId);
+
+    private async Task RefreshLatestRunsByTaskAsync()
+    {
+        _latestRunsByTaskId.Clear();
+
+        if (string.IsNullOrWhiteSpace(_repositoryId) || _tasks.Count == 0)
+        {
+            return;
+        }
+
+        var repositoryRuns = await Store.ListRunsByRepositoryAsync(_repositoryId, CancellationToken.None);
+        foreach (var run in repositoryRuns)
+        {
+            if (!_latestRunsByTaskId.ContainsKey(run.TaskId))
+            {
+                _latestRunsByTaskId[run.TaskId] = run;
+            }
+        }
+
+        foreach (var task in _tasks)
+        {
+            if (_latestRunsByTaskId.ContainsKey(task.Id))
+            {
+                continue;
+            }
+
+            var latestRuns = await Store.ListRunsByTaskAsync(task.Id, 1, CancellationToken.None);
+            _latestRunsByTaskId[task.Id] = latestRuns.FirstOrDefault();
         }
     }
 

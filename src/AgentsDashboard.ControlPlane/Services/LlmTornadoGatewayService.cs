@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using LlmTornado;
 using LlmTornado.Chat.Models;
@@ -14,10 +15,12 @@ public sealed record TaskPromptGenerationRequest(
     string? CronExpression);
 
 public sealed record TaskPromptGenerationResult(bool Success, string Prompt, string? Error);
+public sealed record LlmTornadoTextResult(bool Success, string Text, string? Error);
 
 public sealed class LlmTornadoGatewayService(ILogger<LlmTornadoGatewayService> logger)
 {
     private const string RequiredModel = "glm-5";
+    private const int MaxSummaryInputCharacters = 12000;
 
     public async Task<AiDockerfileResult> GenerateDockerfileAsync(
         string description,
@@ -71,8 +74,7 @@ Output only Dockerfile content.
         }
         catch (Exception ex)
         {
-            var lower = ex.Message.ToLowerInvariant();
-            if (lower.Contains(RequiredModel) || lower.Contains("model") || lower.Contains("not found") || lower.Contains("unsupported"))
+            if (IsModelAccessError(ex))
             {
                 return new AiDockerfileResult(false, string.Empty, $"The current account/plan cannot use {RequiredModel}. Update your Z.ai plan/access and retry.");
             }
@@ -80,6 +82,137 @@ Output only Dockerfile content.
             logger.LogWarning(ex, "LlmTornado Dockerfile generation failed");
             return new AiDockerfileResult(false, string.Empty, $"AI generation failed: {ex.Message}");
         }
+    }
+
+    public async Task<LlmTornadoTextResult> SuggestPromptContinuationAsync(
+        string prompt,
+        string? context,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return new LlmTornadoTextResult(false, string.Empty, "Prompt is required.");
+        }
+
+        var result = await GenerateTextAsync(
+            """
+You complete prompts for coding agents.
+Continue the prompt in the same style and intent.
+Return continuation text only.
+Do not wrap output in markdown fences.
+""",
+            BuildPromptContinuationInput(prompt, context),
+            apiKey,
+            temperature: 0.25,
+            maxTokens: 512,
+            cancellationToken,
+            operationName: "prompt continuation");
+
+        if (!result.Success)
+        {
+            return result;
+        }
+
+        var continuation = result.Text;
+        if (continuation.StartsWith(prompt, StringComparison.OrdinalIgnoreCase))
+        {
+            continuation = continuation[prompt.Length..].TrimStart();
+        }
+
+        return new LlmTornadoTextResult(true, continuation, null);
+    }
+
+    public Task<LlmTornadoTextResult> ImprovePromptAsync(
+        string prompt,
+        string? context,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return Task.FromResult(new LlmTornadoTextResult(false, string.Empty, "Prompt is required."));
+        }
+
+        return GenerateTextAsync(
+            """
+You improve coding workflow prompts.
+Preserve user intent and constraints.
+Improve clarity, structure, and testability.
+Return only the improved prompt text.
+Do not wrap output in markdown fences.
+""",
+            BuildPromptImprovementInput(prompt, context),
+            apiKey,
+            temperature: 0.3,
+            maxTokens: 2048,
+            cancellationToken,
+            operationName: "prompt improvement");
+    }
+
+    public Task<LlmTornadoTextResult> GeneratePromptFromContextAsync(
+        string context,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(context))
+        {
+            return Task.FromResult(new LlmTornadoTextResult(false, string.Empty, "Context is required."));
+        }
+
+        return GenerateTextAsync(
+            """
+You write high-signal prompts for coding agents.
+Output concise markdown with sections:
+- Goal
+- Constraints
+- Required steps
+- Validation checks
+- Expected output format
+Do not include code fences.
+""",
+            $"Context:\n{context}",
+            apiKey,
+            temperature: 0.35,
+            maxTokens: 2048,
+            cancellationToken,
+            operationName: "context prompt generation");
+    }
+
+    public Task<LlmTornadoTextResult> SummarizeRunOutputAsync(
+        string outputJson,
+        string runLogs,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        var normalizedOutput = TruncateForModelInput(outputJson, MaxSummaryInputCharacters);
+        var normalizedLogs = TruncateForModelInput(runLogs, MaxSummaryInputCharacters);
+
+        var userInput = new StringBuilder()
+            .AppendLine("Output JSON:")
+            .AppendLine(string.IsNullOrWhiteSpace(normalizedOutput) ? "(none)" : normalizedOutput)
+            .AppendLine()
+            .AppendLine("Run Logs:")
+            .AppendLine(string.IsNullOrWhiteSpace(normalizedLogs) ? "(none)" : normalizedLogs)
+            .ToString();
+
+        return GenerateTextAsync(
+            """
+You summarize AI harness run output for an operations dashboard.
+Focus on:
+- Final status and result
+- Key actions taken
+- Errors or blockers
+- Artifacts produced
+- Next operator action, if any
+Return concise markdown without code fences.
+""",
+            userInput,
+            apiKey,
+            temperature: 0.2,
+            maxTokens: 1200,
+            cancellationToken,
+            operationName: "run output summary");
     }
 
     public async Task<TaskPromptGenerationResult> GenerateTaskPromptAsync(
@@ -130,14 +263,57 @@ Write the final task prompt.
         }
         catch (Exception ex)
         {
-            var lower = ex.Message.ToLowerInvariant();
-            if (lower.Contains(RequiredModel) || lower.Contains("model") || lower.Contains("not found") || lower.Contains("unsupported"))
+            if (IsModelAccessError(ex))
             {
                 return new TaskPromptGenerationResult(false, string.Empty, $"The current account/plan cannot use {RequiredModel}. Update your Z.ai plan/access and retry.");
             }
 
             logger.LogWarning(ex, "LlmTornado task prompt generation failed");
             return new TaskPromptGenerationResult(false, string.Empty, $"AI generation failed: {ex.Message}");
+        }
+    }
+
+    private async Task<LlmTornadoTextResult> GenerateTextAsync(
+        string systemPrompt,
+        string userInput,
+        string apiKey,
+        double temperature,
+        int maxTokens,
+        CancellationToken cancellationToken,
+        string operationName)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new LlmTornadoTextResult(false, string.Empty, "Z.ai API key not configured.");
+        }
+
+        try
+        {
+            var api = CreateApi(apiKey);
+            var response = await api.Chat
+                .CreateConversation(ChatModel.Zai.Glm.Glm5, temperature: temperature, maxTokens: maxTokens)
+                .AppendSystemMessage(systemPrompt)
+                .AppendUserInput(userInput)
+                .GetResponse();
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (string.IsNullOrWhiteSpace(response))
+            {
+                return new LlmTornadoTextResult(false, string.Empty, "LLM returned an empty response.");
+            }
+
+            return new LlmTornadoTextResult(true, NormalizeTextResponse(response), null);
+        }
+        catch (Exception ex)
+        {
+            if (IsModelAccessError(ex))
+            {
+                return new LlmTornadoTextResult(false, string.Empty, $"The current account/plan cannot use {RequiredModel}. Update your Z.ai plan/access and retry.");
+            }
+
+            logger.LogWarning(ex, "LlmTornado {OperationName} failed", operationName);
+            return new LlmTornadoTextResult(false, string.Empty, $"AI generation failed: {ex.Message}");
         }
     }
 
@@ -152,5 +328,59 @@ Write the final task prompt.
         trimmed = Regex.Replace(trimmed, @"^```(?:dockerfile|md|markdown)?\s*", string.Empty, RegexOptions.IgnoreCase);
         trimmed = Regex.Replace(trimmed, @"\s*```$", string.Empty, RegexOptions.IgnoreCase);
         return trimmed.Trim();
+    }
+
+    private static bool IsModelAccessError(Exception ex)
+    {
+        var lower = ex.Message.ToLowerInvariant();
+        return lower.Contains(RequiredModel) ||
+               lower.Contains("model") ||
+               lower.Contains("not found") ||
+               lower.Contains("unsupported");
+    }
+
+    private static string BuildPromptContinuationInput(string prompt, string? context)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Current prompt draft:");
+        builder.AppendLine(prompt);
+
+        if (!string.IsNullOrWhiteSpace(context))
+        {
+            builder.AppendLine();
+            builder.AppendLine("Additional context:");
+            builder.AppendLine(context);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string BuildPromptImprovementInput(string prompt, string? context)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Prompt to improve:");
+        builder.AppendLine(prompt);
+
+        if (!string.IsNullOrWhiteSpace(context))
+        {
+            builder.AppendLine();
+            builder.AppendLine("Context:");
+            builder.AppendLine(context);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string TruncateForModelInput(string value, int maxCharacters)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = NormalizeTextResponse(value);
+        return normalized.Length <= maxCharacters
+            ? normalized
+            : normalized[..maxCharacters];
     }
 }

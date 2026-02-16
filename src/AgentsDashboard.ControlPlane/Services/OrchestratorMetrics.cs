@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
@@ -5,8 +6,8 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public interface IOrchestratorMetrics
 {
-    void RecordRunStart(string harness, string projectId, string repositoryId);
-    void RecordRunComplete(string harness, string state, double durationSeconds, string projectId, string repositoryId);
+    void RecordRunStart(string harness, string repositoryId);
+    void RecordRunComplete(string harness, string state, double durationSeconds, string repositoryId);
     void RecordJobDispatch(string harness);
     void RecordError(string errorType, string errorCategory);
     void SetPendingJobs(int count);
@@ -56,7 +57,13 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     private readonly ObservableGauge<int> _workerMaxSlots;
 
     private readonly Dictionary<string, (int Active, int Max)> _workerSlots = new();
-    private int _currentSignalRConnections = 0;
+    private readonly ConcurrentDictionary<string, double> _containerCpuByHarness = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, double> _containerMemoryByHarness = new(StringComparer.OrdinalIgnoreCase);
+    private int _currentSignalRConnections;
+    private int _currentPendingJobs;
+    private int _currentActiveJobs;
+    private int _currentQueuedRuns;
+    private int _currentActiveRuns;
 
     public OrchestratorMetrics()
     {
@@ -84,6 +91,8 @@ public class OrchestratorMetrics : IOrchestratorMetrics
 
         _workerActiveSlots = s_meter.CreateObservableGauge<int>("orchestrator_worker_active_slots", () => GetWorkerSlots("active"), "slots", "Active worker slots");
         _workerMaxSlots = s_meter.CreateObservableGauge<int>("orchestrator_worker_max_slots", () => GetWorkerSlots("max"), "slots", "Maximum worker slots");
+        _ = s_meter.CreateObservableGauge<double>("orchestrator_container_cpu_percent", () => GetContainerCpuMeasurements(), "percent", "Container CPU usage");
+        _ = s_meter.CreateObservableGauge<double>("orchestrator_container_memory_bytes", () => GetContainerMemoryMeasurements(), "bytes", "Container memory usage");
     }
 
     private IEnumerable<Measurement<int>> GetWorkerSlots(string type)
@@ -98,24 +107,22 @@ public class OrchestratorMetrics : IOrchestratorMetrics
         }
     }
 
-    public void RecordRunStart(string harness, string projectId, string repositoryId)
+    public void RecordRunStart(string harness, string repositoryId)
     {
         var tags = new TagList
         {
             { "harness", harness },
-            { "project_id", projectId },
             { "repository_id", repositoryId }
         };
         _runsTotal.Add(1, tags);
     }
 
-    public void RecordRunComplete(string harness, string state, double durationSeconds, string projectId, string repositoryId)
+    public void RecordRunComplete(string harness, string state, double durationSeconds, string repositoryId)
     {
         var tags = new TagList
         {
             { "harness", harness },
             { "state", state },
-            { "project_id", projectId },
             { "repository_id", repositoryId }
         };
         _runDuration.Record(durationSeconds, tags);
@@ -138,22 +145,22 @@ public class OrchestratorMetrics : IOrchestratorMetrics
 
     public void SetPendingJobs(int count)
     {
-        _pendingJobs.Add(count - GetCurrentPendingJobs());
+        UpdateCounter(_pendingJobs, ref _currentPendingJobs, count);
     }
 
     public void SetActiveJobs(int count)
     {
-        _activeJobs.Add(count - GetCurrentActiveJobs());
+        UpdateCounter(_activeJobs, ref _currentActiveJobs, count);
     }
 
     public void SetQueuedRuns(int count)
     {
-        _queuedRuns.Add(count - GetCurrentQueuedRuns());
+        UpdateCounter(_queuedRuns, ref _currentQueuedRuns, count);
     }
 
     public void SetActiveRuns(int count)
     {
-        _activeRuns.Add(count - GetCurrentActiveRuns());
+        UpdateCounter(_activeRuns, ref _currentActiveRuns, count);
     }
 
     public void RecordQueueWaitTime(double seconds)
@@ -197,8 +204,7 @@ public class OrchestratorMetrics : IOrchestratorMetrics
 
     public void SetSignalRConnections(int count)
     {
-        _signalRConnections.Add(count);
-        Interlocked.Add(ref _currentSignalRConnections, count);
+        UpdateCounter(_signalRConnections, ref _currentSignalRConnections, count);
     }
 
     public void RecordGrpcDuration(string method, double seconds)
@@ -218,17 +224,36 @@ public class OrchestratorMetrics : IOrchestratorMetrics
 
     public void RecordContainerMetrics(string harness, double cpuPercent, double memoryBytes)
     {
-        var tags = new TagList
-        {
-            { "harness", harness }
-        };
-        s_meter.CreateObservableGauge<double>("orchestrator_container_cpu_percent", () => new Measurement<double>(cpuPercent, tags), "percent", "Container CPU usage");
-        s_meter.CreateObservableGauge<double>("orchestrator_container_memory_bytes", () => new Measurement<double>(memoryBytes, tags), "bytes", "Container memory usage");
+        if (string.IsNullOrWhiteSpace(harness))
+            return;
+
+        _containerCpuByHarness[harness] = cpuPercent;
+        _containerMemoryByHarness[harness] = memoryBytes;
     }
 
-    private int GetCurrentPendingJobs() => 0;
-    private int GetCurrentActiveJobs() => 0;
-    private int GetCurrentQueuedRuns() => 0;
-    private int GetCurrentActiveRuns() => 0;
-    private int GetCurrentSignalRConnections() => Volatile.Read(ref _currentSignalRConnections);
+    private static void UpdateCounter(UpDownCounter<int> counter, ref int field, int count)
+    {
+        var previous = Interlocked.Exchange(ref field, count);
+        var delta = count - previous;
+        if (delta != 0)
+        {
+            counter.Add(delta);
+        }
+    }
+
+    private IEnumerable<Measurement<double>> GetContainerCpuMeasurements()
+    {
+        foreach (var (harness, value) in _containerCpuByHarness)
+        {
+            yield return new Measurement<double>(value, new KeyValuePair<string, object?>("harness", harness));
+        }
+    }
+
+    private IEnumerable<Measurement<double>> GetContainerMemoryMeasurements()
+    {
+        foreach (var (harness, value) in _containerMemoryByHarness)
+        {
+            yield return new Measurement<double>(value, new KeyValuePair<string, object?>("harness", harness));
+        }
+    }
 }

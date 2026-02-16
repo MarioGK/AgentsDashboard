@@ -6,7 +6,6 @@ public sealed class OrchestratorContainerInfo
     public required string RunId { get; init; }
     public string TaskId { get; init; } = string.Empty;
     public string RepoId { get; init; } = string.Empty;
-    public string ProjectId { get; init; } = string.Empty;
     public string State { get; init; } = string.Empty;
     public string Image { get; init; } = string.Empty;
     public DateTime CreatedAt { get; init; }

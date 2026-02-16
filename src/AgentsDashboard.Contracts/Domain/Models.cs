@@ -14,7 +14,8 @@ public enum RunState
     Succeeded = 2,
     Failed = 3,
     Cancelled = 4,
-    PendingApproval = 5
+    PendingApproval = 5,
+    Obsolete = 6
 }
 
 public enum FindingSeverity
@@ -110,21 +111,25 @@ public sealed record SandboxProfileConfig(
 
 public sealed record ArtifactPolicyConfig(int MaxArtifacts = 50, long MaxTotalSizeBytes = 104_857_600);
 
-public sealed class ProjectDocument
+public class RepositoryDocument
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
-}
-
-public sealed class RepositoryDocument
-{
-    public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string ProjectId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string GitUrl { get; set; } = string.Empty;
+    public string LocalPath { get; set; } = string.Empty;
     public string DefaultBranch { get; set; } = "main";
+    public string CurrentBranch { get; set; } = string.Empty;
+    public string CurrentCommit { get; set; } = string.Empty;
+    public int AheadCount { get; set; }
+    public int BehindCount { get; set; }
+    public int ModifiedCount { get; set; }
+    public int StagedCount { get; set; }
+    public int UntrackedCount { get; set; }
+    public DateTime? LastScannedAtUtc { get; set; }
+    public DateTime? LastFetchedAtUtc { get; set; }
+    public DateTime? LastCloneAtUtc { get; set; }
+    public DateTime? LastViewedAtUtc { get; set; }
+    public string LastSyncError { get; set; } = string.Empty;
     public List<InstructionFile> InstructionFiles { get; set; } = [];
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
@@ -142,6 +147,10 @@ public sealed class TaskDocument
     public string CronExpression { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
     public DateTime? NextRunAtUtc { get; set; }
+    public string WorktreePath { get; set; } = string.Empty;
+    public string WorktreeBranch { get; set; } = string.Empty;
+    public DateTime? LastGitSyncAtUtc { get; set; }
+    public string LastGitSyncError { get; set; } = string.Empty;
     public RetryPolicyConfig RetryPolicy { get; set; } = new();
     public TimeoutConfig Timeouts { get; set; } = new();
     public ApprovalProfileConfig ApprovalProfile { get; set; } = new();
@@ -157,7 +166,6 @@ public sealed class TaskDocument
 public sealed class RunDocument
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string ProjectId { get; set; } = string.Empty;
     public string RepositoryId { get; set; } = string.Empty;
     public string TaskId { get; set; } = string.Empty;
     public string WorkerId { get; set; } = string.Empty;
@@ -174,6 +182,51 @@ public sealed class RunDocument
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? EndedAtUtc { get; set; }
+}
+
+public sealed class WorkspacePromptEntryDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public string RunId { get; set; } = string.Empty;
+    public string Role { get; set; } = "user";
+    public string Content { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class SemanticChunkDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public string RunId { get; set; } = string.Empty;
+    public string ChunkKey { get; set; } = string.Empty;
+    public string SourceType { get; set; } = string.Empty;
+    public string SourceRef { get; set; } = string.Empty;
+    public int ChunkIndex { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public string ContentHash { get; set; } = string.Empty;
+    public int TokenCount { get; set; }
+    public string EmbeddingModel { get; set; } = string.Empty;
+    public int EmbeddingDimensions { get; set; }
+    public string EmbeddingPayload { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class RunAiSummaryDocument
+{
+    public string RunId { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string Model { get; set; } = string.Empty;
+    public string SourceFingerprint { get; set; } = string.Empty;
+    public DateTime SourceUpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime GeneratedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ExpiresAtUtc { get; set; }
 }
 
 public sealed class FindingDocument
@@ -252,11 +305,21 @@ public sealed class HarnessAction
 }
 
 public sealed record InstructionFile(string Name, string Content, int Order);
+public sealed record RepositoryGitStatus(
+    string CurrentBranch,
+    string CurrentCommit,
+    int AheadCount,
+    int BehindCount,
+    int ModifiedCount,
+    int StagedCount,
+    int UntrackedCount,
+    DateTime ScannedAtUtc,
+    DateTime? FetchedAtUtc,
+    string LastSyncError = "");
 
 public sealed class ProxyAuditDocument
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string ProjectId { get; set; } = string.Empty;
     public string RepoId { get; set; } = string.Empty;
     public string TaskId { get; set; } = string.Empty;
     public string RunId { get; set; } = string.Empty;
@@ -402,7 +465,6 @@ public sealed class WorkflowExecutionDocument
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string WorkflowId { get; set; } = string.Empty;
     public string RepositoryId { get; set; } = string.Empty;
-    public string ProjectId { get; set; } = string.Empty;
     public WorkflowExecutionState State { get; set; } = WorkflowExecutionState.Running;
     public int CurrentStageIndex { get; set; }
     public List<WorkflowStageResult> StageResults { get; set; } = [];
@@ -458,6 +520,19 @@ public sealed class TaskTemplateDocument
     public List<string> LinkedFailureRuns { get; set; } = [];
     public bool IsBuiltIn { get; set; } = true;
     public bool IsEditable { get; set; } = true;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class PromptSkillDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RepositoryId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Trigger { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

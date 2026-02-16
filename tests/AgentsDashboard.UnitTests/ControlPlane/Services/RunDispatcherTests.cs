@@ -18,7 +18,6 @@ public class RunDispatcherTests
         var service = new SutBuilder().Build();
         var run = CreateRun();
         var task = CreateTask("task-approve", requireApproval: true);
-        var project = CreateProject();
         var repo = CreateRepository();
 
         service.Store
@@ -28,7 +27,7 @@ public class RunDispatcherTests
             .Setup(p => p.PublishStatusAsync(It.IsAny<AgentsDashboard.Contracts.Domain.RunDocument>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var result = await service.Dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
+        var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
         result.Should().BeTrue();
         service.WorkerLifecycleManagerMock.Verify(
@@ -52,16 +51,14 @@ public class RunDispatcherTests
         var service = new SutBuilder().Build();
         var run = CreateRun();
         var task = CreateTask();
-        var project = CreateProject();
         var repo = CreateRepository();
         service.Store.Setup(s => s.CountActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        service.Store.Setup(s => s.CountActiveRunsByProjectAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
         service.Store.Setup(s => s.CountActiveRunsByRepoAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
         service.Store.Setup(s => s.CountActiveRunsByTaskAsync(task.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
         service.WorkerLifecycleManagerMock.Setup(x => x.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync((WorkerLease?)null);
 
-        var result = await service.Dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
+        var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
         result.Should().BeFalse();
         service.WorkerClientMock.Verify(
@@ -80,16 +77,65 @@ public class RunDispatcherTests
     }
 
     [Test]
+    [Arguments(RunState.Queued)]
+    [Arguments(RunState.Running)]
+    [Arguments(RunState.PendingApproval)]
+    public async Task DispatchAsync_WhenOlderActiveRunExistsForTask_LeavesRunQueued(RunState blockingState)
+    {
+        var service = new SutBuilder().Build();
+        var baseTime = new DateTime(2026, 2, 16, 12, 0, 0, DateTimeKind.Utc);
+        var run = CreateRun("run-2", createdAtUtc: baseTime.AddMinutes(1));
+        var blockingRun = CreateRun("run-1", blockingState, baseTime);
+        var task = CreateTask();
+        var repo = CreateRepository();
+
+        service.Store.Setup(s => s.ListRunsByTaskAsync(task.Id, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([run, blockingRun]);
+
+        var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
+
+        result.Should().BeFalse();
+        service.WorkerLifecycleManagerMock.Verify(x => x.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>()), Times.Never);
+        service.Store.Verify(s => s.MarkRunPendingApprovalAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task DispatchAsync_WhenRunIsTaskQueueHead_DispatchesRun()
+    {
+        var service = new SutBuilder().WithActiveWorker().Build();
+        var baseTime = new DateTime(2026, 2, 16, 13, 0, 0, DateTimeKind.Utc);
+        var run = CreateRun("run-1", createdAtUtc: baseTime);
+        var queuedBehind = CreateRun("run-2", createdAtUtc: baseTime.AddMinutes(1));
+        var task = CreateTask();
+        var repo = CreateRepository();
+
+        service.Store.Setup(s => s.ListRunsByTaskAsync(task.Id, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([queuedBehind, run]);
+        service.WorkerClientMock
+            .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+
+        var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
+
+        result.Should().BeTrue();
+        service.Store.Verify(s => s.MarkRunStartedAsync(
+            run.Id,
+            "worker-1",
+            It.IsAny<CancellationToken>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>()), Times.Once);
+    }
+
+    [Test]
     public async Task DispatchAsync_WhenWorkerRejectsRun_MarksRunAsFailed()
     {
         var service = new SutBuilder().WithActiveWorker().Build();
         var run = CreateRun();
         var task = CreateTask();
-        var project = CreateProject();
         var repo = CreateRepository();
         var failedRun = new RunDocument { Id = run.Id, State = RunState.Failed };
         service.Store.Setup(s => s.CountActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        service.Store.Setup(s => s.CountActiveRunsByProjectAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
         service.Store.Setup(s => s.CountActiveRunsByRepoAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
         service.Store.Setup(s => s.CountActiveRunsByTaskAsync(task.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
         service.Store.Setup(s => s.MarkRunCompletedAsync(run.Id, false, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
@@ -102,7 +148,7 @@ public class RunDispatcherTests
             .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
             .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = false, ErrorMessage = "worker unavailable" }));
 
-        var result = await service.Dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
+        var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
         result.Should().BeFalse();
         service.Store.Verify(s => s.MarkRunCompletedAsync(
@@ -116,16 +162,9 @@ public class RunDispatcherTests
         service.Store.Verify(s => s.MarkRunStartedAsync(run.Id, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    private static ProjectDocument CreateProject() => new()
-    {
-        Id = "project-1",
-        Name = "Project"
-    };
-
     private static RepositoryDocument CreateRepository() => new()
     {
         Id = "repo-1",
-        ProjectId = "project-1",
         Name = "repo",
         GitUrl = "https://github.com/org/repo.git",
         DefaultBranch = "main"
@@ -140,20 +179,22 @@ public class RunDispatcherTests
         ApprovalProfile = new ApprovalProfileConfig(RequireApproval: requireApproval)
     };
 
-    private static RunDocument CreateRun(string id = "run-1") => new()
+    private static RunDocument CreateRun(
+        string id = "run-1",
+        RunState state = RunState.Queued,
+        DateTime? createdAtUtc = null) => new()
     {
         Id = id,
-        ProjectId = "project-1",
         RepositoryId = "repo-1",
         TaskId = "task-1",
-        State = RunState.Queued
+        State = state,
+        CreatedAtUtc = createdAtUtc ?? DateTime.UtcNow
     };
 
     private static RunDocument PendingRun(RunDocument run) =>
         new()
         {
             Id = run.Id,
-            ProjectId = run.ProjectId,
             RepositoryId = run.RepositoryId,
             TaskId = run.TaskId,
             State = RunState.PendingApproval
@@ -176,25 +217,40 @@ public class RunDispatcherTests
         {
             WorkerLifecycleManagerMock.Setup(x => x.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>())).ReturnsAsync(
                 new WorkerLease("worker-1", "container-1", "http://worker.local:5201", "http://worker.local:8080"));
+            WorkerLifecycleManagerMock.Setup(x => x.RecordDispatchActivityAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
             ClientFactoryMock
                 .Setup(f => f.CreateWorkerGatewayService(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(WorkerClientMock.Object);
             Store.Setup(s => s.CountActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
-            Store.Setup(s => s.CountActiveRunsByProjectAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
             Store.Setup(s => s.CountActiveRunsByRepoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
             Store.Setup(s => s.CountActiveRunsByTaskAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
+            Store.Setup(s => s.ListRunsByTaskAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
             Store.Setup(s => s.ListProviderSecretsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
             Store.Setup(s => s.GetHarnessProviderSettingsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((HarnessProviderSettingsDocument?)null);
             Store.Setup(s => s.GetInstructionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+            Store.Setup(s => s.GetSettingsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SystemSettingsDocument { Orchestrator = new OrchestratorSettings() });
             Store.Setup(s => s.MarkRunCompletedAsync(It.IsAny<string>(), false, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
                 .ReturnsAsync((string runId, bool _, string _, string _, CancellationToken _, string? _, string? _) =>
                 new RunDocument { Id = runId, State = RunState.Failed });
-            Store.Setup(s => s.MarkRunStartedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((string runId, string _, CancellationToken _) => new RunDocument { Id = runId, State = RunState.Running });
+            Store.Setup(s => s.MarkRunStartedAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<CancellationToken>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<string?>()))
+                .ReturnsAsync((string runId, string _, CancellationToken _, string? _, string? _, string? _) =>
+                    new RunDocument { Id = runId, State = RunState.Running });
             Store.Setup(s => s.CreateFindingFromFailureAsync(It.IsAny<RunDocument>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new FindingDocument());
             Store.Setup(s => s.ListAllRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+            PublisherMock.Setup(p => p.PublishStatusAsync(It.IsAny<RunDocument>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+            PublisherMock.Setup(p => p.PublishRouteAvailableAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
             Dispatcher = new RunDispatcher(
                 ClientFactoryMock.Object,
                 Store.Object,

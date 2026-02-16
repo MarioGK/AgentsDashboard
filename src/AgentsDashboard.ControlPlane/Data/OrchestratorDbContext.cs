@@ -1,17 +1,19 @@
 using System.Text.Json;
 using AgentsDashboard.Contracts.Domain;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
 public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext> options) : DbContext(options)
 {
-    public DbSet<ProjectDocument> Projects => Set<ProjectDocument>();
     public DbSet<RepositoryDocument> Repositories => Set<RepositoryDocument>();
     public DbSet<TaskDocument> Tasks => Set<TaskDocument>();
     public DbSet<RunDocument> Runs => Set<RunDocument>();
+    public DbSet<WorkspacePromptEntryDocument> WorkspacePromptEntries => Set<WorkspacePromptEntryDocument>();
+    public DbSet<SemanticChunkDocument> SemanticChunks => Set<SemanticChunkDocument>();
+    public DbSet<RunAiSummaryDocument> RunAiSummaries => Set<RunAiSummaryDocument>();
     public DbSet<RunLogEvent> RunEvents => Set<RunLogEvent>();
     public DbSet<FindingDocument> Findings => Set<FindingDocument>();
     public DbSet<ProviderSecretDocument> ProviderSecrets => Set<ProviderSecretDocument>();
@@ -27,6 +29,7 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<RepositoryInstructionDocument> RepositoryInstructions => Set<RepositoryInstructionDocument>();
     public DbSet<HarnessProviderSettingsDocument> HarnessProviderSettings => Set<HarnessProviderSettingsDocument>();
     public DbSet<TaskTemplateDocument> TaskTemplates => Set<TaskTemplateDocument>();
+    public DbSet<PromptSkillDocument> PromptSkills => Set<PromptSkillDocument>();
     public DbSet<TerminalSessionDocument> TerminalSessions => Set<TerminalSessionDocument>();
     public DbSet<TerminalAuditEventDocument> TerminalAuditEvents => Set<TerminalAuditEventDocument>();
 
@@ -34,10 +37,12 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<ProjectDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<RepositoryDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TaskDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<RunDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<WorkspacePromptEntryDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<SemanticChunkDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<RunAiSummaryDocument>().HasKey(x => x.RunId);
         modelBuilder.Entity<RunLogEvent>().HasKey(x => x.Id);
         modelBuilder.Entity<FindingDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<ProviderSecretDocument>().HasKey(x => x.Id);
@@ -53,6 +58,7 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<RepositoryInstructionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<HarnessProviderSettingsDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TaskTemplateDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<PromptSkillDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TerminalSessionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TerminalAuditEventDocument>().HasKey(x => x.Id);
 
@@ -140,22 +146,45 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
             .HasConversion(JsonConverter<List<string>>());
         taskTemplateLinkedFailureRuns.Metadata.SetValueComparer(JsonValueComparer<List<string>>());
 
-        modelBuilder.Entity<ProjectDocument>()
+        modelBuilder.Entity<RepositoryDocument>()
             .HasIndex(x => x.Name);
         modelBuilder.Entity<RepositoryDocument>()
-            .HasIndex(x => x.ProjectId);
+            .HasIndex(x => x.LastViewedAtUtc);
         modelBuilder.Entity<TaskDocument>()
             .HasIndex(x => x.RepositoryId);
         modelBuilder.Entity<TaskDocument>()
             .HasIndex(x => x.NextRunAtUtc);
+        modelBuilder.Entity<TaskDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.WorktreePath });
+        modelBuilder.Entity<TaskDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.WorktreeBranch });
+        modelBuilder.Entity<TaskDocument>()
+            .HasIndex(x => x.LastGitSyncAtUtc);
         modelBuilder.Entity<RunDocument>()
             .HasIndex(x => new { x.RepositoryId, x.CreatedAtUtc });
         modelBuilder.Entity<RunDocument>()
             .HasIndex(x => x.State);
         modelBuilder.Entity<RunDocument>()
-            .HasIndex(x => new { x.ProjectId, x.State });
-        modelBuilder.Entity<RunDocument>()
             .HasIndex(x => new { x.TaskId, x.State });
+        modelBuilder.Entity<RunDocument>()
+            .HasIndex(x => new { x.TaskId, x.CreatedAtUtc });
+        modelBuilder.Entity<WorkspacePromptEntryDocument>()
+            .HasIndex(x => new { x.TaskId, x.CreatedAtUtc });
+        modelBuilder.Entity<WorkspacePromptEntryDocument>()
+            .HasIndex(x => new { x.RunId, x.CreatedAtUtc });
+        modelBuilder.Entity<SemanticChunkDocument>()
+            .HasIndex(x => new { x.TaskId, x.ChunkKey })
+            .IsUnique();
+        modelBuilder.Entity<SemanticChunkDocument>()
+            .HasIndex(x => new { x.TaskId, x.UpdatedAtUtc });
+        modelBuilder.Entity<SemanticChunkDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.RunId });
+        modelBuilder.Entity<RunAiSummaryDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.TaskId });
+        modelBuilder.Entity<RunAiSummaryDocument>()
+            .HasIndex(x => x.GeneratedAtUtc);
+        modelBuilder.Entity<RunAiSummaryDocument>()
+            .HasIndex(x => x.ExpiresAtUtc);
         modelBuilder.Entity<FindingDocument>()
             .HasIndex(x => new { x.RepositoryId, x.CreatedAtUtc });
         modelBuilder.Entity<FindingDocument>()
@@ -193,6 +222,11 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<HarnessProviderSettingsDocument>()
             .HasIndex(x => new { x.RepositoryId, x.Harness })
             .IsUnique();
+        modelBuilder.Entity<PromptSkillDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.Trigger })
+            .IsUnique();
+        modelBuilder.Entity<PromptSkillDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.UpdatedAtUtc });
 
         modelBuilder.Entity<TerminalSessionDocument>()
             .HasIndex(x => x.WorkerId);

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using ICSharpCode.SharpZipLib.Tar;
@@ -18,12 +19,29 @@ public record DockerfileGenerationRequest(
     bool IncludeDockerCli,
     int TargetPlatform);
 public record AiDockerfileResult(bool Success, string Dockerfile, string? Error);
+public sealed record ImageDependencyMatrix(
+    IReadOnlyList<string> Languages,
+    IReadOnlyList<string> PackageManagers,
+    IReadOnlyList<string> Harnesses,
+    IReadOnlyList<string> SecurityTools);
 
 public class ImageBuilderService(
     LlmTornadoGatewayService llmTornadoGatewayService,
     ILogger<ImageBuilderService> logger) : IAsyncDisposable
 {
     private readonly DockerClient _dockerClient = new DockerClientConfiguration().CreateClient();
+    private static readonly Dictionary<string, string> PinnedImageVersions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ubuntu"] = "24.04",
+        ["debian"] = "bookworm-slim",
+        ["alpine"] = "3.19",
+        ["node"] = "20-slim",
+        ["python"] = "3.12-slim",
+        ["golang"] = "1.23-alpine",
+        ["rust"] = "1.75-slim",
+        ["mcr.microsoft.com/dotnet/sdk"] = "10.0",
+        ["mcr.microsoft.com/dotnet/aspnet"] = "10.0"
+    };
 
     public string GenerateDockerfile(DockerfileGenerationRequest request)
     {
@@ -195,6 +213,206 @@ public class ImageBuilderService(
         sb.AppendLine("CMD [\"/bin/bash\"]");
 
         return sb.ToString();
+    }
+
+    public ImageDependencyMatrix AnalyzeDependencyMatrix(string dockerfileContent)
+    {
+        if (string.IsNullOrWhiteSpace(dockerfileContent))
+        {
+            return new ImageDependencyMatrix([], [], [], []);
+        }
+
+        var languages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var packageManagers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var harnesses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var securityTools = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var rawLine in dockerfileContent.Split('\n'))
+        {
+            var line = StripInlineComment(rawLine).Trim();
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            if (line.StartsWith("FROM", StringComparison.OrdinalIgnoreCase))
+            {
+                var image = ExtractFromImage(line);
+                AddLanguageFromImage(image, languages);
+            }
+
+            if (line.Contains("apt-get", StringComparison.OrdinalIgnoreCase))
+            {
+                packageManagers.Add("apt-get");
+            }
+
+            if (line.Contains("apk", StringComparison.OrdinalIgnoreCase))
+            {
+                packageManagers.Add("apk");
+            }
+
+            if (line.Contains("yum", StringComparison.OrdinalIgnoreCase) || line.Contains("dnf", StringComparison.OrdinalIgnoreCase))
+            {
+                packageManagers.Add("yum/dnf");
+            }
+
+            if (line.Contains("npm install", StringComparison.OrdinalIgnoreCase) || line.Contains("npm install -g", StringComparison.OrdinalIgnoreCase))
+            {
+                packageManagers.Add("npm");
+            }
+
+            if (line.Contains("pip install", StringComparison.OrdinalIgnoreCase))
+            {
+                packageManagers.Add("pip");
+                languages.Add("python");
+            }
+
+            if (line.Contains("go install", StringComparison.OrdinalIgnoreCase))
+            {
+                packageManagers.Add("go");
+                languages.Add("go");
+            }
+
+            if (line.Contains("cargo", StringComparison.OrdinalIgnoreCase))
+            {
+                languages.Add("rust");
+            }
+
+            if (line.Contains("openai", StringComparison.OrdinalIgnoreCase) && line.Contains("npm install -g", StringComparison.OrdinalIgnoreCase))
+            {
+                harnesses.Add("codex");
+            }
+
+            if (line.Contains("claude-code", StringComparison.OrdinalIgnoreCase) || line.Contains("claude-wrapper", StringComparison.OrdinalIgnoreCase))
+            {
+                harnesses.Add("claude-code");
+            }
+
+            if (line.Contains("cc-mirror", StringComparison.OrdinalIgnoreCase))
+            {
+                harnesses.Add("zai");
+            }
+
+            if (line.Contains("opencode", StringComparison.OrdinalIgnoreCase))
+            {
+                harnesses.Add("opencode");
+            }
+
+            if (line.Contains("playwright", StringComparison.OrdinalIgnoreCase))
+            {
+                harnesses.Add("playwright");
+            }
+
+            if (line.Contains("trivy", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("snyk", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("grype", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("checkov", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("semgrep", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("gitleaks", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("nancy", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("safety", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("pip-audit", StringComparison.OrdinalIgnoreCase))
+            {
+                if (line.Contains("trivy", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("Trivy");
+                }
+
+                if (line.Contains("snyk", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("Snyk");
+                }
+
+                if (line.Contains("grype", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("Grype");
+                }
+
+                if (line.Contains("checkov", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("Checkov");
+                }
+
+                if (line.Contains("semgrep", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("Semgrep");
+                }
+
+                if (line.Contains("gitleaks", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("Gitleaks");
+                }
+
+                if (line.Contains("nancy", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("Nancy");
+                }
+
+                if (line.Contains("safety", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("Safety");
+                }
+
+                if (line.Contains("pip-audit", StringComparison.OrdinalIgnoreCase))
+                {
+                    securityTools.Add("pip-audit");
+                }
+            }
+        }
+
+        return new ImageDependencyMatrix(
+            [.. languages.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)],
+            [.. packageManagers.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)],
+            [.. harnesses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)],
+            [.. securityTools.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)]);
+    }
+
+    public string HardenDockerfile(string dockerfileContent)
+    {
+        if (string.IsNullOrWhiteSpace(dockerfileContent))
+        {
+            return dockerfileContent;
+        }
+
+        var lines = dockerfileContent.Split('\n');
+        var hardened = new List<string>(lines.Length + 12);
+
+        foreach (var line in lines)
+        {
+            if (line.TrimStart().StartsWith("FROM ", StringComparison.OrdinalIgnoreCase))
+            {
+                var pinned = ApplyPinnedFromLine(line);
+                hardened.Add(pinned.line);
+                continue;
+            }
+
+            hardened.Add(line);
+        }
+
+        if (!HasSafeUser(hardened))
+        {
+            InsertBeforeRuntimeInstruction(
+                hardened,
+                [
+                    "RUN if id agent >/dev/null 2>&1; then :; elif command -v useradd >/dev/null 2>&1; then useradd -m -s /bin/bash -u 1000 agent; elif command -v adduser >/dev/null 2>&1; then adduser -D -u 1000 -s /bin/sh agent; fi",
+                    "RUN mkdir -p /workspace /artifacts && chown -R 1000:1000 /workspace /artifacts /home/agent",
+                    "USER agent",
+                    "WORKDIR /workspace"
+                ]);
+        }
+
+        if (!HasInstruction(hardened, "HEALTHCHECK"))
+        {
+            InsertBeforeRuntimeInstruction(
+                hardened,
+                [
+                    "HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \\",
+                    "  CMD [\"/bin/sh\", \"-c\", \"test -d /workspace && test -d /artifacts\"]"
+                ]);
+        }
+
+        return string.Join('\n', hardened)
+            .TrimEnd('\n', '\r');
     }
 
     public async Task<AiDockerfileResult> GenerateDockerfileWithAiAsync(
@@ -388,5 +606,193 @@ public class ImageBuilderService(
     {
         _dockerClient.Dispose();
         return ValueTask.CompletedTask;
+    }
+
+    private static bool HasInstruction(IReadOnlyList<string> lines, string instruction)
+    {
+        return lines.Any(line =>
+        {
+            var trimmed = line.TrimStart();
+            return trimmed.StartsWith($"{instruction} ", StringComparison.OrdinalIgnoreCase)
+                || trimmed.Equals(instruction, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private static bool HasSafeUser(List<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            var trimmed = line.TrimStart();
+            if (!trimmed.StartsWith("USER ", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var user = trimmed["USER ".Length..].Trim();
+            if (!user.Equals("root", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string ExtractFromImage(string line)
+    {
+        var tokens = Regex.Matches(line, @"[^\s]+")
+            .Select(match => match.Value)
+            .ToArray();
+        if (tokens.Length < 2)
+        {
+            return string.Empty;
+        }
+
+        var imageIndex = 1;
+        while (imageIndex < tokens.Length && tokens[imageIndex].StartsWith("--", StringComparison.OrdinalIgnoreCase))
+        {
+            imageIndex++;
+        }
+
+        return imageIndex < tokens.Length ? tokens[imageIndex] : string.Empty;
+    }
+
+    private static (string line, bool changed) ApplyPinnedFromLine(string line)
+    {
+        var tokens = Regex.Matches(line, @"[^\s]+").Select(match => match.Value).ToList();
+        if (tokens.Count < 2)
+        {
+            return (line, false);
+        }
+
+        var imageIndex = 1;
+        while (imageIndex < tokens.Count && tokens[imageIndex].StartsWith("--", StringComparison.OrdinalIgnoreCase))
+        {
+            imageIndex++;
+        }
+
+        if (imageIndex >= tokens.Count)
+        {
+            return (line, false);
+        }
+
+        var image = tokens[imageIndex];
+        if (!TryPinImage(image, out var pinnedImage))
+        {
+            return (line, false);
+        }
+
+        var beforeImage = string.Join(" ", tokens.Take(imageIndex));
+        var afterImage = string.Join(" ", tokens.Skip(imageIndex + 1));
+        var rebuilt = $"{beforeImage} {pinnedImage}{(afterImage.Length > 0 ? $" {afterImage}" : string.Empty)}";
+        return (rebuilt, true);
+    }
+
+    private static bool TryPinImage(string image, out string pinnedImage)
+    {
+        pinnedImage = image;
+
+        if (string.IsNullOrWhiteSpace(image) || image.Contains("${", StringComparison.OrdinalIgnoreCase) || image.Contains("$(", StringComparison.OrdinalIgnoreCase) || image.Contains('@'))
+        {
+            return false;
+        }
+
+        var tagSeparator = image.LastIndexOf(':');
+        var slashSeparator = image.LastIndexOf('/');
+        if (tagSeparator <= slashSeparator)
+        {
+            if (!PinnedImageVersions.TryGetValue(image, out var fallbackTag) && !PinnedImageVersions.TryGetValue(image.ToLowerInvariant(), out fallbackTag))
+            {
+                return false;
+            }
+
+            pinnedImage = $"{image}:{fallbackTag}";
+            return true;
+        }
+
+        var tag = image[(tagSeparator + 1)..];
+        if (!tag.Equals("latest", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var imageName = image[..tagSeparator];
+        if (!PinnedImageVersions.TryGetValue(imageName, out var pinnedTag) && !PinnedImageVersions.TryGetValue(imageName.ToLowerInvariant(), out pinnedTag))
+        {
+            if (!PinnedImageVersions.TryGetValue(imageName[(slashSeparator + 1)..], out pinnedTag))
+            {
+                return false;
+            }
+        }
+
+        pinnedImage = $"{imageName}:{pinnedTag}";
+        return true;
+    }
+
+    private static void AddLanguageFromImage(string image, HashSet<string> languages)
+    {
+        if (string.IsNullOrWhiteSpace(image))
+        {
+            return;
+        }
+
+        var lower = image.ToLowerInvariant();
+        if (lower.Contains("python"))
+        {
+            languages.Add("python");
+        }
+        if (lower.Contains("node"))
+        {
+            languages.Add("node");
+        }
+        if (lower.Contains("dotnet"))
+        {
+            languages.Add("dotnet");
+        }
+        if (lower.Contains("golang"))
+        {
+            languages.Add("go");
+        }
+        if (lower.Contains("go"))
+        {
+            languages.Add("go");
+        }
+        if (lower.Contains("rust"))
+        {
+            languages.Add("rust");
+        }
+        if (lower.Contains("alpine") || lower.Contains("debian") || lower.Contains("ubuntu"))
+        {
+            languages.Add("linux");
+        }
+    }
+
+    private static void InsertBeforeRuntimeInstruction(List<string> lines, IReadOnlyList<string> insertLines)
+    {
+        var insertAt = lines.FindIndex(line =>
+        {
+            var trimmed = line.TrimStart();
+            return trimmed.StartsWith("CMD ", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("ENTRYPOINT ", StringComparison.OrdinalIgnoreCase)
+                || trimmed.StartsWith("ONBUILD ", StringComparison.OrdinalIgnoreCase);
+        });
+
+        if (insertAt < 0)
+        {
+            insertAt = lines.Count;
+        }
+
+        lines.InsertRange(insertAt, insertLines);
+    }
+
+    private static string StripInlineComment(string line)
+    {
+        var index = line.IndexOf('#');
+        if (index < 0)
+        {
+            return line;
+        }
+
+        return line[..index];
     }
 }

@@ -26,7 +26,7 @@ else
     <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
         <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/settings/runs" />
         <MudText Typo="Typo.h4">Run @_run.Id[..8]</MudText>
-        <MudChip T="string" Color="@GetStateColor(_run.State)" Class="ml-2">@_run.State</MudChip>
+        <MudChip T="string" Color="@GetRunStateColor(_run.State)" Class="ml-2">@GetRunStateLabel(_run.State)</MudChip>
         @if (_run.Attempt > 1)
         {
             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Attempt @_run.Attempt</MudChip>
@@ -72,7 +72,7 @@ else
             <MudPaper Class="pa-6">
                 <MudGrid>
                     <MudItem xs="12" md="3">
-                        <MudField Label="Project" Variant="Variant.Outlined">@_run.ProjectId[..8]</MudField>
+                        <MudField Label="Repository" Variant="Variant.Outlined">@_run.RepositoryId[..8]</MudField>
                     </MudItem>
                     <MudItem xs="12" md="3">
                         <MudField Label="Task" Variant="Variant.Outlined">@_run.TaskId[..8]</MudField>
@@ -370,14 +370,7 @@ else
             return;
         }
 
-        var project = await Store.GetProjectAsync(repository.ProjectId, CancellationToken.None);
-        if (project is null)
-        {
-            _run = approved;
-            return;
-        }
-
-        await Dispatcher.DispatchAsync(project, repository, task, approved, CancellationToken.None);
+        await Dispatcher.DispatchAsync(repository, task, approved, CancellationToken.None);
         _run = await Store.GetRunAsync(_run.Id, CancellationToken.None) ?? approved;
     }
 
@@ -412,16 +405,9 @@ else
         await JS.InvokeVoidAsync("agentsDashboard.downloadBase64File", artifact, "application/octet-stream", payload);
     }
 
-    private static Color GetStateColor(RunState state) => state switch
-    {
-        RunState.Queued => Color.Default,
-        RunState.Running => Color.Info,
-        RunState.Succeeded => Color.Success,
-        RunState.Failed => Color.Error,
-        RunState.Cancelled => Color.Warning,
-        RunState.PendingApproval => Color.Secondary,
-        _ => Color.Default,
-    };
+    private static Color GetRunStateColor(RunState state) => TaskRunStatusPresentation.FromRunState(state).Color;
+
+    private static string GetRunStateLabel(RunState state) => TaskRunStatusPresentation.FromRunState(state).Label;
 
     private static Color GetWorkflowStateColor(WorkflowExecutionState state) => state switch
     {

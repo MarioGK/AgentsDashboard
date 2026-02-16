@@ -1,0 +1,668 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using AgentsDashboard.Contracts.Api;
+using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.ControlPlane.Data;
+
+namespace AgentsDashboard.ControlPlane.Services;
+
+public interface IWorkspaceService
+{
+    Task<WorkspacePageData?> GetWorkspacePageDataAsync(
+        string repositoryId,
+        string? selectedRunId,
+        CancellationToken cancellationToken);
+
+    Task<WorkspacePromptSubmissionResult> SubmitPromptAsync(
+        string repositoryId,
+        WorkspacePromptSubmissionRequest request,
+        CancellationToken cancellationToken);
+
+    void NotifyRunEvent(string runId, string eventType, DateTime eventTimestampUtc);
+
+    Task<WorkspaceSummaryRefreshResult> RefreshRunSummaryAsync(
+        string repositoryId,
+        string runId,
+        string eventType,
+        bool force,
+        CancellationToken cancellationToken);
+}
+
+public sealed record WorkspacePageData(
+    RepositoryDocument Repository,
+    IReadOnlyList<TaskDocument> Tasks,
+    IReadOnlyList<RunDocument> Runs,
+    RunDocument? LatestActiveRun,
+    RunDocument? LatestCompletedRun,
+    RunDocument? SelectedRun,
+    IReadOnlyList<RunLogEvent> SelectedRunLogs,
+    ParsedHarnessOutput? ParsedSelectedRunOutput,
+    WorkspaceSummaryRefreshStateView SummaryRefreshState);
+
+public sealed record WorkspaceSummaryRefreshStateView(
+    bool ShouldRefresh,
+    string Reason,
+    DateTime? LastRefreshAtUtc,
+    DateTime? NextAllowedRefreshAtUtc,
+    bool HasNewEvents);
+
+public sealed record WorkspacePromptSubmissionRequest(
+    string Prompt,
+    string? TaskId = null,
+    string? Harness = null,
+    string? Command = null,
+    bool ForceNewRun = false);
+
+public sealed record WorkspacePromptSubmissionResult(
+    bool Success,
+    bool CreatedRun,
+    bool DispatchAccepted,
+    string Message,
+    TaskDocument? Task,
+    RunDocument? Run);
+
+public sealed record WorkspaceSummaryRefreshResult(
+    bool Success,
+    bool Refreshed,
+    string Summary,
+    bool UsedFallback,
+    bool KeyConfigured,
+    string Message,
+    DateTime? LastRefreshAtUtc,
+    DateTime? NextAllowedRefreshAtUtc);
+
+public sealed class WorkspaceService(
+    IOrchestratorStore store,
+    RunDispatcher dispatcher,
+    IHarnessOutputParserService parserService,
+    IWorkspaceAiService workspaceAiService,
+    ILogger<WorkspaceService> logger) : IWorkspaceService
+{
+    private static readonly HashSet<RunState> s_activeStates =
+    [
+        RunState.Queued,
+        RunState.Running,
+        RunState.PendingApproval,
+    ];
+
+    private static readonly HashSet<RunState> s_terminalStates =
+    [
+        RunState.Succeeded,
+        RunState.Failed,
+        RunState.Cancelled,
+    ];
+
+    private static readonly TimeSpan s_summaryRefreshCooldown = TimeSpan.FromSeconds(45);
+
+    private readonly ConcurrentDictionary<string, SummaryRefreshState> _summaryRefreshStates =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    public async Task<WorkspacePageData?> GetWorkspacePageDataAsync(
+        string repositoryId,
+        string? selectedRunId,
+        CancellationToken cancellationToken)
+    {
+        var repositoryTask = store.GetRepositoryAsync(repositoryId, cancellationToken);
+        var tasksTask = store.ListTasksAsync(repositoryId, cancellationToken);
+        var runsTask = store.ListRunsByRepositoryAsync(repositoryId, cancellationToken);
+        await Task.WhenAll(repositoryTask, tasksTask, runsTask);
+
+        var repository = repositoryTask.Result;
+        if (repository is null)
+        {
+            return null;
+        }
+
+        var tasks = tasksTask.Result;
+        var runs = runsTask.Result;
+
+        var latestActiveRun = SelectLatestActiveRun(runs);
+        var latestCompletedRun = SelectLatestCompletedRun(runs);
+
+        var selectedRun = SelectRun(runs, selectedRunId) ?? latestActiveRun ?? latestCompletedRun;
+
+        IReadOnlyList<RunLogEvent> selectedRunLogs = [];
+        ParsedHarnessOutput? parsedOutput = null;
+        var refreshStateView = new WorkspaceSummaryRefreshStateView(
+            ShouldRefresh: false,
+            Reason: "No run selected.",
+            LastRefreshAtUtc: null,
+            NextAllowedRefreshAtUtc: null,
+            HasNewEvents: false);
+
+        if (selectedRun is not null)
+        {
+            selectedRunLogs = await store.ListRunLogsAsync(selectedRun.Id, cancellationToken);
+            parsedOutput = parserService.Parse(selectedRun.OutputJson, selectedRunLogs);
+
+            var signature = ComputeSummarySignature(selectedRun, selectedRunLogs, parsedOutput);
+            TrackObservedRunSnapshot(selectedRun.Id, signature, DateTime.UtcNow);
+            refreshStateView = EvaluateSummaryRefresh(selectedRun.Id, selectedRun.State, signature, force: false);
+        }
+
+        return new WorkspacePageData(
+            repository,
+            tasks,
+            runs,
+            latestActiveRun,
+            latestCompletedRun,
+            selectedRun,
+            selectedRunLogs,
+            parsedOutput,
+            refreshStateView);
+    }
+
+    public async Task<WorkspacePromptSubmissionResult> SubmitPromptAsync(
+        string repositoryId,
+        WorkspacePromptSubmissionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var repository = await store.GetRepositoryAsync(repositoryId, cancellationToken);
+        if (repository is null)
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "Repository not found.",
+                Task: null,
+                Run: null);
+        }
+
+        logger.LogDebug("Submitting workspace prompt for repository {RepositoryId}", repositoryId);
+
+        var tasks = await store.ListTasksAsync(repositoryId, cancellationToken);
+        var task = await ResolveTaskAsync(tasks, repositoryId, request, cancellationToken);
+
+        if (task is null)
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "No task available. Provide taskId or command/harness to create one.",
+                Task: null,
+                Run: null);
+        }
+
+        var runs = await store.ListRunsByRepositoryAsync(repositoryId, cancellationToken);
+        var activeRun = runs
+            .Where(run => run.TaskId == task.Id && s_activeStates.Contains(run.State))
+            .OrderByDescending(run => run.CreatedAtUtc)
+            .FirstOrDefault();
+
+        if (activeRun is not null && !request.ForceNewRun)
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: true,
+                CreatedRun: false,
+                DispatchAccepted: true,
+                Message: $"Active run {activeRun.Id} already exists for this task.",
+                Task: task,
+                Run: activeRun);
+        }
+
+        var dispatchTask = CloneTask(task);
+        if (!string.IsNullOrWhiteSpace(request.Prompt))
+        {
+            dispatchTask.Prompt = request.Prompt.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Command))
+        {
+            dispatchTask.Command = request.Command.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Harness))
+        {
+            dispatchTask.Harness = request.Harness.Trim().ToLowerInvariant();
+        }
+
+        if (string.IsNullOrWhiteSpace(dispatchTask.Command))
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "Task command is required to submit a prompt.",
+                Task: task,
+                Run: null);
+        }
+
+        if (string.IsNullOrWhiteSpace(dispatchTask.Prompt))
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "Prompt cannot be empty.",
+                Task: task,
+                Run: null);
+        }
+
+        var run = await store.CreateRunAsync(task, cancellationToken);
+        var dispatchAccepted = await dispatcher.DispatchAsync(repository, dispatchTask, run, cancellationToken);
+
+        NotifyRunEvent(run.Id, "created", DateTime.UtcNow);
+        logger.LogDebug(
+            "Workspace prompt submission created run {RunId} for task {TaskId} (dispatch accepted: {DispatchAccepted})",
+            run.Id,
+            task.Id,
+            dispatchAccepted);
+
+        return new WorkspacePromptSubmissionResult(
+            Success: true,
+            CreatedRun: true,
+            DispatchAccepted: dispatchAccepted,
+            Message: dispatchAccepted
+                ? $"Run {run.Id} created and dispatched."
+                : $"Run {run.Id} created and queued.",
+            Task: task,
+            Run: run);
+    }
+
+    public void NotifyRunEvent(string runId, string eventType, DateTime eventTimestampUtc)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return;
+        }
+
+        var state = _summaryRefreshStates.GetOrAdd(runId, _ => new SummaryRefreshState());
+        var timestamp = eventTimestampUtc == default ? DateTime.UtcNow : eventTimestampUtc;
+
+        lock (state.SyncRoot)
+        {
+            state.LastEventAtUtc = timestamp;
+            state.LastEventType = eventType ?? string.Empty;
+        }
+    }
+
+    public async Task<WorkspaceSummaryRefreshResult> RefreshRunSummaryAsync(
+        string repositoryId,
+        string runId,
+        string eventType,
+        bool force,
+        CancellationToken cancellationToken)
+    {
+        var run = await store.GetRunAsync(runId, cancellationToken);
+        if (run is null || !string.Equals(run.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase))
+        {
+            return new WorkspaceSummaryRefreshResult(
+                Success: false,
+                Refreshed: false,
+                Summary: string.Empty,
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "Run not found.",
+                LastRefreshAtUtc: null,
+                NextAllowedRefreshAtUtc: null);
+        }
+
+        var cachedSummary = await store.GetRunAiSummaryAsync(runId, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(eventType))
+        {
+            NotifyRunEvent(runId, eventType, DateTime.UtcNow);
+        }
+
+        var runLogs = await store.ListRunLogsAsync(runId, cancellationToken);
+        var parsedOutput = parserService.Parse(run.OutputJson, runLogs);
+        var signature = ComputeSummarySignature(run, runLogs, parsedOutput);
+
+        TrackObservedRunSnapshot(runId, signature, DateTime.UtcNow);
+
+        var decision = EvaluateSummaryRefresh(runId, run.State, signature, force);
+        if (!decision.ShouldRefresh)
+        {
+            var summary = !string.IsNullOrWhiteSpace(cachedSummary?.Summary)
+                ? cachedSummary.Summary
+                : ResolveExistingSummary(run, runId, parsedOutput);
+            return new WorkspaceSummaryRefreshResult(
+                Success: true,
+                Refreshed: false,
+                Summary: summary,
+                UsedFallback: true,
+                KeyConfigured: cachedSummary is not null,
+                Message: decision.Reason,
+                LastRefreshAtUtc: decision.LastRefreshAtUtc,
+                NextAllowedRefreshAtUtc: decision.NextAllowedRefreshAtUtc);
+        }
+
+        var aiResult = await workspaceAiService.SummarizeRunOutputAsync(
+            repositoryId,
+            run.OutputJson,
+            runLogs,
+            cancellationToken);
+
+        var resolvedSummary = string.IsNullOrWhiteSpace(aiResult.Text)
+            ? ResolveExistingSummary(run, runId, parsedOutput)
+            : aiResult.Text.Trim();
+
+        var now = DateTime.UtcNow;
+        var state = _summaryRefreshStates.GetOrAdd(runId, _ => new SummaryRefreshState());
+
+        lock (state.SyncRoot)
+        {
+            state.LastRefreshAtUtc = now;
+            state.LastRefreshedSignature = signature;
+            state.LastSummary = resolvedSummary;
+            state.LastEventType = eventType ?? state.LastEventType;
+        }
+
+        var summaryDocument = new RunAiSummaryDocument
+        {
+            RunId = run.Id,
+            RepositoryId = run.RepositoryId,
+            TaskId = run.TaskId,
+            Title = BuildSummaryTitle(resolvedSummary, run),
+            Summary = resolvedSummary,
+            Model = aiResult.UsedFallback ? "fallback" : "glm-5",
+            SourceFingerprint = signature,
+            SourceUpdatedAtUtc = run.EndedAtUtc ?? run.CreatedAtUtc,
+            GeneratedAtUtc = now,
+            ExpiresAtUtc = now.AddHours(24),
+        };
+        await store.UpsertRunAiSummaryAsync(summaryDocument, cancellationToken);
+
+        return new WorkspaceSummaryRefreshResult(
+            Success: true,
+            Refreshed: true,
+            Summary: resolvedSummary,
+            UsedFallback: aiResult.UsedFallback,
+            KeyConfigured: aiResult.KeyConfigured,
+                Message: aiResult.Message ?? "Summary refreshed.",
+                LastRefreshAtUtc: now,
+                NextAllowedRefreshAtUtc: now + s_summaryRefreshCooldown);
+    }
+
+    private static string BuildSummaryTitle(string summary, RunDocument run)
+    {
+        var normalized = summary.Trim();
+        if (normalized.Length == 0)
+        {
+            return $"Run {run.Id[..Math.Min(8, run.Id.Length)]} summary";
+        }
+
+        var line = normalized
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? normalized;
+
+        return line.Length <= 80 ? line : $"{line[..80]}...";
+    }
+
+    private async Task<TaskDocument?> ResolveTaskAsync(
+        IReadOnlyList<TaskDocument> tasks,
+        string repositoryId,
+        WorkspacePromptSubmissionRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(request.TaskId))
+        {
+            var matchedTask = tasks.FirstOrDefault(x => x.Id == request.TaskId);
+            if (matchedTask is not null)
+            {
+                return matchedTask;
+            }
+
+            var loaded = await store.GetTaskAsync(request.TaskId, cancellationToken);
+            if (loaded is not null && string.Equals(loaded.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase))
+            {
+                return loaded;
+            }
+
+            return null;
+        }
+
+        var selected = tasks
+            .Where(x => x.Enabled)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefault() ?? tasks.OrderByDescending(x => x.CreatedAtUtc).FirstOrDefault();
+
+        if (selected is not null)
+        {
+            return selected;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Command))
+        {
+            return null;
+        }
+
+        var createRequest = new CreateTaskRequest(
+            RepositoryId: repositoryId,
+            Name: "Workspace Prompt Task",
+            Kind: TaskKind.OneShot,
+            Harness: string.IsNullOrWhiteSpace(request.Harness) ? "codex" : request.Harness.Trim().ToLowerInvariant(),
+            Prompt: string.IsNullOrWhiteSpace(request.Prompt)
+                ? "Execute the task and return a structured JSON envelope."
+                : request.Prompt.Trim(),
+            Command: request.Command.Trim(),
+            AutoCreatePullRequest: false,
+            CronExpression: string.Empty,
+            Enabled: true);
+
+        return await store.CreateTaskAsync(createRequest, cancellationToken);
+    }
+
+    private WorkspaceSummaryRefreshStateView EvaluateSummaryRefresh(
+        string runId,
+        RunState runState,
+        string signature,
+        bool force)
+    {
+        var state = _summaryRefreshStates.GetOrAdd(runId, _ => new SummaryRefreshState());
+        var now = DateTime.UtcNow;
+
+        lock (state.SyncRoot)
+        {
+            var hasSignatureDelta = !string.Equals(signature, state.LastRefreshedSignature, StringComparison.Ordinal);
+            var hasEventAfterRefresh =
+                state.LastEventAtUtc.HasValue &&
+                (!state.LastRefreshAtUtc.HasValue || state.LastEventAtUtc.Value > state.LastRefreshAtUtc.Value);
+
+            var hasNewEvents = hasSignatureDelta || hasEventAfterRefresh;
+
+            if (!force && !s_terminalStates.Contains(runState))
+            {
+                return new WorkspaceSummaryRefreshStateView(
+                    ShouldRefresh: false,
+                    Reason: "Run is still active.",
+                    LastRefreshAtUtc: state.LastRefreshAtUtc,
+                    NextAllowedRefreshAtUtc: null,
+                    HasNewEvents: hasNewEvents);
+            }
+
+            if (!force && !hasNewEvents)
+            {
+                return new WorkspaceSummaryRefreshStateView(
+                    ShouldRefresh: false,
+                    Reason: "No new run events since last summary refresh.",
+                    LastRefreshAtUtc: state.LastRefreshAtUtc,
+                    NextAllowedRefreshAtUtc: null,
+                    HasNewEvents: false);
+            }
+
+            if (!force && state.LastRefreshAtUtc is { } lastRefresh)
+            {
+                var cooldownEndsAt = lastRefresh + s_summaryRefreshCooldown;
+                if (cooldownEndsAt > now)
+                {
+                    return new WorkspaceSummaryRefreshStateView(
+                        ShouldRefresh: false,
+                        Reason: "Summary refresh cooldown active.",
+                        LastRefreshAtUtc: state.LastRefreshAtUtc,
+                        NextAllowedRefreshAtUtc: cooldownEndsAt,
+                        HasNewEvents: hasNewEvents);
+                }
+            }
+
+            return new WorkspaceSummaryRefreshStateView(
+                ShouldRefresh: true,
+                Reason: force ? "Forced refresh." : "New run events detected.",
+                LastRefreshAtUtc: state.LastRefreshAtUtc,
+                NextAllowedRefreshAtUtc: null,
+                HasNewEvents: hasNewEvents);
+        }
+    }
+
+    private void TrackObservedRunSnapshot(string runId, string signature, DateTime observedAtUtc)
+    {
+        var state = _summaryRefreshStates.GetOrAdd(runId, _ => new SummaryRefreshState());
+
+        lock (state.SyncRoot)
+        {
+            if (string.Equals(state.LastObservedSignature, signature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            state.LastObservedSignature = signature;
+            state.LastEventAtUtc = observedAtUtc;
+        }
+    }
+
+    private string ResolveExistingSummary(RunDocument run, string runId, ParsedHarnessOutput parsedOutput)
+    {
+        if (!string.IsNullOrWhiteSpace(run.Summary))
+        {
+            return run.Summary.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(parsedOutput.Summary))
+        {
+            return parsedOutput.Summary;
+        }
+
+        var state = _summaryRefreshStates.GetOrAdd(runId, _ => new SummaryRefreshState());
+        lock (state.SyncRoot)
+        {
+            if (!string.IsNullOrWhiteSpace(state.LastSummary))
+            {
+                return state.LastSummary;
+            }
+        }
+
+        return parsedOutput.Status;
+    }
+
+    private static RunDocument? SelectRun(IReadOnlyList<RunDocument> runs, string? selectedRunId)
+    {
+        if (string.IsNullOrWhiteSpace(selectedRunId))
+        {
+            return null;
+        }
+
+        return runs.FirstOrDefault(x => x.Id == selectedRunId);
+    }
+
+    private static RunDocument? SelectLatestActiveRun(IReadOnlyList<RunDocument> runs)
+    {
+        return runs
+            .Where(x => s_activeStates.Contains(x.State))
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefault();
+    }
+
+    private static RunDocument? SelectLatestCompletedRun(IReadOnlyList<RunDocument> runs)
+    {
+        return runs
+            .Where(x => s_terminalStates.Contains(x.State))
+            .OrderByDescending(x => x.EndedAtUtc ?? x.CreatedAtUtc)
+            .FirstOrDefault();
+    }
+
+    private static string ComputeSummarySignature(
+        RunDocument run,
+        IReadOnlyList<RunLogEvent> runLogs,
+        ParsedHarnessOutput parsedOutput)
+    {
+        var builder = new StringBuilder();
+        builder.Append(run.Id)
+            .Append('|')
+            .Append(run.State)
+            .Append('|')
+            .Append(run.CreatedAtUtc.Ticks)
+            .Append('|')
+            .Append(run.StartedAtUtc?.Ticks ?? 0)
+            .Append('|')
+            .Append(run.EndedAtUtc?.Ticks ?? 0)
+            .Append('|')
+            .Append(Truncate(run.OutputJson, 8000))
+            .Append('|')
+            .Append(parsedOutput.Status)
+            .Append('|')
+            .Append(parsedOutput.Summary)
+            .Append('|')
+            .Append(parsedOutput.Error)
+            .Append('|')
+            .Append(parsedOutput.ToolCallGroups.Count)
+            .Append('|')
+            .Append(parsedOutput.RawStream.Count);
+
+        foreach (var log in runLogs.TakeLast(300))
+        {
+            builder
+                .Append('|')
+                .Append(log.TimestampUtc.Ticks)
+                .Append(':')
+                .Append(log.Level)
+                .Append(':')
+                .Append(Truncate(log.Message, 500));
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(builder.ToString());
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
+    }
+
+    private static string Truncate(string value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value[..maxLength];
+    }
+
+    private static TaskDocument CloneTask(TaskDocument source)
+    {
+        return new TaskDocument
+        {
+            Id = source.Id,
+            RepositoryId = source.RepositoryId,
+            Name = source.Name,
+            Kind = source.Kind,
+            Harness = source.Harness,
+            Prompt = source.Prompt,
+            Command = source.Command,
+            AutoCreatePullRequest = source.AutoCreatePullRequest,
+            CronExpression = source.CronExpression,
+            Enabled = source.Enabled,
+            NextRunAtUtc = source.NextRunAtUtc,
+            RetryPolicy = source.RetryPolicy,
+            Timeouts = source.Timeouts,
+            ApprovalProfile = source.ApprovalProfile,
+            SandboxProfile = source.SandboxProfile,
+            ArtifactPolicy = source.ArtifactPolicy,
+            ArtifactPatterns = [.. source.ArtifactPatterns],
+            LinkedFailureRuns = [.. source.LinkedFailureRuns],
+            ConcurrencyLimit = source.ConcurrencyLimit,
+            InstructionFiles = [.. source.InstructionFiles],
+            CreatedAtUtc = source.CreatedAtUtc,
+        };
+    }
+
+    private sealed class SummaryRefreshState
+    {
+        public object SyncRoot { get; } = new();
+        public DateTime? LastEventAtUtc { get; set; }
+        public DateTime? LastRefreshAtUtc { get; set; }
+        public string LastObservedSignature { get; set; } = string.Empty;
+        public string LastRefreshedSignature { get; set; } = string.Empty;
+        public string LastSummary { get; set; } = string.Empty;
+        public string LastEventType { get; set; } = string.Empty;
+    }
+}

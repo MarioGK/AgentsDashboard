@@ -33,7 +33,7 @@ else
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudField Label="Repository" Variant="Variant.Outlined">
-                    <MudLink Href="@($"/repositories/{_finding.RepositoryId}")">@_finding.RepositoryId[..8]</MudLink>
+                    <MudLink Href="@($"/settings/repositories/{_finding.RepositoryId}")">@_finding.RepositoryId[..8]</MudLink>
                 </MudField>
             </MudItem>
             <MudItem xs="12" md="6">
@@ -173,7 +173,7 @@ else
             [_finding.RunId]);
 
         if (created is not null)
-            Navigation.NavigateTo($"/repositories/{_finding.RepositoryId}");
+            Navigation.NavigateTo($"/settings/repositories/{_finding.RepositoryId}");
     }
 
     private async Task CreateRegressionReplayTaskAsync()
@@ -192,7 +192,7 @@ else
             [_finding.RunId]);
 
         if (created is not null)
-            Navigation.NavigateTo($"/repositories/{_finding.RepositoryId}");
+            Navigation.NavigateTo($"/settings/repositories/{_finding.RepositoryId}");
     }
 
     private Task RetryAsync()
@@ -214,11 +214,8 @@ else
         var repo = await Store.GetRepositoryAsync(task.RepositoryId, CancellationToken.None);
         if (repo is null) return;
 
-        var project = await Store.GetProjectAsync(repo.ProjectId, CancellationToken.None);
-        if (project is null) return;
-
-        var retryRun = await Store.CreateRunAsync(task, project.Id, CancellationToken.None, run.Attempt + 1);
-        await Dispatcher.DispatchAsync(project, repo, task, retryRun, CancellationToken.None);
+        var retryRun = await Store.CreateRunAsync(task, CancellationToken.None, run.Attempt + 1);
+        await Dispatcher.DispatchAsync(repo, task, retryRun, CancellationToken.None);
         await Store.UpdateFindingStateAsync(_finding.Id, FindingState.InProgress, CancellationToken.None);
 
         Navigation.NavigateTo($"/settings/runs/{retryRun.Id}");

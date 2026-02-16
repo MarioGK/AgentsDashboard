@@ -84,7 +84,6 @@ public class WorkerGatewayServiceTests
         Request = new DispatchJobRequest
         {
             RunId = runId,
-            ProjectId = "project-1",
             RepositoryId = "repo-1",
             TaskId = "task-1",
             HarnessType = "codex",

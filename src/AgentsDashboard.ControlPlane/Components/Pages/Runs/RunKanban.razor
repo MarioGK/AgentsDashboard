@@ -97,17 +97,17 @@ else
 
         _columns =
         [
-            new("Pending Approval", Icons.Material.Filled.Approval, Color.Secondary,
+            new("Pending Approval", Icons.Material.Filled.Approval, GetRunStateColor(RunState.PendingApproval),
                 grouped.GetValueOrDefault(RunState.PendingApproval, [])),
-            new("Queued", Icons.Material.Filled.HourglassEmpty, Color.Default,
+            new("Queued", Icons.Material.Filled.HourglassEmpty, GetRunStateColor(RunState.Queued),
                 grouped.GetValueOrDefault(RunState.Queued, [])),
-            new("Running", Icons.Material.Filled.PlayCircle, Color.Info,
+            new("Running", Icons.Material.Filled.PlayCircle, GetRunStateColor(RunState.Running),
                 grouped.GetValueOrDefault(RunState.Running, [])),
-            new("Succeeded", Icons.Material.Filled.CheckCircle, Color.Success,
+            new("Succeeded", Icons.Material.Filled.CheckCircle, GetRunStateColor(RunState.Succeeded),
                 grouped.GetValueOrDefault(RunState.Succeeded, [])),
-            new("Failed", Icons.Material.Filled.Cancel, Color.Error,
+            new("Failed", Icons.Material.Filled.Cancel, GetRunStateColor(RunState.Failed),
                 grouped.GetValueOrDefault(RunState.Failed, [])),
-            new("Cancelled", Icons.Material.Filled.Block, Color.Warning,
+            new("Cancelled", Icons.Material.Filled.Block, GetRunStateColor(RunState.Cancelled),
                 grouped.GetValueOrDefault(RunState.Cancelled, [])),
         ];
 
@@ -121,6 +121,9 @@ else
         var duration = end - run.StartedAtUtc.Value;
         return duration.TotalMinutes >= 1 ? $"{duration.TotalMinutes:F0}m {duration.Seconds}s" : $"{duration.TotalSeconds:F0}s";
     }
+
+    private static Color GetRunStateColor(RunState state)
+        => TaskRunStatusPresentation.FromRunState(state).Color;
 
     public void Dispose()
     {

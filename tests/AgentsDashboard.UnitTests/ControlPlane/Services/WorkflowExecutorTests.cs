@@ -44,7 +44,7 @@ public class WorkflowExecutorTests
             NullLogger<WorkflowExecutor>.Instance,
             timeProvider: new StaticTimeProvider(now));
 
-        await executor.ExecuteWorkflowAsync(workflow, "project-1", CancellationToken.None);
+        await executor.ExecuteWorkflowAsync(workflow, CancellationToken.None);
 
         var state = await completed.Task.WaitAsync(TimeSpan.FromSeconds(1));
         state.Should().Be(WorkflowExecutionState.Succeeded);
@@ -111,7 +111,7 @@ public class WorkflowExecutorTests
             NullLogger<WorkflowExecutor>.Instance,
             new StaticTimeProvider(now));
 
-        await executor.ExecuteWorkflowAsync(workflow, "project-1", CancellationToken.None);
+        await executor.ExecuteWorkflowAsync(workflow, CancellationToken.None);
 
         var state = await completed.Task.WaitAsync(TimeSpan.FromSeconds(1));
         state.Should().Be(WorkflowExecutionState.Failed);
@@ -123,7 +123,6 @@ public class WorkflowExecutorTests
         Id = Guid.NewGuid().ToString("N"),
         WorkflowId = "workflow-1",
         RepositoryId = "repo-1",
-        ProjectId = "project-1",
         State = WorkflowExecutionState.Running
     };
 

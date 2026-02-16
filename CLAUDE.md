@@ -6,9 +6,10 @@ Production-focused, self-hosted AI orchestration platform on .NET 10. Blazor Ser
 
 - `AGENTS.md` in this repo is a symlink to `CLAUDE.md`; edit `CLAUDE.md` only.
 - `AGENTS.md` must always be kept up to date.
-- After every significant change, update this file before finishing work.
+- Update this file only when a change is materially relevant to operating or developing this platform.
 - Significant change includes architecture, domain model, workflow behavior, auth/policies, build/test commands, harness support, deployment, or project structure changes.
 - For each major update, refresh the `Last Verified` date in this file.
+- Do not append historical change logs in this file; keep it as current-state guidance only.
 
 ## Token Efficiency Rules (Mandatory)
 
@@ -37,27 +38,27 @@ docs/
 
 - `src/AgentsDashboard.slnx`: 3 production projects (`AgentsDashboard.ControlPlane`, `AgentsDashboard.WorkerGateway`, `AgentsDashboard.Contracts`).
 - Active harness adapters: `CodexAdapter`, `OpenCodeAdapter`, `ClaudeCodeAdapter`, `ZaiAdapter`.
-- Blazor components: 41 `.razor` files under `src/AgentsDashboard.ControlPlane/Components`.
+- Blazor components: 38 `.razor` files under `src/AgentsDashboard.ControlPlane/Components`.
 
 ## Architecture Rules
 
 - Service boundary is MagicOnion service boundaries and application services; route-based HTTP APIs are not part of the target architecture.
 - All communication between `ControlPlane` and `WorkerGateway` MUST use MagicOnion; do not use direct REST/gRPC or raw transport calls between these services.
+- Repository is the primary orchestration boundary; do not reintroduce project-scoped workflow/state APIs.
 - Enforce layered dependencies: `Domain -> Application -> Infrastructure -> UI` (inward only).
 - Use command/query handlers + domain services/events for orchestration.
 - Keep transport DTOs only at integration boundaries.
 
 ## Product Model
 
-1. Project
-2. Repository
-3. Task
-4. Run
-5. Finding
-6. Agent
-7. WorkflowV2 (DAG)
-8. WorkflowExecutionV2
-9. WorkflowDeadLetter
+1. Repository (top-level workspace)
+2. Task
+3. Run
+4. Finding
+5. Agent
+6. WorkflowV2 (DAG)
+7. WorkflowExecutionV2
+8. WorkflowDeadLetter
 
 ## Engineering Conventions
 
@@ -78,6 +79,7 @@ docs/
 - Use transactions for multi-step state transitions.
 - Pass cancellation tokens through data-access calls.
 - Startup should auto-apply migrations and idempotent seed data.
+- Create migrations with `dotnet ef` tooling; do not hand-edit migration files or snapshots.
 
 ### Authentication
 
@@ -133,6 +135,11 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 
 ## Execution Model
 
+- Repository is the only top-level scope (project entity removed).
+- Repository creation is git-bound and folder-bound: a repo must include `GitUrl` + absolute `LocalPath`, and create flow validates/links/clones before persistence.
+- ControlPlane exposes host folder browsing + create-folder in repository creation UI and stores git status (`CurrentBranch`, ahead/behind, staged/modified/untracked, scan/fetch timestamps, sync error).
+- Git metrics refresh is hybrid: on repository detail open, explicit refresh action, and background refresh for recently viewed repositories.
+- Git auth paths are system git-native: URL credentials, repository GitHub token (when configured), and host SSH keys/agent.
 - Harness-only execution (no direct provider APIs).
 - ControlPlane is the parent orchestrator and spawns worker-gateway containers on demand via Docker socket.
 - Worker gateways launch ephemeral harness Docker containers.
@@ -156,6 +163,7 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 - Redact secrets from output.
 - Standalone terminal sessions inherit provider API key environment variables from the worker process (`CODEX_API_KEY` is mirrored to `OPENAI_API_KEY` when needed).
 - Dashboard AI generation features (image Dockerfile generation and repository task prompt generation) now call `LlmTornadoGatewayService` with `ChatModel.Zai.Glm.Glm5`.
+- Prompt skills support global + repository scopes via `PromptSkills`, with management in `/settings/skills` (global) and repository tasks, and slash-trigger autocomplete (`/`) in the task prompt Monaco editor.
 - Artifact storage path is configurable via `Orchestrator:ArtifactsRootPath` (default `/data/artifacts`; development override `data/artifacts`).
 - Health endpoints use split probes: `/alive` (liveness), `/ready` (dependency readiness), and `/health` (readiness alias with detailed JSON payload).
 
@@ -167,44 +175,4 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 ## Last Verified
 
 - Date: 2026-02-16
-- Fixed worker tool diagnostics compatibility for stale worker images: ControlPlane startup image bootstrap now forces policy-based refresh (with local fallback if refresh fails), and `/settings/workers/{workerId}` now shows a targeted legacy-image message when `GetHarnessToolsAsync` is unimplemented instead of surfacing the raw RPC exception.
-- Added worker spawn hardening in ControlPlane: `DockerWorkerLifecycleManager` now ensures the configured Docker network exists and creates it when missing before creating worker containers, preventing `network agentsdashboard not found` startup failures in fresh environments.
-- Container Image Builder `Full Harness` template now mirrors `deploy/harness-image/Dockerfile` exactly so dashboard template builds match repo harness image content.
-- Worker capacity defaults are `MinWorkers=4` and `MaxWorkers=100`; runtime now honors persisted `Orchestrator.MinWorkers` and applies a `>= 1` floor when stored values are invalid (`0`).
-- 2026-02-16 run with `dotnet watch` on ControlPlane + WorkerGateway and fixed startup null-safety issues in dispatch execution.
-- Clarified LAN launch contract: services must be reachable at `http://192.168.10.101:5266` (HTTP explicit) with `0.0.0.0` binding; HTTPS is not enabled by default.
-- Enforced strict single-occupancy worker execution: dispatch now provisions a fresh worker per task/terminal lease, with `Worker__MaxSlots=1` and WorkerGateway queue/session limits clamped to one active job/session.
-- Worker recycle now removes containers and worker-scoped storage volumes; ControlPlane worker host binds now use per-worker volume names (`worker-artifacts-{workerId}`, `worker-workspaces-{workerId}`).
-- Run completion now triggers worker recycle automatically; standalone terminal session closure (explicit close, worker-close event, or grace timeout) also recycles the owning worker.
-- Added required task prompt envelope support from `SystemSettingsDocument.Orchestrator.TaskPromptPrefix/TaskPromptSuffix`, with enforced default git branch/commit/push instructions when settings are empty.
-- Run dispatch now sets deterministic per-run task branches (`agent/<repo>/<task>/<runId>`) and passes `TASK_BRANCH`, `TASK_DEFAULT_BRANCH`, `PR_BRANCH`, and `PR_BRANCH_PREFIX` to harness execution.
-- `RunDispatcher` layered prompts now support per-task prompt wrappers via task instruction file names `prompt-prefix` / `task-prompt-prefix` and `prompt-suffix` / `task-prompt-suffix`.
-- PR branch validation now honors a dispatcher-provided `PR_BRANCH_PREFIX` override so harness-side PR automation validates task-owned branch patterns correctly.
-- Added `LlmTornado` package integration in ControlPlane and introduced `LlmTornadoGatewayService` for dashboard AI features.
-- Provider settings now include a global `LlmTornado` key section (`repositoryId=global`) plus repository-level `llmtornado` provider support.
-- `RunDispatcher` now maps `llmtornado` secrets into Anthropic-compatible Z.ai env vars and applies global-secret fallback.
-- Enforced `glm-5` for Z.ai/Claude-Code-via-Z.ai execution settings and dashboard AI generation paths.
-- Added offline docs knowledge base under `docs/ai` with Z.ai + Claude Code setup, LlmTornado integration notes, GLM-5 policy, and source index.
-- Refreshed `docs/ai` from official references, added `docs/ai/README.md` index, and added `docs/ai/feature-ideas.md` as the next-step AI backlog for agents/workflows/images.
-- Added `OrchestratorSettings` under `SystemSettingsDocument` and persisted migration `20260216151028_OrchestratorReliabilityV2` (new `Settings.Orchestrator`, run image provenance fields, and `Leases` table).
-- `DockerWorkerLifecycleManager` now enforces runtime-configurable policies for min/max workers, per-worker concurrency, image resolution policy, build/pull throttling, failure budgets/cooldowns, draining, auto-recycle, and reconciler sync.
-- Added `IOrchestratorRuntimeSettingsProvider`, `ILeaseCoordinator`, and `WorkerPoolReconciliationService` to support reliable runtime orchestration and multi-instance-safe worker operations.
-- Added `/settings/orchestrator` UI and operator action center (pause/resume scale-out, clear cooldown, ensure image, drain/recycle workers, run reconciliation).
-- Worker image rollout now supports canary behavior via `Orchestrator.WorkerCanaryImage` + `Orchestrator.CanaryPercent` with automatic fallback to base image when canary resolution fails.
-- Worker container host config now enforces `nofile` ulimit when `Orchestrator.WorkerFileDescriptorLimit` is configured.
-- Stabilized local runtime by binding `IOrchestratorStore` back to in-process `OrchestratorStore` for ControlPlane consumers.
-- Deferred `RecoveryService` startup recovery pass until `ApplicationStarted` to avoid pre-listen startup races.
-- Added MessagePack annotations to `ControlPlane` store-gateway invocation contracts and removed `CancellationToken` from the MagicOnion method signature for serialization compatibility.
-- Added the standard LAN-ready `dotnet watch` command for ControlPlane (`0.0.0.0:5266`, polling watcher, explicit reload host).
-- ControlPlane now auto-builds `WorkerGateway` image using the local `docker` CLI (`docker build`) when a configured image is missing, then retries container create; if build fails it falls back to image pull.
-- Environment overrides for this behavior: `WORKER_GATEWAY_DOCKERFILE_PATH` and `WORKER_GATEWAY_BUILD_CONTEXT`.
-- ControlPlane now performs worker image availability checks at startup through `WorkerImageBootstrapService`.
-- `WorkerImageBootstrapService` now rethrows bootstrap failures so host startup does not continue in a degraded state.
-- WorkerGateway `ImagePrePullService` now attempts local image build for known harness images (`ai-harness`, `ai-harness-base`, `harness-*`) before pull fallback.
-- Global `/settings/tools` was removed; tool visibility is now only available in worker detail under `/settings/workers/{workerId}`.
-- Worker details now expose per-worker tool availability and version diagnostics for `codex`, `opencode`, `claude-code`, and `zai` with live refresh.
-- Added global run-completion audio cues in `MainLayout` via JS interop (`agentsDashboard.playRunCompletedSound`) for terminal states `Succeeded`, `Failed`, and `Cancelled`, with dedicated modern tones per state.
-- Added `/settings/sounds` with run-end audio preferences (enabled, volume, selected profile, and per-state toggles), localStorage-backed persistence via JS interop, and a dedicated test button.
-- Added local Mixkit sound assets for run completion/error cues and defaulted run-end sounds to a new `mixkit` profile using:
-  - `mixkit-message-pop-alert-2354.mp3` for succeeded
-  - `mixkit-digital-quick-tone-2866.mp3`, `mixkit-double-beep-tone-alert-2868.mp3`, `mixkit-elevator-tone-2863.mp3` for failed.
+- Purpose: Date-only freshness marker for this document; do not use this section as a changelog/history log.

@@ -7,16 +7,12 @@ public interface IOrchestratorStore
 {
     Task InitializeAsync(CancellationToken cancellationToken);
 
-    Task<ProjectDocument> CreateProjectAsync(CreateProjectRequest request, CancellationToken cancellationToken);
-    Task<List<ProjectDocument>> ListProjectsAsync(CancellationToken cancellationToken);
-    Task<ProjectDocument?> GetProjectAsync(string projectId, CancellationToken cancellationToken);
-    Task<ProjectDocument?> UpdateProjectAsync(string projectId, UpdateProjectRequest request, CancellationToken cancellationToken);
-    Task<bool> DeleteProjectAsync(string projectId, CancellationToken cancellationToken);
-
     Task<RepositoryDocument> CreateRepositoryAsync(CreateRepositoryRequest request, CancellationToken cancellationToken);
-    Task<List<RepositoryDocument>> ListRepositoriesAsync(string projectId, CancellationToken cancellationToken);
+    Task<List<RepositoryDocument>> ListRepositoriesAsync(CancellationToken cancellationToken);
     Task<RepositoryDocument?> GetRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<RepositoryDocument?> UpdateRepositoryAsync(string repositoryId, UpdateRepositoryRequest request, CancellationToken cancellationToken);
+    Task<RepositoryDocument?> UpdateRepositoryGitStateAsync(string repositoryId, RepositoryGitStatus gitStatus, CancellationToken cancellationToken);
+    Task<RepositoryDocument?> TouchRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<bool> DeleteRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<InstructionFile>> GetRepositoryInstructionFilesAsync(string repositoryId, CancellationToken cancellationToken);
     Task<RepositoryDocument?> UpdateRepositoryInstructionFilesAsync(string repositoryId, List<InstructionFile> instructionFiles, CancellationToken cancellationToken);
@@ -26,6 +22,11 @@ public interface IOrchestratorStore
     Task<bool> DeleteInstructionAsync(string instructionId, CancellationToken cancellationToken);
     Task<HarnessProviderSettingsDocument?> GetHarnessProviderSettingsAsync(string repositoryId, string harness, CancellationToken cancellationToken);
     Task<HarnessProviderSettingsDocument> UpsertHarnessProviderSettingsAsync(string repositoryId, string harness, string model, double temperature, int maxTokens, Dictionary<string, string>? additionalSettings, CancellationToken cancellationToken);
+    Task<PromptSkillDocument> CreatePromptSkillAsync(CreatePromptSkillRequest request, CancellationToken cancellationToken);
+    Task<List<PromptSkillDocument>> ListPromptSkillsAsync(string repositoryId, bool includeGlobal, CancellationToken cancellationToken);
+    Task<PromptSkillDocument?> GetPromptSkillAsync(string skillId, CancellationToken cancellationToken);
+    Task<PromptSkillDocument?> UpdatePromptSkillAsync(string skillId, UpdatePromptSkillRequest request, CancellationToken cancellationToken);
+    Task<bool> DeletePromptSkillAsync(string skillId, CancellationToken cancellationToken);
 
     Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken);
     Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken);
@@ -38,18 +39,24 @@ public interface IOrchestratorStore
     Task<TaskDocument?> UpdateTaskAsync(string taskId, UpdateTaskRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteTaskAsync(string taskId, CancellationToken cancellationToken);
 
-    Task<RunDocument> CreateRunAsync(TaskDocument task, string projectId, CancellationToken cancellationToken, int attempt = 1);
+    Task<RunDocument> CreateRunAsync(TaskDocument task, CancellationToken cancellationToken, int attempt = 1);
     Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken);
-    Task<List<RunDocument>> ListRecentRunsByProjectAsync(string projectId, CancellationToken cancellationToken);
-    Task<ReliabilityMetrics> GetReliabilityMetricsByProjectAsync(string projectId, CancellationToken cancellationToken);
+    Task<List<RepositoryDocument>> ListRepositoriesWithRecentTasksAsync(int limit, CancellationToken cancellationToken);
+    Task<List<RunDocument>> ListRunsByTaskAsync(string taskId, int limit, CancellationToken cancellationToken);
+    Task<Dictionary<string, RunState>> GetLatestRunStatesByTaskIdsAsync(List<string> taskIds, CancellationToken cancellationToken);
+    Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptHistoryAsync(string taskId, int limit, CancellationToken cancellationToken);
+    Task<WorkspacePromptEntryDocument> AppendWorkspacePromptEntryAsync(WorkspacePromptEntryDocument promptEntry, CancellationToken cancellationToken);
+    Task<RunAiSummaryDocument> UpsertRunAiSummaryAsync(RunAiSummaryDocument summary, CancellationToken cancellationToken);
+    Task<RunAiSummaryDocument?> GetRunAiSummaryAsync(string runId, CancellationToken cancellationToken);
+    Task UpsertSemanticChunksAsync(string taskId, List<SemanticChunkDocument> chunks, CancellationToken cancellationToken);
+    Task<List<SemanticChunkDocument>> SearchWorkspaceSemanticAsync(string taskId, string queryText, string? queryEmbeddingPayload, int limit, CancellationToken cancellationToken);
     Task<ReliabilityMetrics> GetReliabilityMetricsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<RunDocument?> GetRunAsync(string runId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRunsByStateAsync(RunState state, CancellationToken cancellationToken);
     Task<List<string>> ListAllRunIdsAsync(CancellationToken cancellationToken);
     Task<long> CountRunsByStateAsync(RunState state, CancellationToken cancellationToken);
     Task<long> CountActiveRunsAsync(CancellationToken cancellationToken);
-    Task<long> CountActiveRunsByProjectAsync(string projectId, CancellationToken cancellationToken);
     Task<long> CountActiveRunsByRepoAsync(string repositoryId, CancellationToken cancellationToken);
     Task<long> CountActiveRunsByTaskAsync(string taskId, CancellationToken cancellationToken);
     Task<RunDocument?> MarkRunStartedAsync(
@@ -61,6 +68,7 @@ public interface IOrchestratorStore
         string? workerImageSource = null);
     Task<RunDocument?> MarkRunCompletedAsync(string runId, bool succeeded, string summary, string outputJson, CancellationToken cancellationToken, string? failureClass = null, string? prUrl = null);
     Task<RunDocument?> MarkRunCancelledAsync(string runId, CancellationToken cancellationToken);
+    Task<RunDocument?> MarkRunObsoleteAsync(string runId, CancellationToken cancellationToken);
     Task<RunDocument?> MarkRunPendingApprovalAsync(string runId, CancellationToken cancellationToken);
     Task<RunDocument?> ApproveRunAsync(string runId, CancellationToken cancellationToken);
     Task<RunDocument?> RejectRunAsync(string runId, CancellationToken cancellationToken);
@@ -98,7 +106,7 @@ public interface IOrchestratorStore
 
     Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken);
     Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken);
-    Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? projectId, string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken);
+    Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken);
 
     Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken);
     Task<SystemSettingsDocument> UpdateSettingsAsync(SystemSettingsDocument settings, CancellationToken cancellationToken);
@@ -140,16 +148,12 @@ public interface IOrchestratorStore
 
     Task<ReliabilityMetrics> GetReliabilityMetricsAsync(CancellationToken cancellationToken);
 
-    // ── Terminal Sessions ─────────────────────────────────────────────────────
-
     Task<TerminalSessionDocument> CreateTerminalSessionAsync(TerminalSessionDocument session, CancellationToken cancellationToken = default);
     Task<TerminalSessionDocument?> GetTerminalSessionAsync(string sessionId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<TerminalSessionDocument>> ListActiveTerminalSessionsByWorkerAsync(string workerId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<TerminalSessionDocument>> ListTerminalSessionsByRunAsync(string runId, CancellationToken cancellationToken = default);
     Task UpdateTerminalSessionAsync(TerminalSessionDocument session, CancellationToken cancellationToken = default);
     Task CloseTerminalSessionAsync(string sessionId, string reason, CancellationToken cancellationToken = default);
-
-    // ── Terminal Audit Events ────────────────────────────────────────────────
 
     Task AppendTerminalAuditEventAsync(TerminalAuditEventDocument auditEvent, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<TerminalAuditEventDocument>> GetTerminalAuditEventsAsync(string sessionId, long? afterSequence = null, int limit = 2000, CancellationToken cancellationToken = default);

@@ -25,7 +25,6 @@ public class ProxyAuditMiddleware(
             var runId = ExtractRouteValue(context, "runId") ?? string.Empty;
             var taskId = ExtractRouteValue(context, "taskId") ?? string.Empty;
             var repoId = ExtractRouteValue(context, "repoId") ?? string.Empty;
-            var projectId = ExtractRouteValue(context, "projectId") ?? string.Empty;
 
             var upstreamTarget = string.Empty;
             try
@@ -43,7 +42,6 @@ public class ProxyAuditMiddleware(
                 RunId = runId,
                 TaskId = taskId,
                 RepoId = repoId,
-                ProjectId = projectId,
                 Path = context.Request.Path,
                 UpstreamTarget = upstreamTarget,
                 StatusCode = context.Response.StatusCode,

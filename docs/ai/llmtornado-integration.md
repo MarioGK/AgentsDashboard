@@ -38,4 +38,7 @@ var api = new TornadoApi(new AnthropicEndpointProvider
 - Current feature integrations:
   - AI Dockerfile generation in `ImageBuilder`.
   - AI task prompt generation in `RepositoryDetail`.
+- `ImageBuilder` also supports:
+  - Dependency matrix extraction from generated/edited Dockerfiles (languages, package managers, harness CLIs, security tools).
+  - One-click hardening pass (non-root defaults, healthcheck, and `latest`-style base pinning when applicable).
 - Policy: hard-require `glm-5`; no fallback to earlier GLM families.

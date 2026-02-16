@@ -58,7 +58,8 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
         {
             foreach (var runId in runIds)
             {
-                if (string.IsNullOrWhiteSpace(runId)) continue;
+                if (string.IsNullOrWhiteSpace(runId))
+                    continue;
 
                 GetRunGroup(runId).Add(_connectionId, Client);
                 _subscribedRunIds.Add(runId);

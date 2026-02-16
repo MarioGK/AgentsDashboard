@@ -8,8 +8,6 @@
 <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
     <MudText Typo="Typo.h4">Proxy Audits</MudText>
     <MudSpacer />
-    <MudTextField @bind-Value="_projectIdFilter" Label="Project ID" Variant="Variant.Outlined"
-                  Margin="Margin.Dense" Style="max-width: 200px;" Clearable />
     <MudTextField @bind-Value="_repoIdFilter" Label="Repo ID" Variant="Variant.Outlined"
                   Margin="Margin.Dense" Style="max-width: 200px;" Clearable />
     <MudTextField @bind-Value="_taskIdFilter" Label="Task ID" Variant="Variant.Outlined"
@@ -77,7 +75,6 @@ else
 @code {
     private List<ProxyAuditDocument> _audits = [];
     private bool _loading = true;
-    private string? _projectIdFilter;
     private string? _repoIdFilter;
     private string? _taskIdFilter;
     private string? _runIdFilter;
@@ -88,7 +85,7 @@ else
     private async Task LoadAsync()
     {
         _loading = true;
-        _audits = await Store.ListProxyAuditsAsync(null, null, null, null, 200, CancellationToken.None);
+        _audits = await Store.ListProxyAuditsAsync(null, null, null, 200, CancellationToken.None);
         _loading = false;
     }
 
@@ -96,7 +93,6 @@ else
     {
         _loading = true;
         _audits = await Store.ListProxyAuditsAsync(
-            _projectIdFilter,
             _repoIdFilter,
             _taskIdFilter,
             _runIdFilter,

@@ -1,4 +1,5 @@
 @page "/settings/repositories/{RepositoryId}"
+@page "/repositories/{RepositoryId}"
 @layout SettingsLayout
 @rendermode InteractiveServer
 @inject Data.IOrchestratorStore Store
@@ -6,9 +7,12 @@
 @inject Services.SecretCryptoService Crypto
 @inject Services.TaskTemplateService TemplateService
 @inject Services.LlmTornadoGatewayService LlmTornadoGateway
+@inject Services.IGitWorkspaceService GitWorkspace
+@inject IJSRuntime JS
 @inject ISnackbar Snackbar
 @using AgentsDashboard.ControlPlane.Services
 @using AgentsDashboard.Contracts.Domain
+@implements IAsyncDisposable
 
 <PageTitle>Repository</PageTitle>
 
@@ -21,6 +25,16 @@ else
     <MudStack Spacing="2">
         <MudText Typo="Typo.h4">@_repository.Name</MudText>
         <MudText Typo="Typo.subtitle2">@_repository.GitUrl</MudText>
+        <MudText Typo="Typo.caption">@_repository.LocalPath</MudText>
+
+        <MudPaper Class="pa-3">
+            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudChip T="string" Color="Color.Info" Size="Size.Small">Branch: @(_repository.CurrentBranch == string.Empty ? "-" : _repository.CurrentBranch)</MudChip>
+                <MudChip T="string" Color="Color.Default" Size="Size.Small">Ahead/Behind: @_repository.AheadCount/@_repository.BehindCount</MudChip>
+                <MudChip T="string" Color="Color.Default" Size="Size.Small">Staged/Modified/Untracked: @_repository.StagedCount/@_repository.ModifiedCount/@_repository.UntrackedCount</MudChip>
+                <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small" OnClick="RefreshGitStatusAsync">Refresh Git</MudButton>
+            </MudStack>
+        </MudPaper>
 
         <MudTabs Elevation="1" Rounded>
             <MudTabPanel Text="Tasks">
@@ -35,6 +49,65 @@ else
                             </MudButton>
                         }
                     </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-4 mb-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Prompt Skills</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        Type <code>/</code> in the task prompt editor to autocomplete repository and global skills.
+                    </MudText>
+                    <MudGrid>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_promptSkillName" Label="Skill Name" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_promptSkillTrigger" Label="Trigger (without /)" />
+                        </MudItem>
+                        <MudItem xs="12" md="4" Class="d-flex align-center">
+                            <MudSwitch @bind-Value="_promptSkillEnabled" Label="Enabled" />
+                        </MudItem>
+                    </MudGrid>
+                    <MudGrid Class="mt-2">
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_promptSkillDescription" Label="Description" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_promptSkillContent" Label="Skill Content" Lines="6" />
+                        </MudItem>
+                    </MudGrid>
+                    <MudStack Row Spacing="2" Class="mt-3">
+                        @if (_editingPromptSkillId is not null)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="SavePromptSkillAsync">Update Skill</MudButton>
+                            <MudButton Variant="Variant.Outlined" OnClick="CancelPromptSkillEdit">Cancel</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePromptSkillAsync">Create Skill</MudButton>
+                        }
+                    </MudStack>
+                    <MudDivider Class="my-3" />
+                    <MudTable Items="_repositoryPromptSkills" Dense Hover>
+                        <HeaderContent>
+                            <MudTh>Name</MudTh>
+                            <MudTh>Trigger</MudTh>
+                            <MudTh>Enabled</MudTh>
+                            <MudTh>Updated</MudTh>
+                            <MudTh></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Name">@context.Name</MudTd>
+                            <MudTd DataLabel="Trigger"><code>@($"/{context.Trigger}")</code></MudTd>
+                            <MudTd DataLabel="Enabled">@context.Enabled</MudTd>
+                            <MudTd DataLabel="Updated">@context.UpdatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+                            <MudTd DataLabel="Actions">
+                                <MudStack Row>
+                                    <MudButton Variant="Variant.Text" Color="Color.Secondary" Size="Size.Small" OnClick="() => StartEditPromptSkill(context)">Edit</MudButton>
+                                    <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="() => DeletePromptSkillAsync(context)">Delete</MudButton>
+                                </MudStack>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
                 </MudPaper>
 
                 <MudPaper Class="pa-4 mb-3">
@@ -105,6 +178,7 @@ else
                 <MudTable Items="_tasks" Dense Hover>
                     <HeaderContent>
                         <MudTh>Name</MudTh>
+                        <MudTh>Status</MudTh>
                         <MudTh>Kind</MudTh>
                         <MudTh>Harness</MudTh>
                         <MudTh>Enabled</MudTh>
@@ -113,6 +187,9 @@ else
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd>@context.Name</MudTd>
+                        <MudTd>
+                            <TaskStatusChip Task="context" LatestRun="@GetLatestRunForTask(context.Id)" />
+                        </MudTd>
                         <MudTd>@context.Kind</MudTd>
                         <MudTd>@context.Harness</MudTd>
                         <MudTd>@context.Enabled</MudTd>
@@ -140,7 +217,11 @@ else
                     <RowTemplate>
                         <MudTd>@context.Id[..8]</MudTd>
                         <MudTd>@context.TaskId[..Math.Min(8, context.TaskId.Length)]</MudTd>
-                        <MudTd><MudChip T="string" Color="@StateColor(context.State)">@context.State</MudChip></MudTd>
+                        <MudTd>
+                            <MudChip T="string" Color="@TaskRunStatusPresentation.FromRunState(context.State).Color">
+                                @TaskRunStatusPresentation.FromRunState(context.State).Label
+                            </MudChip>
+                        </MudTd>
                         <MudTd>@context.Summary</MudTd>
                         <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
                     </RowTemplate>
@@ -168,7 +249,7 @@ else
                 <MudPaper Class="pa-4">
                     <MudText Typo="Typo.h6" Class="mb-3">Repository Instruction Files</MudText>
                     <MudText Typo="Typo.body2" Class="mb-3">
-                        These instructions are layered into every task prompt for this repository (Project → Repository → Task → User Prompt).
+                        These instructions are layered into every task prompt for this repository (Repository → Task → User Prompt).
                     </MudText>
 
                     @for (var i = 0; i < _repoInstructionFiles.Count; i++)
@@ -265,12 +346,14 @@ else
     [Parameter] public string RepositoryId { get; set; } = string.Empty;
 
     private RepositoryDocument? _repository;
-    private ProjectDocument? _project;
 
     private readonly List<TaskDocument> _tasks = [];
     private readonly List<RunDocument> _runs = [];
     private readonly List<FindingDocument> _findings = [];
+    private readonly Dictionary<string, RunDocument?> _latestRunsByTaskId = new(StringComparer.Ordinal);
     private List<TaskTemplateDocument> _templates = [];
+    private readonly List<PromptSkillDocument> _repositoryPromptSkills = [];
+    private readonly List<PromptSkillDocument> _globalPromptSkills = [];
 
     private string _taskName = string.Empty;
     private TaskKind _taskKind = TaskKind.OneShot;
@@ -304,7 +387,17 @@ else
     private StandaloneCodeEditor? _taskPromptEditor;
     private string _instructionSaveMessage = string.Empty;
     private bool _isGeneratingTaskPrompt;
+    private string _promptSkillName = string.Empty;
+    private string _promptSkillTrigger = string.Empty;
+    private string _promptSkillDescription = string.Empty;
+    private string _promptSkillContent = string.Empty;
+    private bool _promptSkillEnabled = true;
+    private string? _editingPromptSkillId;
+    private bool _taskPromptSkillAutocompleteBound;
+    private int _taskPromptSkillAutocompleteVersion;
+    private int _taskPromptSkillAutocompleteSyncedVersion = -1;
     private const string MonacoTheme = "agents-dashboard-dark";
+    private const string GlobalRepositoryScope = "global";
 
     private StandaloneEditorConstructionOptions InstructionEditorOptions(StandaloneCodeEditor editor)
         => new()
@@ -349,10 +442,14 @@ else
             return;
         }
 
-        _project = await Store.GetProjectAsync(_repository.ProjectId, CancellationToken.None);
+        await Store.TouchRepositoryAsync(_repository.Id, CancellationToken.None);
         _templates = await TemplateService.ListTemplatesAsync(CancellationToken.None);
+        _taskPromptSkillAutocompleteBound = false;
+        _taskPromptSkillAutocompleteSyncedVersion = -1;
+        await LoadPromptSkillsAsync();
         await RefreshAsync();
         await LoadInstructionFilesAsync();
+        await RefreshGitStatusAsync();
     }
 
     private void ApplyTemplate(TaskTemplateDocument template)
@@ -428,6 +525,207 @@ else
         _taskLinkedFailureRuns = [];
         _ = SyncTaskPromptEditorAsync();
         StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await SyncTaskPromptSkillAutocompleteAsync();
+    }
+
+    private async Task SavePromptSkillAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        var trigger = NormalizePromptSkillTriggerInput(_promptSkillTrigger);
+
+        try
+        {
+            if (_editingPromptSkillId is not null)
+            {
+                var updateRequest = new UpdatePromptSkillRequest(
+                    _promptSkillName,
+                    trigger,
+                    _promptSkillContent,
+                    _promptSkillDescription,
+                    _promptSkillEnabled);
+                var updated = await Store.UpdatePromptSkillAsync(_editingPromptSkillId, updateRequest, CancellationToken.None);
+                if (updated is null)
+                {
+                    Snackbar.Add("Skill not found.", Severity.Warning);
+                    return;
+                }
+            }
+            else
+            {
+                var createRequest = new CreatePromptSkillRequest(
+                    _repository.Id,
+                    _promptSkillName,
+                    trigger,
+                    _promptSkillContent,
+                    _promptSkillDescription,
+                    _promptSkillEnabled);
+                await Store.CreatePromptSkillAsync(createRequest, CancellationToken.None);
+            }
+
+            CancelPromptSkillEdit();
+            await LoadPromptSkillsAsync();
+            Snackbar.Add("Skill saved.", Severity.Success);
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private void StartEditPromptSkill(PromptSkillDocument skill)
+    {
+        _editingPromptSkillId = skill.Id;
+        _promptSkillName = skill.Name;
+        _promptSkillTrigger = skill.Trigger;
+        _promptSkillDescription = skill.Description;
+        _promptSkillContent = skill.Content;
+        _promptSkillEnabled = skill.Enabled;
+    }
+
+    private void CancelPromptSkillEdit()
+    {
+        _editingPromptSkillId = null;
+        _promptSkillName = string.Empty;
+        _promptSkillTrigger = string.Empty;
+        _promptSkillDescription = string.Empty;
+        _promptSkillContent = string.Empty;
+        _promptSkillEnabled = true;
+    }
+
+    private async Task DeletePromptSkillAsync(PromptSkillDocument skill)
+    {
+        var deleted = await Store.DeletePromptSkillAsync(skill.Id, CancellationToken.None);
+        if (!deleted)
+        {
+            Snackbar.Add("Skill not found.", Severity.Warning);
+            return;
+        }
+
+        if (_editingPromptSkillId == skill.Id)
+        {
+            CancelPromptSkillEdit();
+        }
+
+        await LoadPromptSkillsAsync();
+        Snackbar.Add("Skill deleted.", Severity.Success);
+    }
+
+    private async Task LoadPromptSkillsAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        var skills = await Store.ListPromptSkillsAsync(_repository.Id, includeGlobal: true, CancellationToken.None);
+
+        _repositoryPromptSkills.Clear();
+        _repositoryPromptSkills.AddRange(
+            skills
+                .Where(x => x.RepositoryId == _repository.Id)
+                .OrderBy(x => x.Trigger)
+                .ToList());
+
+        _globalPromptSkills.Clear();
+        _globalPromptSkills.AddRange(
+            skills
+                .Where(x => x.RepositoryId == GlobalRepositoryScope)
+                .OrderBy(x => x.Trigger)
+                .ToList());
+
+        _taskPromptSkillAutocompleteVersion++;
+    }
+
+    private async Task SyncTaskPromptSkillAutocompleteAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        if (_taskPromptSkillAutocompleteSyncedVersion == _taskPromptSkillAutocompleteVersion && _taskPromptSkillAutocompleteBound)
+        {
+            return;
+        }
+
+        var payload = BuildTaskPromptSkillAutocompletePayload();
+
+        try
+        {
+            var bound = await JS.InvokeAsync<bool>(
+                "agentsDashboardSkillAutocomplete.bindTaskPromptEditor",
+                "promptEditor",
+                payload);
+
+            if (!bound)
+            {
+                return;
+            }
+
+            _taskPromptSkillAutocompleteBound = true;
+            _taskPromptSkillAutocompleteSyncedVersion = _taskPromptSkillAutocompleteVersion;
+        }
+        catch (JSException)
+        {
+            _taskPromptSkillAutocompleteBound = false;
+        }
+    }
+
+    private List<PromptSkillAutocompleteEntry> BuildTaskPromptSkillAutocompletePayload()
+    {
+        var payload = new List<PromptSkillAutocompleteEntry>();
+        var seenTriggers = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var skill in _repositoryPromptSkills.Where(x => x.Enabled))
+        {
+            if (!seenTriggers.Add(skill.Trigger))
+            {
+                continue;
+            }
+
+            payload.Add(new PromptSkillAutocompleteEntry(
+                skill.Trigger,
+                skill.Content,
+                skill.Description,
+                "Repository skill",
+                0,
+                true));
+        }
+
+        foreach (var skill in _globalPromptSkills.Where(x => x.Enabled))
+        {
+            if (!seenTriggers.Add(skill.Trigger))
+            {
+                continue;
+            }
+
+            payload.Add(new PromptSkillAutocompleteEntry(
+                skill.Trigger,
+                skill.Content,
+                skill.Description,
+                "Global skill",
+                1,
+                true));
+        }
+
+        return payload;
+    }
+
+    private static string NormalizePromptSkillTriggerInput(string trigger)
+    {
+        return (trigger?.Trim() ?? string.Empty).TrimStart('/').ToLowerInvariant();
     }
 
     private async Task CreateTaskAsync()
@@ -585,15 +883,56 @@ else
 
     private async Task TriggerTaskAsync(TaskDocument task)
     {
-        if (_project is null || _repository is null)
+        if (_repository is null)
         {
             return;
         }
 
-        var run = await Store.CreateRunAsync(task, _project.Id, CancellationToken.None);
-        await Dispatcher.DispatchAsync(_project, _repository, task, run, CancellationToken.None);
+        var run = await Store.CreateRunAsync(task, CancellationToken.None);
+        await Dispatcher.DispatchAsync(_repository, task, run, CancellationToken.None);
 
         await RefreshAsync();
+    }
+
+    private async Task RefreshGitStatusAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var githubToken = await TryGetGithubTokenAsync(_repository.Id);
+            var gitStatus = await GitWorkspace.RefreshStatusAsync(_repository, githubToken, fetchRemote: true, CancellationToken.None);
+            _repository = await Store.UpdateRepositoryGitStateAsync(_repository.Id, gitStatus, CancellationToken.None);
+            if (_repository is null)
+            {
+                _repository = await Store.GetRepositoryAsync(RepositoryId, CancellationToken.None);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Git refresh failed: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private async Task<string?> TryGetGithubTokenAsync(string repositoryId)
+    {
+        var secret = await Store.GetProviderSecretAsync(repositoryId, "github", CancellationToken.None);
+        if (secret is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Crypto.Decrypt(secret.EncryptedValue);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async Task RefreshAsync()
@@ -608,9 +947,37 @@ else
 
         _runs.Clear();
         _runs.AddRange(await Store.ListRunsByRepositoryAsync(_repository.Id, CancellationToken.None));
+        await RefreshLatestRunsByTaskAsync();
 
         _findings.Clear();
         _findings.AddRange(await Store.ListFindingsAsync(_repository.Id, CancellationToken.None));
+    }
+
+    private RunDocument? GetLatestRunForTask(string taskId)
+        => _latestRunsByTaskId.GetValueOrDefault(taskId);
+
+    private async Task RefreshLatestRunsByTaskAsync()
+    {
+        _latestRunsByTaskId.Clear();
+
+        foreach (var run in _runs)
+        {
+            if (!_latestRunsByTaskId.ContainsKey(run.TaskId))
+            {
+                _latestRunsByTaskId[run.TaskId] = run;
+            }
+        }
+
+        foreach (var task in _tasks)
+        {
+            if (_latestRunsByTaskId.ContainsKey(task.Id))
+            {
+                continue;
+            }
+
+            var latestRuns = await Store.ListRunsByTaskAsync(task.Id, 1, CancellationToken.None);
+            _latestRunsByTaskId[task.Id] = latestRuns.FirstOrDefault();
+        }
     }
 
     private async Task SaveSecretsAsync()
@@ -709,14 +1076,27 @@ else
         StateHasChanged();
     }
 
-    private static Color StateColor(RunState state) => state switch
+    public async ValueTask DisposeAsync()
     {
-        RunState.Succeeded => Color.Success,
-        RunState.Failed => Color.Error,
-        RunState.Running => Color.Info,
-        RunState.Queued => Color.Warning,
-        _ => Color.Default
-    };
+        try
+        {
+            await JS.InvokeVoidAsync("agentsDashboardSkillAutocomplete.unbindTaskPromptEditor", "promptEditor");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private sealed record PromptSkillAutocompleteEntry(
+        string Trigger,
+        string Content,
+        string Description,
+        string ScopeLabel,
+        int ScopePriority,
+        bool Enabled);
 
     private sealed class InstructionFileEdit
     {
