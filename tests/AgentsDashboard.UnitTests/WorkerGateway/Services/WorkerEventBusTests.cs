@@ -10,7 +10,7 @@ public class WorkerEventBusTests
     public async Task PublishAsync_MessageIsPublishedSuccessfully()
     {
         var bus = new WorkerEventBus();
-        var message = new JobEventReply { RunId = "run-1", Kind = "status" };
+        var message = new JobEventMessage { RunId = "run-1", EventType = "status" };
 
         await bus.PublishAsync(message, CancellationToken.None);
     }
@@ -19,14 +19,14 @@ public class WorkerEventBusTests
     public async Task ReadAllAsync_ReturnsPublishedMessages()
     {
         var bus = new WorkerEventBus();
-        var message1 = new JobEventReply { RunId = "run-1", Kind = "status", Message = "Running" };
-        var message2 = new JobEventReply { RunId = "run-2", Kind = "status", Message = "Completed" };
+        var message1 = new JobEventMessage { RunId = "run-1", EventType = "status", Summary = "Running" };
+        var message2 = new JobEventMessage { RunId = "run-2", EventType = "status", Summary = "Completed" };
 
         await bus.PublishAsync(message1, CancellationToken.None);
         await bus.PublishAsync(message2, CancellationToken.None);
 
         var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
-        var messages = new List<JobEventReply>();
+        var messages = new List<JobEventMessage>();
 
         await foreach (var msg in bus.ReadAllAsync(cts.Token))
         {
@@ -44,7 +44,7 @@ public class WorkerEventBusTests
     public async Task ReadAllAsync_MultipleReaders_ReceiveSameMessages()
     {
         var bus = new WorkerEventBus();
-        var message = new JobEventReply { RunId = "run-1", Kind = "status" };
+        var message = new JobEventMessage { RunId = "run-1", EventType = "status" };
 
         var reader1Task = Task.Run(async () =>
         {
@@ -68,7 +68,7 @@ public class WorkerEventBusTests
     {
         var bus = new WorkerEventBus();
         var messages = Enumerable.Range(1, 10)
-            .Select(i => new JobEventReply { RunId = $"run-{i}", Kind = $"kind-{i}" })
+            .Select(i => new JobEventMessage { RunId = $"run-{i}", EventType = $"kind-{i}" })
             .ToList();
 
         foreach (var msg in messages)
@@ -77,7 +77,7 @@ public class WorkerEventBusTests
         }
 
         var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1000));
-        var received = new List<JobEventReply>();
+        var received = new List<JobEventMessage>();
 
         await foreach (var msg in bus.ReadAllAsync(cts.Token))
         {

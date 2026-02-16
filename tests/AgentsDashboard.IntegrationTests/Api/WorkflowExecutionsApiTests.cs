@@ -38,7 +38,7 @@ public class WorkflowExecutionsApiTests(ApiTestFixture fixture)
     {
         var request = new CreateWorkflowRequest(repoId, "ApprovalWorkflow", "Test",
         [
-            new WorkflowStageConfigRequest("Approval Stage", WorkflowStageType.Approval, ApproverRole: "admin", Order: 0)
+            new WorkflowStageConfigRequest("Approval Stage", WorkflowStageType.Approval, Order: 0)
         ]);
         var response = await _client.PostAsJsonAsync("/api/workflows", request);
         return (await response.Content.ReadFromJsonAsync<WorkflowDocument>())!;

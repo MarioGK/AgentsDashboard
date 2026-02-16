@@ -16,7 +16,7 @@ public class JobProcessorServiceTests
 {
     private sealed class EventCollector
     {
-        public List<JobEventReply> Events { get; } = [];
+        public List<JobEventMessage> Events { get; } = [];
         private readonly WorkerEventBus _eventBus;
         private CancellationTokenSource? _cts;
         private Task? _collectTask;
@@ -113,9 +113,14 @@ public class JobProcessorServiceTests
             Request = new DispatchJobRequest
             {
                 RunId = runId,
+                ProjectId = "proj-1",
+                RepositoryId = "repo-1",
                 TaskId = taskId,
-                Command = "echo test",
-                Harness = "codex",
+                HarnessType = "codex",
+                ImageTag = "latest",
+                CloneUrl = "https://github.com/test/repo.git",
+                Instruction = "echo test",
+                CustomArgs = "echo test",
             }
         };
     }
@@ -133,9 +138,14 @@ public class JobProcessorServiceTests
             Request = new DispatchJobRequest
             {
                 RunId = "test-run-id",
+                ProjectId = "proj-1",
+                RepositoryId = "repo-1",
                 TaskId = "test-task-id",
-                Command = "",
-                Harness = "codex",
+                HarnessType = "codex",
+                ImageTag = "latest",
+                CloneUrl = "https://github.com/test/repo.git",
+                Instruction = "",
+                CustomArgs = "",
             }
         };
 
@@ -159,13 +169,14 @@ public class JobProcessorServiceTests
 
         await collector.StopCollecting();
 
-        collector.Events.Should().Contain(e => e.Kind == "log" && e.Message == "Job started");
-        collector.Events.Should().Contain(e => e.Kind == "completed");
+        collector.Events.Should().Contain(e => e.EventType == "log" && e.Summary == "Job started");
+        collector.Events.Should().Contain(e => e.EventType == "completed");
 
-        var completedEvent = collector.Events.FirstOrDefault(e => e.Kind == "completed");
+        var completedEvent = collector.Events.FirstOrDefault(e => e.EventType == "completed");
         completedEvent.Should().NotBeNull();
 
-        var envelope = JsonSerializer.Deserialize<HarnessResultEnvelope>(completedEvent!.PayloadJson);
+        var payloadJson = completedEvent!.Metadata?["payload"];
+        var envelope = JsonSerializer.Deserialize<HarnessResultEnvelope>(payloadJson!);
         envelope.Should().NotBeNull();
         envelope!.Status.Should().Be("failed");
     }
@@ -205,13 +216,13 @@ public class JobProcessorServiceTests
 
         await collector.StopCollecting();
 
-        collector.Events.Should().Contain(e => e.Kind == "log" && e.Message == "Job started");
-        collector.Events.Should().Contain(e => e.Kind == "completed");
+        collector.Events.Should().Contain(e => e.EventType == "log" && e.Summary == "Job started");
+        collector.Events.Should().Contain(e => e.EventType == "completed");
 
-        var startEvent = collector.Events.First(e => e.Kind == "log");
+        var startEvent = collector.Events.First(e => e.EventType == "log");
         startEvent.RunId.Should().Be("test-run-id");
 
-        var completedEvent = collector.Events.First(e => e.Kind == "completed");
+        var completedEvent = collector.Events.First(e => e.EventType == "completed");
         completedEvent.RunId.Should().Be("test-run-id");
     }
 
@@ -286,7 +297,7 @@ public class JobProcessorServiceTests
 
         await collector.StopCollecting();
 
-        var completedEvents = collector.Events.Where(e => e.Kind == "completed").ToList();
+        var completedEvents = collector.Events.Where(e => e.EventType == "completed").ToList();
         completedEvents.Should().HaveCountGreaterThan(0);
         completedEvents.Should().Contain(e => e.RunId == "run-1");
         completedEvents.Should().Contain(e => e.RunId == "run-2");
@@ -323,7 +334,7 @@ public class JobProcessorServiceTests
 
         await collector.StopCollecting();
 
-        var completedEvent = collector.Events.FirstOrDefault(e => e.Kind == "completed");
+        var completedEvent = collector.Events.FirstOrDefault(e => e.EventType == "completed");
         if (completedEvent != null)
         {
             completedEvent.RunId.Should().Be("test-run-id");
@@ -360,7 +371,7 @@ public class JobProcessorServiceTests
         await collector.StopCollecting();
 
         collector.Events.Should().NotBeEmpty();
-        collector.Events.Should().AllSatisfy(e => e.TimestampUnixMs.Should().BeGreaterThan(0));
+        collector.Events.Should().AllSatisfy(e => e.Timestamp.Should().BeGreaterThan(0));
     }
 
     [Test, Skip("BackgroundService tests require full async runtime - run manually")]
@@ -398,10 +409,11 @@ public class JobProcessorServiceTests
 
         await collector.StopCollecting();
 
-        var completedEvent = collector.Events.FirstOrDefault(e => e.Kind == "completed");
+        var completedEvent = collector.Events.FirstOrDefault(e => e.EventType == "completed");
         completedEvent.Should().NotBeNull();
 
-        var action = () => JsonSerializer.Deserialize<HarnessResultEnvelope>(completedEvent!.PayloadJson);
+        var payloadJson = completedEvent!.Metadata?["payload"];
+        var action = () => JsonSerializer.Deserialize<HarnessResultEnvelope>(payloadJson!);
         action.Should().NotThrow();
 
         var payload = action();

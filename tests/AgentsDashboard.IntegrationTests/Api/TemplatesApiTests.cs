@@ -1,16 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class TemplatesApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ListTemplates_ReturnsBuiltInTemplates()
     {
         var response = await _client.GetAsync("/api/templates");
@@ -24,7 +23,7 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         templates.Should().Contain(t => t.TemplateId == "regression-replay");
     }
 
-    [Fact]
+    [Test]
     public async Task GetTemplate_ReturnsTemplate_WhenExists()
     {
         var response = await _client.GetAsync("/api/templates/qa-browser-sweep");
@@ -36,14 +35,14 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         template.Name.Should().Be("QA Browser Sweep");
     }
 
-    [Fact]
+    [Test]
     public async Task GetTemplate_ReturnsNotFound_WhenNotExists()
     {
         var response = await _client.GetAsync("/api/templates/nonexistent-template");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateTemplate_ReturnsCreatedTemplate()
     {
         var request = new TaskTemplateDocument
@@ -65,7 +64,7 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         template.Name.Should().Be("Custom Test Template");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateTemplate_ReturnsUpdatedTemplate()
     {
         var createRequest = new TaskTemplateDocument
@@ -103,7 +102,7 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         updated.AutoCreatePullRequest.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteTemplate_ReturnsOk_WhenExists()
     {
         var createRequest = new TaskTemplateDocument
@@ -123,7 +122,7 @@ public class TemplatesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteTemplate_ReturnsNotFound_WhenNotExists()
     {
         var response = await _client.DeleteAsync("/api/templates/nonexistent");

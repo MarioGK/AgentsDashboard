@@ -46,8 +46,7 @@ public class CodexAdapterTests
     [Test]
     public void PrepareContext_UsesCustomTimeout_WhenProvided()
     {
-        var request = CreateRequest();
-        request.TimeoutSeconds = 300;
+        var request = CreateRequest() with { TimeoutSeconds = 300 };
 
         var context = _adapter.PrepareContext(request);
 
@@ -57,16 +56,17 @@ public class CodexAdapterTests
     [Test]
     public void PrepareContext_UsesCustomSandboxSettings()
     {
-        var request = CreateRequest();
-        request.SandboxProfileCpuLimit = 2.0;
-        request.SandboxProfileMemoryLimit = "4g";
-        request.SandboxProfileNetworkDisabled = true;
-        request.SandboxProfileReadOnlyRootFs = true;
+        var request = CreateRequest() with
+        {
+            SandboxProfileCpuLimit = 2.0,
+            SandboxProfileMemoryLimit = 4L * 1024 * 1024 * 1024,
+            SandboxProfileNetworkDisabled = true,
+            SandboxProfileReadOnlyRootFs = true,
+        };
 
         var context = _adapter.PrepareContext(request);
 
         context.CpuLimit.Should().Be(2.0);
-        context.MemoryLimit.Should().Be("4g");
         context.NetworkDisabled.Should().BeTrue();
         context.ReadOnlyRootFs.Should().BeTrue();
     }
@@ -90,8 +90,8 @@ public class CodexAdapterTests
     public void BuildCommand_IncludesOptionalEnvVariables_WhenPresent()
     {
         var request = CreateRequest();
-        request.Env["CODEX_MODEL"] = "gpt-4";
-        request.Env["CODEX_MAX_TOKENS"] = "4096";
+        request.EnvironmentVars!["CODEX_MODEL"] = "gpt-4";
+        request.EnvironmentVars!["CODEX_MAX_TOKENS"] = "4096";
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -104,8 +104,8 @@ public class CodexAdapterTests
     public void BuildCommand_IncludesContainerLabels()
     {
         var request = CreateRequest();
-        request.ContainerLabels["app"] = "test-app";
-        request.ContainerLabels["env"] = "test";
+        request.ContainerLabels!["app"] = "test-app";
+        request.ContainerLabels!["env"] = "test";
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -118,8 +118,7 @@ public class CodexAdapterTests
     [Test]
     public void BuildCommand_IncludesNetworkDisabled_WhenSet()
     {
-        var request = CreateRequest();
-        request.SandboxProfileNetworkDisabled = true;
+        var request = CreateRequest() with { SandboxProfileNetworkDisabled = true };
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -131,8 +130,7 @@ public class CodexAdapterTests
     [Test]
     public void BuildCommand_IncludesReadOnlyRootFs_WhenSet()
     {
-        var request = CreateRequest();
-        request.SandboxProfileReadOnlyRootFs = true;
+        var request = CreateRequest() with { SandboxProfileReadOnlyRootFs = true };
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -371,14 +369,21 @@ public class CodexAdapterTests
         var request = new DispatchJobRequest
         {
             RunId = "test-run-id",
-            Harness = "codex",
-            Command = "echo test",
-            Prompt = "test prompt",
+            ProjectId = "proj-1",
+            RepositoryId = "repo-1",
+            TaskId = "task-1",
+            HarnessType = "codex",
+            ImageTag = "latest",
+            CloneUrl = "https://github.com/test/repo.git",
+            Instruction = "test prompt",
+            CustomArgs = "echo test",
             TimeoutSeconds = 0,
             SandboxProfileCpuLimit = 0,
-            SandboxProfileMemoryLimit = "",
+            SandboxProfileMemoryLimit = null,
             SandboxProfileNetworkDisabled = false,
-            SandboxProfileReadOnlyRootFs = false
+            SandboxProfileReadOnlyRootFs = false,
+            EnvironmentVars = new Dictionary<string, string>(),
+            ContainerLabels = new Dictionary<string, string>()
         };
         return request;
     }

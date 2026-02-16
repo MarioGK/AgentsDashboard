@@ -2,7 +2,6 @@ using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.WorkerGateway.Adapters;
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Services;
-using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -34,7 +33,8 @@ public class ImageAllowlistTests
         return new HarnessExecutor(optionsWrapper, factory, redactor, dockerService, artifactExtractor, NullLogger<HarnessExecutor>.Instance);
     }
 
-    [Fact(Skip = "Docker.DotNet API version mismatch - CreateClient signature changed")]
+    [Test]
+    [Skip("Docker.DotNet API version mismatch - CreateClient signature changed")]
     public async Task Execute_RejectsNonAllowlistedImage()
     {
         var options = new WorkerOptions
@@ -54,8 +54,13 @@ public class ImageAllowlistTests
             Request = new AgentsDashboard.Contracts.Worker.DispatchJobRequest
             {
                 RunId = "test",
-                Harness = "codex",
-                Command = "echo hi",
+                ProjectId = "proj-1",
+                RepositoryId = "repo-1",
+                TaskId = "task-1",
+                HarnessType = "codex",
+                ImageTag = "latest",
+                CloneUrl = "https://github.com/test/repo.git",
+                Instruction = "echo hi",
             }
         };
 
@@ -65,7 +70,8 @@ public class ImageAllowlistTests
         result.Error.Should().Contain("not in the configured allowlist");
     }
 
-    [Fact(Skip = "Docker.DotNet API version mismatch - CreateClient signature changed")]
+    [Test]
+    [Skip("Docker.DotNet API version mismatch - CreateClient signature changed")]
     public async Task Execute_AcceptsAllowlistedImage()
     {
         var options = new WorkerOptions
@@ -85,8 +91,13 @@ public class ImageAllowlistTests
             Request = new AgentsDashboard.Contracts.Worker.DispatchJobRequest
             {
                 RunId = "test",
-                Harness = "codex",
-                Command = "echo hi",
+                ProjectId = "proj-1",
+                RepositoryId = "repo-1",
+                TaskId = "task-1",
+                HarnessType = "codex",
+                ImageTag = "latest",
+                CloneUrl = "https://github.com/test/repo.git",
+                Instruction = "echo hi",
             }
         };
 

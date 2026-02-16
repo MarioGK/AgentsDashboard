@@ -58,10 +58,10 @@ public class ClaudeCodeAdapterTests
     public void BuildCommand_IncludesOptionalEnvVariables_WhenPresent()
     {
         var request = CreateRequest();
-        request.Env["CLAUDE_MODEL"] = "claude-3-opus";
-        request.Env["ANTHROPIC_MODEL"] = "claude-3-opus-20240229";
-        request.Env["CLAUDE_MAX_THINKING_TOKENS"] = "10000";
-        request.Env["CLAUDE_MCP_SERVERS"] = "server1,server2";
+        request.EnvironmentVars!["CLAUDE_MODEL"] = "claude-3-opus";
+        request.EnvironmentVars!["ANTHROPIC_MODEL"] = "claude-3-opus-20240229";
+        request.EnvironmentVars!["CLAUDE_MAX_THINKING_TOKENS"] = "10000";
+        request.EnvironmentVars!["CLAUDE_MCP_SERVERS"] = "server1,server2";
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -76,7 +76,7 @@ public class ClaudeCodeAdapterTests
     public void BuildCommand_IncludesSkipPermissions_WhenSetToTrue()
     {
         var request = CreateRequest();
-        request.Env["CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS"] = "true";
+        request.EnvironmentVars!["CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS"] = "true";
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -91,7 +91,7 @@ public class ClaudeCodeAdapterTests
     public void BuildCommand_SkipsSkipPermissions_WhenNotTrue(string value)
     {
         var request = CreateRequest();
-        request.Env["CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS"] = value;
+        request.EnvironmentVars!["CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS"] = value;
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -366,14 +366,21 @@ public class ClaudeCodeAdapterTests
         var request = new DispatchJobRequest
         {
             RunId = "test-run-id",
-            Harness = "claude-code",
-            Command = "echo test",
-            Prompt = "test prompt",
+            ProjectId = "proj-1",
+            RepositoryId = "repo-1",
+            TaskId = "task-1",
+            HarnessType = "claude-code",
+            ImageTag = "latest",
+            CloneUrl = "https://github.com/test/repo.git",
+            Instruction = "test prompt",
+            CustomArgs = "echo test",
             TimeoutSeconds = 0,
             SandboxProfileCpuLimit = 0,
-            SandboxProfileMemoryLimit = "",
+            SandboxProfileMemoryLimit = null,
             SandboxProfileNetworkDisabled = false,
-            SandboxProfileReadOnlyRootFs = false
+            SandboxProfileReadOnlyRootFs = false,
+            EnvironmentVars = new Dictionary<string, string>(),
+            ContainerLabels = new Dictionary<string, string>()
         };
         return request;
     }

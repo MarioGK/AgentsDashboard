@@ -50,7 +50,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture)
             Nodes:
             [
                 new WorkflowNodeConfigRequest("start-1", "Start", WorkflowNodeType.Start, PositionX: 0, PositionY: 0),
-                new WorkflowNodeConfigRequest("approval-1", "Approval", WorkflowNodeType.Approval, ApproverRole: "admin", PositionX: 200, PositionY: 0),
+                new WorkflowNodeConfigRequest("approval-1", "Approval", WorkflowNodeType.Approval, PositionX: 200, PositionY: 0),
                 new WorkflowNodeConfigRequest("end-1", "End", WorkflowNodeType.End, PositionX: 400, PositionY: 0)
             ],
             Edges:

@@ -3,15 +3,14 @@ using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
-using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Yarp.ReverseProxy.Configuration;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class YarpForwardingApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
     private readonly WebApplicationFactory<AgentsDashboard.ControlPlane.Program> _factory = fixture.Factory;
@@ -35,7 +34,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         return (project, repo, task, run);
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoutes_ListIsEmpty_Initially()
     {
         var response = await _client.GetAsync("/api/proxy-audits");
@@ -43,7 +42,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_CreatedForRun_Exists()
     {
         var (_, _, _, run) = await SetupRunWithProxyAsync();
@@ -52,7 +51,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         proxyResponse.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_WithRunId_FiltersByRun()
     {
         var response = await _client.GetAsync("/api/proxy-audits?runId=test-run-id");
@@ -62,7 +61,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_WithProjectId_FiltersByProject()
     {
         var response = await _client.GetAsync("/api/proxy-audits?projectId=test-project-id");
@@ -72,7 +71,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_WithRepositoryId_FiltersByRepository()
     {
         var response = await _client.GetAsync("/api/proxy-audits?repositoryId=test-repo-id");
@@ -82,7 +81,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_WithDateRange_FiltersCorrectly()
     {
         var from = DateTime.UtcNow.AddDays(-1).ToString("o");
@@ -95,7 +94,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_PaginatesCorrectly()
     {
         var response = await _client.GetAsync("/api/proxy-audits?skip=0&limit=10");
@@ -106,7 +105,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         audits!.Count.Should().BeLessThanOrEqualTo(10);
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_WithInvalidRunId_ReturnsNotFound()
     {
         var response = await _client.GetAsync("/api/runs/nonexistent-run-id");
@@ -114,7 +113,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyConfig_Updates_WhenRunCreated()
     {
         var (_, _, _, run) = await SetupRunWithProxyAsync();
@@ -127,7 +126,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         runs.Should().Contain(r => r.Id == run.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_AuditRecord_ContainsRequiredFields()
     {
         var response = await _client.GetAsync("/api/proxy-audits?limit=1");
@@ -135,7 +134,7 @@ public class YarpForwardingApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task ProxyRoute_WithLatencyFilter_FiltersCorrectly()
     {
         var response = await _client.GetAsync("/api/proxy-audits?minLatencyMs=0&maxLatencyMs=10000");

@@ -69,7 +69,6 @@ public class GraphWorkflowModelsTests
         node.Type.Should().Be(WorkflowNodeType.Start);
         node.AgentId.Should().BeNull();
         node.DelaySeconds.Should().BeNull();
-        node.ApproverRole.Should().BeNull();
         node.TimeoutMinutes.Should().BeNull();
         node.RetryPolicy.Should().BeNull();
         node.InputMappings.Should().BeEmpty();

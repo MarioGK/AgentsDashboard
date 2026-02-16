@@ -1,7 +1,10 @@
 using AgentsDashboard.WorkerGateway.Adapters;
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Services;
+using Cysharp.Runtime.Multicast;
+using Cysharp.Runtime.Multicast.InMemory;
 using MagicOnion.Server;
+using MagicOnion.Serialization.MessagePack;
 using MessagePack;
 using MessagePack.Resolvers;
 
@@ -20,11 +23,16 @@ builder.WebHost.ConfigureKestrel(options =>
     });
 });
 
-StaticCompositeResolver.Instance.Register(
-    MessagePack.Resolvers.StandardResolver.Instance
-);
+var messagePackOptions = MessagePackSerializerOptions.Standard
+    .WithResolver(StandardResolver.Instance);
 
-builder.Services.AddMagicOnion();
+builder.Services.AddMagicOnion(options =>
+{
+    options.MessageSerializer = MessagePackMagicOnionSerializerProvider.Default
+        .WithOptions(messagePackOptions);
+});
+builder.Services.AddSingleton<IMulticastGroupProvider>(_ =>
+    new InMemoryGroupProvider(DynamicInMemoryProxyFactory.Instance));
 
 builder.Services.AddSingleton<WorkerQueue>(sp =>
 {
@@ -51,7 +59,7 @@ builder.Services.AddHealthChecks().AddCheck<DockerHealthCheckService>("docker", 
 var app = builder.Build();
 
 app.MapMagicOnionService();
-app.MapGet("/", () => "WorkerGateway gRPC endpoint is running.");
+app.MapGet("/", () => "WorkerGateway MagicOnion endpoint is running.");
 app.MapDefaultEndpoints();
 
 app.Run();

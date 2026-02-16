@@ -58,9 +58,9 @@ public class OpenCodeAdapterTests
     public void BuildCommand_IncludesOptionalEnvVariables_WhenPresent()
     {
         var request = CreateRequest();
-        request.Env["OPENCODE_MODEL"] = "claude-3";
-        request.Env["OPENCODE_PROVIDER"] = "anthropic";
-        request.Env["OPENCODE_TEMPERATURE"] = "0.7";
+        request.EnvironmentVars!["OPENCODE_MODEL"] = "claude-3";
+        request.EnvironmentVars!["OPENCODE_PROVIDER"] = "anthropic";
+        request.EnvironmentVars!["OPENCODE_TEMPERATURE"] = "0.7";
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -264,14 +264,21 @@ public class OpenCodeAdapterTests
         var request = new DispatchJobRequest
         {
             RunId = "test-run-id",
-            Harness = "opencode",
-            Command = "echo test",
-            Prompt = "test prompt",
+            ProjectId = "proj-1",
+            RepositoryId = "repo-1",
+            TaskId = "task-1",
+            HarnessType = "opencode",
+            ImageTag = "latest",
+            CloneUrl = "https://github.com/test/repo.git",
+            Instruction = "test prompt",
+            CustomArgs = "echo test",
             TimeoutSeconds = 0,
             SandboxProfileCpuLimit = 0,
-            SandboxProfileMemoryLimit = "",
+            SandboxProfileMemoryLimit = null,
             SandboxProfileNetworkDisabled = false,
-            SandboxProfileReadOnlyRootFs = false
+            SandboxProfileReadOnlyRootFs = false,
+            EnvironmentVars = new Dictionary<string, string>(),
+            ContainerLabels = new Dictionary<string, string>()
         };
         return request;
     }

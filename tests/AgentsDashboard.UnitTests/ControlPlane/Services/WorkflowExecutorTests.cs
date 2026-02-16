@@ -54,12 +54,10 @@ public class WorkflowExecutorTests
             Id = "stage-1",
             Name = "Approval Stage",
             Type = WorkflowStageType.Approval,
-            ApproverRole = "admin",
             Order = 0
         };
 
         stage.Type.Should().Be(WorkflowStageType.Approval);
-        stage.ApproverRole.Should().Be("admin");
     }
 
     [Test]
@@ -277,7 +275,7 @@ public class WorkflowExecutorTests
             [
                 new WorkflowStageConfig { Type = WorkflowStageType.Task, TaskId = "task-1", Order = 0 },
                 new WorkflowStageConfig { Type = WorkflowStageType.Delay, DelaySeconds = 10, Order = 1 },
-                new WorkflowStageConfig { Type = WorkflowStageType.Approval, ApproverRole = "admin", Order = 2 },
+                new WorkflowStageConfig { Type = WorkflowStageType.Approval, Order = 2 },
                 new WorkflowStageConfig { Type = WorkflowStageType.Parallel, ParallelStageIds = ["t1", "t2"], Order = 3 }
             ]
         };
@@ -297,7 +295,6 @@ public class WorkflowExecutorTests
         stage.TaskId.Should().BeNull();
         stage.DelaySeconds.Should().BeNull();
         stage.ParallelStageIds.Should().BeNull();
-        stage.ApproverRole.Should().BeNull();
         stage.Order.Should().Be(0);
     }
 

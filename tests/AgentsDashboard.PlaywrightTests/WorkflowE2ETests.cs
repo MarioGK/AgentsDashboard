@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class WorkflowE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_LoadsAfterLogin()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
         await Expect(Page.Locator("text=Workflows")).ToBeVisibleAsync();
     }
@@ -19,7 +18,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_HasNewWorkflowButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
         await Expect(Page.Locator("button:has-text('New Workflow')")).ToBeVisibleAsync();
     }
@@ -27,7 +26,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_HasSearchField()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
         await Expect(Page.Locator("input[placeholder*='Search']")).ToBeVisibleAsync();
     }
@@ -35,7 +34,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_TableHeaders()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         await Expect(Page.Locator("th:has-text('Name')")).ToBeVisibleAsync();
@@ -49,7 +48,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_NewWorkflowButtonNavigatesToEditor()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         await Page.ClickAsync("button:has-text('New Workflow')");
@@ -59,7 +58,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditorPage_Loads()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
         await Expect(Page.Locator("text=Workflow")).ToBeVisibleAsync();
     }
@@ -67,7 +66,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task CreateWorkflow_WithBasicInfo()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var nameInput = Page.Locator("input[label='Name'], input[placeholder*='Name']").First;
@@ -77,7 +76,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task CreateWorkflow_WithStages()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Workflow Test {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
@@ -95,7 +94,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task EditWorkflow_Stages()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowLink = Page.Locator("a[href^='/workflows/']:not([href='/workflows/new'])").First;
@@ -115,7 +114,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task ExecuteWorkflow()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowRow = Page.Locator("tbody tr").First;
@@ -133,7 +132,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task ViewWorkflow_Execution()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowLink = Page.Locator("a[href^='/workflows/']:not([href='/workflows/new'])").First;
@@ -153,7 +152,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_WorkflowLinkNavigatesToEditor()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowLink = Page.Locator("a[href^='/workflows/']:not([href='/workflows/new'])").First;
@@ -168,7 +167,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_EditButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -182,7 +181,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_DeleteButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -196,7 +195,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_DeleteWorkflow()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -219,7 +218,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_EnabledStatusChip()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -233,7 +232,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task Workflow_ToggleEnabled()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -251,7 +250,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_Pagination()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var pager = Page.Locator(".mud-table-pagination");
@@ -264,7 +263,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_RepositorySelector()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var repoSelect = Page.Locator(".mud-select:has(label:text('Repository'))");
@@ -277,7 +276,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_StageConfiguration()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var stagesSection = Page.Locator("text=Stages, text=Stage").First;
@@ -290,7 +289,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_SaveButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var saveButton = Page.Locator("button:has-text('Save'), button:has-text('Create')");
@@ -300,7 +299,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_BackButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var backButton = Page.Locator("button:has(.mud-icon-root) >> nth=0");
@@ -314,7 +313,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task Workflow_StageOrder()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowLink = Page.Locator("a[href^='/workflows/']:not([href='/workflows/new'])").First;

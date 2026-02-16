@@ -20,8 +20,23 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
 
     public MagicOnionClientFactory(IOptions<OrchestratorOptions> options)
     {
-        var workerGatewayUrl = options.Value.WorkerGrpcAddress;
+        var workerGatewayUrl = NormalizeGrpcAddress(options.Value.WorkerGrpcAddress);
         _channel = GrpcChannel.ForAddress(workerGatewayUrl);
+    }
+
+    private static string NormalizeGrpcAddress(string address)
+    {
+        if (address.StartsWith("grpc://", StringComparison.OrdinalIgnoreCase))
+        {
+            return "http://" + address["grpc://".Length..];
+        }
+
+        if (address.StartsWith("grpcs://", StringComparison.OrdinalIgnoreCase))
+        {
+            return "https://" + address["grpcs://".Length..];
+        }
+
+        return address;
     }
 
     public IWorkerGatewayService CreateWorkerGatewayService()

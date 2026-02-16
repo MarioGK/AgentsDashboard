@@ -15,14 +15,7 @@ COPY --from=build /app/publish .
 
 ARG TARGETARCH
 
-RUN apt-get update && apt-get install -y --no-install-recommends docker.io gh wget ca-certificates && rm -rf /var/lib/apt/lists/* \
-    && case "${TARGETARCH}" in \
-         amd64) PROBE_ARCH="amd64" ;; \
-         arm64) PROBE_ARCH="arm64" ;; \
-         *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-       esac \
-    && wget -qO/bin/grpc_health_probe "https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.24/grpc_health_probe-linux-${PROBE_ARCH}" \
-    && chmod +x /bin/grpc_health_probe
+RUN apt-get update && apt-get install -y --no-install-recommends docker.io gh ca-certificates && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 5201
 ENTRYPOINT ["dotnet", "AgentsDashboard.WorkerGateway.dll"]

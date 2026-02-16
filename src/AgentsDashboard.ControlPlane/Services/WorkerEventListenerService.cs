@@ -10,6 +10,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 public sealed class WorkerEventListenerService(
     IMagicOnionClientFactory clientFactory,
     IOrchestratorStore store,
+    IWorkerRegistryService workerRegistry,
     IRunEventPublisher publisher,
     InMemoryYarpConfigProvider yarpProvider,
     RunDispatcher dispatcher,
@@ -153,10 +154,14 @@ public sealed class WorkerEventListenerService(
     {
         try
         {
-            var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(statusMessage.Timestamp).UtcDateTime;
-
             logger.LogDebug("Worker {WorkerId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
                 statusMessage.WorkerId, statusMessage.Status, statusMessage.ActiveSlots, statusMessage.MaxSlots);
+
+            workerRegistry.RecordHeartbeat(
+                statusMessage.WorkerId,
+                statusMessage.WorkerId,
+                statusMessage.ActiveSlots,
+                statusMessage.MaxSlots);
 
             await publisher.PublishWorkerHeartbeatAsync(
                 statusMessage.WorkerId,

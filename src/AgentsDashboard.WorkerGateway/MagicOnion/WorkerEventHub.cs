@@ -1,5 +1,6 @@
-using MagicOnion.Server.Hubs;
 using AgentsDashboard.Contracts.Worker;
+using Cysharp.Runtime.Multicast;
+using MagicOnion.Server.Hubs;
 using Microsoft.Extensions.Logging;
 
 namespace AgentsDashboard.WorkerGateway.MagicOnion;
@@ -10,23 +11,26 @@ namespace AgentsDashboard.WorkerGateway.MagicOnion;
 /// </summary>
 public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEventReceiver>, IWorkerEventHub
 {
+    private const string AllEventsGroupName = "worker-events:all";
     private readonly ILogger<WorkerEventHub> _logger;
-    private IWorkerEventReceiver? _receiver;
-    private IGroup<IWorkerEventReceiver>? _allGroup;
-    private readonly List<string> _subscribedRunIds = [];
+    private readonly HashSet<string> _subscribedRunIds = [];
+    private Guid _connectionId;
+    private bool _subscribedToAll;
+    private static readonly object ProviderLock = new();
+    private static IMulticastGroupProvider? _groupProvider;
 
-    /// <summary>
-    /// Static broadcaster for sending events from outside the hub.
-    /// </summary>
-    private static readonly WorkerEventBroadcaster Broadcaster = new();
-
-    public WorkerEventHub(ILogger<WorkerEventHub> logger)
+    public WorkerEventHub(ILogger<WorkerEventHub> logger, IMulticastGroupProvider groupProvider)
     {
         _logger = logger;
+        lock (ProviderLock)
+        {
+            _groupProvider ??= groupProvider;
+        }
     }
 
     protected override ValueTask OnConnecting()
     {
+        _connectionId = ConnectionId;
         _logger.LogDebug("Client connecting to event hub");
         return ValueTask.CompletedTask;
     }
@@ -35,19 +39,19 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
     {
         _logger.LogDebug("Client disconnecting from event hub");
 
-        // Clear subscriptions - the connection is already closing
-        _subscribedRunIds.Clear();
-        _allGroup = null;
+        RemoveCurrentConnectionFromGroups();
 
         return ValueTask.CompletedTask;
     }
 
-    public async Task SubscribeAsync(string[]? runIds = null)
+    public Task SubscribeAsync(string[]? runIds = null)
     {
+        RemoveCurrentConnectionFromGroups();
+
         if (runIds == null || runIds.Length == 0)
         {
-            _allGroup = await Group.AddAsync("all");
-            _subscribedRunIds.Clear();
+            GetAllGroup().Add(_connectionId, Client);
+            _subscribedToAll = true;
             _logger.LogDebug("Client subscribed to all events");
         }
         else
@@ -56,22 +60,22 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
             {
                 if (string.IsNullOrWhiteSpace(runId)) continue;
 
-                await Group.AddAsync(runId);
+                GetRunGroup(runId).Add(_connectionId, Client);
                 _subscribedRunIds.Add(runId);
                 _logger.LogDebug("Client subscribed to run {RunId}", runId);
             }
         }
+
+        return Task.CompletedTask;
     }
 
-    public async Task UnsubscribeAsync()
+    public Task UnsubscribeAsync()
     {
-        // Clear local tracking - groups are per-connection so just clear the list
-        _subscribedRunIds.Clear();
-        _allGroup = null;
+        RemoveCurrentConnectionFromGroups();
 
         _logger.LogDebug("Client unsubscribed from all events");
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -79,7 +83,24 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
     /// </summary>
     public static async Task BroadcastJobEventAsync(JobEventMessage eventMessage)
     {
-        await Broadcaster.BroadcastJobEventAsync(eventMessage);
+        var groupProvider = _groupProvider;
+        if (groupProvider is null)
+        {
+            return;
+        }
+
+        groupProvider.GetOrAddSynchronousGroup<Guid, IWorkerEventReceiver>(AllEventsGroupName)
+            .All
+            .OnJobEvent(eventMessage);
+
+        if (!string.IsNullOrWhiteSpace(eventMessage.RunId))
+        {
+            groupProvider.GetOrAddSynchronousGroup<Guid, IWorkerEventReceiver>(GetRunGroupName(eventMessage.RunId))
+                .All
+                .OnJobEvent(eventMessage);
+        }
+
+        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -87,92 +108,57 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
     /// </summary>
     public static async Task BroadcastWorkerStatusAsync(WorkerStatusMessage statusMessage)
     {
-        await Broadcaster.BroadcastWorkerStatusAsync(statusMessage);
-    }
-}
-
-/// <summary>
-/// Internal broadcaster for worker events.
-/// Uses a simple in-memory approach to track groups for broadcasting.
-/// </summary>
-internal sealed class WorkerEventBroadcaster
-{
-    private readonly object _lock = new();
-    private readonly List<IWorkerEventReceiver> _allReceivers = [];
-    private readonly Dictionary<string, List<IWorkerEventReceiver>> _runReceivers = new();
-
-    public void RegisterReceiver(string? runId, IWorkerEventReceiver receiver)
-    {
-        lock (_lock)
+        var groupProvider = _groupProvider;
+        if (groupProvider is null)
         {
-            _allReceivers.Add(receiver);
-            if (!string.IsNullOrEmpty(runId))
-            {
-                if (!_runReceivers.TryGetValue(runId, out var list))
-                {
-                    list = [];
-                    _runReceivers[runId] = list;
-                }
-                list.Add(receiver);
-            }
-        }
-    }
-
-    public void UnregisterReceiver(IWorkerEventReceiver receiver)
-    {
-        lock (_lock)
-        {
-            _allReceivers.Remove(receiver);
-            foreach (var list in _runReceivers.Values)
-            {
-                list.Remove(receiver);
-            }
-        }
-    }
-
-    public async Task BroadcastJobEventAsync(JobEventMessage eventMessage)
-    {
-        List<IWorkerEventReceiver>? receiversCopy;
-        lock (_lock)
-        {
-            receiversCopy = _allReceivers.ToList();
+            return;
         }
 
-        foreach (var receiver in receiversCopy)
-        {
-            try
-            {
-                receiver.OnJobEvent(eventMessage);
-            }
-            catch
-            {
-                // Ignore errors when broadcasting
-            }
-        }
+        groupProvider.GetOrAddSynchronousGroup<Guid, IWorkerEventReceiver>(AllEventsGroupName)
+            .All
+            .OnWorkerStatusChanged(statusMessage);
 
         await Task.CompletedTask;
     }
 
-    public async Task BroadcastWorkerStatusAsync(WorkerStatusMessage statusMessage)
+    private void RemoveCurrentConnectionFromGroups()
     {
-        List<IWorkerEventReceiver>? receiversCopy;
-        lock (_lock)
+        var groupProvider = _groupProvider;
+        if (groupProvider is null)
         {
-            receiversCopy = _allReceivers.ToList();
+            return;
         }
 
-        foreach (var receiver in receiversCopy)
+        if (_subscribedToAll)
         {
-            try
-            {
-                receiver.OnWorkerStatusChanged(statusMessage);
-            }
-            catch
-            {
-                // Ignore errors when broadcasting
-            }
+            groupProvider.GetOrAddSynchronousGroup<Guid, IWorkerEventReceiver>(AllEventsGroupName)
+                .Remove(_connectionId);
         }
 
-        await Task.CompletedTask;
+        foreach (var runId in _subscribedRunIds)
+        {
+            groupProvider.GetOrAddSynchronousGroup<Guid, IWorkerEventReceiver>(GetRunGroupName(runId))
+                .Remove(_connectionId);
+        }
+
+        _subscribedToAll = false;
+        _subscribedRunIds.Clear();
+    }
+
+    private static IMulticastSyncGroup<Guid, IWorkerEventReceiver> GetAllGroup()
+    {
+        return _groupProvider!
+            .GetOrAddSynchronousGroup<Guid, IWorkerEventReceiver>(AllEventsGroupName);
+    }
+
+    private static IMulticastSyncGroup<Guid, IWorkerEventReceiver> GetRunGroup(string runId)
+    {
+        return _groupProvider!
+            .GetOrAddSynchronousGroup<Guid, IWorkerEventReceiver>(GetRunGroupName(runId));
+    }
+
+    private static string GetRunGroupName(string runId)
+    {
+        return $"worker-events:run:{runId}";
     }
 }

@@ -2,16 +2,15 @@ using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.IntegrationTests.Infrastructure;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests;
 
-[Collection("Sqlite")]
+[ClassDataSource<SqliteFixture>(Shared = SharedType.Keyed, Key = "Sqlite")]
 public class OrchestratorStoreTests(SqliteFixture sqlite)
 {
     private OrchestratorStore CreateStore() => TestOrchestratorStore.Create(sqlite.ConnectionString);
 
-    [Fact]
+    [Test]
     public async Task CreateProject_RoundTrips()
     {
         var store = CreateStore();
@@ -27,7 +26,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         fetched!.Name.Should().Be("TestProject");
     }
 
-    [Fact]
+    [Test]
     public async Task CreateRepository_RoundTrips()
     {
         var store = CreateStore();
@@ -43,7 +42,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         list.Should().ContainSingle(r => r.Id == repo.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateTask_WithRetryPolicy_Persists()
     {
         var store = CreateStore();
@@ -66,7 +65,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         fetched!.RetryPolicy.MaxAttempts.Should().Be(3);
     }
 
-    [Fact]
+    [Test]
     public async Task RunLifecycle_CreateStartComplete()
     {
         var store = CreateStore();
@@ -91,7 +90,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         completed.EndedAtUtc.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task RunLifecycle_CancelRun()
     {
         var store = CreateStore();
@@ -108,7 +107,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         cancelled!.State.Should().Be(RunState.Cancelled);
     }
 
-    [Fact]
+    [Test]
     public async Task RunWithAttempt_CreatesWithCorrectAttempt()
     {
         var store = CreateStore();
@@ -122,7 +121,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         run.Attempt.Should().Be(3);
     }
 
-    [Fact]
+    [Test]
     public async Task ConcurrencyCounting_Works()
     {
         var store = CreateStore();
@@ -147,7 +146,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         globalCount.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public async Task FindingsLifecycle_CreateUpdateQuery()
     {
         var store = CreateStore();
@@ -172,7 +171,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         all.Should().ContainSingle(f => f.Id == finding.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task RunLogs_PersistAndQuery()
     {
         var store = CreateStore();
@@ -185,7 +184,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         logs.Should().ContainSingle(l => l.Message == "Hello");
     }
 
-    [Fact]
+    [Test]
     public async Task Workers_UpsertAndList()
     {
         var store = CreateStore();
@@ -199,7 +198,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         workers[0].ActiveSlots.Should().Be(3);
     }
 
-    [Fact]
+    [Test]
     public async Task ScheduledTasks_ListCronTasks()
     {
         var store = CreateStore();
@@ -215,7 +214,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         scheduled.Should().ContainSingle(t => t.Name == "Cron Task");
     }
 
-    [Fact]
+    [Test]
     public async Task Webhooks_CreateAndList()
     {
         var store = CreateStore();
@@ -231,7 +230,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         list.Should().ContainSingle(w => w.Id == webhook.Id);
     }
 
-    [Fact]
+    [Test]
     public void ComputeNextRun_CronTask_ReturnsNextOccurrence()
     {
         var task = new TaskDocument { Kind = TaskKind.Cron, CronExpression = "0 * * * *", Enabled = true };
@@ -241,7 +240,7 @@ public class OrchestratorStoreTests(SqliteFixture sqlite)
         next!.Value.Should().Be(new DateTime(2026, 1, 1, 13, 0, 0, DateTimeKind.Utc));
     }
 
-    [Fact]
+    [Test]
     public void ComputeNextRun_DisabledTask_ReturnsNull()
     {
         var task = new TaskDocument { Kind = TaskKind.Cron, CronExpression = "0 * * * *", Enabled = false };

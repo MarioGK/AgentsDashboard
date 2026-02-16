@@ -161,7 +161,7 @@ public class WorkerGatewayServiceTests
         var service = new WorkerGatewayService(queue, orphanMock.Object, dockerMock.Object, logger.Object);
 
         var tasks = Enumerable.Range(0, 5)
-            .Select(i => service.DispatchJobAsync(CreateDispatchRequest($"run-concurrent-{i}")).AsTask())
+            .Select(async i => await service.DispatchJobAsync(CreateDispatchRequest($"run-concurrent-{i}")))
             .ToArray();
 
         var results = await Task.WhenAll(tasks);
@@ -211,30 +211,30 @@ public class WorkerGatewayServiceTests
 
         var cancelRequest = new CancelJobRequest { RunId = "run-123" };
 
-        var result = _service.CancelJobAsync(cancelRequest);
+        var result = await _service.CancelJobAsync(cancelRequest);
 
-        result.Result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue();
     }
 
     [Test]
-    public void CancelJobAsync_WithNonExistentRun_ReturnsFailure()
+    public async Task CancelJobAsync_WithNonExistentRun_ReturnsFailure()
     {
         var request = new CancelJobRequest { RunId = "nonexistent" };
 
-        var result = _service.CancelJobAsync(request);
+        var result = await _service.CancelJobAsync(request);
 
-        result.Result.Success.Should().BeFalse();
-        result.Result.ErrorMessage.Should().Contain("nonexistent");
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("nonexistent");
     }
 
     [Test]
-    public void CancelJobAsync_WithEmptyRunId_ReturnsFailure()
+    public async Task CancelJobAsync_WithEmptyRunId_ReturnsFailure()
     {
         var request = new CancelJobRequest { RunId = "" };
 
-        var result = _service.CancelJobAsync(request);
+        var result = await _service.CancelJobAsync(request);
 
-        result.Result.Success.Should().BeFalse();
+        result.Success.Should().BeFalse();
     }
 
     [Test]
@@ -242,11 +242,11 @@ public class WorkerGatewayServiceTests
     {
         await _service.DispatchJobAsync(CreateDispatchRequest("run-double-cancel"));
 
-        var firstResult = _service.CancelJobAsync(new CancelJobRequest { RunId = "run-double-cancel" });
-        var secondResult = _service.CancelJobAsync(new CancelJobRequest { RunId = "run-double-cancel" });
+        var firstResult = await _service.CancelJobAsync(new CancelJobRequest { RunId = "run-double-cancel" });
+        var secondResult = await _service.CancelJobAsync(new CancelJobRequest { RunId = "run-double-cancel" });
 
-        firstResult.Result.Success.Should().BeTrue();
-        secondResult.Result.Success.Should().BeTrue();
+        firstResult.Success.Should().BeTrue();
+        secondResult.Success.Should().BeTrue();
     }
 
     [Test]
@@ -256,9 +256,9 @@ public class WorkerGatewayServiceTests
 
         var cancelRequest = new CancelJobRequest { RunId = "run-mixed-case" };
 
-        var result = _service.CancelJobAsync(cancelRequest);
+        var result = await _service.CancelJobAsync(cancelRequest);
 
-        result.Result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue();
     }
 
     [Test]
@@ -267,7 +267,7 @@ public class WorkerGatewayServiceTests
         await _service.DispatchJobAsync(CreateDispatchRequest("run-concurrent-cancel"));
 
         var tasks = Enumerable.Range(0, 3)
-            .Select(_ => _service.CancelJobAsync(new CancelJobRequest { RunId = "run-concurrent-cancel" }).AsTask())
+            .Select(async _ => await _service.CancelJobAsync(new CancelJobRequest { RunId = "run-concurrent-cancel" }))
             .ToArray();
 
         var results = await Task.WhenAll(tasks);
@@ -280,9 +280,9 @@ public class WorkerGatewayServiceTests
     {
         await _service.DispatchJobAsync(CreateDispatchRequest("run-queued-only"));
 
-        var result = _service.CancelJobAsync(new CancelJobRequest { RunId = "run-queued-only" });
+        var result = await _service.CancelJobAsync(new CancelJobRequest { RunId = "run-queued-only" });
 
-        result.Result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue();
     }
 
     // --- KillContainerAsync ---
@@ -361,7 +361,7 @@ public class WorkerGatewayServiceTests
     // --- HeartbeatAsync ---
 
     [Test]
-    public void HeartbeatAsync_ReturnsSuccess()
+    public async Task HeartbeatAsync_ReturnsSuccess()
     {
         var request = new HeartbeatRequest
         {
@@ -371,14 +371,14 @@ public class WorkerGatewayServiceTests
             MaxSlots = 4
         };
 
-        var result = _service.HeartbeatAsync(request);
+        var result = await _service.HeartbeatAsync(request);
 
-        result.Result.Success.Should().BeTrue();
-        result.Result.ErrorMessage.Should().BeNull();
+        result.Success.Should().BeTrue();
+        result.ErrorMessage.Should().BeNull();
     }
 
     [Test]
-    public void HeartbeatAsync_WithEmptyWorkerId_ReturnsSuccess()
+    public async Task HeartbeatAsync_WithEmptyWorkerId_ReturnsSuccess()
     {
         var request = new HeartbeatRequest
         {
@@ -388,13 +388,13 @@ public class WorkerGatewayServiceTests
             MaxSlots = 4
         };
 
-        var result = _service.HeartbeatAsync(request);
+        var result = await _service.HeartbeatAsync(request);
 
-        result.Result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue();
     }
 
     [Test]
-    public void HeartbeatAsync_WithZeroSlots_ReturnsSuccess()
+    public async Task HeartbeatAsync_WithZeroSlots_ReturnsSuccess()
     {
         var request = new HeartbeatRequest
         {
@@ -404,13 +404,13 @@ public class WorkerGatewayServiceTests
             MaxSlots = 0
         };
 
-        var result = _service.HeartbeatAsync(request);
+        var result = await _service.HeartbeatAsync(request);
 
-        result.Result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue();
     }
 
     [Test]
-    public void HeartbeatAsync_MultipleHeartbeats_AllSucceed()
+    public async Task HeartbeatAsync_MultipleHeartbeats_AllSucceed()
     {
         var request = new HeartbeatRequest
         {
@@ -422,13 +422,13 @@ public class WorkerGatewayServiceTests
 
         for (int i = 0; i < 3; i++)
         {
-            var result = _service.HeartbeatAsync(request);
-            result.Result.Success.Should().BeTrue();
+            var result = await _service.HeartbeatAsync(request);
+            result.Success.Should().BeTrue();
         }
     }
 
     [Test]
-    public void HeartbeatAsync_WithMaxSlots_ReturnsSuccess()
+    public async Task HeartbeatAsync_WithMaxSlots_ReturnsSuccess()
     {
         var request = new HeartbeatRequest
         {
@@ -438,9 +438,9 @@ public class WorkerGatewayServiceTests
             MaxSlots = int.MaxValue
         };
 
-        var result = _service.HeartbeatAsync(request);
+        var result = await _service.HeartbeatAsync(request);
 
-        result.Result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue();
     }
 
     // --- ReconcileOrphanedContainersAsync ---

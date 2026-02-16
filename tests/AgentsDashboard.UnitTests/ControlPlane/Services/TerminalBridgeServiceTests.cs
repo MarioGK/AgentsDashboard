@@ -18,7 +18,7 @@ public class TerminalBridgeServiceTests
     private readonly Mock<ILogger<TerminalBridgeService>> _mockLogger;
     private readonly Mock<ITerminalHub> _mockTerminalHub;
     private readonly Mock<IHubClients> _mockClients;
-    private readonly Mock<IClientProxy> _mockClientProxy;
+    private readonly Mock<ISingleClientProxy> _mockClientProxy;
     private readonly TerminalBridgeService _service;
 
     public TerminalBridgeServiceTests()
@@ -29,7 +29,7 @@ public class TerminalBridgeServiceTests
         _mockLogger = new Mock<ILogger<TerminalBridgeService>>();
         _mockTerminalHub = new Mock<ITerminalHub>();
         _mockClients = new Mock<IHubClients>();
-        _mockClientProxy = new Mock<IClientProxy>();
+        _mockClientProxy = new Mock<ISingleClientProxy>();
 
         _mockHubContext.Setup(h => h.Clients).Returns(_mockClients.Object);
         _mockClients.Setup(c => c.Client(It.IsAny<string>())).Returns(_mockClientProxy.Object);
@@ -420,5 +420,286 @@ public class TerminalBridgeServiceTests
                 d.State == TerminalSessionState.Closed &&
                 d.CloseReason == "Container crashed"),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task AttachSession_ReplaysMissedEventsToClient()
+    {
+        var sessionId = await _service.CreateSessionAsync("conn-1", "worker-1", null, 80, 24);
+
+        var missedEvents = new List<TerminalAuditEventDocument>
+        {
+            new() { SessionId = sessionId, Sequence = 6, Direction = TerminalDataDirection.Output, PayloadBase64 = "ZXZ0MQ==" },
+            new() { SessionId = sessionId, Sequence = 7, Direction = TerminalDataDirection.Output, PayloadBase64 = "ZXZ0Mg==" },
+            new() { SessionId = sessionId, Sequence = 8, Direction = TerminalDataDirection.Input, PayloadBase64 = "aW5wdXQ=" }
+        };
+
+        _mockStore
+            .Setup(s => s.GetTerminalSessionAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TerminalSessionDocument
+            {
+                Id = sessionId,
+                WorkerId = "worker-1",
+                State = TerminalSessionState.Active
+            });
+
+        _mockStore
+            .Setup(s => s.GetTerminalAuditEventsAsync(sessionId, 5L, 2000, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(missedEvents);
+
+        await _service.AttachSessionAsync("conn-replay", sessionId, 5);
+
+        // Should send each missed event to the attaching client
+        _mockClientProxy.Verify(
+            c => c.SendCoreAsync("TerminalOutput", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(3));
+    }
+
+    [Test]
+    public async Task AttachSession_PassesCorrectSequenceToStore()
+    {
+        var sessionId = await _service.CreateSessionAsync("conn-1", "worker-1", null, 80, 24);
+
+        _mockStore
+            .Setup(s => s.GetTerminalSessionAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TerminalSessionDocument
+            {
+                Id = sessionId,
+                WorkerId = "worker-1",
+                State = TerminalSessionState.Active
+            });
+
+        _mockStore
+            .Setup(s => s.GetTerminalAuditEventsAsync(sessionId, 42L, 2000, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TerminalAuditEventDocument>());
+
+        await _service.AttachSessionAsync("conn-seq", sessionId, 42);
+
+        _mockStore.Verify(s => s.GetTerminalAuditEventsAsync(
+            sessionId, 42L, 2000, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task AttachSession_DisconnectedSession_ReattachesToWorker()
+    {
+        // Simulate a session that was in the bridge but got disconnected and removed
+        _mockStore
+            .Setup(s => s.GetTerminalSessionAsync("detached-session", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TerminalSessionDocument
+            {
+                Id = "detached-session",
+                WorkerId = "worker-1",
+                State = TerminalSessionState.Disconnected
+            });
+
+        _mockStore
+            .Setup(s => s.GetTerminalAuditEventsAsync("detached-session", 0L, 2000, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TerminalAuditEventDocument>());
+
+        await _service.AttachSessionAsync("conn-reattach", "detached-session", 0);
+
+        _mockTerminalHub.Verify(h => h.ReattachSessionAsync(
+            It.Is<ReattachTerminalSessionRequest>(r =>
+                r.SessionId == "detached-session" &&
+                r.LastSequence == 0)), Times.Once);
+    }
+
+    [Test]
+    public async Task MultipleClients_AllReceiveOutput()
+    {
+        var sessionId = await _service.CreateSessionAsync("conn-a", "worker-1", null, 80, 24);
+
+        // Set up per-connection client proxies so we can verify each independently
+        var proxyA = new Mock<ISingleClientProxy>();
+        var proxyB = new Mock<ISingleClientProxy>();
+        _mockClients.Setup(c => c.Client("conn-a")).Returns(proxyA.Object);
+        _mockClients.Setup(c => c.Client("conn-b")).Returns(proxyB.Object);
+
+        // Attach a second client
+        _mockStore
+            .Setup(s => s.GetTerminalSessionAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TerminalSessionDocument
+            {
+                Id = sessionId,
+                WorkerId = "worker-1",
+                State = TerminalSessionState.Active
+            });
+
+        _mockStore
+            .Setup(s => s.GetTerminalAuditEventsAsync(sessionId, 0L, 2000, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TerminalAuditEventDocument>());
+
+        await _service.AttachSessionAsync("conn-b", sessionId, 0);
+
+        // Trigger output callback
+        ((ITerminalReceiver)_service).OnSessionOutput(new TerminalOutputMessage
+        {
+            SessionId = sessionId,
+            Sequence = 1,
+            PayloadBase64 = "bXVsdGk=",
+            Direction = TerminalDataDirection.Output
+        });
+
+        await Task.Delay(150);
+
+        proxyA.Verify(
+            c => c.SendCoreAsync("TerminalOutput", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        proxyB.Verify(
+            c => c.SendCoreAsync("TerminalOutput", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task OnClientDisconnected_WithRemainingClients_DoesNotMarkDisconnected()
+    {
+        var sessionId = await _service.CreateSessionAsync("conn-stay", "worker-1", null, 80, 24);
+
+        // Attach a second client
+        _mockStore
+            .Setup(s => s.GetTerminalSessionAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TerminalSessionDocument
+            {
+                Id = sessionId,
+                WorkerId = "worker-1",
+                State = TerminalSessionState.Active
+            });
+
+        _mockStore
+            .Setup(s => s.GetTerminalAuditEventsAsync(sessionId, 0L, 2000, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TerminalAuditEventDocument>());
+
+        await _service.AttachSessionAsync("conn-leave", sessionId, 0);
+
+        // Disconnect one client while the other remains
+        await _service.OnClientDisconnectedAsync("conn-leave");
+
+        // Should NOT update session state since conn-stay is still connected
+        _mockStore.Verify(
+            s => s.UpdateTerminalSessionAsync(It.IsAny<TerminalSessionDocument>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task HandleSessionOutput_BroadcastsToSignalRClients()
+    {
+        var sessionId = await _service.CreateSessionAsync("conn-bcast", "worker-1", null, 80, 24);
+
+        ((ITerminalReceiver)_service).OnSessionOutput(new TerminalOutputMessage
+        {
+            SessionId = sessionId,
+            Sequence = 1,
+            PayloadBase64 = "b3V0",
+            Direction = TerminalDataDirection.Output
+        });
+
+        await Task.Delay(100);
+
+        _mockClientProxy.Verify(
+            c => c.SendCoreAsync("TerminalOutput", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task HandleSessionClosed_NotifiesSignalRClients()
+    {
+        var sessionId = await _service.CreateSessionAsync("conn-notify", "worker-1", null, 80, 24);
+
+        ((ITerminalReceiver)_service).OnSessionClosed(new TerminalSessionClosedMessage
+        {
+            SessionId = sessionId,
+            Reason = "Worker shutdown"
+        });
+
+        await Task.Delay(100);
+
+        _mockClientProxy.Verify(
+            c => c.SendCoreAsync("TerminalSessionClosed", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task HandleSessionOpened_NotifiesSignalRClients()
+    {
+        var sessionId = await _service.CreateSessionAsync("conn-opened-notify", "worker-1", null, 80, 24);
+
+        _mockStore
+            .Setup(s => s.GetTerminalSessionAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TerminalSessionDocument
+            {
+                Id = sessionId,
+                WorkerId = "worker-1",
+                State = TerminalSessionState.Pending
+            });
+
+        ((ITerminalReceiver)_service).OnSessionOpened(new TerminalSessionOpenedMessage
+        {
+            SessionId = sessionId,
+            Success = true
+        });
+
+        await Task.Delay(100);
+
+        _mockClientProxy.Verify(
+            c => c.SendCoreAsync("TerminalSessionOpened", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Close_CleansUpConnectionMappings()
+    {
+        var sessionId = await _service.CreateSessionAsync("conn-cleanup", "worker-1", null, 80, 24);
+
+        await _service.CloseAsync(sessionId);
+
+        // After close, SendInput should fail because the bridge was removed
+        var act = () => _service.SendInputAsync(sessionId, "data");
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*No active bridge*");
+    }
+
+    [Test]
+    public async Task Resize_WithNoActiveBridge_ThrowsInvalidOperation()
+    {
+        var act = () => _service.ResizeAsync("unknown-session", 120, 40);
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*No active bridge*");
+    }
+
+    [Test]
+    public async Task HandleSessionOutput_ForUnknownSession_DoesNotThrow()
+    {
+        // Should not throw even if session is not tracked
+        ((ITerminalReceiver)_service).OnSessionOutput(new TerminalOutputMessage
+        {
+            SessionId = "ghost-session",
+            Sequence = 1,
+            PayloadBase64 = "data",
+            Direction = TerminalDataDirection.Output
+        });
+
+        await Task.Delay(100);
+
+        // Audit event should still be persisted even for unknown bridge
+        _mockStore.Verify(s => s.AppendTerminalAuditEventAsync(
+            It.Is<TerminalAuditEventDocument>(e => e.SessionId == "ghost-session"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task HandleSessionError_ForUnknownSession_DoesNotThrow()
+    {
+        // Should not throw even if session is not tracked
+        ((ITerminalReceiver)_service).OnSessionError(new TerminalSessionErrorMessage
+        {
+            SessionId = "ghost-session",
+            Error = "Container not found"
+        });
+
+        await Task.Delay(100);
+
+        // No client proxy calls expected since no connections are tracked
+        _mockClientProxy.Verify(
+            c => c.SendCoreAsync("TerminalSessionError", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

@@ -1,6 +1,5 @@
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Services;
-using FluentAssertions;
 using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.IntegrationTests;
@@ -16,7 +15,7 @@ public class SecretRedactorTests
         return new SecretRedactor(options);
     }
 
-    [Fact]
+    [Test]
     public void Redact_MasksKnownSecretValues()
     {
         var redactor = CreateRedactor();
@@ -34,7 +33,7 @@ public class SecretRedactorTests
         result.Should().Contain("not-a-secret");
     }
 
-    [Fact]
+    [Test]
     public void Redact_IgnoresShortValues()
     {
         var redactor = CreateRedactor();
@@ -44,7 +43,7 @@ public class SecretRedactorTests
         result.Should().Contain("abc");
     }
 
-    [Fact]
+    [Test]
     public void Redact_EmptyInput_ReturnsEmpty()
     {
         var redactor = CreateRedactor();
@@ -52,7 +51,7 @@ public class SecretRedactorTests
         redactor.Redact("", new Dictionary<string, string>()).Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void Redact_MultipleSecrets_AllRedacted()
     {
         var redactor = CreateRedactor();

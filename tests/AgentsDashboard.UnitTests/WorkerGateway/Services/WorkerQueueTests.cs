@@ -19,7 +19,14 @@ public class WorkerQueueTests
             Request = new DispatchJobRequest
             {
                 RunId = runId,
-                Command = "echo test",
+                ProjectId = "proj-1",
+                RepositoryId = "repo-1",
+                TaskId = "task-1",
+                HarnessType = "codex",
+                ImageTag = "latest",
+                CloneUrl = "https://github.com/test/repo.git",
+                Instruction = "test instruction",
+                CustomArgs = "echo test",
             }
         };
     }

@@ -443,10 +443,10 @@ public class GlobalSelectionServiceTests
         var tcs = new TaskCompletionSource();
 
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
-            .Callback(async () =>
+            .Callback(() =>
             {
                 callCount++;
-                await tcs.Task;
+                tcs.Task.Wait();
             })
             .ReturnsAsync(_testProjects);
         _storeMock.Setup(s => s.ListRepositoriesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))

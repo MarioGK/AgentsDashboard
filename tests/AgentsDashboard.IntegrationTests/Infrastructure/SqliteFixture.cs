@@ -1,5 +1,6 @@
 using AgentsDashboard.ControlPlane.Data;
 using Microsoft.EntityFrameworkCore;
+using TUnit.Core.Interfaces;
 
 namespace AgentsDashboard.IntegrationTests.Infrastructure;
 

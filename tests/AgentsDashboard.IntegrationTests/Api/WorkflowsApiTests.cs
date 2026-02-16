@@ -92,7 +92,7 @@ public class WorkflowsApiTests(ApiTestFixture fixture)
         var created = await createResponse.Content.ReadFromJsonAsync<WorkflowDocument>();
 
         var updateRequest = new UpdateWorkflowRequest("Updated Workflow", "Updated desc", [
-            new WorkflowStageConfigRequest("New Stage", WorkflowStageType.Approval, ApproverRole: "admin", Order: 0)
+            new WorkflowStageConfigRequest("New Stage", WorkflowStageType.Approval, Order: 0)
         ], false);
 
         var response = await _client.PutAsJsonAsync($"/api/workflows/{created!.Id}", updateRequest);

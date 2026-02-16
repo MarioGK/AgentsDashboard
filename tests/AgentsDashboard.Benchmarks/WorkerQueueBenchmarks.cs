@@ -34,7 +34,14 @@ public class WorkerQueueBenchmarks
                 Request = new DispatchJobRequest
                 {
                     RunId = $"run-{i}",
-                    Command = "echo test"
+                    ProjectId = "proj-1",
+                    RepositoryId = "repo-1",
+                    TaskId = $"task-{i}",
+                    HarnessType = "codex",
+                    ImageTag = "latest",
+                    CloneUrl = "https://github.com/test/repo.git",
+                    Instruction = "echo test",
+                    CustomArgs = "echo test",
                 }
             });
         }

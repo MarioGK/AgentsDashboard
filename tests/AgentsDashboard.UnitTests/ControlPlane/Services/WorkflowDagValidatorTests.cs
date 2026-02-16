@@ -299,7 +299,7 @@ public class WorkflowDagValidatorTests
     public async Task Valid_ApprovalNode_Passes()
     {
         var workflow = CreateWorkflow(
-            [Node("s", "Start", WorkflowNodeType.Start), new WorkflowNodeConfig { Id = "ap", Name = "Approve", Type = WorkflowNodeType.Approval, ApproverRole = "admin" }, Node("e", "End", WorkflowNodeType.End)],
+            [Node("s", "Start", WorkflowNodeType.Start), new WorkflowNodeConfig { Id = "ap", Name = "Approve", Type = WorkflowNodeType.Approval }, Node("e", "End", WorkflowNodeType.End)],
             [Edge("e1", "s", "ap"), Edge("e2", "ap", "e")]);
 
         var result = await WorkflowDagValidator.ValidateAsync(workflow, _store.Object, CancellationToken.None);

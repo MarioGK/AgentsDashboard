@@ -9,6 +9,7 @@ using AgentsDashboard.ControlPlane.Hubs;
 using AgentsDashboard.ControlPlane.Services;
 using AgentsDashboard.IntegrationTests.Infrastructure;
 using AgentsDashboard.WorkerGateway.Configuration;
+using TUnit.Core.Interfaces;
 using AgentsDashboard.WorkerGateway.Models;
 using AgentsDashboard.WorkerGateway.Services;
 using FluentAssertions;

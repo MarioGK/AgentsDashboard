@@ -58,9 +58,9 @@ public class ZaiAdapterTests
     public void BuildCommand_IncludesOptionalEnvVariables_WhenPresent()
     {
         var request = CreateRequest();
-        request.Env["ZAI_MODEL"] = "glm-5";
-        request.Env["Z_AI_API_KEY"] = "test-api-key";
-        request.Env["ZAI_MAX_THINKING_TOKENS"] = "8000";
+        request.EnvironmentVars!["ZAI_MODEL"] = "glm-5";
+        request.EnvironmentVars!["Z_AI_API_KEY"] = "test-api-key";
+        request.EnvironmentVars!["ZAI_MAX_THINKING_TOKENS"] = "8000";
         var context = _adapter.PrepareContext(request);
 
         var command = _adapter.BuildCommand(context);
@@ -370,14 +370,21 @@ public class ZaiAdapterTests
         var request = new DispatchJobRequest
         {
             RunId = "test-run-id",
-            Harness = "zai",
-            Command = "echo test",
-            Prompt = "test prompt",
+            ProjectId = "proj-1",
+            RepositoryId = "repo-1",
+            TaskId = "task-1",
+            HarnessType = "zai",
+            ImageTag = "latest",
+            CloneUrl = "https://github.com/test/repo.git",
+            Instruction = "test prompt",
+            CustomArgs = "echo test",
             TimeoutSeconds = 0,
             SandboxProfileCpuLimit = 0,
-            SandboxProfileMemoryLimit = "",
+            SandboxProfileMemoryLimit = null,
             SandboxProfileNetworkDisabled = false,
-            SandboxProfileReadOnlyRootFs = false
+            SandboxProfileReadOnlyRootFs = false,
+            EnvironmentVars = new Dictionary<string, string>(),
+            ContainerLabels = new Dictionary<string, string>()
         };
         return request;
     }

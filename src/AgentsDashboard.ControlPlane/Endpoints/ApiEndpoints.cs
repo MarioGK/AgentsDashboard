@@ -401,6 +401,7 @@ public static class ApiEndpoints
         app.MapPost("/api/workers/heartbeat", async (
             WorkerHeartbeatRequest request,
             OrchestratorStore store,
+            IWorkerRegistryService workerRegistry,
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(request.WorkerId))
@@ -412,6 +413,12 @@ public static class ApiEndpoints
                 request.ActiveSlots,
                 request.MaxSlots,
                 ct);
+
+            workerRegistry.RecordHeartbeat(
+                request.WorkerId,
+                request.Endpoint ?? request.WorkerId,
+                request.ActiveSlots,
+                request.MaxSlots);
 
             return Results.Ok(new { acknowledged = true });
         }).AllowAnonymous();

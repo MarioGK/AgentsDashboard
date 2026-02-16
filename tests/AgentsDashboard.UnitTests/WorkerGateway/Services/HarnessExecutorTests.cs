@@ -63,8 +63,14 @@ public class HarnessExecutorTests
             Request = new DispatchJobRequest
             {
                 RunId = "test-run-id",
-                Command = command,
-                Harness = harness,
+                ProjectId = "proj-1",
+                RepositoryId = "repo-1",
+                TaskId = "task-1",
+                HarnessType = harness,
+                ImageTag = "latest",
+                CloneUrl = "https://github.com/test/repo.git",
+                Instruction = "test instruction",
+                CustomArgs = command,
             }
         };
     }
