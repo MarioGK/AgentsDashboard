@@ -45,7 +45,7 @@
   1. ControlPlane (Blazor Server + APIs + SignalR + Scheduler + YARP + Docker client).
   2. WorkerGateway (ASP.NET Core gRPC + Channel<> local queues + container runner).
   3. SQLite as system of record via EF Core.
-  4. OpenTelemetry instrumentation via Aspire.
+  4. OpenTelemetry instrumentation through shared startup defaults.
   5. Docker Compose single-host topology
 
   ## Execution Model (Harness-Only)
@@ -118,7 +118,7 @@
 
   ## Observability
 
-  1. Aspire defines service composition and local operational wiring.
+  1. Standard app host composition and local operational wiring are handled via direct process startup.
   2. OpenTelemetry tracing/metrics/log correlation across control plane, worker, gRPC, SQLite, and harness execution.
   4. Alerts: missing heartbeat, failure-rate spike, queue backlog threshold, repeated PR failures, route-leak detection.
 

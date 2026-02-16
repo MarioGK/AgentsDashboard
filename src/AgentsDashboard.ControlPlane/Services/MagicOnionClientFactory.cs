@@ -2,27 +2,21 @@ using MagicOnion;
 using MagicOnion.Client;
 using Grpc.Net.Client;
 using AgentsDashboard.Contracts.Worker;
-using AgentsDashboard.ControlPlane.Configuration;
-using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
 public interface IMagicOnionClientFactory
 {
-    IWorkerGatewayService CreateWorkerGatewayService();
-    Task<IWorkerEventHub> ConnectEventHubAsync(IWorkerEventReceiver receiver, CancellationToken ct = default);
-    Task<ITerminalHub> ConnectTerminalHubAsync(ITerminalReceiver receiver, CancellationToken ct = default);
+    IWorkerGatewayService CreateWorkerGatewayService(string workerId, string grpcAddress);
+    Task<IWorkerEventHub> ConnectEventHubAsync(string workerId, string grpcAddress, IWorkerEventReceiver receiver, CancellationToken ct = default);
+    Task<ITerminalHub> ConnectTerminalHubAsync(string workerId, string grpcAddress, ITerminalReceiver receiver, CancellationToken ct = default);
+    void RemoveWorker(string workerId);
 }
 
 public class MagicOnionClientFactory : IMagicOnionClientFactory
 {
-    private readonly GrpcChannel _channel;
-
-    public MagicOnionClientFactory(IOptions<OrchestratorOptions> options)
-    {
-        var workerGatewayUrl = NormalizeGrpcAddress(options.Value.WorkerGrpcAddress);
-        _channel = GrpcChannel.ForAddress(workerGatewayUrl);
-    }
+    private readonly ConcurrentDictionary<string, ChannelEntry> _channels = new(StringComparer.OrdinalIgnoreCase);
 
     private static string NormalizeGrpcAddress(string address)
     {
@@ -39,26 +33,61 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
         return address;
     }
 
-    public IWorkerGatewayService CreateWorkerGatewayService()
+    public IWorkerGatewayService CreateWorkerGatewayService(string workerId, string grpcAddress)
     {
-        return MagicOnionClient.Create<IWorkerGatewayService>(_channel);
+        var channel = GetOrCreateChannel(workerId, grpcAddress);
+        return MagicOnionClient.Create<IWorkerGatewayService>(channel);
     }
 
-    public async Task<IWorkerEventHub> ConnectEventHubAsync(IWorkerEventReceiver receiver, CancellationToken ct = default)
+    public async Task<IWorkerEventHub> ConnectEventHubAsync(string workerId, string grpcAddress, IWorkerEventReceiver receiver, CancellationToken ct = default)
     {
+        var channel = GetOrCreateChannel(workerId, grpcAddress);
         return await StreamingHubClient.ConnectAsync<IWorkerEventHub, IWorkerEventReceiver>(
-            _channel,
+            channel,
             receiver,
             cancellationToken: ct
         );
     }
 
-    public async Task<ITerminalHub> ConnectTerminalHubAsync(ITerminalReceiver receiver, CancellationToken ct = default)
+    public async Task<ITerminalHub> ConnectTerminalHubAsync(string workerId, string grpcAddress, ITerminalReceiver receiver, CancellationToken ct = default)
     {
+        var channel = GetOrCreateChannel(workerId, grpcAddress);
         return await StreamingHubClient.ConnectAsync<ITerminalHub, ITerminalReceiver>(
-            _channel,
+            channel,
             receiver,
             cancellationToken: ct
         );
     }
+
+    public void RemoveWorker(string workerId)
+    {
+        if (!_channels.TryRemove(workerId, out var entry))
+        {
+            return;
+        }
+
+        entry.Channel.Dispose();
+    }
+
+    private GrpcChannel GetOrCreateChannel(string workerId, string grpcAddress)
+    {
+        var normalized = NormalizeGrpcAddress(grpcAddress);
+        var entry = _channels.AddOrUpdate(
+            workerId,
+            _ => new ChannelEntry(normalized, GrpcChannel.ForAddress(normalized)),
+            (_, existing) =>
+            {
+                if (string.Equals(existing.Address, normalized, StringComparison.OrdinalIgnoreCase))
+                {
+                    return existing;
+                }
+
+                existing.Channel.Dispose();
+                return new ChannelEntry(normalized, GrpcChannel.ForAddress(normalized));
+            });
+
+        return entry.Channel;
+    }
+
+    private sealed record ChannelEntry(string Address, GrpcChannel Channel);
 }

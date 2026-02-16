@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgentsDashboard.Contracts.Domain;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -18,6 +19,7 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<WebhookRegistration> Webhooks => Set<WebhookRegistration>();
     public DbSet<ProxyAuditDocument> ProxyAudits => Set<ProxyAuditDocument>();
     public DbSet<SystemSettingsDocument> Settings => Set<SystemSettingsDocument>();
+    public DbSet<OrchestratorLeaseDocument> Leases => Set<OrchestratorLeaseDocument>();
     public DbSet<WorkflowDocument> Workflows => Set<WorkflowDocument>();
     public DbSet<WorkflowExecutionDocument> WorkflowExecutions => Set<WorkflowExecutionDocument>();
     public DbSet<AlertRuleDocument> AlertRules => Set<AlertRuleDocument>();
@@ -25,10 +27,6 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<RepositoryInstructionDocument> RepositoryInstructions => Set<RepositoryInstructionDocument>();
     public DbSet<HarnessProviderSettingsDocument> HarnessProviderSettings => Set<HarnessProviderSettingsDocument>();
     public DbSet<TaskTemplateDocument> TaskTemplates => Set<TaskTemplateDocument>();
-    public DbSet<AgentDocument> Agents => Set<AgentDocument>();
-    public DbSet<WorkflowV2Document> WorkflowsV2 => Set<WorkflowV2Document>();
-    public DbSet<WorkflowExecutionV2Document> WorkflowExecutionsV2 => Set<WorkflowExecutionV2Document>();
-    public DbSet<WorkflowDeadLetterDocument> WorkflowDeadLetters => Set<WorkflowDeadLetterDocument>();
     public DbSet<TerminalSessionDocument> TerminalSessions => Set<TerminalSessionDocument>();
     public DbSet<TerminalAuditEventDocument> TerminalAuditEvents => Set<TerminalAuditEventDocument>();
 
@@ -47,6 +45,7 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<WebhookRegistration>().HasKey(x => x.Id);
         modelBuilder.Entity<ProxyAuditDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<SystemSettingsDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<OrchestratorLeaseDocument>().HasKey(x => x.LeaseName);
         modelBuilder.Entity<WorkflowDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<WorkflowExecutionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<AlertRuleDocument>().HasKey(x => x.Id);
@@ -54,16 +53,13 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<RepositoryInstructionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<HarnessProviderSettingsDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TaskTemplateDocument>().HasKey(x => x.Id);
-        modelBuilder.Entity<AgentDocument>().HasKey(x => x.Id);
-        modelBuilder.Entity<WorkflowV2Document>().HasKey(x => x.Id);
-        modelBuilder.Entity<WorkflowExecutionV2Document>().HasKey(x => x.Id);
-        modelBuilder.Entity<WorkflowDeadLetterDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TerminalSessionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TerminalAuditEventDocument>().HasKey(x => x.Id);
 
-        modelBuilder.Entity<RepositoryDocument>()
+        var repositoryInstructionFiles = modelBuilder.Entity<RepositoryDocument>()
             .Property(x => x.InstructionFiles)
             .HasConversion(JsonConverter<List<InstructionFile>>());
+        repositoryInstructionFiles.Metadata.SetValueComparer(JsonValueComparer<List<InstructionFile>>());
 
         modelBuilder.Entity<TaskDocument>()
             .Property(x => x.RetryPolicy)
@@ -80,26 +76,42 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<TaskDocument>()
             .Property(x => x.ArtifactPolicy)
             .HasConversion(JsonConverter<ArtifactPolicyConfig>());
-        modelBuilder.Entity<TaskDocument>()
+        var taskInstructionFiles = modelBuilder.Entity<TaskDocument>()
             .Property(x => x.InstructionFiles)
             .HasConversion(JsonConverter<List<InstructionFile>>());
-        modelBuilder.Entity<TaskDocument>()
+        taskInstructionFiles.Metadata.SetValueComparer(JsonValueComparer<List<InstructionFile>>());
+
+        var taskArtifactPatterns = modelBuilder.Entity<TaskDocument>()
             .Property(x => x.ArtifactPatterns)
             .HasConversion(JsonConverter<List<string>>());
-        modelBuilder.Entity<TaskDocument>()
+        taskArtifactPatterns.Metadata.SetValueComparer(JsonValueComparer<List<string>>());
+
+        var taskLinkedFailureRuns = modelBuilder.Entity<TaskDocument>()
             .Property(x => x.LinkedFailureRuns)
             .HasConversion(JsonConverter<List<string>>());
+        taskLinkedFailureRuns.Metadata.SetValueComparer(JsonValueComparer<List<string>>());
 
-        modelBuilder.Entity<WorkflowDocument>()
+        var workflowStages = modelBuilder.Entity<WorkflowDocument>()
             .Property(x => x.Stages)
             .HasConversion(JsonConverter<List<WorkflowStageConfig>>());
-        modelBuilder.Entity<WorkflowExecutionDocument>()
+        workflowStages.Metadata.SetValueComparer(JsonValueComparer<List<WorkflowStageConfig>>());
+
+        var workflowStageResults = modelBuilder.Entity<WorkflowExecutionDocument>()
             .Property(x => x.StageResults)
             .HasConversion(JsonConverter<List<WorkflowStageResult>>());
+        workflowStageResults.Metadata.SetValueComparer(JsonValueComparer<List<WorkflowStageResult>>());
 
-        modelBuilder.Entity<HarnessProviderSettingsDocument>()
+        var harnessAdditionalSettings = modelBuilder.Entity<HarnessProviderSettingsDocument>()
             .Property(x => x.AdditionalSettings)
             .HasConversion(JsonConverter<Dictionary<string, string>>());
+        harnessAdditionalSettings.Metadata.SetValueComparer(JsonValueComparer<Dictionary<string, string>>());
+        modelBuilder.Entity<SystemSettingsDocument>()
+            .Property(x => x.Orchestrator)
+            .HasConversion(
+                value => JsonSerializer.Serialize(value, (JsonSerializerOptions?)null),
+                value => string.IsNullOrWhiteSpace(value)
+                    ? new OrchestratorSettings()
+                    : JsonSerializer.Deserialize<OrchestratorSettings>(value, (JsonSerializerOptions?)null) ?? new OrchestratorSettings());
 
         modelBuilder.Entity<TaskTemplateDocument>()
             .Property(x => x.RetryPolicy)
@@ -113,55 +125,20 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<TaskTemplateDocument>()
             .Property(x => x.ArtifactPolicy)
             .HasConversion(JsonConverter<ArtifactPolicyConfig>());
-        modelBuilder.Entity<TaskTemplateDocument>()
+        var taskTemplateCommands = modelBuilder.Entity<TaskTemplateDocument>()
             .Property(x => x.Commands)
             .HasConversion(JsonConverter<List<string>>());
-        modelBuilder.Entity<TaskTemplateDocument>()
+        taskTemplateCommands.Metadata.SetValueComparer(JsonValueComparer<List<string>>());
+
+        var taskTemplateArtifactPatterns = modelBuilder.Entity<TaskTemplateDocument>()
             .Property(x => x.ArtifactPatterns)
             .HasConversion(JsonConverter<List<string>>());
-        modelBuilder.Entity<TaskTemplateDocument>()
+        taskTemplateArtifactPatterns.Metadata.SetValueComparer(JsonValueComparer<List<string>>());
+
+        var taskTemplateLinkedFailureRuns = modelBuilder.Entity<TaskTemplateDocument>()
             .Property(x => x.LinkedFailureRuns)
             .HasConversion(JsonConverter<List<string>>());
-
-        modelBuilder.Entity<AgentDocument>()
-            .Property(x => x.RetryPolicy)
-            .HasConversion(JsonConverter<RetryPolicyConfig>());
-        modelBuilder.Entity<AgentDocument>()
-            .Property(x => x.Timeouts)
-            .HasConversion(JsonConverter<TimeoutConfig>());
-        modelBuilder.Entity<AgentDocument>()
-            .Property(x => x.SandboxProfile)
-            .HasConversion(JsonConverter<SandboxProfileConfig>());
-        modelBuilder.Entity<AgentDocument>()
-            .Property(x => x.ArtifactPolicy)
-            .HasConversion(JsonConverter<ArtifactPolicyConfig>());
-        modelBuilder.Entity<AgentDocument>()
-            .Property(x => x.ArtifactPatterns)
-            .HasConversion(JsonConverter<List<string>>());
-        modelBuilder.Entity<AgentDocument>()
-            .Property(x => x.InstructionFiles)
-            .HasConversion(JsonConverter<List<InstructionFile>>());
-
-        modelBuilder.Entity<WorkflowV2Document>()
-            .Property(x => x.Nodes)
-            .HasConversion(JsonConverter<List<WorkflowNodeConfig>>());
-        modelBuilder.Entity<WorkflowV2Document>()
-            .Property(x => x.Edges)
-            .HasConversion(JsonConverter<List<WorkflowEdgeConfig>>());
-        modelBuilder.Entity<WorkflowV2Document>()
-            .Property(x => x.Trigger)
-            .HasConversion(JsonConverter<WorkflowV2TriggerConfig>());
-
-        modelBuilder.Entity<WorkflowExecutionV2Document>()
-            .Property(x => x.Context)
-            .HasConversion(JsonConverter<Dictionary<string, System.Text.Json.JsonElement>>());
-        modelBuilder.Entity<WorkflowExecutionV2Document>()
-            .Property(x => x.NodeResults)
-            .HasConversion(JsonConverter<List<WorkflowNodeResult>>());
-
-        modelBuilder.Entity<WorkflowDeadLetterDocument>()
-            .Property(x => x.InputContextSnapshot)
-            .HasConversion(JsonConverter<Dictionary<string, System.Text.Json.JsonElement>>());
+        taskTemplateLinkedFailureRuns.Metadata.SetValueComparer(JsonValueComparer<List<string>>());
 
         modelBuilder.Entity<ProjectDocument>()
             .HasIndex(x => x.Name);
@@ -195,6 +172,8 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
             .HasIndex(x => x.RepositoryId);
         modelBuilder.Entity<ProxyAuditDocument>()
             .HasIndex(x => new { x.RunId, x.TimestampUtc });
+        modelBuilder.Entity<OrchestratorLeaseDocument>()
+            .HasIndex(x => x.ExpiresAtUtc);
         modelBuilder.Entity<WorkflowDocument>()
             .HasIndex(x => x.RepositoryId);
         modelBuilder.Entity<WorkflowExecutionDocument>()
@@ -214,22 +193,6 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<HarnessProviderSettingsDocument>()
             .HasIndex(x => new { x.RepositoryId, x.Harness })
             .IsUnique();
-
-        modelBuilder.Entity<AgentDocument>()
-            .HasIndex(x => x.RepositoryId);
-        modelBuilder.Entity<AgentDocument>()
-            .HasIndex(x => new { x.RepositoryId, x.Name })
-            .IsUnique();
-        modelBuilder.Entity<WorkflowV2Document>()
-            .HasIndex(x => x.RepositoryId);
-        modelBuilder.Entity<WorkflowExecutionV2Document>()
-            .HasIndex(x => new { x.WorkflowV2Id, x.CreatedAtUtc });
-        modelBuilder.Entity<WorkflowExecutionV2Document>()
-            .HasIndex(x => x.State);
-        modelBuilder.Entity<WorkflowDeadLetterDocument>()
-            .HasIndex(x => x.ExecutionId);
-        modelBuilder.Entity<WorkflowDeadLetterDocument>()
-            .HasIndex(x => x.Replayed);
 
         modelBuilder.Entity<TerminalSessionDocument>()
             .HasIndex(x => x.WorkerId);
@@ -268,5 +231,37 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         return new ValueConverter<T, string>(
             value => JsonSerializer.Serialize(value, (JsonSerializerOptions?)null),
             value => JsonSerializer.Deserialize<T>(value, (JsonSerializerOptions?)null)!);
+    }
+
+    private static ValueComparer<T> JsonValueComparer<T>()
+    {
+        return new ValueComparer<T>(
+            (left, right) => AreEqualForComparison(left, right),
+            value => GetComparisonHashCode(value),
+            value => CloneForComparison(value));
+    }
+
+    private static string SerializeForComparison<T>(T value)
+    {
+        return ReferenceEquals(value, null)
+            ? "null"
+            : JsonSerializer.Serialize(value, (JsonSerializerOptions?)null);
+    }
+
+    private static bool AreEqualForComparison<T>(T left, T right)
+    {
+        return string.Equals(SerializeForComparison(left), SerializeForComparison(right), StringComparison.Ordinal);
+    }
+
+    private static int GetComparisonHashCode<T>(T value)
+    {
+        return SerializeForComparison(value).GetHashCode();
+    }
+
+    private static T CloneForComparison<T>(T value)
+    {
+        return ReferenceEquals(value, null)
+            ? default!
+            : JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, (JsonSerializerOptions?)null), (JsonSerializerOptions?)null)!;
     }
 }

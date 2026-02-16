@@ -1,10 +1,15 @@
-@page "/terminals"
+@page "/settings/terminals"
+@layout SettingsLayout
 @rendermode InteractiveServer
+@using AgentsDashboard.Contracts.Worker
+@using AgentsDashboard.ControlPlane.Services
 
 @inject NavigationManager Navigation
-@inject IHttpClientFactory HttpClientFactory
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
+@inject IWorkerRegistryService WorkerRegistry
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
+@inject AgentsDashboard.ControlPlane.Services.ITerminalBridgeService TerminalBridge
 @implements IAsyncDisposable
 
 <PageTitle>Terminals - AgentsDashboard</PageTitle>
@@ -15,27 +20,10 @@
     <MudButton Variant="Variant.Filled"
                Color="Color.Primary"
                StartIcon="@Icons.Material.Filled.Add"
-               OnClick="OpenNewTerminalDialogAsync"
-               Disabled="@(_hubConnection?.State != HubConnectionState.Connected)">
+               OnClick="OpenNewTerminalDialogAsync">
         New Terminal
     </MudButton>
 </MudStack>
-
-@if (_hubConnection?.State != HubConnectionState.Connected)
-{
-    <MudAlert Severity="Severity.Warning" Class="mb-4">
-        @if (_hubConnection?.State == HubConnectionState.Reconnecting)
-        {
-            <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
-            @:Reconnecting to terminal hub...
-        }
-        else
-        {
-            @:Connecting to terminal hub...
-            <MudProgressCircular Size="Size.Small" Indeterminate Class="ml-2" />
-        }
-    </MudAlert>
-}
 
 @if (_tabs.Count == 0)
 {
@@ -76,15 +64,15 @@ else
                         </MudAlert>
                     }
                     <div id="@tab.ElementId"
-                         style="height: 500px; background: #1e1e1e;"
+                         style="height: 520px; background: #07090d; border: 1px solid rgba(165, 177, 193, 0.12); border-bottom: 0; border-radius: 12px 12px 0 0;"
                          @onclick="() => FocusTerminalAsync(tab)">
                     </div>
-                    <MudStack Row AlignItems="AlignItems.Center" Class="px-2 py-1" Style="background: #2d2d2d;">
+                    <MudStack Row AlignItems="AlignItems.Center" Class="px-2 py-1" Style="background: #0b0d11; border: 1px solid rgba(165, 177, 193, 0.12); border-top: 1px solid rgba(165, 177, 193, 0.08); border-radius: 0 0 12px 12px;">
                         <MudChip T="string" Size="Size.Small"
                                  Color="@(tab.IsConnected ? Color.Success : Color.Error)">
                             @(tab.IsConnected ? "Connected" : "Disconnected")
                         </MudChip>
-                        <MudText Typo="Typo.caption" Style="color: #888;">
+                        <MudText Typo="Typo.caption" Style="color: #a5b1c1;">
                             Session: @tab.SessionId[..Math.Min(12, tab.SessionId.Length)]
                         </MudText>
                         <MudSpacer />
@@ -113,7 +101,7 @@ else
         }
         else if (_availableWorkers.Count == 0)
         {
-            <MudAlert Severity="Severity.Warning">No online workers available. Workers must be registered and online to open terminal sessions.</MudAlert>
+            <MudAlert Severity="Severity.Info">No online workers are currently registered. A worker will be started automatically when you connect.</MudAlert>
         }
         else
         {
@@ -142,7 +130,7 @@ else
         <MudButton OnClick="() => _showNewTerminalDialog = false">Cancel</MudButton>
         <MudButton Variant="Variant.Filled"
                    Color="Color.Primary"
-                   Disabled="@(string.IsNullOrEmpty(_selectedWorkerId) || _workersLoading)"
+                   Disabled="@(_workersLoading)"
                    OnClick="CreateTerminalSessionAsync">
             Connect
         </MudButton>
@@ -153,7 +141,7 @@ else
     [SupplyParameterFromQuery]
     public string? RunId { get; set; }
 
-    private HubConnection? _hubConnection;
+    private readonly string _clientId = Guid.NewGuid().ToString("N");
     private IJSObjectReference? _jsModule;
     private readonly List<TerminalTab> _tabs = [];
     private int _activeTabIndex;
@@ -170,59 +158,19 @@ else
         CloseOnEscapeKey = true
     };
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
         _dotNetRef = DotNetObjectReference.Create(this);
 
-        _hubConnection = new HubConnectionBuilder()
-            .WithUrl(Navigation.ToAbsoluteUri("/hubs/terminal"))
-            .WithAutomaticReconnect()
-            .Build();
-
-        _hubConnection.On<string, bool, string?>("TerminalSessionOpened", OnTerminalSessionOpened);
-        _hubConnection.On<string, long, string>("TerminalOutput", OnTerminalOutput);
-        _hubConnection.On<string, string?>("TerminalSessionClosed", OnTerminalSessionClosed);
-        _hubConnection.On<string, string>("TerminalSessionError", OnTerminalSessionError);
-
-        _hubConnection.Reconnecting += _ =>
+        TerminalBridge.RegisterClient(_clientId, new TerminalClientCallbacks
         {
-            InvokeAsync(StateHasChanged);
-            return Task.CompletedTask;
-        };
+            OnSessionOpenedAsync = OnTerminalSessionOpenedAsync,
+            OnSessionOutputAsync = OnTerminalOutputAsync,
+            OnSessionClosedAsync = OnTerminalSessionClosedAsync,
+            OnSessionErrorAsync = OnTerminalSessionErrorAsync,
+        });
 
-        _hubConnection.Reconnected += _ =>
-        {
-            InvokeAsync(async () =>
-            {
-                foreach (var tab in _tabs.Where(t => t.IsConnected))
-                {
-                    try
-                    {
-                        await _hubConnection.InvokeAsync("AttachSession", tab.SessionId, tab.LastSequence);
-                    }
-                    catch (Exception ex)
-                    {
-                        tab.IsConnected = false;
-                        Snackbar.Add($"Failed to reattach session: {ex.Message}", Severity.Warning);
-                    }
-                }
-                StateHasChanged();
-            });
-            return Task.CompletedTask;
-        };
-
-        _hubConnection.Closed += _ =>
-        {
-            InvokeAsync(() =>
-            {
-                foreach (var tab in _tabs)
-                    tab.IsConnected = false;
-                StateHasChanged();
-            });
-            return Task.CompletedTask;
-        };
-
-        await _hubConnection.StartAsync();
+        return Task.CompletedTask;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -243,6 +191,12 @@ else
         {
             tab.NeedsInit = false;
             await InitTerminalForTabAsync(tab);
+
+            while (tab.PendingOutput.Count > 0)
+            {
+                var output = tab.PendingOutput.Dequeue();
+                await _jsModule!.InvokeVoidAsync("writeTerminal", tab.ElementId, output);
+            }
         }
     }
 
@@ -250,24 +204,13 @@ else
     {
         try
         {
-            var client = HttpClientFactory.CreateClient("Api");
-            var response = await client.GetAsync($"/api/runs/{RunId}");
-            if (!response.IsSuccessStatusCode) return;
-
-            var run = await response.Content.ReadFromJsonAsync<RunInfo>();
+            var run = await Store.GetRunAsync(RunId!, CancellationToken.None);
             if (run is null) return;
 
             await LoadWorkersAsync();
 
-            var workerId = _availableWorkers.FirstOrDefault()?.WorkerId;
-            if (workerId is null)
-            {
-                Snackbar.Add("No workers available for terminal session", Severity.Warning);
-                return;
-            }
-
             var rid = RunId!;
-            await CreateSessionOnWorkerAsync(workerId, rid, $"Run #{rid[..Math.Min(8, rid.Length)]}");
+            await CreateSessionOnWorkerAsync(null, null, $"Run #{rid[..Math.Min(8, rid.Length)]}");
         }
         catch (Exception ex)
         {
@@ -289,34 +232,37 @@ else
 
         try
         {
-            var client = HttpClientFactory.CreateClient("Api");
-            var response = await client.GetAsync("/api/workers/registered");
-
-            if (response.IsSuccessStatusCode)
-            {
-                _availableWorkers = await response.Content.ReadFromJsonAsync<List<WorkerInfo>>() ?? [];
-            }
-            else
-            {
-                var storeResponse = await client.GetAsync("/api/workers");
-                if (storeResponse.IsSuccessStatusCode)
+            _availableWorkers = WorkerRegistry.GetRegisteredWorkers()
+                .Select(w => new WorkerInfo
                 {
-                    var workers = await storeResponse.Content.ReadFromJsonAsync<List<WorkerStoreInfo>>() ?? [];
-                    _availableWorkers = workers
-                        .Where(w => w.Online)
-                        .Select(w => new WorkerInfo
-                        {
-                            WorkerId = w.WorkerId,
-                            HostName = w.Endpoint ?? w.WorkerId,
-                            ActiveSlots = w.ActiveSlots,
-                            MaxSlots = w.MaxSlots
-                        })
-                        .ToList();
-                }
+                    WorkerId = w.WorkerId,
+                    HostName = w.HostName,
+                    ActiveSlots = w.ActiveSlots,
+                    MaxSlots = w.MaxSlots,
+                    LastHeartbeat = w.LastHeartbeat.ToUnixTimeSeconds()
+                })
+                .ToList();
+
+            if (_availableWorkers.Count == 0)
+            {
+                var workers = await Store.ListWorkersAsync(CancellationToken.None);
+                _availableWorkers = workers
+                    .Where(w => w.Online)
+                    .Select(w => new WorkerInfo
+                    {
+                        WorkerId = w.WorkerId,
+                        HostName = w.Endpoint ?? w.WorkerId,
+                        ActiveSlots = w.ActiveSlots,
+                        MaxSlots = w.MaxSlots
+                    })
+                    .ToList();
             }
 
             if (_availableWorkers.Count > 0 && _selectedWorkerId is null)
                 _selectedWorkerId = _availableWorkers[0].WorkerId;
+
+            if (_availableWorkers.Count == 0)
+                _selectedWorkerId = null;
         }
         catch (Exception ex)
         {
@@ -331,24 +277,21 @@ else
 
     private async Task CreateTerminalSessionAsync()
     {
-        if (string.IsNullOrEmpty(_selectedWorkerId)) return;
-
         _showNewTerminalDialog = false;
-        var workerName = _availableWorkers.FirstOrDefault(w => w.WorkerId == _selectedWorkerId)?.HostName ?? _selectedWorkerId;
+        var workerName = string.IsNullOrWhiteSpace(_selectedWorkerId)
+            ? "Auto"
+            : _availableWorkers.FirstOrDefault(w => w.WorkerId == _selectedWorkerId)?.HostName ?? _selectedWorkerId;
         await CreateSessionOnWorkerAsync(_selectedWorkerId, null, workerName);
     }
 
-    private async Task CreateSessionOnWorkerAsync(string workerId, string? runId, string label)
+    private async Task CreateSessionOnWorkerAsync(string? workerId, string? runId, string label)
     {
-        if (_hubConnection?.State != HubConnectionState.Connected) return;
-
         var tab = new TerminalTab
         {
             Label = label,
-            WorkerId = workerId,
+            WorkerId = workerId ?? "auto",
             RunId = runId,
-            State = TerminalTabState.Connecting,
-            NeedsInit = true
+            State = TerminalTabState.Connecting
         };
 
         _tabs.Add(tab);
@@ -357,9 +300,17 @@ else
 
         try
         {
-            var sessionId = await _hubConnection.InvokeAsync<string>(
-                "CreateSession", workerId, runId, 120, 30);
+            var sessionId = await TerminalBridge.CreateSessionAsync(
+                _clientId,
+                workerId,
+                runId,
+                120,
+                30,
+                CancellationToken.None);
+
             tab.SessionId = sessionId;
+            tab.NeedsInit = true;
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
@@ -391,19 +342,19 @@ else
         {
             await _jsModule.InvokeVoidAsync("focusTerminal", tab.ElementId);
         }
-        catch { }
+        catch
+        {
+        }
     }
 
     private async Task ReconnectTabAsync(TerminalTab tab)
     {
-        if (_hubConnection?.State != HubConnectionState.Connected) return;
-
         try
         {
             tab.State = TerminalTabState.Connecting;
             StateHasChanged();
 
-            await _hubConnection.InvokeAsync("AttachSession", tab.SessionId, tab.LastSequence);
+            await TerminalBridge.AttachSessionAsync(_clientId, tab.SessionId, tab.LastSequence, CancellationToken.None);
             tab.IsConnected = true;
             tab.State = TerminalTabState.Active;
             StateHasChanged();
@@ -420,12 +371,14 @@ else
     {
         try
         {
-            if (_hubConnection?.State == HubConnectionState.Connected && tab.IsConnected)
+            if (tab.IsConnected)
             {
-                await _hubConnection.InvokeAsync("Close", tab.SessionId);
+                await TerminalBridge.CloseAsync(tab.SessionId, CancellationToken.None);
             }
         }
-        catch { }
+        catch
+        {
+        }
 
         if (_jsModule is not null)
         {
@@ -433,23 +386,26 @@ else
             {
                 await _jsModule.InvokeVoidAsync("disposeTerminal", tab.ElementId);
             }
-            catch { }
+            catch
+            {
+            }
         }
 
         _tabs.Remove(tab);
         if (_activeTabIndex >= _tabs.Count)
             _activeTabIndex = Math.Max(0, _tabs.Count - 1);
+
         StateHasChanged();
     }
 
-    private void OnTerminalSessionOpened(string sessionId, bool success, string? error)
+    private Task OnTerminalSessionOpenedAsync(TerminalSessionOpenedMessage message)
     {
-        InvokeAsync(() =>
+        return InvokeAsync(() =>
         {
-            var tab = _tabs.FirstOrDefault(t => t.SessionId == sessionId);
+            var tab = _tabs.FirstOrDefault(t => t.SessionId == message.SessionId);
             if (tab is null) return;
 
-            if (success)
+            if (message.Success)
             {
                 tab.IsConnected = true;
                 tab.State = TerminalTabState.Active;
@@ -458,53 +414,61 @@ else
             {
                 tab.IsConnected = false;
                 tab.State = TerminalTabState.Error;
-                Snackbar.Add($"Terminal session failed: {error}", Severity.Error);
+                Snackbar.Add($"Terminal session failed: {message.Error}", Severity.Error);
             }
             StateHasChanged();
         });
     }
 
-    private void OnTerminalOutput(string sessionId, long sequence, string payloadBase64)
+    private Task OnTerminalOutputAsync(TerminalOutputMessage message)
     {
-        InvokeAsync(async () =>
+        return InvokeAsync(async () =>
         {
-            var tab = _tabs.FirstOrDefault(t => t.SessionId == sessionId);
-            if (tab is null || _jsModule is null) return;
+            var tab = _tabs.FirstOrDefault(t => t.SessionId == message.SessionId);
+            if (tab is null) return;
 
-            tab.LastSequence = sequence;
+            tab.LastSequence = message.Sequence;
+
+            if (_jsModule is null)
+            {
+                tab.PendingOutput.Enqueue(message.PayloadBase64);
+                return;
+            }
 
             try
             {
-                await _jsModule.InvokeVoidAsync("writeTerminal", tab.ElementId, payloadBase64);
+                await _jsModule.InvokeVoidAsync("writeTerminal", tab.ElementId, message.PayloadBase64);
             }
-            catch { }
+            catch
+            {
+            }
         });
     }
 
-    private void OnTerminalSessionClosed(string sessionId, string? reason)
+    private Task OnTerminalSessionClosedAsync(TerminalSessionClosedMessage message)
     {
-        InvokeAsync(() =>
+        return InvokeAsync(() =>
         {
-            var tab = _tabs.FirstOrDefault(t => t.SessionId == sessionId);
+            var tab = _tabs.FirstOrDefault(t => t.SessionId == message.SessionId);
             if (tab is null) return;
 
             tab.IsConnected = false;
             tab.State = TerminalTabState.Closed;
-            Snackbar.Add($"Terminal session closed{(reason is not null ? $": {reason}" : "")}", Severity.Info);
+            Snackbar.Add($"Terminal session closed{(message.Reason is not null ? $": {message.Reason}" : "")}", Severity.Info);
             StateHasChanged();
         });
     }
 
-    private void OnTerminalSessionError(string sessionId, string error)
+    private Task OnTerminalSessionErrorAsync(TerminalSessionErrorMessage message)
     {
-        InvokeAsync(() =>
+        return InvokeAsync(() =>
         {
-            var tab = _tabs.FirstOrDefault(t => t.SessionId == sessionId);
+            var tab = _tabs.FirstOrDefault(t => t.SessionId == message.SessionId);
             if (tab is null) return;
 
             tab.IsConnected = false;
             tab.State = TerminalTabState.Error;
-            Snackbar.Add($"Terminal error: {error}", Severity.Error);
+            Snackbar.Add($"Terminal error: {message.Error}", Severity.Error);
             StateHasChanged();
         });
     }
@@ -512,42 +476,44 @@ else
     [JSInvokable]
     public async Task OnTerminalData(string sessionId, string base64Input)
     {
-        if (_hubConnection?.State != HubConnectionState.Connected) return;
-
         try
         {
-            await _hubConnection.InvokeAsync("Input", sessionId, base64Input);
+            await TerminalBridge.SendInputAsync(sessionId, base64Input, CancellationToken.None);
         }
-        catch { }
+        catch
+        {
+        }
     }
 
     [JSInvokable]
     public async Task OnTerminalResize(string sessionId, int cols, int rows)
     {
-        if (_hubConnection?.State != HubConnectionState.Connected) return;
-
         try
         {
-            await _hubConnection.InvokeAsync("Resize", sessionId, cols, rows);
+            await TerminalBridge.ResizeAsync(sessionId, cols, rows, CancellationToken.None);
         }
-        catch { }
+        catch
+        {
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_hubConnection is not null)
+        foreach (var tab in _tabs.ToList())
         {
-            foreach (var tab in _tabs)
+            try
             {
-                try
+                if (tab.IsConnected)
                 {
-                    if (_hubConnection.State == HubConnectionState.Connected)
-                        await _hubConnection.InvokeAsync("Close", tab.SessionId);
+                    await TerminalBridge.CloseAsync(tab.SessionId, CancellationToken.None);
                 }
-                catch { }
             }
-            await _hubConnection.DisposeAsync();
+            catch
+            {
+            }
         }
+
+        await TerminalBridge.UnregisterClientAsync(_clientId, CancellationToken.None);
 
         if (_jsModule is not null)
         {
@@ -557,7 +523,9 @@ else
                 {
                     await _jsModule.InvokeVoidAsync("disposeTerminal", tab.ElementId);
                 }
-                catch { }
+                catch
+                {
+                }
             }
             await _jsModule.DisposeAsync();
         }
@@ -575,6 +543,7 @@ else
         public TerminalTabState State { get; set; } = TerminalTabState.Connecting;
         public long LastSequence { get; set; }
         public bool NeedsInit { get; set; }
+        public Queue<string> PendingOutput { get; } = [];
         public string ElementId => $"terminal-{SessionId}";
     }
 
@@ -595,19 +564,4 @@ else
         public long LastHeartbeat { get; set; }
     }
 
-    private sealed class WorkerStoreInfo
-    {
-        public string WorkerId { get; set; } = string.Empty;
-        public string? Endpoint { get; set; }
-        public bool Online { get; set; }
-        public int ActiveSlots { get; set; }
-        public int MaxSlots { get; set; }
-    }
-
-    private sealed class RunInfo
-    {
-        public string Id { get; set; } = string.Empty;
-        public string State { get; set; } = string.Empty;
-        public string? WorkerId { get; set; }
-    }
 }

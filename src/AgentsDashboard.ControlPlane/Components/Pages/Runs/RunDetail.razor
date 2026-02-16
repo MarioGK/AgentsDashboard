@@ -1,11 +1,15 @@
-@page "/runs/{Id}"
+<script type="module" src="@Assets["Components/Pages/Runs/RunDetail.razor.js"]"></script>
+
+@page "/settings/runs/{Id}"
+@layout SettingsLayout
 @rendermode InteractiveServer
 
-@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 @inject AgentsDashboard.ControlPlane.Services.RunDispatcher Dispatcher
-@inject AgentsDashboard.ControlPlane.Services.IRunEventPublisher Publisher
+@inject AgentsDashboard.ControlPlane.Services.IUiRealtimeBroker UiRealtimeBroker
 @inject NavigationManager Navigation
-@implements IAsyncDisposable
+@inject IJSRuntime JS
+@implements IDisposable
 
 <div style="display: none;">
     @(_workflowExecutionRefresh)
@@ -20,7 +24,7 @@
 else
 {
     <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
-        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/runs" />
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/settings/runs" />
         <MudText Typo="Typo.h4">Run @_run.Id[..8]</MudText>
         <MudChip T="string" Color="@GetStateColor(_run.State)" Class="ml-2">@_run.State</MudChip>
         @if (_run.Attempt > 1)
@@ -44,7 +48,7 @@ else
             <MudTooltip Text="Open in Terminal">
                 <MudIconButton Icon="@Icons.Material.Filled.Terminal"
                                Color="Color.Info"
-                               OnClick="@(() => Navigation.NavigateTo($"/terminals?runId={Id}", forceLoad: true))" />
+                               OnClick="@(() => Navigation.NavigateTo($"/settings/terminals?runId={Id}", forceLoad: true))" />
             </MudTooltip>
         }
         @if (_run.State is RunState.Queued or RunState.Running or RunState.PendingApproval)
@@ -144,8 +148,7 @@ else
                                         <MudTooltip Text="Download artifact" Placement="Placement.Top">
                                             <MudIconButton Icon="@Icons.Material.Filled.Download"
                                                            Size="Size.Small"
-                                                           Href="@($"/api/runs/{Id}/artifacts/{artifact}")"
-                                                           Target="_blank" />
+                                                           OnClick="@(() => DownloadArtifactAsync(artifact))" />
                                         </MudTooltip>
                                     </td>
                                 </tr>
@@ -239,7 +242,7 @@ else
                                                 <MudStack Spacing="1">
                                                     @foreach (var runId in result.RunIds)
                                                     {
-                                                        <MudLink Href="@($"/runs/{runId}")" Typo="Typo.body2">@runId[..8]...</MudLink>
+                                                        <MudLink Href="@($"/settings/runs/{runId}")" Typo="Typo.body2">@runId[..8]...</MudLink>
                                                     }
                                                 </MudStack>
                                             }
@@ -262,7 +265,8 @@ else
     private List<RunLogEvent> _logs = [];
     private List<string> _artifacts = [];
     private List<string> _storedArtifacts = [];
-    private HubConnection? _hubConnection;
+    private IDisposable? _runLogSubscription;
+    private IDisposable? _runStatusSubscription;
     private WorkflowExecutionDocument? _workflowExecution;
     private WorkflowDocument? _workflow;
     private List<WorkflowStageConfig> _orderedStages = [];
@@ -294,21 +298,26 @@ else
             _orderedStages = _workflow?.Stages.OrderBy(s => s.Order).ToList() ?? [];
         }
 
-        _hubConnection = new HubConnectionBuilder()
-            .WithUrl(Navigation.ToAbsoluteUri("/hubs/runs"))
-            .WithAutomaticReconnect()
-            .Build();
-
-        _hubConnection.On<string, string, string, DateTime>("RunLogChunk", (runId, level, message, timestamp) =>
+        _runLogSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunLogChunkEvent>(runLog =>
         {
-            if (runId != Id) return;
-            _logs.Add(new RunLogEvent { RunId = runId, Level = level, Message = message, TimestampUtc = timestamp });
+            if (runLog.RunId != Id) return Task.CompletedTask;
+
+            _logs.Add(new RunLogEvent
+            {
+                RunId = runLog.RunId,
+                Level = runLog.Level,
+                Message = runLog.Message,
+                TimestampUtc = runLog.Timestamp
+            });
+
             InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
         });
 
-        _hubConnection.On<string, string, string, DateTime?, DateTime?>("RunStatusChanged", async (runId, state, summary, started, ended) =>
+        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(async runStatus =>
         {
-            if (runId != Id) return;
+            if (runStatus.RunId != Id) return;
+
             _run = await Store.GetRunAsync(Id, CancellationToken.None);
             _workflowExecution = await Store.GetWorkflowExecutionByRunIdAsync(Id, CancellationToken.None);
             if (_workflowExecution is not null)
@@ -319,8 +328,6 @@ else
             _workflowExecutionRefresh++;
             await InvokeAsync(StateHasChanged);
         });
-
-        await _hubConnection.StartAsync();
     }
 
     private async Task CancelRunAsync()
@@ -335,33 +342,74 @@ else
     {
         if (_run is null) return;
         // Navigate to the retry endpoint result
-        Navigation.NavigateTo($"/runs/{_run.Id}");
+        Navigation.NavigateTo($"/settings/runs/{_run.Id}");
     }
 
     private async Task ApproveRunAsync()
     {
         if (_run is null) return;
+        if (_run.State != RunState.PendingApproval) return;
 
-        using var httpClient = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
-        var response = await httpClient.PostAsync($"/api/runs/{_run.Id}/approve", null);
-
-        if (response.IsSuccessStatusCode)
+        var approved = await Store.ApproveRunAsync(_run.Id, CancellationToken.None);
+        if (approved is null)
         {
-            _run = await Store.GetRunAsync(_run.Id, CancellationToken.None);
+            return;
         }
+
+        var task = await Store.GetTaskAsync(approved.TaskId, CancellationToken.None);
+        if (task is null)
+        {
+            _run = approved;
+            return;
+        }
+
+        var repository = await Store.GetRepositoryAsync(task.RepositoryId, CancellationToken.None);
+        if (repository is null)
+        {
+            _run = approved;
+            return;
+        }
+
+        var project = await Store.GetProjectAsync(repository.ProjectId, CancellationToken.None);
+        if (project is null)
+        {
+            _run = approved;
+            return;
+        }
+
+        await Dispatcher.DispatchAsync(project, repository, task, approved, CancellationToken.None);
+        _run = await Store.GetRunAsync(_run.Id, CancellationToken.None) ?? approved;
     }
 
     private async Task RejectRunAsync()
     {
         if (_run is null) return;
+        if (_run.State != RunState.PendingApproval) return;
 
-        using var httpClient = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
-        var response = await httpClient.PostAsync($"/api/runs/{_run.Id}/reject", null);
-
-        if (response.IsSuccessStatusCode)
+        var rejected = await Store.RejectRunAsync(_run.Id, CancellationToken.None);
+        if (rejected is not null)
         {
-            _run = await Store.GetRunAsync(_run.Id, CancellationToken.None);
+            _run = rejected;
         }
+    }
+
+    private async Task DownloadArtifactAsync(string artifact)
+    {
+        if (string.IsNullOrWhiteSpace(Id) || string.IsNullOrWhiteSpace(artifact))
+        {
+            return;
+        }
+
+        await using var stream = await Store.GetArtifactAsync(Id, artifact, CancellationToken.None);
+        if (stream is null)
+        {
+            return;
+        }
+
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory, CancellationToken.None);
+        var payload = Convert.ToBase64String(memory.ToArray());
+        await JS.InvokeVoidAsync("agentsDashboard.downloadBase64File", artifact, "application/octet-stream", payload);
     }
 
     private static Color GetStateColor(RunState state) => state switch
@@ -441,9 +489,9 @@ else
         _expandedStageId = _expandedStageId == stageId ? null : stageId;
     }
 
-    public async ValueTask DisposeAsync()
+    public void Dispose()
     {
-        if (_hubConnection is not null)
-            await _hubConnection.DisposeAsync();
+        _runLogSubscription?.Dispose();
+        _runStatusSubscription?.Dispose();
     }
 }

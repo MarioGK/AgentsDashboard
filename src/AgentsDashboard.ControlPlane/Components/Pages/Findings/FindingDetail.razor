@@ -1,11 +1,11 @@
-@page "/findings/{Id}"
+@page "/settings/findings/{Id}"
+@layout SettingsLayout
 @rendermode InteractiveServer
 
-@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 @inject AgentsDashboard.ControlPlane.Services.RunDispatcher Dispatcher
 @inject AgentsDashboard.ControlPlane.Services.TaskTemplateService TemplateService
 @inject NavigationManager Navigation
-@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Finding @Id?[..8] - AgentsDashboard</PageTitle>
 
@@ -16,7 +16,7 @@
 else
 {
     <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
-        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/findings" />
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/settings/findings" />
         <MudText Typo="Typo.h4">@_finding.Title</MudText>
         <MudChip T="string" Color="@GetSeverityColor(_finding.Severity)" Class="ml-2">@_finding.Severity</MudChip>
         <MudChip T="string" Variant="Variant.Outlined">@_finding.State</MudChip>
@@ -38,7 +38,7 @@ else
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudField Label="Source Run" Variant="Variant.Outlined">
-                    <MudLink Href="@($"/runs/{_finding.RunId}")">@_finding.RunId[..8]</MudLink>
+                    <MudLink Href="@($"/settings/runs/{_finding.RunId}")">@_finding.RunId[..8]</MudLink>
                 </MudField>
             </MudItem>
             <MudItem xs="12" md="6">
@@ -165,17 +165,14 @@ else
         if (_finding is null) return;
         _showTaskDialog = false;
 
-        var request = new CreateTaskFromFindingRequest(
+        var created = await CreateTaskFromFindingAsync(
             _taskName.Trim(),
             _taskHarness,
             _taskCommand,
             _taskPrompt,
             [_finding.RunId]);
 
-        var client = HttpClientFactory.CreateClient("Api");
-        var response = await client.PostAsJsonAsync($"/api/findings/{_finding.Id}/create-task", request);
-
-        if (response.IsSuccessStatusCode)
+        if (created is not null)
             Navigation.NavigateTo($"/repositories/{_finding.RepositoryId}");
     }
 
@@ -187,17 +184,14 @@ else
         var template = await TemplateService.GetTemplateByTemplateIdAsync("regression-replay", CancellationToken.None);
         if (template is null) return;
 
-        var request = new CreateTaskFromFindingRequest(
+        var created = await CreateTaskFromFindingAsync(
             _regressionTaskName.Trim(),
             template.Harness,
             string.Join(" && ", template.Commands),
             template.Prompt,
             [_finding.RunId]);
 
-        var client = HttpClientFactory.CreateClient("Api");
-        var response = await client.PostAsJsonAsync($"/api/findings/{_finding.Id}/create-task", request);
-
-        if (response.IsSuccessStatusCode)
+        if (created is not null)
             Navigation.NavigateTo($"/repositories/{_finding.RepositoryId}");
     }
 
@@ -227,7 +221,7 @@ else
         await Dispatcher.DispatchAsync(project, repo, task, retryRun, CancellationToken.None);
         await Store.UpdateFindingStateAsync(_finding.Id, FindingState.InProgress, CancellationToken.None);
 
-        Navigation.NavigateTo($"/runs/{retryRun.Id}");
+        Navigation.NavigateTo($"/settings/runs/{retryRun.Id}");
     }
 
     private static Color GetSeverityColor(FindingSeverity severity) => severity switch
@@ -238,4 +232,37 @@ else
         FindingSeverity.Low => Color.Default,
         _ => Color.Default,
     };
+
+    private async Task<TaskDocument?> CreateTaskFromFindingAsync(
+        string name,
+        string harness,
+        string command,
+        string prompt,
+        List<string>? linkedFailureRuns)
+    {
+        if (_finding is null)
+            return null;
+
+        var run = await Store.GetRunAsync(_finding.RunId, CancellationToken.None);
+        if (run is null)
+            return null;
+
+        var sourceTask = await Store.GetTaskAsync(run.TaskId, CancellationToken.None);
+        if (sourceTask is null)
+            return null;
+
+        var createTaskRequest = new CreateTaskRequest(
+            RepositoryId: sourceTask.RepositoryId,
+            Name: name,
+            Kind: TaskKind.OneShot,
+            Harness: harness,
+            Prompt: prompt,
+            Command: command,
+            AutoCreatePullRequest: false,
+            CronExpression: string.Empty,
+            Enabled: true,
+            LinkedFailureRuns: linkedFailureRuns ?? [_finding.RunId]);
+
+        return await Store.CreateTaskAsync(createTaskRequest, CancellationToken.None);
+    }
 }

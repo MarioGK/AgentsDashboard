@@ -7,12 +7,8 @@ public sealed class OrchestratorOptions : IValidatableObject
     public const string SectionName = "Orchestrator";
 
     public string SqliteConnectionString { get; set; } = "Data Source=/data/orchestrator.db";
-    public string WorkerGrpcAddress { get; set; } = "http://worker-gateway:5201";
-    public string WorkerContainerImage { get; set; } = "agentsdashboard-worker-gateway:latest";
-    public string WorkerContainerName { get; set; } = "worker-gateway";
-    public string WorkerDockerNetwork { get; set; } = "agentsdashboard";
-    public int WorkerIdleTimeoutMinutes { get; set; } = 5;
-    public int WorkerStartupTimeoutSeconds { get; set; } = 60;
+    public string ArtifactsRootPath { get; set; } = "/data/artifacts";
+    public WorkerPoolConfig Workers { get; set; } = new();
     public int SchedulerIntervalSeconds { get; set; } = 10;
     public int MaxGlobalConcurrentRuns { get; set; } = 50;
     public int PerProjectConcurrencyLimit { get; set; } = 10;
@@ -28,8 +24,8 @@ public sealed class OrchestratorOptions : IValidatableObject
         if (string.IsNullOrWhiteSpace(SqliteConnectionString))
             yield return new ValidationResult("SqliteConnectionString is required", [nameof(SqliteConnectionString)]);
 
-        if (string.IsNullOrWhiteSpace(WorkerGrpcAddress))
-            yield return new ValidationResult("WorkerGrpcAddress is required", [nameof(WorkerGrpcAddress)]);
+        if (string.IsNullOrWhiteSpace(ArtifactsRootPath))
+            yield return new ValidationResult("ArtifactsRootPath is required", [nameof(ArtifactsRootPath)]);
 
         if (SchedulerIntervalSeconds < 1 || SchedulerIntervalSeconds > 300)
             yield return new ValidationResult("SchedulerIntervalSeconds must be between 1 and 300", [nameof(SchedulerIntervalSeconds)]);
@@ -48,7 +44,60 @@ public sealed class OrchestratorOptions : IValidatableObject
 
         if (PerRepoConcurrencyLimit > PerProjectConcurrencyLimit)
             yield return new ValidationResult("PerRepoConcurrencyLimit cannot exceed PerProjectConcurrencyLimit", [nameof(PerRepoConcurrencyLimit)]);
+
+        if (Workers.MaxWorkers < 1 || Workers.MaxWorkers > 256)
+            yield return new ValidationResult("Workers.MaxWorkers must be between 1 and 256", [$"{nameof(Workers)}.{nameof(Workers.MaxWorkers)}"]);
+
+        if (Workers.SlotsPerWorker < 1 || Workers.SlotsPerWorker > 128)
+            yield return new ValidationResult("Workers.SlotsPerWorker must be between 1 and 128", [$"{nameof(Workers)}.{nameof(Workers.SlotsPerWorker)}"]);
+
+        if (Workers.IdleTimeoutMinutes < 1 || Workers.IdleTimeoutMinutes > 1440)
+            yield return new ValidationResult("Workers.IdleTimeoutMinutes must be between 1 and 1440", [$"{nameof(Workers)}.{nameof(Workers.IdleTimeoutMinutes)}"]);
+
+        if (Workers.StartupTimeoutSeconds < 5 || Workers.StartupTimeoutSeconds > 300)
+            yield return new ValidationResult("Workers.StartupTimeoutSeconds must be between 5 and 300", [$"{nameof(Workers)}.{nameof(Workers.StartupTimeoutSeconds)}"]);
+
+        if (string.IsNullOrWhiteSpace(Workers.ContainerImage))
+            yield return new ValidationResult("Workers.ContainerImage is required", [$"{nameof(Workers)}.{nameof(Workers.ContainerImage)}"]);
+
+        if (string.IsNullOrWhiteSpace(Workers.ContainerNamePrefix))
+            yield return new ValidationResult("Workers.ContainerNamePrefix is required", [$"{nameof(Workers)}.{nameof(Workers.ContainerNamePrefix)}"]);
+
+        if (string.IsNullOrWhiteSpace(Workers.DockerNetwork))
+            yield return new ValidationResult("Workers.DockerNetwork is required", [$"{nameof(Workers)}.{nameof(Workers.DockerNetwork)}"]);
+
+        if (Workers.PressureSampleWindowSeconds < 5 || Workers.PressureSampleWindowSeconds > 600)
+            yield return new ValidationResult("Workers.PressureSampleWindowSeconds must be between 5 and 600", [$"{nameof(Workers)}.{nameof(Workers.PressureSampleWindowSeconds)}"]);
+
+        if (Workers.CpuScaleOutThresholdPercent < 1 || Workers.CpuScaleOutThresholdPercent > 100)
+            yield return new ValidationResult("Workers.CpuScaleOutThresholdPercent must be between 1 and 100", [$"{nameof(Workers)}.{nameof(Workers.CpuScaleOutThresholdPercent)}"]);
+
+        if (Workers.MemoryScaleOutThresholdPercent < 1 || Workers.MemoryScaleOutThresholdPercent > 100)
+            yield return new ValidationResult("Workers.MemoryScaleOutThresholdPercent must be between 1 and 100", [$"{nameof(Workers)}.{nameof(Workers.MemoryScaleOutThresholdPercent)}"]);
     }
+}
+
+public enum WorkerConnectivityMode
+{
+    AutoDetect = 0,
+    DockerDnsOnly = 1,
+    HostPortOnly = 2
+}
+
+public sealed class WorkerPoolConfig
+{
+    public int MaxWorkers { get; set; } = 100;
+    public int SlotsPerWorker { get; set; } = 1;
+    public int IdleTimeoutMinutes { get; set; } = 5;
+    public int StartupTimeoutSeconds { get; set; } = 60;
+    public string ContainerImage { get; set; } = "agentsdashboard-worker-gateway:latest";
+    public string ContainerNamePrefix { get; set; } = "worker-gateway";
+    public string DockerNetwork { get; set; } = "agentsdashboard";
+    public WorkerConnectivityMode ConnectivityMode { get; set; } = WorkerConnectivityMode.AutoDetect;
+    public bool EnablePressureScaling { get; set; } = true;
+    public int CpuScaleOutThresholdPercent { get; set; } = 85;
+    public int MemoryScaleOutThresholdPercent { get; set; } = 85;
+    public int PressureSampleWindowSeconds { get; set; } = 30;
 }
 
 public sealed class RetryDefaultsConfig

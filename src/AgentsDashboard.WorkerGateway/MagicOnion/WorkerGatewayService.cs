@@ -11,9 +11,10 @@ namespace AgentsDashboard.WorkerGateway.MagicOnion;
 /// Replaces gRPC WorkerGateway service.
 /// </summary>
 public sealed class WorkerGatewayService(
-    WorkerQueue queue,
+    IWorkerQueue queue,
     IContainerOrphanReconciler orphanReconciler,
     IDockerContainerService dockerService,
+    WorkerHarnessToolHealthService harnessToolHealthService,
     ILogger<WorkerGatewayService> logger)
     : ServiceBase<IWorkerGatewayService>, IWorkerGatewayService
 {
@@ -123,10 +124,7 @@ public sealed class WorkerGatewayService(
 
         try
         {
-            // Get all active run IDs from the queue
-            var activeRunIds = queue.ActiveSlots > 0
-                ? Enumerable.Empty<string>() // We'd need to expose active run IDs from WorkerQueue
-                : Enumerable.Empty<string>();
+            var activeRunIds = queue.ActiveRunIds;
 
             var result = await orphanReconciler.ReconcileAsync(activeRunIds, CancellationToken.None);
 
@@ -151,6 +149,42 @@ public sealed class WorkerGatewayService(
                 ErrorMessage = ex.Message,
                 ReconciledCount = 0,
                 ContainerIds = null
+            };
+        }
+    }
+
+    public async UnaryResult<GetHarnessToolsReply> GetHarnessToolsAsync(GetHarnessToolsRequest request)
+    {
+        try
+        {
+            var tools = await harnessToolHealthService.GetHarnessToolsAsync(CancellationToken.None);
+
+            return new GetHarnessToolsReply
+            {
+                Success = true,
+                ErrorMessage = null,
+                CheckedAt = DateTimeOffset.UtcNow,
+                Tools = tools
+                    .Select(x => new HarnessToolStatus
+                    {
+                        Command = x.Command,
+                        DisplayName = x.DisplayName,
+                        Status = x.Status,
+                        Version = x.Version
+                    })
+                    .ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to retrieve harness tool status for worker");
+
+            return new GetHarnessToolsReply
+            {
+                Success = false,
+                ErrorMessage = ex.Message,
+                CheckedAt = DateTimeOffset.UtcNow,
+                Tools = []
             };
         }
     }

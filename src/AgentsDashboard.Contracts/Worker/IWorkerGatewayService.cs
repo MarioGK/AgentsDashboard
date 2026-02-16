@@ -33,4 +33,9 @@ public interface IWorkerGatewayService : IService<IWorkerGatewayService>
     /// Reconcile orphaned containers on the worker.
     /// </summary>
     UnaryResult<ReconcileOrphanedContainersReply> ReconcileOrphanedContainersAsync(ReconcileOrphanedContainersRequest request);
+
+    /// <summary>
+    /// Query harness tool availability and versions from this worker.
+    /// </summary>
+    UnaryResult<GetHarnessToolsReply> GetHarnessToolsAsync(GetHarnessToolsRequest request);
 }

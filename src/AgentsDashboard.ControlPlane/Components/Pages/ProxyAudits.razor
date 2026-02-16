@@ -1,6 +1,7 @@
-@page "/proxy-audits"
+@page "/settings/proxy-audits"
+@layout SettingsLayout
 @rendermode InteractiveServer
-@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 
 <PageTitle>Proxy Audits - AgentsDashboard</PageTitle>
 
@@ -62,7 +63,7 @@ else
                 <MudTd DataLabel="Run ID">
                     @if (!string.IsNullOrEmpty(context.RunId))
                     {
-                        <MudLink Href="@($"/runs/{context.RunId}")">@context.RunId[..Math.Min(8, context.RunId.Length)]</MudLink>
+                        <MudLink Href="@($"/settings/runs/{context.RunId}")">@context.RunId[..Math.Min(8, context.RunId.Length)]</MudLink>
                     }
                 </MudTd>
             </RowTemplate>

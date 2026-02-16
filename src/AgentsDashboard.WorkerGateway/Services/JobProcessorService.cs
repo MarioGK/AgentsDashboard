@@ -5,7 +5,7 @@ using AgentsDashboard.WorkerGateway.Models;
 namespace AgentsDashboard.WorkerGateway.Services;
 
 public class JobProcessorService(
-    WorkerQueue queue,
+    IWorkerQueue queue,
     IHarnessExecutor executor,
     WorkerEventBus eventBus,
     ILogger<JobProcessorService> logger) : BackgroundService, IJobProcessorService

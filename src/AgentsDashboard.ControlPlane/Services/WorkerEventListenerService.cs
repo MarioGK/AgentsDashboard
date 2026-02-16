@@ -1,5 +1,5 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
-using System.Threading.Tasks;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Data;
@@ -9,6 +9,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class WorkerEventListenerService(
     IMagicOnionClientFactory clientFactory,
+    IWorkerLifecycleManager lifecycleManager,
     IOrchestratorStore store,
     IWorkerRegistryService workerRegistry,
     IRunEventPublisher publisher,
@@ -16,10 +17,10 @@ public sealed class WorkerEventListenerService(
     RunDispatcher dispatcher,
     ILogger<WorkerEventListenerService> logger) : BackgroundService, IWorkerEventReceiver
 {
-    private IWorkerEventHub? _eventHub;
-    private readonly object _hubLock = new();
-    private int _reconnectDelayMs = 1000;
-    private const int MaxReconnectDelayMs = 30000;
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan WorkerTtl = TimeSpan.FromMinutes(2);
+
+    private readonly ConcurrentDictionary<string, WorkerHubConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -27,7 +28,8 @@ public sealed class WorkerEventListenerService(
         {
             try
             {
-                await ConnectAndListenAsync(stoppingToken);
+                await SyncConnectionsAsync(stoppingToken);
+                await store.MarkStaleWorkersOfflineAsync(WorkerTtl, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -35,32 +37,108 @@ public sealed class WorkerEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Worker event hub connection failed. Reconnecting in {Delay}ms.", _reconnectDelayMs);
-                await Task.Delay(_reconnectDelayMs, stoppingToken);
+                logger.LogError(ex, "Worker event listener synchronization failed");
+            }
 
-                _reconnectDelayMs = Math.Min(_reconnectDelayMs * 2, MaxReconnectDelayMs);
+            await Task.Delay(PollInterval, stoppingToken);
+        }
+    }
+
+    private async Task SyncConnectionsAsync(CancellationToken cancellationToken)
+    {
+        var workers = await lifecycleManager.ListWorkersAsync(cancellationToken);
+        var runningWorkers = workers.Where(x => x.IsRunning).ToDictionary(x => x.WorkerId, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var worker in runningWorkers.Values)
+        {
+            if (_connections.TryGetValue(worker.WorkerId, out var existing))
+            {
+                if (string.Equals(existing.Endpoint, worker.GrpcEndpoint, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                await RemoveConnectionAsync(worker.WorkerId);
+            }
+
+            var connection = WorkerHubConnection.Create(worker.WorkerId, worker.GrpcEndpoint);
+            if (_connections.TryAdd(worker.WorkerId, connection))
+            {
+                connection.ConnectionTask = Task.Run(() => RunConnectionLoopAsync(connection, connection.Cancellation.Token), CancellationToken.None);
+            }
+        }
+
+        foreach (var knownWorkerId in _connections.Keys.ToList())
+        {
+            if (runningWorkers.ContainsKey(knownWorkerId))
+            {
+                continue;
+            }
+
+            await RemoveConnectionAsync(knownWorkerId);
+        }
+    }
+
+    private async Task RunConnectionLoopAsync(WorkerHubConnection connection, CancellationToken cancellationToken)
+    {
+        var reconnectDelay = TimeSpan.FromSeconds(1);
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                logger.LogInformation("Connecting worker event hub for {WorkerId} at {Endpoint}", connection.WorkerId, connection.Endpoint);
+                var hub = await clientFactory.ConnectEventHubAsync(connection.WorkerId, connection.Endpoint, this, cancellationToken);
+                connection.SetHub(hub);
+                reconnectDelay = TimeSpan.FromSeconds(1);
+
+                await hub.SubscribeAsync(runIds: null);
+                await hub.WaitForDisconnect();
+
+                logger.LogWarning("Worker event hub disconnected for {WorkerId}", connection.WorkerId);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Worker event hub connection failed for {WorkerId}", connection.WorkerId);
+                await Task.Delay(reconnectDelay, cancellationToken);
+                reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
+            }
+            finally
+            {
+                await connection.DisposeHubAsync();
             }
         }
     }
 
-    private async Task ConnectAndListenAsync(CancellationToken cancellationToken)
+    private async Task RemoveConnectionAsync(string workerId)
     {
-        logger.LogInformation("Connecting to WorkerEventHub...");
-
-        var hub = await clientFactory.ConnectEventHubAsync(this, cancellationToken);
-
-        lock (_hubLock)
+        if (!_connections.TryRemove(workerId, out var connection))
         {
-            _eventHub = hub;
+            return;
         }
 
-        _reconnectDelayMs = 1000;
-        logger.LogInformation("Connected to WorkerEventHub. Subscribing to all events...");
+        connection.Cancellation.Cancel();
 
-        await hub.SubscribeAsync(runIds: null);
-
-        await hub.WaitForDisconnect();
-        logger.LogWarning("WorkerEventHub disconnected.");
+        try
+        {
+            if (connection.ConnectionTask is not null)
+            {
+                await connection.ConnectionTask;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            await connection.DisposeHubAsync();
+            connection.Cancellation.Dispose();
+            clientFactory.RemoveWorker(workerId);
+        }
     }
 
     void IWorkerEventReceiver.OnJobEvent(JobEventMessage eventMessage)
@@ -138,6 +216,18 @@ public sealed class WorkerEventListenerService(
 
             await publisher.PublishStatusAsync(completedRun, CancellationToken.None);
 
+            if (!string.IsNullOrWhiteSpace(completedRun.WorkerId))
+            {
+                try
+                {
+                    await lifecycleManager.RecycleWorkerAsync(completedRun.WorkerId, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed recycling worker {WorkerId} after run {RunId} completion", completedRun.WorkerId, completedRun.Id);
+                }
+            }
+
             if (!succeeded)
             {
                 await store.CreateFindingFromFailureAsync(completedRun, envelope.Error, CancellationToken.None);
@@ -157,15 +247,29 @@ public sealed class WorkerEventListenerService(
             logger.LogDebug("Worker {WorkerId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
                 statusMessage.WorkerId, statusMessage.Status, statusMessage.ActiveSlots, statusMessage.MaxSlots);
 
+            var endpoint = await ResolveWorkerEndpointAsync(statusMessage.WorkerId);
             workerRegistry.RecordHeartbeat(
                 statusMessage.WorkerId,
-                statusMessage.WorkerId,
+                endpoint ?? statusMessage.WorkerId,
                 statusMessage.ActiveSlots,
                 statusMessage.MaxSlots);
 
+            await lifecycleManager.ReportWorkerHeartbeatAsync(
+                statusMessage.WorkerId,
+                statusMessage.ActiveSlots,
+                statusMessage.MaxSlots,
+                CancellationToken.None);
+
+            await store.UpsertWorkerHeartbeatAsync(
+                statusMessage.WorkerId,
+                endpoint ?? statusMessage.WorkerId,
+                statusMessage.ActiveSlots,
+                statusMessage.MaxSlots,
+                CancellationToken.None);
+
             await publisher.PublishWorkerHeartbeatAsync(
                 statusMessage.WorkerId,
-                statusMessage.WorkerId,
+                endpoint ?? statusMessage.WorkerId,
                 statusMessage.ActiveSlots,
                 statusMessage.MaxSlots,
                 CancellationToken.None);
@@ -174,6 +278,17 @@ public sealed class WorkerEventListenerService(
         {
             logger.LogError(ex, "Failed to handle worker status for worker {WorkerId}", statusMessage.WorkerId);
         }
+    }
+
+    private async Task<string?> ResolveWorkerEndpointAsync(string workerId)
+    {
+        if (_connections.TryGetValue(workerId, out var connection))
+        {
+            return connection.Endpoint;
+        }
+
+        var worker = await lifecycleManager.GetWorkerAsync(workerId, CancellationToken.None);
+        return worker?.GrpcEndpoint;
     }
 
     private async Task TryRetryAsync(RunDocument failedRun)
@@ -226,49 +341,61 @@ public sealed class WorkerEventListenerService(
         };
     }
 
-    public override void Dispose()
-    {
-        IWorkerEventHub? hubToDispose = null;
-        lock (_hubLock)
-        {
-            hubToDispose = _eventHub;
-            _eventHub = null;
-        }
-
-        if (hubToDispose is not null)
-        {
-            try
-            {
-                hubToDispose.DisposeAsync().Wait(TimeSpan.FromSeconds(5));
-            }
-            catch
-            {
-                // Ignore disposal errors
-            }
-        }
-        base.Dispose();
-    }
-
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        IWorkerEventHub? hubToDispose = null;
-        lock (_hubLock)
+        var knownWorkerIds = _connections.Keys.ToList();
+        foreach (var workerId in knownWorkerIds)
         {
-            hubToDispose = _eventHub;
-            _eventHub = null;
+            await RemoveConnectionAsync(workerId);
         }
 
-        if (hubToDispose is not null)
+        await base.StopAsync(cancellationToken);
+    }
+
+    private sealed class WorkerHubConnection
+    {
+        public required string WorkerId { get; init; }
+        public required string Endpoint { get; init; }
+        public required CancellationTokenSource Cancellation { get; init; }
+        public Task? ConnectionTask { get; set; }
+        private IWorkerEventHub? _hub;
+        private readonly SemaphoreSlim _hubLock = new(1, 1);
+
+        public static WorkerHubConnection Create(string workerId, string endpoint)
         {
+            return new WorkerHubConnection
+            {
+                WorkerId = workerId,
+                Endpoint = endpoint,
+                Cancellation = new CancellationTokenSource(),
+            };
+        }
+
+        public void SetHub(IWorkerEventHub hub)
+        {
+            _hub = hub;
+        }
+
+        public async Task DisposeHubAsync()
+        {
+            await _hubLock.WaitAsync();
             try
             {
-                await hubToDispose.DisposeAsync().ConfigureAwait(false);
+                if (_hub is null)
+                {
+                    return;
+                }
+
+                await _hub.DisposeAsync();
+                _hub = null;
             }
             catch
             {
-                // Ignore disposal errors during shutdown
+            }
+            finally
+            {
+                _hubLock.Release();
             }
         }
-        await base.StopAsync(cancellationToken);
     }
 }

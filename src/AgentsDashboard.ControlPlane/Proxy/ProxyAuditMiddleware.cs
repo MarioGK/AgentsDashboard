@@ -5,7 +5,7 @@ using AgentsDashboard.ControlPlane.Data;
 namespace AgentsDashboard.ControlPlane.Proxy;
 
 public class ProxyAuditMiddleware(
-    OrchestratorStore store,
+    IOrchestratorStore store,
     ILogger<ProxyAuditMiddleware> logger) : IMiddleware
 {
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)

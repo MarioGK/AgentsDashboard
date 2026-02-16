@@ -1,210 +1,136 @@
 @page "/"
 @rendermode InteractiveServer
-@inject Data.OrchestratorStore Store
+@inject Data.IOrchestratorStore Store
 @inject Services.IGlobalSelectionService SelectionService
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
 <PageTitle>Overview</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4">Overview</MudText>
-
 @if (_loading)
 {
-    <MudProgressCircular Indeterminate="true" />
+    <MudStack Class="overview-loading" AlignItems="AlignItems.Center" Justify="Justify.Center">
+        <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+    </MudStack>
 }
 else
 {
-    <MudGrid>
-        <MudItem xs="12" sm="4">
-            <MudPaper Class="pa-4">
-                <MudText Typo="Typo.subtitle2">Projects</MudText>
-                <MudText Typo="Typo.h4">@_projects.Count</MudText>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12" sm="4">
-            <MudPaper Class="pa-4">
-                <MudText Typo="Typo.subtitle2">Recent Runs</MudText>
-                <MudText Typo="Typo.h4">@_runs.Count</MudText>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12" sm="4">
-            <MudPaper Class="pa-4">
-                <MudText Typo="Typo.subtitle2">Failing Runs</MudText>
-                <MudText Typo="Typo.h4">@_runs.Count(r => r.State == RunState.Failed)</MudText>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
+    <MudStack Spacing="4" Class="overview-shell">
+        <MudPaper Class="overview-hero" Elevation="0">
+            <MudText Typo="Typo.h4">Command Center</MudText>
+            <MudText Typo="Typo.body2" Class="overview-hero-subtitle">Launch into settings pages quickly and keep operational context in one place.</MudText>
 
-    <MudPaper Class="pa-4 mt-4">
-        <MudText Typo="Typo.h6" Class="mb-4">
-            Reliability Overview
-            @if (SelectionService.SelectedRepository is not null)
-            {
-                <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">@SelectionService.SelectedRepository.Name</MudChip>
-            }
-            else if (SelectionService.SelectedProject is not null)
-            {
-                <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">@SelectionService.SelectedProject.Name</MudChip>
-            }
-        </MudText>
-        
+            <MudTextField T="string"
+                          @bind-Value="_commandText"
+                          Placeholder="Type a command like 'runs', 'findings', 'workflows stages', 'workers'"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          OnKeyDown="OnCommandKeyDown" />
+
+            <MudStack Row="true" Class="mt-3" Spacing="1">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCommandTarget">Open</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="ClearCommand">Clear</MudButton>
+            </MudStack>
+        </MudPaper>
+
         <MudGrid>
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="2">
-                    <MudCardContent Class="text-center">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Success Rate (7d)</MudText>
-                        <MudText Typo="Typo.h4" Color="@SuccessRateColor(_metrics?.SuccessRate7Days ?? 0)">@(_metrics?.SuccessRate7Days.ToString("F1") ?? "0")%</MudText>
-                        <MudText Typo="Typo.caption">@(_metrics?.TotalRuns7Days ?? 0) runs</MudText>
-                    </MudCardContent>
-                </MudCard>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="overview-stat-card" Elevation="0">
+                    <MudText Typo="Typo.caption">Projects</MudText>
+                    <MudText Typo="Typo.h4">@_projects.Count</MudText>
+                </MudPaper>
             </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="2">
-                    <MudCardContent Class="text-center">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Success Rate (30d)</MudText>
-                        <MudText Typo="Typo.h4" Color="@SuccessRateColor(_metrics?.SuccessRate30Days ?? 0)">@(_metrics?.SuccessRate30Days.ToString("F1") ?? "0")%</MudText>
-                        <MudText Typo="Typo.caption">@(_metrics?.TotalRuns30Days ?? 0) runs</MudText>
-                    </MudCardContent>
-                </MudCard>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="overview-stat-card" Elevation="0">
+                    <MudText Typo="Typo.caption">Open Findings</MudText>
+                    <MudText Typo="Typo.h4">@_openFindings</MudText>
+                </MudPaper>
             </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="2">
-                    <MudCardContent Class="text-center">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Avg Duration</MudText>
-                        <MudText Typo="Typo.h4">@FormatDuration(_metrics?.AverageDurationSeconds)</MudText>
-                        <MudText Typo="Typo.caption">completed runs</MudText>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="2">
-                    <MudCardContent Class="text-center">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Active Runs</MudText>
-                        <MudText Typo="Typo.h4">@(_metrics?.RunsByState.GetValueOrDefault("Running", 0) + _metrics?.RunsByState.GetValueOrDefault("Queued", 0))</MudText>
-                        <MudText Typo="Typo.caption">running / queued</MudText>
-                    </MudCardContent>
-                </MudCard>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="overview-stat-card" Elevation="0">
+                    <MudText Typo="Typo.caption">Active Runs</MudText>
+                    <MudText Typo="Typo.h4">@_activeRuns</MudText>
+                </MudPaper>
             </MudItem>
         </MudGrid>
 
-        <MudGrid Class="mt-4">
-            <MudItem xs="12" md="6">
-                <MudCard Elevation="2">
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.subtitle1">Run Distribution by State</MudText>
-                        </CardHeaderContent>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        @if (_metrics?.RunsByState?.Count > 0)
+        <MudGrid>
+            <MudItem xs="12" lg="7">
+                <MudPaper Class="overview-card" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudText Typo="Typo.h6">Quick Actions</MudText>
+                        <MudLink Href="/settings">View all settings sections</MudLink>
+                    </MudStack>
+
+                    <MudGrid>
+                        @foreach (var action in _quickActions)
                         {
-                            <MudList T="string" Dense="true">
-                                @foreach (var state in _metrics.RunsByState.OrderByDescending(s => s.Value))
-                                {
-                                    <MudListItem>
-                                        <div class="d-flex justify-space-between align-center" style="width:100%">
-                                            <span><MudChip T="string" Size="Size.Small" Color="@StateColor(Enum.Parse<RunState>(state.Key))">@state.Key</MudChip></span>
-                                            <MudText><strong>@state.Value</strong> runs</MudText>
-                                        </div>
-                                    </MudListItem>
-                                }
-                            </MudList>
+                            <MudItem xs="12" sm="6">
+                                <MudPaper Class="overview-quick-action" Elevation="0" @onclick="() => NavigationManager.NavigateTo(action.Href)">
+                                    <MudIcon Icon="@action.Icon" Class="mr-2" />
+                                    <div>
+                                        <MudText Typo="Typo.subtitle2">@action.Title</MudText>
+                                        <MudText Typo="Typo.caption">@action.Description</MudText>
+                                    </div>
+                                </MudPaper>
+                            </MudItem>
                         }
-                        else
-                        {
-                            <MudText>No run data available</MudText>
-                        }
-                    </MudCardContent>
-                </MudCard>
+                    </MudGrid>
+                </MudPaper>
             </MudItem>
-            <MudItem xs="12" md="6">
-                <MudCard Elevation="2">
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.subtitle1">Failure Trend (14 days)</MudText>
-                        </CardHeaderContent>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        @if (_metrics?.FailureTrend14Days?.Count > 0)
-                        {
-                            <div class="d-flex align-end" style="height:120px; gap:2px;">
-                                @{
-                                    var maxFailures = _metrics.FailureTrend14Days.Max(f => f.Count);
-                                    maxFailures = Math.Max(maxFailures, 1);
-                                }
-                                @foreach (var day in _metrics.FailureTrend14Days)
-                                {
-                                    var height = (int)((double)day.Count / maxFailures * 100);
-                                    var tooltipText = $"{day.Date:MMM dd}: {day.Count} failures";
-                                    <MudTooltip Text="@tooltipText" Placement="Placement.Top">
-                                        <div style="width:calc(100% / 14); height:@(Math.Max(height, 4))px; background-color:var(--mud-palette-error); border-radius:2px 2px 0 0;" />
-                                    </MudTooltip>
-                                }
-                            </div>
-                            <div class="d-flex justify-space-between mt-2">
-                                <MudText Typo="Typo.caption">@_metrics.FailureTrend14Days.First().Date.ToString("MMM dd")</MudText>
-                                <MudText Typo="Typo.caption">@_metrics.FailureTrend14Days.Last().Date.ToString("MMM dd")</MudText>
-                            </div>
-                        }
-                        else
-                        {
-                            <MudText>No failure trend data</MudText>
-                        }
-                    </MudCardContent>
-                </MudCard>
+
+            <MudItem xs="12" lg="5">
+                <MudPaper Class="overview-card" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="mb-2">Recent Runs</MudText>
+
+                    @if (_runs.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2">No runs available for the current selection.</MudText>
+                    }
+                    else
+                    {
+                        <MudList T="RunDocument" Dense="true">
+                            @foreach (var run in _runs.Take(8))
+                            {
+                                <MudListItem>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width:100%">
+                                        <MudStack Spacing="0">
+                                            <MudLink Href="@($"/settings/runs/{run.Id}")">@run.Id[..Math.Min(8, run.Id.Length)]</MudLink>
+                                            <MudText Typo="Typo.caption">@run.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
+                                        </MudStack>
+                                        <MudChip T="string" Size="Size.Small" Color="@StateColor(run.State)">@run.State</MudChip>
+                                    </MudStack>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </MudPaper>
             </MudItem>
         </MudGrid>
-
-        @if (_metrics?.PerProjectMetrics?.Count > 0 && SelectionService.SelectedRepository is null)
-        {
-            <MudText Typo="Typo.subtitle1" Class="mt-4 mb-2">Per-Project Reliability</MudText>
-            <MudTable Items="_metrics.PerProjectMetrics" Dense="true" Hover="true" Elevation="2">
-                <HeaderContent>
-                    <MudTh>Project</MudTh>
-                    <MudTh>Total Runs</MudTh>
-                    <MudTh>Successful</MudTh>
-                    <MudTh>Failed</MudTh>
-                    <MudTh>Success Rate</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd>
-                        <MudLink Href="@($"/projects/{context.ProjectId}")">@context.ProjectName</MudLink>
-                    </MudTd>
-                    <MudTd>@context.TotalRuns</MudTd>
-                    <MudTd>@context.SuccessfulRuns</MudTd>
-                    <MudTd>@context.FailedRuns</MudTd>
-                    <MudTd>
-                        <MudChip T="string" Size="Size.Small" Color="@SuccessRateColor(context.SuccessRate)">@context.SuccessRate%</MudChip>
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
-        }
-    </MudPaper>
-
-    <MudPaper Class="pa-4 mt-4">
-        <MudText Typo="Typo.h6" Class="mb-2">Recent Runs</MudText>
-        <MudTable Items="_runs" Dense Hover>
-            <HeaderContent>
-                <MudTh>Run</MudTh>
-                <MudTh>Task</MudTh>
-                <MudTh>Status</MudTh>
-                <MudTh>Created</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>@context.Id[..8]</MudTd>
-                <MudTd>@context.TaskId[..Math.Min(8, context.TaskId.Length)]</MudTd>
-                <MudTd><MudChip T="string" Color="@StateColor(context.State)">@context.State</MudChip></MudTd>
-                <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
-            </RowTemplate>
-        </MudTable>
-    </MudPaper>
+    </MudStack>
 }
 
 @code {
+    private readonly List<QuickAction> _quickActions =
+    [
+        new("Runs", "Inspect queues, active and finished runs", "/settings/runs", Icons.Material.Filled.PlayCircle),
+        new("Findings", "Triage failures and quality issues", "/settings/findings", Icons.Material.Filled.BugReport),
+        new("Workflows", "Manage stage workflows", "/settings/workflows/stages", Icons.Material.Filled.AccountTree),
+        new("Projects", "Manage projects and repositories", "/settings/projects", Icons.Material.Filled.AccountTree),
+        new("Workers", "Inspect worker status and tool availability", "/settings/workers", Icons.Material.Filled.Engineering),
+        new("Orchestrator", "Tune worker pool reliability and scaling", "/settings/orchestrator", Icons.Material.Filled.Memory),
+        new("System", "Update retention and docker policies", "/settings/system", Icons.Material.Filled.Tune)
+    ];
+
     private bool _loading = true;
+    private string _commandText = string.Empty;
+    private int _openFindings;
+    private int _activeRuns;
     private List<ProjectDocument> _projects = [];
     private List<RunDocument> _runs = [];
-    private ReliabilityMetrics? _metrics;
     private IDisposable? _selectionSubscription;
 
     protected override async Task OnInitializedAsync()
@@ -225,24 +151,70 @@ else
             if (SelectionService.SelectedRepositoryId is not null)
             {
                 _runs = await Store.ListRunsByRepositoryAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
-                _metrics = await Store.GetReliabilityMetricsByRepositoryAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
+                var findings = await Store.ListFindingsAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
+                _openFindings = findings.Count(IsOpenFinding);
             }
             else if (SelectionService.SelectedProjectId is not null)
             {
                 _runs = await Store.ListRecentRunsByProjectAsync(SelectionService.SelectedProjectId, CancellationToken.None);
-                _metrics = await Store.GetReliabilityMetricsByProjectAsync(SelectionService.SelectedProjectId, CancellationToken.None);
+                var findings = await Store.ListAllFindingsAsync(CancellationToken.None);
+                _openFindings = findings.Count(IsOpenFinding);
             }
             else
             {
                 _runs = await Store.ListRecentRunsAsync(CancellationToken.None);
-                _metrics = await Store.GetReliabilityMetricsAsync(CancellationToken.None);
+                var findings = await Store.ListAllFindingsAsync(CancellationToken.None);
+                _openFindings = findings.Count(IsOpenFinding);
             }
+
+            _activeRuns = _runs.Count(r => r.State is RunState.Running or RunState.Queued);
         }
         finally
         {
             _loading = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private void OpenCommandTarget()
+    {
+        NavigationManager.NavigateTo(ResolveCommandRoute(_commandText));
+    }
+
+    private void ClearCommand()
+    {
+        _commandText = string.Empty;
+    }
+
+    private Task OnCommandKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            OpenCommandTarget();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static string ResolveCommandRoute(string? command)
+    {
+        var normalized = command?.Trim().ToLowerInvariant() ?? string.Empty;
+
+        if (normalized.Contains("run")) return "/settings/runs";
+        if (normalized.Contains("finding")) return "/settings/findings";
+        if (normalized.Contains("project") || normalized.Contains("repo")) return "/settings/projects";
+        if (normalized.Contains("workflow") && normalized.Contains("stage")) return "/settings/workflows/stages";
+        if (normalized.Contains("workflow") || normalized.Contains("stage")) return "/settings/workflows/stages";
+        if (normalized.Contains("provider")) return "/providers";
+        if (normalized.Contains("tool")) return "/settings/workers";
+        if (normalized.Contains("worker")) return "/settings/workers";
+        if (normalized.Contains("template")) return "/settings/templates";
+        if (normalized.Contains("alert")) return "/settings/alerts";
+        if (normalized.Contains("terminal")) return "/settings/terminals";
+        if (normalized.Contains("proxy")) return "/settings/proxy-audits";
+        if (normalized.Contains("orchestrator")) return "/settings/orchestrator";
+        if (normalized.Contains("system") || normalized.Contains("settings")) return "/settings/system";
+        return "/settings";
     }
 
     private static Color StateColor(RunState state) => state switch
@@ -255,27 +227,12 @@ else
         _ => Color.Default
     };
 
-    private static Color SuccessRateColor(double rate) => rate switch
-    {
-        >= 90 => Color.Success,
-        >= 70 => Color.Warning,
-        _ => Color.Error
-    };
-
-    private static string FormatDuration(double? seconds)
-    {
-        if (!seconds.HasValue) return "N/A";
-        
-        var ts = TimeSpan.FromSeconds(seconds.Value);
-        if (ts.TotalMinutes >= 60)
-            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
-        if (ts.TotalSeconds >= 60)
-            return $"{(int)ts.TotalMinutes}m {ts.Seconds}s";
-        return $"{(int)ts.TotalSeconds}s";
-    }
+    private static bool IsOpenFinding(FindingDocument finding) => finding.State is FindingState.New or FindingState.Acknowledged or FindingState.InProgress;
 
     public void Dispose()
     {
         _selectionSubscription?.Dispose();
     }
+
+    private record QuickAction(string Title, string Description, string Href, string Icon);
 }

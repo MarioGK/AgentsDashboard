@@ -5,22 +5,24 @@ using AgentsDashboard.WorkerGateway.Models;
 
 namespace AgentsDashboard.WorkerGateway.Services;
 
-public sealed class WorkerQueue
+public sealed class WorkerQueue : IWorkerQueue
 {
     private readonly Channel<QueuedJob> _channel = Channel.CreateUnbounded<QueuedJob>();
     private readonly ConcurrentDictionary<string, QueuedJob> _activeJobs = new(StringComparer.OrdinalIgnoreCase);
-    private readonly WorkerOptions _options;
+    private readonly int _maxSlots;
 
     public WorkerQueue(WorkerOptions options)
     {
-        _options = options;
+        _maxSlots = Math.Max(1, Math.Min(options.MaxSlots, 1));
     }
 
-    public int MaxSlots => _options.MaxSlots;
+    public int MaxSlots => _maxSlots;
 
     public int ActiveSlots => _activeJobs.Count;
 
-    public bool CanAcceptJob() => ActiveSlots < MaxSlots;
+    public IReadOnlyCollection<string> ActiveRunIds => _activeJobs.Keys.ToList();
+
+    public bool CanAcceptJob() => ActiveSlots < _maxSlots;
 
     public ValueTask EnqueueAsync(QueuedJob job, CancellationToken cancellationToken)
     {

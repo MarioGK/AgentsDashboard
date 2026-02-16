@@ -1,6 +1,7 @@
-@page "/settings"
+@page "/settings/system"
+@layout SettingsLayout
 @rendermode InteractiveServer
-@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 @inject ISnackbar Snackbar
 
 <PageTitle>System Settings - AgentsDashboard</PageTitle>
@@ -101,16 +102,13 @@ else
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
 
-            var updated = new SystemSettingsDocument
-            {
-                Id = "singleton",
-                DockerAllowedImages = images,
-                RetentionDaysLogs = _retentionDaysLogs,
-                RetentionDaysRuns = _retentionDaysRuns,
-                VictoriaMetricsEndpoint = _victoriaMetricsEndpoint,
-                VmUiEndpoint = _vmUiEndpoint,
-                UpdatedAtUtc = DateTime.UtcNow
-            };
+            var updated = await Store.GetSettingsAsync(CancellationToken.None);
+            updated.DockerAllowedImages = images;
+            updated.RetentionDaysLogs = _retentionDaysLogs;
+            updated.RetentionDaysRuns = _retentionDaysRuns;
+            updated.VictoriaMetricsEndpoint = _victoriaMetricsEndpoint;
+            updated.VmUiEndpoint = _vmUiEndpoint;
+            updated.UpdatedAtUtc = DateTime.UtcNow;
 
             await Store.UpdateSettingsAsync(updated, CancellationToken.None);
             Snackbar.Add("Settings saved", Severity.Success);

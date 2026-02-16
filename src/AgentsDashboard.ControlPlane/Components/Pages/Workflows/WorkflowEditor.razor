@@ -1,14 +1,15 @@
-@page "/workflows/new"
-@page "/workflows/{Id}"
+@page "/settings/workflows/stages/new"
+@page "/settings/workflows/stages/{Id}"
+@layout SettingsLayout
 @rendermode InteractiveServer
-@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 @inject NavigationManager Navigation
 @inject AgentsDashboard.ControlPlane.Services.WorkflowExecutor WorkflowExecutor
 
 <PageTitle>@(IsNew ? "New Workflow" : "Edit Workflow") - AgentsDashboard</PageTitle>
 
 <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
-    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/workflows" />
+    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="/settings/workflows/stages" />
     <MudText Typo="Typo.h4">@(IsNew ? "New Workflow" : "Edit Workflow")</MudText>
     <MudSpacer />
     <MudButtonGroup Variant="Variant.Outlined">
@@ -694,7 +695,7 @@
                 Enabled = _enabled,
             };
             var created = await Store.CreateWorkflowAsync(workflow, CancellationToken.None);
-            Navigation.NavigateTo($"/workflows/{created.Id}");
+            Navigation.NavigateTo($"/settings/workflows/stages/{created.Id}");
         }
         else
         {

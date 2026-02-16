@@ -3,7 +3,6 @@
   <ItemGroup>
     <PackageReference Include="CliWrap" />
     <PackageReference Include="Docker.DotNet" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="MagicOnion.Server" />
     <PackageReference Include="Multicaster" />
     <PackageReference Include="MessagePack" />
@@ -11,7 +10,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AgentsDashboard.Contracts\AgentsDashboard.Contracts.csproj" />
-    <ProjectReference Include="..\AgentsDashboard.ServiceDefaults\AgentsDashboard.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

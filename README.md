@@ -4,34 +4,49 @@ Production-oriented AI orchestration control plane built with .NET 10.
 
 ## Stack
 - Blazor Server control plane with MudBlazor UI and BlazorMonaco editors
-- Worker gateway over gRPC with channel-based dispatch
+- Worker gateway over gRPC with ControlPlane-managed elastic worker pool
 - Harness-only execution (`codex`, `opencode`, `claude-code`)
 - SQLite persistence via EF Core
 - YARP embedded in control plane
-- Aspire app host + OpenTelemetry-ready services
 - Encrypted provider secret vault (Data Protection + SQLite)
 
 ## Solution
-- `src/AgentsDashboard.ControlPlane`: UI, API, scheduler, SignalR, YARP
+- `src/AgentsDashboard.ControlPlane`: UI, scheduler, SignalR, YARP
 - `src/AgentsDashboard.WorkerGateway`: gRPC worker, queue, harness execution
 - `src/AgentsDashboard.Contracts`: shared domain + gRPC contracts
-- `src/AgentsDashboard.AppHost`: Aspire composition for local orchestration
 
 ## Local run (recommended)
 1. Start control plane container:
 ```bash
 docker compose up -d
 ```
-2. (Optional) Run worker gateway directly for local dev:
-```bash
-dotnet run --project src/AgentsDashboard.WorkerGateway
-```
-3. Run control plane:
+2. Run control plane directly (optional alternative to containerized control plane):
 ```bash
 dotnet run --project src/AgentsDashboard.ControlPlane
 ```
-4. Open:
+3. Open:
 - Dashboard: `http://localhost:5266` (or the printed control-plane URL)
+
+ControlPlane will spawn worker containers on demand through Docker socket.
+
+## Playwright MCP (Codex)
+
+Playwright MCP is configured in Codex for this workspace via `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.playwright]
+command = "playwright-mcp"
+args = ["--headless", "--isolated", "--browser", "chrome"]
+```
+
+Quick checks:
+
+```bash
+codex mcp list
+playwright-mcp --version
+```
+
+If Codex was already open before config changes, restart Codex so it reloads MCP server configuration.
 
 ## Full container stack
 ```bash
@@ -55,17 +70,17 @@ Control plane: `http://localhost:8080`
 
 ## Current feature set
 - Project -> Repository -> Task hierarchy
-- Task kinds: one-shot, cron, event-driven (event ingestion endpoint is scaffold-ready)
+- Task kinds: one-shot, cron, event-driven
 - Manual task run trigger
 - Scheduler loop for due one-shot/cron tasks
 - Per-repo runs and findings inbox
-- Findings retry API (`POST /api/findings/{findingId}/retry`)
-- Event-driven webhook trigger API (`POST /api/webhooks/{repositoryId}/{eventType?}`)
-- Repository secret management API (`/api/repositories/{repositoryId}/secrets/*`)
+- Findings retry from UI/application services
+- Event-driven task triggers through internal orchestration services
+- Repository secret management through application services
 - Real-time run status/log events via SignalR
-- gRPC worker dispatch and completion stream
+- Multi-worker gRPC dispatch and completion stream
 
 ## Notes
 - v1 security model assumes a trusted self-hosted single-operator environment.
-- Docker socket is mounted for privileged container operations.
+- Docker socket is mounted for privileged container operations and worker lifecycle orchestration.
 - Encrypted secret vault protects provider credentials.

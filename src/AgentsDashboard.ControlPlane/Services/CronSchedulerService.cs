@@ -9,12 +9,15 @@ public sealed class CronSchedulerService(
     IOrchestratorStore store,
     RunDispatcher dispatcher,
     IOptions<OrchestratorOptions> options,
-    ILogger<CronSchedulerService> logger) : BackgroundService
+    ILogger<CronSchedulerService> logger,
+    TimeProvider? timeProvider = null) : BackgroundService
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var interval = TimeSpan.FromSeconds(Math.Max(2, options.Value.SchedulerIntervalSeconds));
-        var nextTick = DateTime.UtcNow;
+        var nextTick = _timeProvider.GetUtcNow().UtcDateTime;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -33,7 +36,7 @@ public sealed class CronSchedulerService(
                 logger.LogError(ex, "Scheduler tick failed");
             }
 
-            var delay = nextTick - DateTime.UtcNow;
+            var delay = nextTick - _timeProvider.GetUtcNow().UtcDateTime;
             if (delay > TimeSpan.Zero)
             {
                 await Task.Delay(delay, stoppingToken);
@@ -43,7 +46,7 @@ public sealed class CronSchedulerService(
 
     private async Task TickAsync(CancellationToken cancellationToken)
     {
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         var opts = options.Value;
 
         // Check global concurrency before fetching due tasks

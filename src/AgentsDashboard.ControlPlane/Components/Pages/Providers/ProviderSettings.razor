@@ -1,6 +1,8 @@
 @page "/providers"
 @rendermode InteractiveServer
-@inject HttpClient Http
+@inject Data.IOrchestratorStore Store
+@inject Services.SecretCryptoService SecretCrypto
+@inject Services.CredentialValidationService CredentialValidator
 @inject ISnackbar Snackbar
 
 <PageTitle>Providers - AgentsDashboard</PageTitle>
@@ -8,6 +10,56 @@
 <MudText Typo="Typo.h4" Class="mb-4">Provider Settings</MudText>
 
 <MudStack Spacing="4">
+    <MudPaper Class="pa-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">Global AI Key (LlmTornado)</MudText>
+        <MudStack Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 500;">LlmTornado (Z.ai via Anthropic-compatible API)</MudText>
+                @if (_globalLlmTornadoConfigured)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
+                        Configured
+                    </MudChip>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Last updated: @_globalLlmTornadoUpdatedAt?.ToLocalTime().ToString("g")
+                    </MudText>
+                }
+            </MudStack>
+            <MudTextField @bind-Value="_globalLlmTornadoValue"
+                          Label="Z.ai API Key"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          InputType="InputType.Password"
+                          HelperText="Stored globally and used by dashboard AI features (image generation, prompt generation)." />
+            <MudStack Row Spacing="2">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           OnClick="SaveGlobalLlmTornadoSecretAsync"
+                           Disabled="@string.IsNullOrWhiteSpace(_globalLlmTornadoValue)">
+                    Save Global Key
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Info"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.NetworkCheck"
+                           OnClick="TestGlobalLlmTornadoSecretAsync"
+                           Disabled="@(!_globalLlmTornadoConfigured && string.IsNullOrWhiteSpace(_globalLlmTornadoValue) || _testingGlobalLlmTornado)">
+                    @if (_testingGlobalLlmTornado)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate />
+                        <span>Testing...</span>
+                    }
+                    else
+                    {
+                        <span>Test Connection</span>
+                    }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
     <MudPaper Class="pa-4" Elevation="2">
         <MudText Typo="Typo.h6" Class="mb-3">Repository Selection</MudText>
         @if (_repositories.Count == 0)
@@ -209,8 +261,14 @@
 
     private readonly List<string> _codexModels = ["gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo", "o1", "o1-mini", "o1-preview"];
     private readonly List<string> _openCodeModels = ["gpt-4o", "claude-3-5-sonnet-20241022", "gemini-2.0-flash", "llama-3.1-70b"];
-    private readonly List<string> _claudeModels = ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"];
-    private readonly List<string> _zaiModels = ["glm-5", "glm-4-plus", "glm-4-air", "glm-4-flash"];
+    private readonly List<string> _claudeModels = ["glm-5"];
+    private readonly List<string> _zaiModels = ["glm-5"];
+
+    private const string GlobalSecretsRepositoryId = "global";
+    private string _globalLlmTornadoValue = string.Empty;
+    private bool _globalLlmTornadoConfigured;
+    private DateTime? _globalLlmTornadoUpdatedAt;
+    private bool _testingGlobalLlmTornado;
 
     private int _retentionDaysLogs = 30;
     private int _retentionDaysRuns = 90;
@@ -220,6 +278,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadGlobalLlmTornadoSecretAsync();
         await LoadRepositoriesAsync();
         await LoadSystemSettingsAsync();
     }
@@ -228,23 +287,16 @@
     {
         try
         {
-            var response = await Http.GetAsync("/api/projects");
-            if (response.IsSuccessStatusCode)
+            _repositories.Clear();
+            var projects = await Store.ListProjectsAsync(CancellationToken.None);
+            foreach (var project in projects)
             {
-                var projects = await response.Content.ReadFromJsonAsync<List<ProjectDocument>>() ?? [];
-                foreach (var project in projects)
+                var repos = await Store.ListRepositoriesAsync(project.Id, CancellationToken.None);
+                _repositories.AddRange(repos.Select(r => new RepositoryInfo
                 {
-                    var reposResponse = await Http.GetAsync($"/api/projects/{project.Id}/repositories");
-                    if (reposResponse.IsSuccessStatusCode)
-                    {
-                        var repos = await reposResponse.Content.ReadFromJsonAsync<List<RepositoryDocument>>() ?? [];
-                        _repositories.AddRange(repos.Select(r => new RepositoryInfo
-                        {
-                            Id = r.Id,
-                            Name = $"{project.Name} / {r.Name}"
-                        }));
-                    }
-                }
+                    Id = r.Id,
+                    Name = $"{project.Name} / {r.Name}"
+                }));
             }
         }
         catch (Exception ex)
@@ -257,23 +309,101 @@
     {
         try
         {
-            var response = await Http.GetAsync("/api/settings");
-            if (response.IsSuccessStatusCode)
-            {
-                var settings = await response.Content.ReadFromJsonAsync<SystemSettingsDocument>();
-                if (settings is not null)
-                {
-                    _retentionDaysLogs = settings.RetentionDaysLogs;
-                    _retentionDaysRuns = settings.RetentionDaysRuns;
-                    _victoriaMetricsEndpoint = settings.VictoriaMetricsEndpoint;
-                    _vmUiEndpoint = settings.VmUiEndpoint;
-                    _dockerAllowedImagesInput = string.Join(", ", settings.DockerAllowedImages);
-                }
-            }
+            var settings = await Store.GetSettingsAsync(CancellationToken.None);
+            _retentionDaysLogs = settings.RetentionDaysLogs;
+            _retentionDaysRuns = settings.RetentionDaysRuns;
+            _victoriaMetricsEndpoint = settings.VictoriaMetricsEndpoint;
+            _vmUiEndpoint = settings.VmUiEndpoint;
+            _dockerAllowedImagesInput = string.Join(", ", settings.DockerAllowedImages);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Failed to load system settings: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadGlobalLlmTornadoSecretAsync()
+    {
+        try
+        {
+            var secret = await Store.GetProviderSecretAsync(GlobalSecretsRepositoryId, "llmtornado", CancellationToken.None);
+            _globalLlmTornadoConfigured = secret is not null;
+            _globalLlmTornadoUpdatedAt = secret?.UpdatedAtUtc;
+            _globalLlmTornadoValue = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load global LlmTornado key: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveGlobalLlmTornadoSecretAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_globalLlmTornadoValue))
+        {
+            Snackbar.Add("Global LlmTornado key cannot be empty", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            var encrypted = SecretCrypto.Encrypt(_globalLlmTornadoValue.Trim());
+            await Store.UpsertProviderSecretAsync(
+                GlobalSecretsRepositoryId,
+                "llmtornado",
+                encrypted,
+                CancellationToken.None);
+
+            _globalLlmTornadoConfigured = true;
+            _globalLlmTornadoUpdatedAt = DateTime.UtcNow;
+            _globalLlmTornadoValue = string.Empty;
+            Snackbar.Add("Global LlmTornado key saved", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving global LlmTornado key: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task TestGlobalLlmTornadoSecretAsync()
+    {
+        _testingGlobalLlmTornado = true;
+        StateHasChanged();
+
+        try
+        {
+            string? key = null;
+
+            if (!string.IsNullOrWhiteSpace(_globalLlmTornadoValue))
+            {
+                key = _globalLlmTornadoValue.Trim();
+            }
+            else if (_globalLlmTornadoConfigured)
+            {
+                var secret = await Store.GetProviderSecretAsync(GlobalSecretsRepositoryId, "llmtornado", CancellationToken.None);
+                if (secret is not null)
+                {
+                    key = SecretCrypto.Decrypt(secret.EncryptedValue);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                Snackbar.Add("No global LlmTornado key found", Severity.Error);
+                return;
+            }
+
+            var (success, message) = await CredentialValidator.ValidateAsync("llmtornado", key, CancellationToken.None);
+            Snackbar.Add($"LlmTornado: {message}", success ? Severity.Success : Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error testing global LlmTornado key: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _testingGlobalLlmTornado = false;
+            StateHasChanged();
         }
     }
 
@@ -304,14 +434,21 @@
                 Provider = "claude-code",
                 DisplayName = "Claude Code",
                 EnvVar = "ANTHROPIC_API_KEY",
-                Description = "Anthropic API key for Claude coding assistant"
+                Description = "API key for Claude Code harness"
             },
             new ProviderConfig
             {
                 Provider = "zai",
                 DisplayName = "Z.ai",
                 EnvVar = "Z_AI_API_KEY",
-                Description = "Z.ai API key for AI agent orchestration"
+                Description = "Z.ai API key for GLM-5 harness runs"
+            },
+            new ProviderConfig
+            {
+                Provider = "llmtornado",
+                DisplayName = "LlmTornado",
+                EnvVar = "ANTHROPIC_AUTH_TOKEN",
+                Description = "Z.ai key routed through Anthropic-compatible settings (ANTHROPIC_BASE_URL)"
             },
             new ProviderConfig
             {
@@ -330,19 +467,15 @@
     {
         try
         {
-            var response = await Http.GetAsync($"/api/repositories/{_selectedRepositoryId}/secrets");
-            if (response.IsSuccessStatusCode)
+            var secrets = await Store.ListProviderSecretsAsync(_selectedRepositoryId, CancellationToken.None);
+            foreach (var secret in secrets)
             {
-                var secrets = await response.Content.ReadFromJsonAsync<List<ProviderSecretSummary>>() ?? [];
-                foreach (var secret in secrets)
+                var provider = _providers.FirstOrDefault(p => p.Provider == secret.Provider);
+                if (provider is not null)
                 {
-                    var provider = _providers.FirstOrDefault(p => p.Provider == secret.Provider);
-                    if (provider is not null)
-                    {
-                        provider.HasValue = true;
-                        provider.UpdatedAt = secret.UpdatedAtUtc;
-                        provider.Value = string.Empty;
-                    }
+                    provider.HasValue = true;
+                    provider.UpdatedAt = secret.UpdatedAtUtc;
+                    provider.Value = string.Empty;
                 }
             }
         }
@@ -365,16 +498,23 @@
 
         try
         {
-            var response = await Http.GetAsync($"/api/repositories/{_selectedRepositoryId}/providers/{harness}");
-            if (response.IsSuccessStatusCode)
+            var settings = await Store.GetHarnessProviderSettingsAsync(_selectedRepositoryId, harness, CancellationToken.None);
+            if (settings is not null)
             {
-                var settings = await response.Content.ReadFromJsonAsync<HarnessProviderSettingsResponse>();
-                if (settings is not null)
-                {
-                    state.Model = settings.Model ?? string.Empty;
-                    state.Temperature = settings.Temperature;
-                    state.MaxTokens = settings.MaxTokens;
-                }
+                state.Model = settings.Model;
+                state.Temperature = settings.Temperature;
+                state.MaxTokens = settings.MaxTokens;
+            }
+            else
+            {
+                state.Model = harness is "zai" or "claude-code" ? "glm-5" : string.Empty;
+                state.Temperature = 0.7;
+                state.MaxTokens = 4096;
+            }
+
+            if (harness is "zai" or "claude-code")
+            {
+                state.Model = "glm-5";
             }
         }
         catch (Exception ex)
@@ -394,26 +534,33 @@
 
         try
         {
-            var request = new
+            if (harness is "zai" or "claude-code")
             {
-                Model = state.Model,
-                Temperature = state.Temperature,
-                MaxTokens = state.MaxTokens
-            };
-
-            var response = await Http.PutAsJsonAsync(
-                $"/api/repositories/{_selectedRepositoryId}/providers/{harness}",
-                request);
-
-            if (response.IsSuccessStatusCode)
-            {
-                Snackbar.Add($"{harness} settings saved successfully", Severity.Success);
+                state.Model = "glm-5";
             }
-            else
+
+            if (state.Temperature < 0 || state.Temperature > 2)
             {
-                var error = await response.Content.ReadAsStringAsync();
-                Snackbar.Add($"Failed to save {harness} settings: {error}", Severity.Error);
+                Snackbar.Add("Temperature must be between 0 and 2", Severity.Error);
+                return;
             }
+
+            if (state.MaxTokens < 1)
+            {
+                Snackbar.Add("Max tokens must be at least 1", Severity.Error);
+                return;
+            }
+
+            await Store.UpsertHarnessProviderSettingsAsync(
+                _selectedRepositoryId,
+                harness,
+                state.Model,
+                state.Temperature,
+                state.MaxTokens,
+                null,
+                CancellationToken.None);
+
+            Snackbar.Add($"{harness} settings saved successfully", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -428,6 +575,7 @@
     private RenderFragment RenderHarnessSettings(string harness, string displayName, List<string> models) => __builder =>
     {
         var state = _harnessSettings[harness];
+        var lockModel = harness is "zai" or "claude-code";
 
         __builder.OpenElement(0, "div");
         __builder.AddAttribute(1, "class", "mud-width-full");
@@ -464,15 +612,16 @@
             __builder.OpenComponent<MudSelect<string>>(17);
             __builder.AddAttribute(18, "Label", "Model");
             __builder.AddAttribute(19, "Variant", Variant.Outlined);
-            __builder.AddAttribute(20, "HelperText", "Select the AI model to use");
+            __builder.AddAttribute(20, "HelperText", lockModel ? "GLM-5 is required for this harness." : "Select the AI model to use");
             __builder.AddAttribute(21, "Class", "mud-width-full");
             __builder.AddAttribute(22, "Value", state.Model);
             __builder.AddAttribute(23, "ValueChanged", EventCallback.Factory.Create<string>(this, v => state.Model = v));
+            __builder.AddAttribute(24, "Disabled", lockModel);
 
             foreach (var model in models)
             {
-                __builder.OpenComponent<MudSelectItem<string>>(24);
-                __builder.AddAttribute(25, "Value", model);
+                __builder.OpenComponent<MudSelectItem<string>>(25);
+                __builder.AddAttribute(26, "Value", model);
                 __builder.CloseComponent();
             }
 
@@ -501,12 +650,12 @@
 
             __builder.OpenComponent<MudStack>(40);
             __builder.AddAttribute(41, "Spacing", 1);
-            
+
             __builder.OpenComponent<MudText>(42);
             __builder.AddAttribute(43, "Typo", Typo.body2);
             __builder.AddContent(44, $"Temperature: {state.Temperature:F2}");
             __builder.CloseComponent();
-            
+
             __builder.OpenComponent<MudSlider<double>>(45);
             __builder.AddAttribute(46, "Min", 0.0);
             __builder.AddAttribute(47, "Max", 2.0);
@@ -515,7 +664,7 @@
             __builder.AddAttribute(50, "Value", state.Temperature);
             __builder.AddAttribute(51, "ValueChanged", EventCallback.Factory.Create<double>(this, v => state.Temperature = v));
             __builder.CloseComponent();
-            
+
             __builder.CloseComponent();
 
             __builder.CloseComponent();
@@ -564,23 +713,17 @@
 
         try
         {
-            var request = new { SecretValue = provider.Value };
-            var response = await Http.PutAsJsonAsync(
-                $"/api/repositories/{_selectedRepositoryId}/secrets/{provider.Provider}",
-                request);
+            var encrypted = SecretCrypto.Encrypt(provider.Value.Trim());
+            await Store.UpsertProviderSecretAsync(
+                _selectedRepositoryId,
+                provider.Provider.Trim().ToLowerInvariant(),
+                encrypted,
+                CancellationToken.None);
 
-            if (response.IsSuccessStatusCode)
-            {
-                provider.HasValue = true;
-                provider.UpdatedAt = DateTime.UtcNow;
-                provider.Value = string.Empty;
-                Snackbar.Add($"{provider.DisplayName} secret saved successfully", Severity.Success);
-            }
-            else
-            {
-                var error = await response.Content.ReadAsStringAsync();
-                Snackbar.Add($"Failed to save {provider.DisplayName} secret: {error}", Severity.Error);
-            }
+            provider.HasValue = true;
+            provider.UpdatedAt = DateTime.UtcNow;
+            provider.Value = string.Empty;
+            Snackbar.Add($"{provider.DisplayName} secret saved successfully", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -597,46 +740,29 @@
         {
             if (!string.IsNullOrWhiteSpace(provider.Value))
             {
-                var request = new { Provider = provider.Provider, SecretValue = provider.Value };
-                var response = await Http.PostAsJsonAsync("/api/providers/validate", request);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<ValidationResult>();
-                    if (result is not null)
-                    {
-                        Snackbar.Add(
-                            $"{provider.DisplayName}: {result.Message}",
-                            result.Success ? Severity.Success : Severity.Error);
-                    }
-                }
-                else
-                {
-                    var error = await response.Content.ReadAsStringAsync();
-                    Snackbar.Add($"Validation request failed: {error}", Severity.Error);
-                }
+                var (success, message) = await CredentialValidator.ValidateAsync(provider.Provider, provider.Value, CancellationToken.None);
+                Snackbar.Add(
+                    $"{provider.DisplayName}: {message}",
+                    success ? Severity.Success : Severity.Error);
             }
             else if (provider.HasValue)
             {
-                var response = await Http.PostAsync(
-                    $"/api/repositories/{_selectedRepositoryId}/secrets/{provider.Provider}/test",
-                    null);
+                var secret = await Store.GetProviderSecretAsync(
+                    _selectedRepositoryId,
+                    provider.Provider.Trim().ToLowerInvariant(),
+                    CancellationToken.None);
 
-                if (response.IsSuccessStatusCode)
+                if (secret is null)
                 {
-                    var result = await response.Content.ReadFromJsonAsync<ValidationResult>();
-                    if (result is not null)
-                    {
-                        Snackbar.Add(
-                            $"{provider.DisplayName}: {result.Message}",
-                            result.Success ? Severity.Success : Severity.Error);
-                    }
+                    Snackbar.Add($"{provider.DisplayName}: Secret not found", Severity.Error);
+                    return;
                 }
-                else
-                {
-                    var error = await response.Content.ReadAsStringAsync();
-                    Snackbar.Add($"Validation request failed: {error}", Severity.Error);
-                }
+
+                var decrypted = SecretCrypto.Decrypt(secret.EncryptedValue);
+                var (success, message) = await CredentialValidator.ValidateAsync(provider.Provider, decrypted, CancellationToken.None);
+                Snackbar.Add(
+                    $"{provider.DisplayName}: {message}",
+                    success ? Severity.Success : Severity.Error);
             }
         }
         catch (Exception ex)
@@ -660,70 +786,19 @@
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .ToList();
 
-            var request = new
-            {
-                DockerAllowedImages = dockerImages,
-                RetentionDaysLogs = _retentionDaysLogs,
-                RetentionDaysRuns = _retentionDaysRuns,
-                VictoriaMetricsEndpoint = _victoriaMetricsEndpoint,
-                VmUiEndpoint = _vmUiEndpoint
-            };
+            var settings = await Store.GetSettingsAsync(CancellationToken.None);
+            settings.DockerAllowedImages = dockerImages;
+            settings.RetentionDaysLogs = _retentionDaysLogs;
+            settings.RetentionDaysRuns = _retentionDaysRuns;
+            settings.VictoriaMetricsEndpoint = _victoriaMetricsEndpoint;
+            settings.VmUiEndpoint = _vmUiEndpoint;
 
-            var response = await Http.PutAsJsonAsync("/api/settings", request);
-
-            if (response.IsSuccessStatusCode)
-            {
-                Snackbar.Add("System settings saved successfully", Severity.Success);
-            }
-            else
-            {
-                var error = await response.Content.ReadAsStringAsync();
-                Snackbar.Add($"Failed to save system settings: {error}", Severity.Error);
-            }
+            await Store.UpdateSettingsAsync(settings, CancellationToken.None);
+            Snackbar.Add("System settings saved successfully", Severity.Success);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error saving system settings: {ex.Message}", Severity.Error);
         }
-    }
-
-    private class ProviderSecretSummary
-    {
-        public required string Provider { get; set; }
-        public DateTime UpdatedAtUtc { get; set; }
-    }
-
-    private class ProjectDocument
-    {
-        public required string Id { get; set; }
-        public required string Name { get; set; }
-    }
-
-    private class RepositoryDocument
-    {
-        public required string Id { get; set; }
-        public required string Name { get; set; }
-    }
-
-    private class SystemSettingsDocument
-    {
-        public List<string> DockerAllowedImages { get; set; } = [];
-        public int RetentionDaysLogs { get; set; } = 30;
-        public int RetentionDaysRuns { get; set; } = 90;
-        public string VictoriaMetricsEndpoint { get; set; } = "http://localhost:8428";
-        public string VmUiEndpoint { get; set; } = "http://localhost:8081";
-    }
-
-    private class ValidationResult
-    {
-        public bool Success { get; set; }
-        public string Message { get; set; } = string.Empty;
-    }
-
-    private class HarnessProviderSettingsResponse
-    {
-        public string? Model { get; set; }
-        public double Temperature { get; set; } = 0.7;
-        public int MaxTokens { get; set; } = 4096;
     }
 }

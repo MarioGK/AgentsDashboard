@@ -32,7 +32,7 @@ public sealed record ShutdownRequestMessage
     public required string Reason { get; init; }
 
     [Key(1)]
-    public long GracePeriodSeconds { get; init; } = 30;
+    public long GracePeriodSeconds { get; set; } = 30;
 
     [Key(2)]
     public long Timestamp { get; init; }
@@ -92,7 +92,7 @@ public sealed record WorkerStatusReport
     public long MemoryUsedBytes { get; init; }
 
     [Key(5)]
-    public Dictionary<string, int> QueuedJobsByPriority { get; init; } = new();
+    public Dictionary<string, int> QueuedJobsByPriority { get; set; } = new();
 
     [Key(6)]
     public long Timestamp { get; init; }

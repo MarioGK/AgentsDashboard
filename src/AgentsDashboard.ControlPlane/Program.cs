@@ -1,15 +1,20 @@
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Components;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
-using AgentsDashboard.ControlPlane.Endpoints;
-using AgentsDashboard.ControlPlane.Hubs;
 using AgentsDashboard.ControlPlane.Middleware;
 using AgentsDashboard.ControlPlane.Proxy;
 using AgentsDashboard.ControlPlane.Services;
+using MagicOnion.Serialization.MessagePack;
+using MagicOnion.Server;
+using MessagePack;
+using MessagePack.Resolvers;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using MudBlazor.Services;
 using Yarp.ReverseProxy.Configuration;
@@ -18,7 +23,9 @@ AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.AddServiceDefaults();
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
+    .AddCheck<DatabaseReadyHealthCheck>("database", tags: ["ready"]);
 builder.Services.AddOptions<OrchestratorOptions>()
     .Bind(builder.Configuration.GetSection(OrchestratorOptions.SectionName))
     .ValidateOnStart();
@@ -90,6 +97,14 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
+var messagePackOptions = MessagePackSerializerOptions.Standard
+    .WithResolver(StandardResolver.Instance);
+
+builder.Services.AddMagicOnion(options =>
+{
+    options.MessageSerializer = MessagePackMagicOnionSerializerProvider.Default.WithOptions(messagePackOptions);
+});
+
 builder.Services.AddTransient<RateLimitHeadersMiddleware>();
 
 builder.Services.AddDbContextFactory<OrchestratorDbContext>((sp, options) =>
@@ -99,31 +114,34 @@ builder.Services.AddDbContextFactory<OrchestratorDbContext>((sp, options) =>
 });
 
 builder.Services.AddHostedService<DbMigrationHostedService>();
-builder.Services.AddSingleton<IOrchestratorStore, OrchestratorStore>();
-builder.Services.AddSingleton<OrchestratorStore>(sp => (OrchestratorStore)sp.GetRequiredService<IOrchestratorStore>());
+builder.Services.AddSingleton<OrchestratorStore>();
+builder.Services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<OrchestratorStore>());
 builder.Services.AddSingleton<RunDispatcher>();
+builder.Services.AddSingleton<IOrchestratorRuntimeSettingsProvider, OrchestratorRuntimeSettingsProvider>();
+builder.Services.AddSingleton<ILeaseCoordinator, LeaseCoordinator>();
 builder.Services.AddSingleton<IWorkerLifecycleManager, DockerWorkerLifecycleManager>();
+builder.Services.AddHostedService<WorkerImageBootstrapService>();
 builder.Services.AddSingleton<ISecretCryptoService, SecretCryptoService>();
 builder.Services.AddSingleton<SecretCryptoService>(sp => (SecretCryptoService)sp.GetRequiredService<ISecretCryptoService>());
 builder.Services.AddSingleton<WebhookService>();
-builder.Services.AddSingleton<IRunEventPublisher, SignalRRunEventPublisher>();
+builder.Services.AddSingleton<IUiRealtimeBroker, UiRealtimeBroker>();
+builder.Services.AddSingleton<IRunEventPublisher, BlazorRunEventPublisher>();
 builder.Services.AddSingleton<IOrchestratorMetrics, OrchestratorMetrics>();
 builder.Services.AddHostedService<RecoveryService>();
 builder.Services.AddHostedService<CronSchedulerService>();
 builder.Services.AddHostedService<WorkerEventListenerService>();
 builder.Services.AddHostedService<WorkerIdleShutdownService>();
+builder.Services.AddHostedService<WorkerPoolReconciliationService>();
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<AlertingService>();
 builder.Services.AddSingleton<IWorkflowExecutor, WorkflowExecutor>();
 builder.Services.AddSingleton<WorkflowExecutor>(sp => (WorkflowExecutor)sp.GetRequiredService<IWorkflowExecutor>());
-builder.Services.AddSingleton<IWorkflowDagExecutor, WorkflowDagExecutor>();
+builder.Services.AddSingleton<LlmTornadoGatewayService>();
 builder.Services.AddSingleton<ImageBuilderService>();
 builder.Services.AddSingleton<CredentialValidationService>();
 builder.Services.AddSingleton<TaskTemplateService>();
 builder.Services.AddHostedService<TaskTemplateInitializationService>();
 builder.Services.AddSingleton<IContainerReaper, ContainerReaper>();
-builder.Services.AddSingleton<HarnessHealthService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<HarnessHealthService>());
 builder.Services.AddTransient<ProxyAuditMiddleware>();
 builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 builder.Services.AddScoped<ProjectContext>();
@@ -144,28 +162,11 @@ builder.Services.AddSingleton<InMemoryYarpConfigProvider>();
 builder.Services.AddSingleton<IProxyConfigProvider>(sp => sp.GetRequiredService<InMemoryYarpConfigProvider>());
 builder.Services.AddReverseProxy();
 
-builder.Services.AddMudServices();
-builder.Services.AddSignalR();
-builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-
-builder.Services.AddEndpointsApiExplorer();
-if (!builder.Environment.IsEnvironment("Testing"))
+builder.Services.AddMudServices(config =>
 {
-    builder.Services.AddSwaggerGen(options =>
-    {
-        options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-        {
-            Title = "AI Orchestrator API",
-            Version = "v1",
-            Description = "Self-hosted AI orchestration platform for harness execution (Codex, OpenCode, Claude Code, Zai)",
-            Contact = new Microsoft.OpenApi.Models.OpenApiContact
-            {
-                Name = "AI Orchestrator",
-                Email = "support@example.com"
-            }
-        });
-    });
-}
+    config.PopoverOptions.CheckForPopoverProvider = false;
+});
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var app = builder.Build();
 
@@ -175,20 +176,6 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    app.UseSwagger(options =>
-    {
-        options.RouteTemplate = "api/docs/{documentName}/swagger.json";
-    });
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/api/docs/v1/swagger.json", "AI Orchestrator API v1");
-        options.RoutePrefix = "api/docs";
-        options.DocumentTitle = "AI Orchestrator API Documentation";
-    });
-}
-
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 app.UseRateLimiter();
@@ -196,16 +183,49 @@ app.UseMiddleware<RateLimitHeadersMiddleware>();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
-app.MapHub<RunEventsHub>("/hubs/runs");
-app.MapHub<TerminalHub>("/hubs/terminal");
-app.MapOrchestratorApi();
-app.MapDagWorkflowApi();
 app.UseMiddleware<ProxyAuditMiddleware>();
+app.MapMagicOnionService();
 app.MapReverseProxy();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
-app.MapDefaultEndpoints();
+
+var readyHealthCheckOptions = new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready"),
+    ResponseWriter = WriteHealthResponseAsync
+};
+var liveHealthCheckOptions = new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live"),
+    ResponseWriter = WriteHealthResponseAsync
+};
+
+app.MapHealthChecks("/health", readyHealthCheckOptions);
+app.MapHealthChecks("/ready", readyHealthCheckOptions);
+app.MapHealthChecks("/alive", liveHealthCheckOptions);
 
 app.Run();
+
+static Task WriteHealthResponseAsync(HttpContext context, HealthReport report)
+{
+    context.Response.ContentType = "application/json; charset=utf-8";
+
+    var payload = new
+    {
+        status = report.Status.ToString(),
+        totalDurationMs = report.TotalDuration.TotalMilliseconds,
+        checks = report.Entries.ToDictionary(
+            entry => entry.Key,
+            entry => new
+            {
+                status = entry.Value.Status.ToString(),
+                durationMs = entry.Value.Duration.TotalMilliseconds,
+                description = entry.Value.Description,
+                error = entry.Value.Exception?.Message
+            })
+    };
+
+    return context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+}
 
 namespace AgentsDashboard.ControlPlane
 {

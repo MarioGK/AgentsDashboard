@@ -15,6 +15,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
             "codex" => await ValidateOpenAiAsync(secretValue, ct),
             "opencode" => await ValidateOpenAiAsync(secretValue, ct),
             "zai" => await ValidateZaiAsync(secretValue, ct),
+            "llmtornado" => await ValidateLlmTornadoAsync(secretValue, ct),
             _ => (false, $"Unknown provider: {provider}")
         };
     }
@@ -106,7 +107,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
             using var client = httpClientFactory.CreateClient();
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-            var response = await client.GetAsync("https://open.bigmodel.cn/api/paas/v4/models", ct);
+            var response = await client.GetAsync("https://api.z.ai/api/paas/v4/models", ct);
             if (response.IsSuccessStatusCode || (int)response.StatusCode == 429)
                 return (true, "Z.ai API key is valid");
 
@@ -118,6 +119,37 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Z.ai credential validation failed");
+            return (false, $"Connection failed: {ex.Message}");
+        }
+    }
+
+    private async Task<(bool Success, string Message)> ValidateLlmTornadoAsync(string apiKey, CancellationToken ct)
+    {
+        try
+        {
+            using var client = httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+
+            var body = new
+            {
+                model = "glm-5",
+                max_tokens = 1,
+                messages = new[] { new { role = "user", content = "hi" } }
+            };
+
+            var response = await client.PostAsJsonAsync("https://api.z.ai/api/anthropic/v1/messages", body, ct);
+            if (response.IsSuccessStatusCode || (int)response.StatusCode == 429)
+                return (true, "LlmTornado/Z.ai key is valid");
+
+            if ((int)response.StatusCode == 401)
+                return (false, "Invalid LlmTornado/Z.ai API key");
+
+            return (false, $"LlmTornado/Z.ai API returned {(int)response.StatusCode}: {response.ReasonPhrase}");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "LlmTornado credential validation failed");
             return (false, $"Connection failed: {ex.Message}");
         }
     }

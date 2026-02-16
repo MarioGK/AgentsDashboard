@@ -1,0 +1,60 @@
+@page "/settings"
+@layout SettingsLayout
+@rendermode InteractiveServer
+
+<PageTitle>Settings - AgentsDashboard</PageTitle>
+
+<MudStack Spacing="3" Class="settings-home">
+    <div>
+        <MudText Typo="Typo.h4">Settings</MudText>
+        <MudText Typo="Typo.body2" Class="settings-home-subtitle">All operational pages are organized here.</MudText>
+    </div>
+
+    <MudGrid>
+        <MudItem xs="12" md="6" lg="3">
+            <MudPaper Class="settings-home-card" Elevation="0">
+                <MudText Typo="Typo.subtitle1">Core</MudText>
+                <MudList T="string" Dense="true">
+                    <MudListItem><MudLink Href="/settings/projects" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Folder" Class="mr-2" />Projects</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/runs" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.PlayCircle" Class="mr-2" />Runs</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/findings" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.FactCheck" Class="mr-2" />Findings</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/schedules" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />Schedules</MudLink></MudListItem>
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6" lg="3">
+            <MudPaper Class="settings-home-card" Elevation="0">
+                <MudText Typo="Typo.subtitle1">Workflows</MudText>
+                <MudList T="string" Dense="true">
+                    <MudListItem><MudLink Href="/settings/workflows/stages" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Layers" Class="mr-2" />Stages</MudLink></MudListItem>
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6" lg="3">
+            <MudPaper Class="settings-home-card" Elevation="0">
+                <MudText Typo="Typo.subtitle1">Platform</MudText>
+                <MudList T="string" Dense="true">
+                    <MudListItem><MudLink Href="/settings/templates" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Description" Class="mr-2" />Templates</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/workers" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Engineering" Class="mr-2" />Workers</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/terminals" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Terminal" Class="mr-2" />Terminals</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/alerts" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-2" />Alerts</MudLink></MudListItem>
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6" lg="3">
+            <MudPaper Class="settings-home-card" Elevation="0">
+                <MudText Typo="Typo.subtitle1">Infrastructure</MudText>
+                <MudList T="string" Dense="true">
+                    <MudListItem><MudLink Href="/settings/image-builder" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Build" Class="mr-2" />Image Builder</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/orchestrator" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Memory" Class="mr-2" />Orchestrator</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/sounds" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.VolumeUp" Class="mr-2" />Sounds</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/proxy-audits" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Policy" Class="mr-2" />Proxy Audits</MudLink></MudListItem>
+                    <MudListItem><MudLink Href="/settings/system" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" />System</MudLink></MudListItem>
+                </MudList>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>

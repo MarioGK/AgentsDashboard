@@ -19,10 +19,10 @@ public sealed record OpenTerminalSessionRequest
     public string? RunId { get; init; }
 
     [Key(3)]
-    public int Cols { get; init; } = 80;
+    public int Cols { get; set; } = 80;
 
     [Key(4)]
-    public int Rows { get; init; } = 24;
+    public int Rows { get; set; } = 24;
 }
 
 /// <summary>

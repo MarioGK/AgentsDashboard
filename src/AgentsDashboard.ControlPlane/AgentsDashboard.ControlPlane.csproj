@@ -2,27 +2,26 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AgentsDashboard.Contracts\AgentsDashboard.Contracts.csproj" />
-    <ProjectReference Include="..\AgentsDashboard.ServiceDefaults\AgentsDashboard.ServiceDefaults.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BlazorMonaco" />
     <PackageReference Include="CliWrap" />
     <PackageReference Include="Cronos" />
-    <PackageReference Include="Docker.DotNet.Enhanced" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+    <PackageReference Include="Docker.DotNet" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="LlmTornado" />
     <PackageReference Include="MudBlazor" />
     <PackageReference Include="SharpZipLib" />
-    <PackageReference Include="Swashbuckle.AspNetCore" />
     <PackageReference Include="Yarp.ReverseProxy" />
     <PackageReference Include="MagicOnion.Client" />
     <PackageReference Include="MessagePack" />
+    <PackageReference Include="MagicOnion.Server" />
   </ItemGroup>
 
   <PropertyGroup>

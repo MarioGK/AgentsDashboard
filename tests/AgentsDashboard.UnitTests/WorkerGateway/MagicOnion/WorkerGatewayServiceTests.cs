@@ -25,6 +25,7 @@ public class WorkerGatewayServiceTests
             queue,
             reconcilerMock.Object,
             Mock.Of<IDockerContainerService>(),
+            new WorkerHarnessToolHealthService(),
             NullLogger<WorkerGatewayService>.Instance);
 
         await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { WorkerId = "worker-1" });
@@ -50,6 +51,7 @@ public class WorkerGatewayServiceTests
             queue,
             reconcilerMock.Object,
             Mock.Of<IDockerContainerService>(),
+            new WorkerHarnessToolHealthService(),
             NullLogger<WorkerGatewayService>.Instance);
 
         var response = await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { WorkerId = "worker-1" });
@@ -68,6 +70,7 @@ public class WorkerGatewayServiceTests
             queue,
             Mock.Of<IContainerOrphanReconciler>(),
             Mock.Of<IDockerContainerService>(),
+            new WorkerHarnessToolHealthService(),
             NullLogger<WorkerGatewayService>.Instance);
 
         var response = await service.CancelJobAsync(new CancelJobRequest { RunId = "run-1" });

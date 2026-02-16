@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AgentsDashboard.WorkerGateway.Configuration;
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -71,6 +72,12 @@ public sealed class ImagePrePullService : IHostedService
                 return;
             }
 
+            if (await TryBuildImageAsync(image, cancellationToken))
+            {
+                _logger.LogInformation("Successfully built image {Image}", image);
+                return;
+            }
+
             _logger.LogInformation("Pulling image {Image}...", image);
 
             var authConfig = GetAuthConfig(image);
@@ -97,6 +104,77 @@ public sealed class ImagePrePullService : IHostedService
         {
             _semaphore.Release();
         }
+    }
+
+    private async Task<bool> TryBuildImageAsync(string image, CancellationToken cancellationToken)
+    {
+        var definition = ResolveBuildDefinition(image);
+        if (definition is null)
+            return false;
+
+        var root = ResolveWorkspaceRoot();
+        if (string.IsNullOrWhiteSpace(root))
+            return false;
+
+        var dockerfilePath = Path.Combine(root, definition.Value.DockerfileRelativePath);
+        var contextPath = Path.Combine(root, definition.Value.ContextRelativePath);
+
+        if (!File.Exists(dockerfilePath) || !Directory.Exists(contextPath))
+            return false;
+
+        _logger.LogInformation("Building image {Image} from {Dockerfile}", image, dockerfilePath);
+        return await BuildImageWithCliAsync(image, dockerfilePath, contextPath, cancellationToken);
+    }
+
+    private async Task<bool> BuildImageWithCliAsync(
+        string image,
+        string dockerfilePath,
+        string contextPath,
+        CancellationToken cancellationToken)
+    {
+        var info = new ProcessStartInfo
+        {
+            FileName = "docker",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        info.ArgumentList.Add("build");
+        info.ArgumentList.Add("-t");
+        info.ArgumentList.Add(image);
+        info.ArgumentList.Add("-f");
+        info.ArgumentList.Add(dockerfilePath);
+        info.ArgumentList.Add(contextPath);
+
+        using var process = new Process { StartInfo = info };
+
+        process.OutputDataReceived += (_, args) =>
+        {
+            if (!string.IsNullOrWhiteSpace(args.Data))
+                _logger.LogDebug("Docker build output ({Image}): {Message}", image, args.Data);
+        };
+        process.ErrorDataReceived += (_, args) =>
+        {
+            if (!string.IsNullOrWhiteSpace(args.Data))
+                _logger.LogDebug("Docker build error ({Image}): {Message}", image, args.Data);
+        };
+
+        if (!process.Start())
+        {
+            _logger.LogWarning("Failed to launch docker CLI to build image {Image}", image);
+            return false;
+        }
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode == 0)
+            return true;
+
+        _logger.LogWarning("docker build for image {Image} failed with exit code {ExitCode}", image, process.ExitCode);
+        return false;
     }
 
     private async Task<bool> ImageExistsLocallyAsync(string image, CancellationToken cancellationToken)
@@ -155,5 +233,57 @@ public sealed class ImagePrePullService : IHostedService
         return registry.ToUpperInvariant()
             .Replace("-", "_")
             .Replace(".", "_");
+    }
+
+    private static (string DockerfileRelativePath, string ContextRelativePath)? ResolveBuildDefinition(string imageReference)
+    {
+        var repositoryName = GetImageRepositoryName(imageReference);
+        return repositoryName switch
+        {
+            "ai-harness" => ("deploy/harness-image/Dockerfile", "deploy/harness-image"),
+            "ai-harness-base" => ("deploy/harness-images/Dockerfile.harness-base", "deploy/harness-images"),
+            "harness-codex" => ("deploy/harness-images/Dockerfile.harness-codex", "deploy/harness-images"),
+            "harness-opencode" => ("deploy/harness-images/Dockerfile.harness-opencode", "deploy/harness-images"),
+            "harness-claudecode" => ("deploy/harness-images/Dockerfile.harness-claudecode", "deploy/harness-images"),
+            "harness-zai" => ("deploy/harness-images/Dockerfile.harness-zai", "deploy/harness-images"),
+            _ => null
+        };
+    }
+
+    private static string GetImageRepositoryName(string imageReference)
+    {
+        var withoutDigest = imageReference.Split('@', 2)[0];
+        var lastSlash = withoutDigest.LastIndexOf('/');
+        var candidate = lastSlash >= 0 ? withoutDigest[(lastSlash + 1)..] : withoutDigest;
+
+        var lastColon = candidate.LastIndexOf(':');
+        return lastColon > 0 ? candidate[..lastColon].ToLowerInvariant() : candidate.ToLowerInvariant();
+    }
+
+    private static string? ResolveWorkspaceRoot()
+    {
+        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        {
+            var resolved = ResolveWorkspaceRoot(start);
+            if (!string.IsNullOrWhiteSpace(resolved))
+                return resolved;
+        }
+
+        return null;
+    }
+
+    private static string? ResolveWorkspaceRoot(string startPath)
+    {
+        var current = new DirectoryInfo(startPath);
+        while (current is not null)
+        {
+            var marker = Path.Combine(current.FullName, "deploy", "harness-image", "Dockerfile");
+            if (File.Exists(marker))
+                return current.FullName;
+
+            current = current.Parent;
+        }
+
+        return null;
     }
 }

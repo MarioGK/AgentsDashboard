@@ -1,9 +1,9 @@
-@page "/repositories/{RepositoryId}/instructions"
+@page "/settings/repositories/{RepositoryId}/instructions"
+@layout SettingsLayout
 @rendermode InteractiveServer
-@using BlazorMonaco.Editor
 @using AgentsDashboard.Contracts.Domain
 @using AgentsDashboard.Contracts.Api
-@inject Data.OrchestratorStore Store
+@inject Data.IOrchestratorStore Store
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
@@ -19,7 +19,7 @@ else
     <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" />
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="instruction-back-button" />
                 <MudText Typo="Typo.h4">Instruction Files</MudText>
             </MudStack>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddInstruction">
@@ -47,6 +47,7 @@ else
             @foreach (var instruction in _instructions.OrderBy(i => i.Priority))
             {
                 <MudPaper Elevation="2" Class="pa-4 mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">@instruction.Name</MudText>
                     <MudGrid>
                         <MudItem xs="12" md="5">
                             <MudTextField @bind-Value="instruction.Name" Label="Name" Variant="Variant.Outlined" />
@@ -67,15 +68,12 @@ else
                         </MudItem>
                     </MudGrid>
 
-                    <MudText Typo="Typo.subtitle2" Class="mb-2">Content (Markdown)</MudText>
-                    <div style="height: 300px;">
-                        <StandaloneCodeEditor @key="@($"instr-{instruction.Id}")"
-                                              Id="@($"editor_{instruction.Id}")"
-                                              ConstructionOptions="@(e => GetEditorOptions(e, instruction))"
-                                              Height="300px"
-                                              @ref="@(_editorRefs[instruction.Id])"
-                                              OnDidChangeModelContent="@(() => OnContentChanged(instruction))" />
-                    </div>
+                    <MudTextField @bind-Value="instruction.Content"
+                                  Label="Content (Markdown)"
+                                  Variant="Variant.Outlined"
+                                  Lines="12"
+                                  AutoGrow="true"
+                                  Class="mt-2" />
 
                     <MudDivider Class="my-3" />
                     <MudText Typo="Typo.caption" Color="Color.Secondary">
@@ -113,23 +111,10 @@ else
 
     private RepositoryDocument? _repository;
     private List<RepositoryInstructionDocument> _instructions = [];
-    private readonly Dictionary<string, StandaloneCodeEditor> _editorRefs = [];
     private bool _showAddDialog;
     private string _newName = "";
     private int _newPriority;
     private bool _newEnabled = true;
-
-    private StandaloneEditorConstructionOptions GetEditorOptions(StandaloneCodeEditor editor, RepositoryInstructionDocument instruction)
-        => new()
-        {
-            AutomaticLayout = true,
-            Language = "markdown",
-            Theme = "vs-dark",
-            Minimap = new EditorMinimapOptions { Enabled = false },
-            WordWrap = "on",
-            FontSize = 13,
-            Value = instruction.Content,
-        };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -143,11 +128,6 @@ else
     private async Task LoadInstructionsAsync()
     {
         _instructions = await Store.GetInstructionsAsync(RepositoryId, CancellationToken.None);
-        foreach (var instr in _instructions)
-        {
-            if (!_editorRefs.ContainsKey(instr.Id))
-                _editorRefs[instr.Id] = null!;
-        }
         StateHasChanged();
     }
 
@@ -174,22 +154,8 @@ else
         await LoadInstructionsAsync();
     }
 
-    private async void OnContentChanged(RepositoryInstructionDocument instruction)
-    {
-        if (_editorRefs.TryGetValue(instruction.Id, out var editor) && editor is not null)
-        {
-            var content = await editor.GetValue();
-            instruction.Content = content;
-        }
-    }
-
     private async Task SaveInstructionAsync(RepositoryInstructionDocument instruction)
     {
-        if (_editorRefs.TryGetValue(instruction.Id, out var editor) && editor is not null)
-        {
-            instruction.Content = await editor.GetValue();
-        }
-
         await Store.UpsertInstructionAsync(RepositoryId, instruction.Id,
             new CreateRepositoryInstructionRequest(instruction.Name, instruction.Content, instruction.Priority, instruction.Enabled),
             CancellationToken.None);
@@ -201,7 +167,6 @@ else
         var deleted = await Store.DeleteInstructionAsync(instruction.Id, CancellationToken.None);
         if (deleted)
         {
-            _editorRefs.Remove(instruction.Id);
             Snackbar.Add("Instruction deleted", Severity.Success);
             await LoadInstructionsAsync();
         }
@@ -213,6 +178,6 @@ else
 
     private void GoBack()
     {
-        Navigation.NavigateTo($"/repositories/{RepositoryId}");
+        Navigation.NavigateTo($"/settings/repositories/{RepositoryId}");
     }
 }

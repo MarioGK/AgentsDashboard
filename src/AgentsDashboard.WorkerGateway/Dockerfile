@@ -1,10 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+COPY global.json ./
+COPY Directory.Build.props ./
+COPY Directory.Packages.props ./
 COPY src/AgentsDashboard.slnx ./src/
 COPY src/AgentsDashboard.WorkerGateway ./src/AgentsDashboard.WorkerGateway
 COPY src/AgentsDashboard.Contracts ./src/AgentsDashboard.Contracts
-COPY src/AgentsDashboard.ServiceDefaults ./src/AgentsDashboard.ServiceDefaults
 
 RUN dotnet restore ./src/AgentsDashboard.WorkerGateway/AgentsDashboard.WorkerGateway.csproj
 RUN dotnet publish ./src/AgentsDashboard.WorkerGateway/AgentsDashboard.WorkerGateway.csproj -c Release -o /app/publish

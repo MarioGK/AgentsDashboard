@@ -25,8 +25,9 @@ public sealed class HarnessExecutor(
         CancellationToken cancellationToken)
     {
         var request = job.Request;
+        var command = request.CustomArgs ?? string.Empty;
 
-        if (string.IsNullOrWhiteSpace(request.CustomArgs))
+        if (string.IsNullOrWhiteSpace(command))
         {
             return new HarnessResultEnvelope
             {
@@ -39,11 +40,11 @@ public sealed class HarnessExecutor(
         }
 
         try
-        {
-            if (!options.Value.UseDocker)
             {
-                return await ExecuteDirectAsync(request, onLogChunk, cancellationToken);
-            }
+                if (!options.Value.UseDocker)
+                {
+                    return await ExecuteDirectAsync(request, onLogChunk, cancellationToken);
+                }
 
             return await ExecuteViaAdapterAsync(request, onLogChunk, cancellationToken);
         }
@@ -271,6 +272,7 @@ public sealed class HarnessExecutor(
     {
         if (!string.IsNullOrWhiteSpace(request.WorkingDirectory) && Directory.Exists(request.WorkingDirectory))
         {
+            await EnsureTaskBranchPreparedAsync(request, request.WorkingDirectory, cancellationToken);
             return (request.WorkingDirectory, false);
         }
 
@@ -297,7 +299,58 @@ public sealed class HarnessExecutor(
             logger.LogWarning(ex, "Git clone threw for {CloneUrl}", request.CloneUrl);
         }
 
+        await EnsureTaskBranchPreparedAsync(request, tempPath, cancellationToken);
         return (tempPath, true);
+    }
+
+    private async Task EnsureTaskBranchPreparedAsync(
+        DispatchJobRequest request,
+        string workspacePath,
+        CancellationToken cancellationToken)
+    {
+        if (request.EnvironmentVars is null ||
+            !request.EnvironmentVars.TryGetValue("TASK_BRANCH", out var taskBranch) ||
+            string.IsNullOrWhiteSpace(taskBranch))
+        {
+            return;
+        }
+
+        if (!Directory.Exists(workspacePath))
+        {
+            return;
+        }
+
+        var defaultBranch = request.EnvironmentVars.TryGetValue("TASK_DEFAULT_BRANCH", out var configuredDefaultBranch) &&
+                            !string.IsNullOrWhiteSpace(configuredDefaultBranch)
+            ? configuredDefaultBranch
+            : "main";
+
+        try
+        {
+            await Cli.Wrap("git")
+                .WithArguments(["-C", workspacePath, "fetch", "--all"])
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync(cancellationToken);
+
+            await Cli.Wrap("git")
+                .WithArguments(["-C", workspacePath, "checkout", defaultBranch])
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync(cancellationToken);
+
+            await Cli.Wrap("git")
+                .WithArguments(["-C", workspacePath, "pull", "--ff-only", "origin", defaultBranch])
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync(cancellationToken);
+
+            await Cli.Wrap("git")
+                .WithArguments(["-C", workspacePath, "checkout", "-B", taskBranch])
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to prepare task branch {TaskBranch} in workspace {WorkspacePath}", taskBranch, workspacePath);
+        }
     }
 
     private bool IsImageAllowed(string image)
@@ -332,6 +385,11 @@ public sealed class HarnessExecutor(
         HarnessResultEnvelope envelope,
         CancellationToken cancellationToken)
     {
+        if (request.EnvironmentVars is null || request.EnvironmentVars.Count == 0)
+        {
+            return;
+        }
+
         if (!string.Equals(envelope.Status, "succeeded", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -348,7 +406,10 @@ public sealed class HarnessExecutor(
             return;
         }
 
-        var expectedBranchPrefix = BuildExpectedBranchPrefix(repository, request.TaskId);
+        var expectedBranchPrefix = request.EnvironmentVars.TryGetValue("PR_BRANCH_PREFIX", out var configuredPrefix) &&
+                                   !string.IsNullOrWhiteSpace(configuredPrefix)
+            ? configuredPrefix
+            : BuildExpectedBranchPrefix(repository, request.TaskId);
         if (!ValidateBranchName(branch, expectedBranchPrefix, request.RunId, out var branchError))
         {
             envelope.Status = "failed";
@@ -525,6 +586,8 @@ public sealed class HarnessExecutor(
         Func<string, CancellationToken, Task>? onLogChunk,
         CancellationToken cancellationToken)
     {
+        var command = request.CustomArgs ?? string.Empty;
+
         var stdoutBuf = new StringBuilder();
         var stderrBuf = new StringBuilder();
 
@@ -553,7 +616,7 @@ public sealed class HarnessExecutor(
             : PipeTarget.ToStringBuilder(stderrBuf);
 
         var cmd = Cli.Wrap("sh")
-            .WithArguments(["-lc", request.CustomArgs])
+            .WithArguments(["-lc", command])
             .WithValidation(CommandResultValidation.None)
             .WithStandardOutputPipe(stdoutPipe)
             .WithStandardErrorPipe(stderrPipe);

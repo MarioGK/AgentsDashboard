@@ -1,7 +1,8 @@
-@page "/workers"
+@page "/settings/workers"
+@layout SettingsLayout
 @rendermode InteractiveServer
 
-@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 
 <PageTitle>Workers - AgentsDashboard</PageTitle>
 
@@ -32,9 +33,14 @@ else
                 <MudTh>Slots</MudTh>
                 <MudTh>Utilization</MudTh>
                 <MudTh>Last Heartbeat</MudTh>
+                <MudTh>Actions</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="Worker ID"><b>@context.WorkerId</b></MudTd>
+                <MudTd DataLabel="Worker ID">
+                    <MudLink Href="@GetWorkerDetailsHref(context.WorkerId)">
+                        <b>@context.WorkerId</b>
+                    </MudLink>
+                </MudTd>
                 <MudTd DataLabel="Endpoint" Style="font-family: monospace; font-size: 0.85rem;">
                     @context.Endpoint
                 </MudTd>
@@ -50,6 +56,14 @@ else
                                        Rounded Size="Size.Medium" />
                 </MudTd>
                 <MudTd DataLabel="Last Heartbeat">@context.LastHeartbeatUtc.ToString("g") UTC</MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudButton Variant="Variant.Outlined"
+                               Size="Size.Small"
+                               Href="@GetWorkerDetailsHref(context.WorkerId)"
+                               StartIcon="@Icons.Material.Filled.Visibility">
+                        Details
+                    </MudButton>
+                </MudTd>
             </RowTemplate>
         </MudTable>
     </MudPaper>
@@ -73,5 +87,10 @@ else
         if (max == 0) return Color.Default;
         var ratio = (double)used / max;
         return ratio > 0.8 ? Color.Error : ratio > 0.5 ? Color.Warning : Color.Success;
+    }
+
+    private static string GetWorkerDetailsHref(string workerId)
+    {
+        return $"/settings/workers/{Uri.EscapeDataString(workerId)}";
     }
 }

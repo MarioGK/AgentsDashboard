@@ -1,74 +1,52 @@
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
+using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.WorkerGateway.Configuration;
+using AgentsDashboard.WorkerGateway.MagicOnion;
 
 namespace AgentsDashboard.WorkerGateway.Services;
 
 public sealed class WorkerHeartbeatService(
     WorkerOptions options,
-    WorkerQueue queue,
-    ILogger<WorkerHeartbeatService> logger,
-    HttpClient httpClient) : BackgroundService
+    IWorkerQueue queue,
+    ILogger<WorkerHeartbeatService> logger) : BackgroundService
 {
+    private static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+        await Task.Delay(InitialDelay, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await SendHeartbeatAsync(stoppingToken);
+                await PublishHeartbeatAsync(stoppingToken);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to send heartbeat to control plane");
+                logger.LogWarning(ex, "Failed to publish worker heartbeat");
             }
 
             await Task.Delay(HeartbeatInterval, stoppingToken);
         }
     }
 
-    private async Task SendHeartbeatAsync(CancellationToken cancellationToken)
+    private async Task PublishHeartbeatAsync(CancellationToken cancellationToken)
     {
-        var payload = new HeartbeatPayload
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var status = new WorkerStatusMessage
         {
             WorkerId = options.WorkerId,
-            Endpoint = $"http://{Environment.MachineName}:5201",
+            Status = "healthy",
             ActiveSlots = queue.ActiveSlots,
-            MaxSlots = queue.MaxSlots
+            MaxSlots = queue.MaxSlots,
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Message = "Worker heartbeat"
         };
 
-        var response = await httpClient.PostAsJsonAsync(
-            $"{options.ControlPlaneUrl.TrimEnd('/')}/api/workers/heartbeat",
-            payload,
-            cancellationToken);
-
-        if (response.IsSuccessStatusCode)
-        {
-            logger.LogDebug("Heartbeat sent successfully: Worker={WorkerId}, Active={Active}/{Max}",
-                options.WorkerId, queue.ActiveSlots, queue.MaxSlots);
-        }
-        else
-        {
-            logger.LogWarning("Heartbeat failed with status {StatusCode}", response.StatusCode);
-        }
-    }
-
-    private sealed class HeartbeatPayload
-    {
-        [JsonPropertyName("workerId")]
-        public required string WorkerId { get; set; }
-
-        [JsonPropertyName("endpoint")]
-        public required string Endpoint { get; set; }
-
-        [JsonPropertyName("activeSlots")]
-        public int ActiveSlots { get; set; }
-
-        [JsonPropertyName("maxSlots")]
-        public int MaxSlots { get; set; }
+        await WorkerEventHub.BroadcastWorkerStatusAsync(status);
+        logger.LogDebug("Heartbeat published successfully: Worker={WorkerId}, Active={Active}/{Max}",
+            options.WorkerId, queue.ActiveSlots, queue.MaxSlots);
     }
 }

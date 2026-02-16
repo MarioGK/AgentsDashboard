@@ -3,8 +3,7 @@ using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
-using AgentsDashboard.ControlPlane.Hubs;
-using Microsoft.AspNetCore.SignalR;
+using Grpc.Core;
 using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Services;
@@ -12,128 +11,162 @@ namespace AgentsDashboard.ControlPlane.Services;
 public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalReceiver
 {
     private readonly IMagicOnionClientFactory _clientFactory;
+    private readonly IWorkerLifecycleManager _lifecycleManager;
     private readonly IOrchestratorStore _store;
-    private readonly IHubContext<TerminalHub> _hubContext;
     private readonly ILogger<TerminalBridgeService> _logger;
     private readonly TerminalOptions _options;
 
-    private readonly ConcurrentDictionary<string, SessionBridge> _sessions = new();
-    private readonly ConcurrentDictionary<string, string> _connectionToSession = new();
-
-    private ITerminalHub? _terminalHub;
-    private readonly SemaphoreSlim _hubLock = new(1, 1);
+    private readonly ConcurrentDictionary<string, SessionBridge> _sessions = [];
+    private readonly ConcurrentDictionary<string, TerminalClientCallbacks> _clients = [];
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _clientToSessions = [];
+    private readonly ConcurrentDictionary<string, ITerminalHub> _hubs = [];
+    private readonly SemaphoreSlim _hubsLock = new(1, 1);
 
     public TerminalBridgeService(
         IMagicOnionClientFactory clientFactory,
+        IWorkerLifecycleManager lifecycleManager,
         IOrchestratorStore store,
-        IHubContext<TerminalHub> hubContext,
         IOptions<TerminalOptions> options,
         ILogger<TerminalBridgeService> logger)
     {
         _clientFactory = clientFactory;
+        _lifecycleManager = lifecycleManager;
         _store = store;
-        _hubContext = hubContext;
         _logger = logger;
         _options = options.Value;
     }
 
+    public void RegisterClient(string clientId, TerminalClientCallbacks callbacks)
+    {
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            throw new ArgumentException("Client id is required.", nameof(clientId));
+        }
+
+        _clients[clientId] = callbacks;
+    }
+
+    public async Task UnregisterClientAsync(string clientId, CancellationToken cancellationToken = default)
+    {
+        _clients.TryRemove(clientId, out _);
+
+        if (!_clientToSessions.TryRemove(clientId, out var sessions))
+        {
+            return;
+        }
+
+        foreach (var sessionId in sessions.Keys)
+        {
+            await RemoveClientFromSessionAsync(clientId, sessionId, cancellationToken);
+        }
+    }
+
     public async Task<string> CreateSessionAsync(
-        string connectionId,
-        string workerId,
+        string clientId,
+        string? workerId,
         string? runId,
         int cols,
         int rows,
         CancellationToken cancellationToken = default)
     {
+        EnsureClientIsRegistered(clientId);
+        var resolvedWorkerId = await ResolveWorkerForTerminalAsync(cancellationToken);
+
         var session = new TerminalSessionDocument
         {
-            WorkerId = workerId,
-            RunId = runId,
+            WorkerId = resolvedWorkerId,
+            RunId = null,
             State = TerminalSessionState.Pending,
             Cols = cols,
             Rows = rows
         };
 
         await _store.CreateTerminalSessionAsync(session, cancellationToken);
-        _logger.LogInformation("Created terminal session {SessionId} for worker {WorkerId}", session.Id, workerId);
 
-        var cts = new CancellationTokenSource();
-        var bridge = new SessionBridge(session.Id, workerId, cts);
-        bridge.ConnectionIds.Add(connectionId);
-
+        var bridge = new SessionBridge(session.Id, resolvedWorkerId);
         _sessions[session.Id] = bridge;
-        _connectionToSession[connectionId] = session.Id;
+        AddClientToSession(clientId, session.Id, bridge);
 
-        var hub = await GetOrConnectHubAsync(cancellationToken);
-
-        await hub.OpenSessionAsync(new OpenTerminalSessionRequest
+        await ExecuteHubActionWithReconnectAsync(resolvedWorkerId, hub => hub.OpenSessionAsync(new OpenTerminalSessionRequest
         {
             SessionId = session.Id,
-            WorkerId = workerId,
-            RunId = runId,
+            WorkerId = resolvedWorkerId,
+            RunId = null,
             Cols = cols,
             Rows = rows
-        });
+        }), cancellationToken);
 
+        _logger.LogInformation("Created terminal session {SessionId} for worker {WorkerId}", session.Id, resolvedWorkerId);
         return session.Id;
     }
 
+    private async Task<string> ResolveWorkerForTerminalAsync(CancellationToken cancellationToken)
+    {
+        var lease = await _lifecycleManager.AcquireWorkerForDispatchAsync(cancellationToken);
+        if (lease is not null)
+        {
+            return lease.WorkerId;
+        }
+
+        throw new InvalidOperationException("No online workers available for terminal session.");
+    }
+
     public async Task AttachSessionAsync(
-        string connectionId,
+        string clientId,
         string sessionId,
         long lastSequence,
         CancellationToken cancellationToken = default)
     {
+        EnsureClientIsRegistered(clientId);
+
         var session = await _store.GetTerminalSessionAsync(sessionId, cancellationToken)
             ?? throw new InvalidOperationException($"Session {sessionId} not found");
 
         if (session.State == TerminalSessionState.Closed)
+        {
             throw new InvalidOperationException($"Session {sessionId} is closed");
+        }
 
         if (!_sessions.TryGetValue(sessionId, out var bridge))
         {
-            var cts = new CancellationTokenSource();
-            bridge = new SessionBridge(sessionId, session.WorkerId, cts);
+            bridge = new SessionBridge(sessionId, session.WorkerId);
             _sessions[sessionId] = bridge;
 
-            var hub = await GetOrConnectHubAsync(cancellationToken);
-            await hub.ReattachSessionAsync(new ReattachTerminalSessionRequest
+            await ExecuteHubActionWithReconnectAsync(session.WorkerId, hub => hub.ReattachSessionAsync(new ReattachTerminalSessionRequest
             {
                 SessionId = sessionId,
                 LastSequence = lastSequence
-            });
+            }), cancellationToken);
         }
 
-        bridge.ConnectionIds.Add(connectionId);
-        _connectionToSession[connectionId] = sessionId;
-
-        // Cancel any pending grace timer since a client reconnected
+        AddClientToSession(clientId, sessionId, bridge);
         bridge.CancelGraceTimer();
 
-        // Replay missed audit events
         var missedEvents = await _store.GetTerminalAuditEventsAsync(
             sessionId,
             afterSequence: lastSequence,
             limit: _options.ReplayBufferEvents,
             cancellationToken: cancellationToken);
 
-        foreach (var evt in missedEvents)
+        if (_clients.TryGetValue(clientId, out var callbacks))
         {
-            await _hubContext.Clients.Client(connectionId).SendAsync(
-                "TerminalOutput",
-                new
+            foreach (var evt in missedEvents)
+            {
+                await callbacks.OnSessionOutputAsync(new TerminalOutputMessage
                 {
-                    sessionId,
-                    sequence = evt.Sequence,
-                    payloadBase64 = evt.PayloadBase64,
-                    direction = evt.Direction
-                },
-                cancellationToken);
+                    SessionId = sessionId,
+                    Sequence = evt.Sequence,
+                    PayloadBase64 = evt.PayloadBase64,
+                    Direction = evt.Direction
+                });
+            }
         }
 
         _logger.LogInformation(
-            "Connection {ConnectionId} attached to session {SessionId}, replayed {Count} events",
-            connectionId, sessionId, missedEvents.Count);
+            "Client {ClientId} attached to session {SessionId}, replayed {Count} events",
+            clientId,
+            sessionId,
+            missedEvents.Count);
     }
 
     public async Task SendInputAsync(
@@ -141,8 +174,7 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
         string payloadBase64,
         CancellationToken cancellationToken = default)
     {
-        if (!_sessions.TryGetValue(sessionId, out _))
-            throw new InvalidOperationException($"No active bridge for session {sessionId}");
+        var bridge = GetBridgeOrThrow(sessionId);
 
         await _store.AppendTerminalAuditEventAsync(new TerminalAuditEventDocument
         {
@@ -151,12 +183,11 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
             PayloadBase64 = payloadBase64
         }, cancellationToken);
 
-        var hub = await GetOrConnectHubAsync(cancellationToken);
-        await hub.SendInputAsync(new TerminalInputMessage
+        await ExecuteHubActionWithReconnectAsync(bridge.WorkerId, hub => hub.SendInputAsync(new TerminalInputMessage
         {
             SessionId = sessionId,
             PayloadBase64 = payloadBase64
-        });
+        }), cancellationToken);
     }
 
     public async Task ResizeAsync(
@@ -165,8 +196,7 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
         int rows,
         CancellationToken cancellationToken = default)
     {
-        if (!_sessions.TryGetValue(sessionId, out _))
-            throw new InvalidOperationException($"No active bridge for session {sessionId}");
+        var bridge = GetBridgeOrThrow(sessionId);
 
         var session = await _store.GetTerminalSessionAsync(sessionId, cancellationToken);
         if (session is not null)
@@ -177,76 +207,68 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
             await _store.UpdateTerminalSessionAsync(session, cancellationToken);
         }
 
-        var hub = await GetOrConnectHubAsync(cancellationToken);
-        await hub.ResizeSessionAsync(new TerminalResizeMessage
+        await ExecuteHubActionWithReconnectAsync(bridge.WorkerId, hub => hub.ResizeSessionAsync(new TerminalResizeMessage
         {
             SessionId = sessionId,
             Cols = cols,
             Rows = rows
-        });
+        }), cancellationToken);
     }
 
     public async Task CloseAsync(
         string sessionId,
         CancellationToken cancellationToken = default)
     {
-        var hub = await GetOrConnectHubAsync(cancellationToken);
-        await hub.CloseSessionAsync(new CloseTerminalSessionRequest
-        {
-            SessionId = sessionId
-        });
-
-        await _store.CloseTerminalSessionAsync(sessionId, "Closed by user", cancellationToken);
+        var session = await _store.GetTerminalSessionAsync(sessionId, cancellationToken);
+        var workerId = session?.WorkerId;
 
         if (_sessions.TryRemove(sessionId, out var bridge))
         {
-            bridge.Dispose();
-            foreach (var connId in bridge.ConnectionIds)
+            workerId = bridge.WorkerId;
+            foreach (var clientId in bridge.ClientIds.Keys)
             {
-                _connectionToSession.TryRemove(connId, out _);
+                if (_clientToSessions.TryGetValue(clientId, out var sessions))
+                {
+                    sessions.TryRemove(sessionId, out _);
+                    if (sessions.IsEmpty)
+                    {
+                        _clientToSessions.TryRemove(clientId, out _);
+                    }
+                }
+            }
+
+            bridge.Dispose();
+        }
+
+        if (!string.IsNullOrWhiteSpace(workerId))
+        {
+            await ExecuteHubActionWithReconnectAsync(workerId, hub => hub.CloseSessionAsync(new CloseTerminalSessionRequest
+            {
+                SessionId = sessionId
+            }), cancellationToken);
+        }
+
+        await _store.CloseTerminalSessionAsync(sessionId, "Closed by user", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(workerId))
+        {
+            await TryDisposeWorkerHubIfUnusedAsync(workerId, cancellationToken);
+
+            if (session?.RunId is null)
+            {
+                try
+                {
+                    await _lifecycleManager.RecycleWorkerAsync(workerId, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed recycling standalone terminal worker {WorkerId}", workerId);
+                }
             }
         }
 
         _logger.LogInformation("Terminal session {SessionId} closed by user", sessionId);
     }
-
-    public async Task OnClientDisconnectedAsync(string connectionId)
-    {
-        if (!_connectionToSession.TryRemove(connectionId, out var sessionId))
-            return;
-
-        if (!_sessions.TryGetValue(sessionId, out var bridge))
-            return;
-
-        bridge.ConnectionIds.Remove(connectionId);
-
-        if (bridge.ConnectionIds.Count > 0)
-        {
-            _logger.LogDebug(
-                "Connection {ConnectionId} disconnected from session {SessionId}, {Remaining} connections remain",
-                connectionId, sessionId, bridge.ConnectionIds.Count);
-            return;
-        }
-
-        // No more connected clients - set to Disconnected and start grace timer
-        _logger.LogInformation(
-            "All clients disconnected from session {SessionId}, starting {GraceMinutes}m grace timer",
-            sessionId, _options.ResumeGraceMinutes);
-
-        var session = await _store.GetTerminalSessionAsync(sessionId);
-        if (session is not null && session.State == TerminalSessionState.Active)
-        {
-            session.State = TerminalSessionState.Disconnected;
-            session.LastSeenAtUtc = DateTime.UtcNow;
-            await _store.UpdateTerminalSessionAsync(session);
-        }
-
-        bridge.StartGraceTimer(
-            TimeSpan.FromMinutes(_options.ResumeGraceMinutes),
-            () => OnGraceTimerExpiredAsync(sessionId));
-    }
-
-    // ── ITerminalReceiver callbacks (called by worker via MagicOnion) ─────
 
     void ITerminalReceiver.OnSessionOpened(TerminalSessionOpenedMessage message)
     {
@@ -268,13 +290,11 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
         _ = HandleSessionErrorAsync(message);
     }
 
-    // ── Async handlers for receiver callbacks ─────────────────────────────
-
     private async Task HandleSessionOpenedAsync(TerminalSessionOpenedMessage message)
     {
         try
         {
-            var session = await _store.GetTerminalSessionAsync(message.SessionId);
+            var session = await _store.GetTerminalSessionAsync(message.SessionId, CancellationToken.None);
             if (session is not null)
             {
                 session.State = message.Success ? TerminalSessionState.Active : TerminalSessionState.Closed;
@@ -284,27 +304,13 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
                     session.ClosedAtUtc = DateTime.UtcNow;
                     session.CloseReason = message.Error ?? "Failed to open";
                 }
-                await _store.UpdateTerminalSessionAsync(session);
+
+                await _store.UpdateTerminalSessionAsync(session, CancellationToken.None);
             }
 
-            if (_sessions.TryGetValue(message.SessionId, out var bridge))
-            {
-                var payload = new
-                {
-                    sessionId = message.SessionId,
-                    success = message.Success,
-                    error = message.Error
-                };
-
-                foreach (var connId in bridge.ConnectionIds.ToArray())
-                {
-                    await _hubContext.Clients.Client(connId).SendAsync("TerminalSessionOpened", payload);
-                }
-            }
-
-            _logger.LogInformation(
-                "Terminal session {SessionId} opened: success={Success}",
-                message.SessionId, message.Success);
+            await PublishToSessionClientsAsync(
+                message.SessionId,
+                callbacks => callbacks.OnSessionOpenedAsync(message));
         }
         catch (Exception ex)
         {
@@ -321,23 +327,11 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
                 SessionId = message.SessionId,
                 Direction = TerminalDataDirection.Output,
                 PayloadBase64 = message.PayloadBase64
-            });
+            }, CancellationToken.None);
 
-            if (_sessions.TryGetValue(message.SessionId, out var bridge))
-            {
-                var payload = new
-                {
-                    sessionId = message.SessionId,
-                    sequence = message.Sequence,
-                    payloadBase64 = message.PayloadBase64,
-                    direction = message.Direction
-                };
-
-                foreach (var connId in bridge.ConnectionIds.ToArray())
-                {
-                    await _hubContext.Clients.Client(connId).SendAsync("TerminalOutput", payload);
-                }
-            }
+            await PublishToSessionClientsAsync(
+                message.SessionId,
+                callbacks => callbacks.OnSessionOutputAsync(message));
         }
         catch (Exception ex)
         {
@@ -349,26 +343,42 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
     {
         try
         {
-            await _store.CloseTerminalSessionAsync(message.SessionId, message.Reason ?? "Closed by worker");
+            var session = await _store.GetTerminalSessionAsync(message.SessionId, CancellationToken.None);
+            await _store.CloseTerminalSessionAsync(message.SessionId, message.Reason ?? "Closed by worker", CancellationToken.None);
+
+            await PublishToSessionClientsAsync(
+                message.SessionId,
+                callbacks => callbacks.OnSessionClosedAsync(message));
 
             if (_sessions.TryRemove(message.SessionId, out var bridge))
             {
-                var payload = new
+                foreach (var clientId in bridge.ClientIds.Keys)
                 {
-                    sessionId = message.SessionId,
-                    reason = message.Reason
-                };
-
-                foreach (var connId in bridge.ConnectionIds.ToArray())
-                {
-                    _connectionToSession.TryRemove(connId, out _);
-                    await _hubContext.Clients.Client(connId).SendAsync("TerminalSessionClosed", payload);
+                    if (_clientToSessions.TryGetValue(clientId, out var sessions))
+                    {
+                        sessions.TryRemove(message.SessionId, out _);
+                        if (sessions.IsEmpty)
+                        {
+                            _clientToSessions.TryRemove(clientId, out _);
+                        }
+                    }
                 }
 
                 bridge.Dispose();
-            }
+                await TryDisposeWorkerHubIfUnusedAsync(bridge.WorkerId, CancellationToken.None);
 
-            _logger.LogInformation("Terminal session {SessionId} closed: {Reason}", message.SessionId, message.Reason);
+                if (session?.RunId is null)
+                {
+                    try
+                    {
+                        await _lifecycleManager.RecycleWorkerAsync(bridge.WorkerId, CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed recycling standalone terminal worker {WorkerId}", bridge.WorkerId);
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -380,21 +390,9 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
     {
         try
         {
-            if (_sessions.TryGetValue(message.SessionId, out var bridge))
-            {
-                var payload = new
-                {
-                    sessionId = message.SessionId,
-                    error = message.Error
-                };
-
-                foreach (var connId in bridge.ConnectionIds.ToArray())
-                {
-                    await _hubContext.Clients.Client(connId).SendAsync("TerminalSessionError", payload);
-                }
-            }
-
-            _logger.LogWarning("Terminal session {SessionId} error: {Error}", message.SessionId, message.Error);
+            await PublishToSessionClientsAsync(
+                message.SessionId,
+                callbacks => callbacks.OnSessionErrorAsync(message));
         }
         catch (Exception ex)
         {
@@ -402,32 +400,47 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
         }
     }
 
-    // ── Grace timer ────────────────────────────────────────────────────────
-
     private async Task OnGraceTimerExpiredAsync(string sessionId)
     {
         try
         {
             if (!_sessions.TryGetValue(sessionId, out var bridge))
+            {
                 return;
+            }
 
-            // If clients reconnected while grace timer was running, do nothing
-            if (bridge.ConnectionIds.Count > 0)
+            if (!bridge.ClientIds.IsEmpty)
+            {
                 return;
+            }
 
-            _logger.LogInformation(
-                "Grace timer expired for session {SessionId}, closing", sessionId);
+            var session = await _store.GetTerminalSessionAsync(sessionId, CancellationToken.None);
 
-            var hub = await GetOrConnectHubAsync(CancellationToken.None);
-            await hub.CloseSessionAsync(new CloseTerminalSessionRequest
+            await ExecuteHubActionWithReconnectAsync(bridge.WorkerId, hub => hub.CloseSessionAsync(new CloseTerminalSessionRequest
             {
                 SessionId = sessionId
-            });
+            }), CancellationToken.None);
 
-            await _store.CloseTerminalSessionAsync(sessionId, "Grace timer expired");
+            await _store.CloseTerminalSessionAsync(sessionId, "Grace timer expired", CancellationToken.None);
 
             if (_sessions.TryRemove(sessionId, out var removed))
+            {
                 removed.Dispose();
+            }
+
+            await TryDisposeWorkerHubIfUnusedAsync(bridge.WorkerId, CancellationToken.None);
+
+            if (session?.RunId is null)
+            {
+                try
+                {
+                    await _lifecycleManager.RecycleWorkerAsync(bridge.WorkerId, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed recycling standalone terminal worker {WorkerId}", bridge.WorkerId);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -435,45 +448,205 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
         }
     }
 
-    // ── Hub connection management ──────────────────────────────────────────
-
-    private async Task<ITerminalHub> GetOrConnectHubAsync(CancellationToken cancellationToken)
+    private SessionBridge GetBridgeOrThrow(string sessionId)
     {
-        if (_terminalHub is not null)
-            return _terminalHub;
-
-        await _hubLock.WaitAsync(cancellationToken);
-        try
+        if (_sessions.TryGetValue(sessionId, out var bridge))
         {
-            if (_terminalHub is not null)
-                return _terminalHub;
-
-            _terminalHub = await _clientFactory.ConnectTerminalHubAsync(this, cancellationToken);
-            _logger.LogInformation("Connected to worker terminal hub");
-            return _terminalHub;
+            return bridge;
         }
-        finally
+
+        throw new InvalidOperationException($"No active bridge for session {sessionId}");
+    }
+
+    private void EnsureClientIsRegistered(string clientId)
+    {
+        if (!_clients.ContainsKey(clientId))
         {
-            _hubLock.Release();
+            throw new InvalidOperationException($"Client {clientId} is not registered");
         }
     }
 
-    // ── SessionBridge inner type ───────────────────────────────────────────
+    private void AddClientToSession(string clientId, string sessionId, SessionBridge bridge)
+    {
+        bridge.ClientIds[clientId] = 0;
+
+        var sessions = _clientToSessions.GetOrAdd(clientId, static _ => []);
+        sessions[sessionId] = 0;
+    }
+
+    private async Task RemoveClientFromSessionAsync(string clientId, string sessionId, CancellationToken cancellationToken)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var bridge))
+        {
+            return;
+        }
+
+        bridge.ClientIds.TryRemove(clientId, out _);
+
+        if (!bridge.ClientIds.IsEmpty)
+        {
+            return;
+        }
+
+        var session = await _store.GetTerminalSessionAsync(sessionId, cancellationToken);
+        if (session is not null && session.State == TerminalSessionState.Active)
+        {
+            session.State = TerminalSessionState.Disconnected;
+            session.LastSeenAtUtc = DateTime.UtcNow;
+            await _store.UpdateTerminalSessionAsync(session, cancellationToken);
+        }
+
+        bridge.StartGraceTimer(
+            TimeSpan.FromMinutes(_options.ResumeGraceMinutes),
+            () => OnGraceTimerExpiredAsync(sessionId));
+    }
+
+    private async Task PublishToSessionClientsAsync(string sessionId, Func<TerminalClientCallbacks, Task> action)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var bridge))
+        {
+            return;
+        }
+
+        foreach (var clientId in bridge.ClientIds.Keys.ToArray())
+        {
+            if (!_clients.TryGetValue(clientId, out var callbacks))
+            {
+                continue;
+            }
+
+            try
+            {
+                await action(callbacks);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed delivering terminal event to client {ClientId}", clientId);
+            }
+        }
+    }
+
+    private async Task<ITerminalHub> GetOrConnectHubAsync(string workerId, CancellationToken cancellationToken)
+    {
+        if (_hubs.TryGetValue(workerId, out var existing))
+        {
+            return existing;
+        }
+
+        await _hubsLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_hubs.TryGetValue(workerId, out existing))
+            {
+                return existing;
+            }
+
+            var worker = await _lifecycleManager.GetWorkerAsync(workerId, cancellationToken);
+            if (worker is null || !worker.IsRunning)
+            {
+                throw new InvalidOperationException($"Worker {workerId} is unavailable for terminal connection.");
+            }
+
+            var hub = await _clientFactory.ConnectTerminalHubAsync(worker.WorkerId, worker.GrpcEndpoint, this, cancellationToken);
+            _hubs[workerId] = hub;
+            _logger.LogInformation("Connected to terminal hub for worker {WorkerId}", workerId);
+            return hub;
+        }
+        finally
+        {
+            _hubsLock.Release();
+        }
+    }
+
+    private async Task ExecuteHubActionWithReconnectAsync(
+        string workerId,
+        Func<ITerminalHub, Task> action,
+        CancellationToken cancellationToken)
+    {
+        var hub = await GetOrConnectHubAsync(workerId, cancellationToken);
+
+        try
+        {
+            await action(hub);
+        }
+        catch (Exception ex) when (IsDisconnectedHubException(ex))
+        {
+            _logger.LogWarning(ex, "Terminal hub disconnected for worker {WorkerId}. Reconnecting and retrying once.", workerId);
+            await InvalidateHubAsync(workerId, cancellationToken);
+            hub = await GetOrConnectHubAsync(workerId, cancellationToken);
+            await action(hub);
+        }
+    }
+
+    private static bool IsDisconnectedHubException(Exception ex)
+    {
+        if (ex is RpcException rpc && rpc.StatusCode == StatusCode.Unavailable)
+        {
+            return true;
+        }
+
+        if (ex.Message.Contains("already been disconnected from the server", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return ex.InnerException is not null && IsDisconnectedHubException(ex.InnerException);
+    }
+
+    private async Task InvalidateHubAsync(string workerId, CancellationToken cancellationToken)
+    {
+        ITerminalHub? hubToDispose = null;
+
+        await _hubsLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_hubs.TryRemove(workerId, out var existing))
+            {
+                hubToDispose = existing;
+            }
+        }
+        finally
+        {
+            _hubsLock.Release();
+        }
+
+        if (hubToDispose is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await hubToDispose.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to dispose terminal hub for worker {WorkerId}", workerId);
+        }
+    }
+
+    private async Task TryDisposeWorkerHubIfUnusedAsync(string workerId, CancellationToken cancellationToken)
+    {
+        if (_sessions.Values.Any(x => string.Equals(x.WorkerId, workerId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        await InvalidateHubAsync(workerId, cancellationToken);
+    }
 
     private sealed class SessionBridge : IDisposable
     {
-        public string SessionId { get; }
-        public string WorkerId { get; }
-        public HashSet<string> ConnectionIds { get; } = [];
-        private CancellationTokenSource _cts;
-        private CancellationTokenSource? _graceTimerCts;
-
-        public SessionBridge(string sessionId, string workerId, CancellationTokenSource cts)
+        public SessionBridge(string sessionId, string workerId)
         {
             SessionId = sessionId;
             WorkerId = workerId;
-            _cts = cts;
         }
+
+        public string SessionId { get; }
+        public string WorkerId { get; }
+        public ConcurrentDictionary<string, byte> ClientIds { get; } = [];
+        private CancellationTokenSource? _graceTimerCts;
 
         public void StartGraceTimer(TimeSpan delay, Func<Task> onExpired)
         {
@@ -487,30 +660,31 @@ public sealed class TerminalBridgeService : ITerminalBridgeService, ITerminalRec
                 {
                     await Task.Delay(delay, token);
                     if (!token.IsCancellationRequested)
+                    {
                         await onExpired();
+                    }
                 }
                 catch (OperationCanceledException)
                 {
-                    // Grace timer cancelled (client reconnected)
                 }
             }, CancellationToken.None);
         }
 
         public void CancelGraceTimer()
         {
-            if (_graceTimerCts is not null)
+            if (_graceTimerCts is null)
             {
-                _graceTimerCts.Cancel();
-                _graceTimerCts.Dispose();
-                _graceTimerCts = null;
+                return;
             }
+
+            _graceTimerCts.Cancel();
+            _graceTimerCts.Dispose();
+            _graceTimerCts = null;
         }
 
         public void Dispose()
         {
             CancelGraceTimer();
-            _cts.Cancel();
-            _cts.Dispose();
         }
     }
 }

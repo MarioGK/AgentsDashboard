@@ -6,7 +6,7 @@ public sealed class WorkerOptions
 
     public string WorkerId { get; set; } = Environment.MachineName;
     public string ControlPlaneUrl { get; set; } = "http://localhost:5266";
-    public int MaxSlots { get; set; } = 4;
+    public int MaxSlots { get; set; } = 1;
     public bool UseDocker { get; set; } = true;
     public string DefaultImage { get; set; } = "ghcr.io/mariogk/ai-harness:latest";
     public Dictionary<string, string> HarnessImages { get; set; } = new(StringComparer.OrdinalIgnoreCase)

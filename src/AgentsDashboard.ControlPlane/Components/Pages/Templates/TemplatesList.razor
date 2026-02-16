@@ -1,6 +1,7 @@
-@page "/templates"
+@page "/settings/templates"
+@layout SettingsLayout
 @rendermode InteractiveServer
-@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 @inject AgentsDashboard.ControlPlane.Services.TaskTemplateService TemplateService
 @inject IDialogService DialogService
 @inject NavigationManager Nav

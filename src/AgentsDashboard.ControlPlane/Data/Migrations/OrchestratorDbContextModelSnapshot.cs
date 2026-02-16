@@ -17,81 +17,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
-            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.AgentDocument", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ArtifactPatterns")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ArtifactPolicy")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("AutoCreatePullRequest")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Command")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Harness")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("InstructionFiles")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Prompt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RepositoryId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RetryPolicy")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SandboxProfile")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Timeouts")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RepositoryId");
-
-                    b.HasIndex("RepositoryId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("Agents");
-                });
-
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.AlertEventDocument", b =>
                 {
                     b.Property<string>("Id")
@@ -244,6 +169,25 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("HarnessProviderSettings");
+                });
+
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.OrchestratorLeaseDocument", b =>
+                {
+                    b.Property<string>("LeaseName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("LeaseName");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.ToTable("Leases");
                 });
 
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.ProjectDocument", b =>
@@ -471,6 +415,18 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("WorkerImageDigest")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkerImageRef")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkerImageSource")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("State");
@@ -517,6 +473,10 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.PrimitiveCollection<string>("DockerAllowedImages")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Orchestrator")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -858,62 +818,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.ToTable("Workers");
                 });
 
-            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.WorkflowDeadLetterDocument", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Attempt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ExecutionId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FailedNodeId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FailedNodeName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FailureReason")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("InputContextSnapshot")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("Replayed")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("ReplayedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ReplayedExecutionId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RunId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("WorkflowV2Id")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ExecutionId");
-
-                    b.HasIndex("Replayed");
-
-                    b.ToTable("WorkflowDeadLetters");
-                });
-
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.WorkflowDocument", b =>
                 {
                     b.Property<string>("Id")
@@ -1003,124 +907,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.HasIndex("WorkflowId", "CreatedAtUtc");
 
                     b.ToTable("WorkflowExecutions");
-                });
-
-            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.WorkflowExecutionV2Document", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ApprovedBy")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Context")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CurrentNodeId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("EndedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FailureReason")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("NodeResults")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PendingApprovalNodeId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProjectId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RepositoryId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("StartedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("State")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("TriggeredBy")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("WorkflowV2Id")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("State");
-
-                    b.HasIndex("WorkflowV2Id", "CreatedAtUtc");
-
-                    b.ToTable("WorkflowExecutionsV2");
-                });
-
-            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.WorkflowV2Document", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Edges")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("MaxConcurrentNodes")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Nodes")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RepositoryId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Trigger")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("WebhookToken")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RepositoryId");
-
-                    b.ToTable("WorkflowsV2");
                 });
 #pragma warning restore 612, 618
         }

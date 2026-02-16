@@ -6,35 +6,41 @@ namespace AgentsDashboard.WorkerGateway.Services;
 public sealed class DockerHealthCheckService(ILogger<DockerHealthCheckService> logger) : BackgroundService, IHealthCheck
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StaleThreshold = TimeSpan.FromSeconds(90);
     private readonly DockerClient _client = new DockerClientConfiguration().CreateClient();
     private readonly object _lock = new();
     private HealthCheckResult _lastResult = HealthCheckResult.Unhealthy("Initial health check pending");
+    private DateTimeOffset _lastResultUpdatedAtUtc = DateTimeOffset.MinValue;
 
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
+            if (_lastResultUpdatedAtUtc != DateTimeOffset.MinValue &&
+                DateTimeOffset.UtcNow - _lastResultUpdatedAtUtc > StaleThreshold)
+            {
+                return Task.FromResult(HealthCheckResult.Unhealthy("Docker health check is stale"));
+            }
+
             return Task.FromResult(_lastResult);
         }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
-
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            await CheckDockerAsync(stoppingToken);
+
+            using var timer = new PeriodicTimer(CheckInterval);
+            while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 await CheckDockerAsync(stoppingToken);
             }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Docker health check failed");
-                SetResult(HealthCheckResult.Unhealthy($"Docker health check failed: {ex.Message}"));
-            }
-
-            await Task.Delay(CheckInterval, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
         }
     }
 
@@ -42,9 +48,16 @@ public sealed class DockerHealthCheckService(ILogger<DockerHealthCheckService> l
     {
         try
         {
-            await _client.System.PingAsync(cancellationToken);
+            using var timeoutTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutTokenSource.CancelAfter(CheckTimeout);
+            await _client.System.PingAsync(timeoutTokenSource.Token);
             SetResult(HealthCheckResult.Healthy("Docker daemon is available"));
             logger.LogDebug("Docker health check passed");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            SetResult(HealthCheckResult.Unhealthy($"Docker daemon ping timed out after {CheckTimeout.TotalSeconds:0}s"));
+            logger.LogWarning("Docker health check timed out");
         }
         catch (Exception ex)
         {
@@ -58,6 +71,7 @@ public sealed class DockerHealthCheckService(ILogger<DockerHealthCheckService> l
         lock (_lock)
         {
             _lastResult = result;
+            _lastResultUpdatedAtUtc = DateTimeOffset.UtcNow;
         }
     }
 

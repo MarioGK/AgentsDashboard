@@ -1,104 +1,90 @@
 @inherits LayoutComponentBase
-@inject Data.OrchestratorStore Store
+@inject Data.IOrchestratorStore Store
 @inject Services.IGlobalSelectionService SelectionService
-@inject Services.HarnessHealthService HarnessHealth
+@inject IJSRuntime JS
+@inject Services.IUiRealtimeBroker UiRealtimeBroker
 @implements IAsyncDisposable
 
-<MudThemeProvider @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
+<MudThemeProvider IsDarkMode="true" Theme="_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<MudLayout>
-    <MudAppBar Elevation="1">
+<MudLayout Class="codex-shell">
+    <MudAppBar Elevation="0" Dense="true" Class="codex-appbar">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6" Class="ml-3">Agents Dashboard</MudText>
+        <MudText Typo="Typo.subtitle1" Class="ml-2 codex-brand">Agents Dashboard</MudText>
+
         <MudSpacer />
-        
+
         @if (SelectionService.IsInitialized)
         {
-            <MudSelect T="string" 
-                       Value="@SelectionService.SelectedProjectId" 
-                       ValueChanged="OnProjectChanged"
-                       Label="Project"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       Class="mr-2"
-                       Style="max-width: 200px;">
-                @foreach (var project in SelectionService.Projects)
-                {
-                    <MudSelectItem Value="@project.Id">@project.Name</MudSelectItem>
-                }
-            </MudSelect>
-            
-            <MudSelect T="string" 
-                       Value="@SelectionService.SelectedRepositoryId" 
-                       ValueChanged="OnRepositoryChanged"
-                       Label="Repository"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       Class="mr-2"
-                       Style="max-width: 200px;">
-                @foreach (var repo in SelectionService.Repositories)
-                {
-                    <MudSelectItem Value="@repo.Id">@repo.Name</MudSelectItem>
-                }
-            </MudSelect>
-            
-            <MudTooltip Text="Refresh" Placement="Placement.Bottom">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
-                               Color="Color.Inherit" 
-                               OnClick="RefreshSelectionAsync" />
-            </MudTooltip>
+            <div class="codex-context-selectors">
+                <MudSelect T="string"
+                           Value="@SelectionService.SelectedProjectId"
+                           ValueChanged="OnProjectChanged"
+                           Label="Project"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="codex-context-select"
+                           Style="max-width: 220px;">
+                    @foreach (var project in SelectionService.Projects)
+                    {
+                        <MudSelectItem Value="@project.Id">@project.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudSelect T="string"
+                           Value="@SelectionService.SelectedRepositoryId"
+                           ValueChanged="OnRepositoryChanged"
+                           Label="Repository"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="codex-context-select"
+                           Style="max-width: 220px;">
+                    @foreach (var repo in SelectionService.Repositories)
+                    {
+                        <MudSelectItem Value="@repo.Id">@repo.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTooltip Text="Refresh" Placement="Placement.Bottom">
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                                   Color="Color.Inherit"
+                                   OnClick="RefreshSelectionAsync" />
+                </MudTooltip>
+            </div>
         }
-        
+
         @if (_healthLoaded)
         {
-            <MudChip T="string" Size="Size.Small" Color="@GetWorkerHealthColor()" Class="mr-2">
-                <MudIcon Icon="@Icons.Material.Filled.Dns" Size="Size.Small" Class="mr-1" />
-                @(_onlineWorkers)/@_totalWorkers Workers
-            </MudChip>
-            <MudChip T="string" Size="Size.Small" Color="@GetRunHealthColor()" Class="mr-2">
-                <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Size="Size.Small" Class="mr-1" />
-                @_activeRuns Active
-            </MudChip>
-            @foreach (var harness in HarnessHealth.GetAllHealth())
-            {
-                <MudChip T="string" Size="Size.Small" Color="@GetHarnessColor(harness.Value.Status)" Class="mr-2">
-                    <MudIcon Icon="@Icons.Material.Filled.Terminal" Size="Size.Small" Class="mr-1" />
-                    @harness.Key
+            <div class="codex-health-strip">
+                <MudChip T="string" Size="Size.Small" Color="@GetWorkerHealthColor()">
+                    <MudIcon Icon="@Icons.Material.Filled.Dns" Size="Size.Small" Class="mr-1" />
+                    @(_onlineWorkers)/@_totalWorkers Workers
                 </MudChip>
-            }
+                <MudChip T="string" Size="Size.Small" Color="@GetRunHealthColor()">
+                    <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Size="Size.Small" Class="mr-1" />
+                    @_activeRuns Active
+                </MudChip>
+            </div>
         }
-        
-        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Color="Color.Inherit" OnClick="() => _isDarkMode = !_isDarkMode" />
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
-        <MudNavMenu>
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Overview</MudNavLink>
-            <MudNavLink Href="/projects" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AccountTree">Projects</MudNavLink>
-            <MudNavLink Href="/agents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SmartToy">Agents</MudNavLink>
-            <MudNavLink Href="/runs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PlayCircle">Runs</MudNavLink>
-            <MudNavLink Href="/findings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.BugReport">Findings</MudNavLink>
-            <MudNavLink Href="/schedules" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">Schedules</MudNavLink>
-            <MudNavGroup Title="Workflows" Icon="@Icons.Material.Filled.AccountTree">
-                <MudNavLink Href="/workflows" Match="NavLinkMatch.Prefix">Stages</MudNavLink>
-                <MudNavLink Href="/workflows-v2" Match="NavLinkMatch.Prefix">Graph</MudNavLink>
-                <MudNavLink Href="/workflow-deadletters" Match="NavLinkMatch.Prefix">Dead Letters</MudNavLink>
-            </MudNavGroup>
-            <MudNavLink Href="/templates" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Description">Templates</MudNavLink>
-            <MudNavLink Href="/workers" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dns">Workers</MudNavLink>
-            <MudNavLink Href="/terminals" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Terminal">Terminals</MudNavLink>
-            <MudNavLink Href="/alerts" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Notifications">Alerts</MudNavLink>
-            <MudNavLink Href="/image-builder" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Image">Image Builder</MudNavLink>
-            <MudNavLink Href="/providers" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">Providers</MudNavLink>
-            <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune">Settings</MudNavLink>
+    <MudDrawer @bind-Open="_drawerOpen"
+               ClipMode="DrawerClipMode.Always"
+               Elevation="0"
+               Variant="DrawerVariant.Mini"
+               OpenMiniOnHover="true"
+               Class="codex-rail">
+        <MudNavMenu Dense="true" Class="codex-rail-nav">
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Chat">Overview</MudNavLink>
+            <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune" Class="codex-parent-settings-link">Settings</MudNavLink>
         </MudNavMenu>
     </MudDrawer>
 
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.False" Class="pa-4">
+    <MudMainContent Class="codex-main">
+        <MudContainer MaxWidth="MaxWidth.False" Class="codex-main-container">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -106,26 +92,45 @@
 
 @code {
     private bool _drawerOpen = true;
-    private bool _isDarkMode;
     private bool _healthLoaded;
     private int _onlineWorkers;
     private int _totalWorkers;
     private int _activeRuns;
+    private readonly Dictionary<string, string> _terminalRunStates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _terminalRunStateLock = new();
     private CancellationTokenSource? _cts;
+    private IDisposable? _runStatusSubscription;
     private IDisposable? _selectionSubscription;
 
     private readonly MudTheme _theme = new()
     {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#1565C0",
-            Secondary = "#00897B",
-            Background = "#F5F7FA"
-        },
         PaletteDark = new PaletteDark
         {
-            Primary = "#64B5F6",
-            Secondary = "#4DB6AC"
+            Primary = "#7CC4FF",
+            Secondary = "#4CE0C4",
+            Tertiary = "#9A8CFF",
+            Info = "#53B1FD",
+            Success = "#32D583",
+            Warning = "#F79009",
+            Error = "#F97066",
+            Background = "#07090D",
+            BackgroundGray = "#0E1118",
+            Surface = "#0E131C",
+            AppbarBackground = "#0B0F17",
+            AppbarText = "#F4F7FB",
+            DrawerBackground = "#0A0E15",
+            DrawerText = "#C9D2E3",
+            DrawerIcon = "#91A4BD",
+            TextPrimary = "#F4F7FB",
+            TextSecondary = "#A5B1C1",
+            ActionDefault = "#A5B1C1",
+            ActionDisabled = "#5F6C7E",
+            ActionDisabledBackground = "#141920",
+            LinesDefault = "#1A2230",
+            LinesInputs = "#2A3446",
+            TableLines = "#1A2230",
+            TableStriped = "#0F1218",
+            Divider = "#1A2230"
         }
     };
 
@@ -136,7 +141,36 @@
         _cts = new CancellationTokenSource();
 
         _selectionSubscription = SelectionService.Subscribe(_ => InvokeAsync(StateHasChanged));
-        
+        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(async runStatus =>
+        {
+            var terminalState = GetTerminalRunState(runStatus.State);
+            if (terminalState is null)
+            {
+                return;
+            }
+
+            lock (_terminalRunStateLock)
+            {
+                if (_terminalRunStates.ContainsKey(runStatus.RunId))
+                {
+                    return;
+                }
+
+                _terminalRunStates[runStatus.RunId] = terminalState;
+            }
+
+            await InvokeAsync(async () =>
+            {
+                try
+                {
+                    await JS.InvokeVoidAsync("agentsDashboard.playRunCompletedSound", terminalState);
+                }
+                catch
+                {
+                }
+            });
+        });
+
         _ = Task.Run(async () =>
         {
             while (!_cts.Token.IsCancellationRequested)
@@ -149,6 +183,7 @@
                 catch
                 {
                 }
+
                 await Task.Delay(TimeSpan.FromSeconds(30), _cts.Token);
             }
         }, _cts.Token);
@@ -184,10 +219,10 @@
         var workers = await Store.ListWorkersAsync(CancellationToken.None);
         _totalWorkers = workers.Count;
         _onlineWorkers = workers.Count(w => w.Online);
-        
+
         var runs = await Store.ListRecentRunsAsync(CancellationToken.None);
         _activeRuns = runs.Count(r => r.State is RunState.Running or RunState.Queued);
-        
+
         _healthLoaded = true;
     }
 
@@ -206,16 +241,21 @@
         return Color.Info;
     }
 
-    private static Color GetHarnessColor(Services.HarnessStatus status) => status switch
+    private static string? GetTerminalRunState(string? state)
     {
-        Services.HarnessStatus.Available => Color.Success,
-        Services.HarnessStatus.Unavailable => Color.Error,
-        _ => Color.Default
-    };
+        return state switch
+        {
+            not null when string.Equals(state, "Succeeded", StringComparison.OrdinalIgnoreCase) => "succeeded",
+            not null when string.Equals(state, "Failed", StringComparison.OrdinalIgnoreCase) => "failed",
+            not null when string.Equals(state, "Cancelled", StringComparison.OrdinalIgnoreCase) => "cancelled",
+            _ => null
+        };
+    }
 
     public async ValueTask DisposeAsync()
     {
         _selectionSubscription?.Dispose();
+        _runStatusSubscription?.Dispose();
         _cts?.Cancel();
         _cts?.Dispose();
     }

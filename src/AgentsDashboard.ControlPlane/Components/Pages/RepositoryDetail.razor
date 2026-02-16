@@ -1,9 +1,12 @@
-@page "/repositories/{RepositoryId}"
+@page "/settings/repositories/{RepositoryId}"
+@layout SettingsLayout
 @rendermode InteractiveServer
-@inject Data.OrchestratorStore Store
+@inject Data.IOrchestratorStore Store
 @inject Services.RunDispatcher Dispatcher
 @inject Services.SecretCryptoService Crypto
 @inject Services.TaskTemplateService TemplateService
+@inject Services.LlmTornadoGatewayService LlmTornadoGateway
+@inject ISnackbar Snackbar
 @using AgentsDashboard.ControlPlane.Services
 @using AgentsDashboard.Contracts.Domain
 
@@ -63,7 +66,29 @@ else
                         <MudItem xs="12" md="2" Class="d-flex align-center"><MudSwitch @bind-Value="_taskAutoPr" Label="Auto PR" /></MudItem>
                     </MudGrid>
                     <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">Prompt (Monaco)</MudText>
-                    <StandaloneCodeEditor Id="promptEditor" ConstructionOptions="EditorOptions" @bind-Value="_taskPrompt" Height="280px" />
+                    <div style="height: 420px;">
+                        <StandaloneCodeEditor @ref="_taskPromptEditor"
+                                              Id="promptEditor"
+                                              CssClass="monaco-fill-parent"
+                                              ConstructionOptions="EditorOptions" />
+                    </div>
+                    <MudStack Row Spacing="2" Class="mt-3">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                   OnClick="GenerateTaskPromptAsync"
+                                   Disabled="@(_isGeneratingTaskPrompt || string.IsNullOrWhiteSpace(_taskName))">
+                            @if (_isGeneratingTaskPrompt)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Generating...</span>
+                            }
+                            else
+                            {
+                                <span>Generate Prompt (GLM-5)</span>
+                            }
+                        </MudButton>
+                    </MudStack>
                     <MudStack Row Spacing="2" Class="mt-3">
                         @if (_editingTaskId is not null)
                         {
@@ -177,13 +202,14 @@ else
                                     </MudTooltip>
                                 </MudItem>
                             </MudGrid>
-                            <StandaloneCodeEditor @key="@($"repo-instr-{index}-{file.Name}")"
-                                                  Id="@($"repoInstrEditor_{index}")"
-                                                  ConstructionOptions="InstructionEditorOptions"
-                                                  CssClass="mt-2"
-                                                  OnDidChangeModelContent="() => OnInstructionContentChanged(index)"
-                                                  @ref="_instructionEditors[index]"
-                                                  Height="200px" />
+                            <div style="height: 320px;" class="mt-2">
+                                <StandaloneCodeEditor @key="@($"repo-instr-{index}-{file.Name}")"
+                                                      Id="@($"repoInstrEditor_{index}")"
+                                                      CssClass="monaco-fill-parent"
+                                                      ConstructionOptions="InstructionEditorOptions"
+                                                      OnDidChangeModelContent="() => OnInstructionContentChanged(index)"
+                                                      @ref="_instructionEditors[index]" />
+                            </div>
                         </MudPaper>
                     }
 
@@ -218,6 +244,9 @@ else
                         </MudItem>
                         <MudItem xs="12" md="6">
                             <MudTextField @bind-Value="_zaiToken" Label="Z.ai API Key (Z_AI_API_KEY)" InputType="InputType.Password" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_llmTornadoToken" Label="LlmTornado Key (ANTHROPIC_AUTH_TOKEN)" InputType="InputType.Password" />
                         </MudItem>
                     </MudGrid>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSecretsAsync" Class="mt-3">Save Secrets</MudButton>
@@ -268,17 +297,21 @@ else
     private string _opencodeToken = string.Empty;
     private string _claudeToken = string.Empty;
     private string _zaiToken = string.Empty;
+    private string _llmTornadoToken = string.Empty;
     private string _saveMessage = string.Empty;
     private readonly List<InstructionFileEdit> _repoInstructionFiles = [];
     private readonly Dictionary<int, StandaloneCodeEditor> _instructionEditors = [];
+    private StandaloneCodeEditor? _taskPromptEditor;
     private string _instructionSaveMessage = string.Empty;
+    private bool _isGeneratingTaskPrompt;
+    private const string MonacoTheme = "agents-dashboard-dark";
 
     private StandaloneEditorConstructionOptions InstructionEditorOptions(StandaloneCodeEditor editor)
         => new()
         {
             AutomaticLayout = true,
             Language = "markdown",
-            Theme = "vs-dark",
+            Theme = MonacoTheme,
             Minimap = new EditorMinimapOptions { Enabled = false },
             WordWrap = "on",
             FontSize = 13,
@@ -300,10 +333,11 @@ else
         {
             AutomaticLayout = true,
             Language = "markdown",
-            Theme = "vs-dark",
+            Theme = MonacoTheme,
             Minimap = new EditorMinimapOptions { Enabled = false },
             WordWrap = "on",
             FontSize = 13,
+            Value = _taskPrompt,
         };
 
     protected override async Task OnParametersSetAsync()
@@ -368,6 +402,7 @@ else
         _taskMaxTotalSizeBytes = task.ArtifactPolicy.MaxTotalSizeBytes;
         _taskArtifactPatterns = [.. task.ArtifactPatterns];
         _taskLinkedFailureRuns = [.. task.LinkedFailureRuns];
+        _ = SyncTaskPromptEditorAsync();
         StateHasChanged();
     }
 
@@ -391,6 +426,7 @@ else
         _taskMaxTotalSizeBytes = 104_857_600;
         _taskArtifactPatterns = [];
         _taskLinkedFailureRuns = [];
+        _ = SyncTaskPromptEditorAsync();
         StateHasChanged();
     }
 
@@ -400,6 +436,9 @@ else
         {
             return;
         }
+
+        if (_taskPromptEditor is not null)
+            _taskPrompt = await _taskPromptEditor.GetValue();
 
         var retryPolicy = new RetryPolicyConfig(_taskRetryMaxAttempts);
         var timeouts = new TimeoutConfig(_taskExecutionTimeout, _taskOverallTimeout);
@@ -463,6 +502,81 @@ else
         await RefreshAsync();
     }
 
+    private async Task GenerateTaskPromptAsync()
+    {
+        if (_repository is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_taskName))
+        {
+            Snackbar.Add("Set a task name before generating a prompt.", Severity.Warning);
+            return;
+        }
+
+        _isGeneratingTaskPrompt = true;
+        StateHasChanged();
+
+        try
+        {
+            var llmTornadoSecret = await Store.GetProviderSecretAsync("global", "llmtornado", CancellationToken.None);
+            var zaiSecret = await Store.GetProviderSecretAsync("global", "zai", CancellationToken.None);
+            string? apiKey = null;
+
+            if (llmTornadoSecret is not null && !string.IsNullOrWhiteSpace(llmTornadoSecret.EncryptedValue))
+            {
+                apiKey = Crypto.Decrypt(llmTornadoSecret.EncryptedValue);
+            }
+            else if (zaiSecret is not null && !string.IsNullOrWhiteSpace(zaiSecret.EncryptedValue))
+            {
+                apiKey = Crypto.Decrypt(zaiSecret.EncryptedValue);
+            }
+
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                Snackbar.Add("Configure a global LlmTornado key in Provider Settings first.", Severity.Warning);
+                return;
+            }
+
+            var result = await LlmTornadoGateway.GenerateTaskPromptAsync(
+                new TaskPromptGenerationRequest(
+                    _repository.Name,
+                    _taskName.Trim(),
+                    _taskHarness,
+                    _taskKind.ToString(),
+                    _taskCommand,
+                    _taskCron),
+                apiKey,
+                CancellationToken.None);
+
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? "Failed to generate prompt.", Severity.Error);
+                return;
+            }
+
+            _taskPrompt = result.Prompt;
+            await SyncTaskPromptEditorAsync();
+            Snackbar.Add("Prompt generated with GLM-5.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to generate prompt: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isGeneratingTaskPrompt = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SyncTaskPromptEditorAsync()
+    {
+        if (_taskPromptEditor is not null)
+            await _taskPromptEditor.SetValue(_taskPrompt);
+    }
+
     private async Task DeleteTaskAsync(TaskDocument task)
     {
         await Store.DeleteTaskAsync(task.Id, CancellationToken.None);
@@ -511,6 +625,7 @@ else
         await SaveSecretIfPresentAsync("opencode", _opencodeToken);
         await SaveSecretIfPresentAsync("claude-code", _claudeToken);
         await SaveSecretIfPresentAsync("zai", _zaiToken);
+        await SaveSecretIfPresentAsync("llmtornado", _llmTornadoToken);
 
         _saveMessage = "Secrets saved.";
         await RefreshAsync();

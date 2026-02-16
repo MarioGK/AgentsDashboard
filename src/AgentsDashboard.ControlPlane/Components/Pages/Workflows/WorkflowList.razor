@@ -1,6 +1,7 @@
-@page "/workflows"
+@page "/settings/workflows/stages"
+@layout SettingsLayout
 @rendermode InteractiveServer
-@inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 
 <PageTitle>Workflows - AgentsDashboard</PageTitle>
 
@@ -8,7 +9,7 @@
     <MudText Typo="Typo.h4">Workflows</MudText>
     <MudSpacer />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-               Href="/workflows/new">
+               Href="/settings/workflows/stages/new">
         New Workflow
     </MudButton>
 </MudStack>
@@ -30,7 +31,7 @@
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Name">
-                <MudLink Href="@($"/workflows/{context.Id}")">@context.Name</MudLink>
+                <MudLink Href="@($"/settings/workflows/stages/{context.Id}")">@context.Name</MudLink>
             </MudTd>
             <MudTd DataLabel="Repository">@context.RepositoryName</MudTd>
             <MudTd DataLabel="Stages">@context.StageCount</MudTd>
@@ -42,7 +43,7 @@
             <MudTd DataLabel="Created">@context.CreatedAt.ToString("g")</MudTd>
             <MudTd DataLabel="Actions">
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                               Href="@($"/workflows/{context.Id}")" />
+                               Href="@($"/settings/workflows/stages/{context.Id}")" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
                                OnClick="() => DeleteWorkflow(context.Id)" />
             </MudTd>

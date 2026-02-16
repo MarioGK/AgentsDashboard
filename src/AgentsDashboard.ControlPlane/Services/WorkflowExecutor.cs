@@ -10,9 +10,11 @@ public class WorkflowExecutor(
     RunDispatcher dispatcher,
     IContainerReaper containerReaper,
     IOptions<OrchestratorOptions> options,
-    ILogger<WorkflowExecutor> logger) : IWorkflowExecutor
+    ILogger<WorkflowExecutor> logger,
+    TimeProvider? timeProvider = null) : IWorkflowExecutor
 {
     private readonly StageTimeoutConfig _timeoutConfig = options.Value.StageTimeout;
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public virtual async Task<WorkflowExecutionDocument> ExecuteWorkflowAsync(
         WorkflowDocument workflow,
@@ -26,7 +28,7 @@ public class WorkflowExecutor(
             ProjectId = projectId,
             State = WorkflowExecutionState.Running,
             CurrentStageIndex = 0,
-            StartedAtUtc = DateTime.UtcNow
+            StartedAtUtc = _timeProvider.GetUtcNow().UtcDateTime
         };
 
         execution = await store.CreateWorkflowExecutionAsync(execution, cancellationToken);
@@ -86,7 +88,7 @@ public class WorkflowExecutor(
                 StageId = stage.Id,
                 StageName = stage.Name,
                 StageType = stage.Type,
-                StartedAtUtc = DateTime.UtcNow
+                StartedAtUtc = _timeProvider.GetUtcNow().UtcDateTime
             };
 
             var stageTimeout = GetStageTimeout(stage);
@@ -100,7 +102,7 @@ public class WorkflowExecutor(
                 await ExecuteStageWithTimeoutAsync(
                     stage, stageResult, execution, projectId: execution.ProjectId, linkedCts.Token, stageCts);
 
-                stageResult.EndedAtUtc = DateTime.UtcNow;
+                stageResult.EndedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
                 execution.StageResults.Add(stageResult);
                 await store.UpdateWorkflowExecutionAsync(execution, cancellationToken);
 
@@ -127,7 +129,7 @@ public class WorkflowExecutor(
                 logger.LogWarning("Stage {StageName} timed out after {Timeout}", stage.Name, stageTimeout);
                 stageResult.Succeeded = false;
                 stageResult.Summary = $"Stage timed out after {stageTimeout.TotalMinutes:F0} minutes";
-                stageResult.EndedAtUtc = DateTime.UtcNow;
+                stageResult.EndedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
                 execution.StageResults.Add(stageResult);
                 await store.UpdateWorkflowExecutionAsync(execution, cancellationToken);
 
@@ -155,7 +157,7 @@ public class WorkflowExecutor(
                 logger.LogError(ex, "Exception during stage {StageName} execution", stage.Name);
                 stageResult.Succeeded = false;
                 stageResult.Summary = $"Exception: {ex.Message}";
-                stageResult.EndedAtUtc = DateTime.UtcNow;
+                stageResult.EndedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
                 execution.StageResults.Add(stageResult);
                 await store.UpdateWorkflowExecutionAsync(execution, cancellationToken);
                 await store.MarkWorkflowExecutionCompletedAsync(
@@ -287,11 +289,11 @@ public class WorkflowExecutor(
         }
 
         var pollingInterval = TimeSpan.FromSeconds(2);
-        var stageTimeout = GetStageTimeout(stage);
-        var startTime = DateTime.UtcNow;
+                var stageTimeout = GetStageTimeout(stage);
+                var startTime = _timeProvider.GetUtcNow().UtcDateTime;
 
-        while (DateTime.UtcNow - startTime < stageTimeout)
-        {
+                while (_timeProvider.GetUtcNow().UtcDateTime - startTime < stageTimeout)
+                {
             if (cancellationToken.IsCancellationRequested)
             {
                 result.Succeeded = false;
@@ -346,11 +348,11 @@ public class WorkflowExecutor(
 
         await store.MarkWorkflowExecutionPendingApprovalAsync(execution.Id, stage.Id, cancellationToken);
 
-        var stageTimeout = GetStageTimeout(stage);
-        var pollingInterval = TimeSpan.FromSeconds(5);
-        var startTime = DateTime.UtcNow;
+                var stageTimeout = GetStageTimeout(stage);
+                var pollingInterval = TimeSpan.FromSeconds(5);
+                var startTime = _timeProvider.GetUtcNow().UtcDateTime;
 
-        while (DateTime.UtcNow - startTime < stageTimeout)
+                while (_timeProvider.GetUtcNow().UtcDateTime - startTime < stageTimeout)
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -493,9 +495,9 @@ public class WorkflowExecutor(
 
         var pollingInterval = TimeSpan.FromSeconds(2);
         var stageTimeout = GetStageTimeout(stage);
-        var startTime = DateTime.UtcNow;
+        var startTime = _timeProvider.GetUtcNow().UtcDateTime;
 
-        while (DateTime.UtcNow - startTime < stageTimeout)
+        while (_timeProvider.GetUtcNow().UtcDateTime - startTime < stageTimeout)
         {
             if (cancellationToken.IsCancellationRequested)
             {

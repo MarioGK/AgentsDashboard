@@ -58,7 +58,8 @@ public sealed record UpdateSystemSettingsRequest(
     int? RetentionDaysLogs = null,
     int? RetentionDaysRuns = null,
     string? VictoriaMetricsEndpoint = null,
-    string? VmUiEndpoint = null);
+    string? VmUiEndpoint = null,
+    OrchestratorSettings? Orchestrator = null);
 public sealed record CreateWorkflowRequest(string RepositoryId, string Name, string Description, List<WorkflowStageConfigRequest> Stages);
 public sealed record UpdateWorkflowRequest(string Name, string Description, List<WorkflowStageConfigRequest> Stages, bool Enabled);
 public sealed record WorkflowStageConfigRequest(
@@ -154,88 +155,3 @@ public sealed record UpdateTaskTemplateRequest(
     ArtifactPolicyConfig? ArtifactPolicy = null,
     List<string>? ArtifactPatterns = null,
     List<string>? LinkedFailureRuns = null);
-
-// ── Graph Agent Workflow (V2) ────────────────────────────────────────
-
-public sealed record CreateAgentRequest(
-    string RepositoryId,
-    string Name,
-    string Description,
-    string Harness,
-    string Prompt,
-    string Command,
-    bool AutoCreatePullRequest,
-    bool Enabled = true,
-    RetryPolicyConfig? RetryPolicy = null,
-    TimeoutConfig? Timeouts = null,
-    SandboxProfileConfig? SandboxProfile = null,
-    ArtifactPolicyConfig? ArtifactPolicy = null,
-    List<string>? ArtifactPatterns = null,
-    List<InstructionFile>? InstructionFiles = null);
-
-public sealed record UpdateAgentRequest(
-    string Name,
-    string Description,
-    string Harness,
-    string Prompt,
-    string Command,
-    bool AutoCreatePullRequest,
-    bool Enabled,
-    RetryPolicyConfig? RetryPolicy = null,
-    TimeoutConfig? Timeouts = null,
-    SandboxProfileConfig? SandboxProfile = null,
-    ArtifactPolicyConfig? ArtifactPolicy = null,
-    List<string>? ArtifactPatterns = null,
-    List<InstructionFile>? InstructionFiles = null);
-
-public sealed record WorkflowNodeConfigRequest(
-    string TempId,
-    string Name,
-    WorkflowNodeType Type,
-    string? AgentId = null,
-    int? DelaySeconds = null,
-    int? TimeoutMinutes = null,
-    RetryPolicyConfig? RetryPolicy = null,
-    Dictionary<string, string>? InputMappings = null,
-    Dictionary<string, string>? OutputMappings = null,
-    double PositionX = 0,
-    double PositionY = 0);
-
-public sealed record WorkflowEdgeConfigRequest(
-    string SourceNodeTempId,
-    string TargetNodeTempId,
-    string Condition = "",
-    int Priority = 0,
-    string Label = "");
-
-public sealed record WorkflowV2TriggerConfigRequest(
-    string Type = "Manual",
-    string CronExpression = "",
-    string WebhookEventFilter = "");
-
-public sealed record CreateWorkflowV2Request(
-    string RepositoryId,
-    string Name,
-    string Description,
-    List<WorkflowNodeConfigRequest> Nodes,
-    List<WorkflowEdgeConfigRequest> Edges,
-    WorkflowV2TriggerConfigRequest? Trigger = null,
-    bool Enabled = true,
-    int MaxConcurrentNodes = 4);
-
-public sealed record UpdateWorkflowV2Request(
-    string Name,
-    string Description,
-    List<WorkflowNodeConfigRequest> Nodes,
-    List<WorkflowEdgeConfigRequest> Edges,
-    WorkflowV2TriggerConfigRequest? Trigger = null,
-    bool Enabled = true,
-    int MaxConcurrentNodes = 4);
-
-public sealed record ExecuteWorkflowV2Request(
-    Dictionary<string, System.Text.Json.JsonElement>? InitialContext = null,
-    string TriggeredBy = "manual");
-
-public sealed record ApproveWorkflowV2NodeRequest(string ApprovedBy, bool Approved = true);
-
-public sealed record ReplayDeadLetterRequest(string TriggeredBy = "manual");

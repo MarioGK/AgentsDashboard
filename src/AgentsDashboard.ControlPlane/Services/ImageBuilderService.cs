@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Docker.DotNet;
@@ -20,7 +19,9 @@ public record DockerfileGenerationRequest(
     int TargetPlatform);
 public record AiDockerfileResult(bool Success, string Dockerfile, string? Error);
 
-public class ImageBuilderService(ILogger<ImageBuilderService> logger) : IAsyncDisposable
+public class ImageBuilderService(
+    LlmTornadoGatewayService llmTornadoGatewayService,
+    ILogger<ImageBuilderService> logger) : IAsyncDisposable
 {
     private readonly DockerClient _dockerClient = new DockerClientConfiguration().CreateClient();
 
@@ -206,94 +207,7 @@ public class ImageBuilderService(ILogger<ImageBuilderService> logger) : IAsyncDi
             return new AiDockerfileResult(false, string.Empty, "Z.ai API key not configured. Please set up Z.ai credentials in Provider Settings.");
         }
 
-        try
-        {
-            using var httpClient = new HttpClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(60);
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", zaiApiKey);
-
-            var systemPrompt = @"You are an expert DevOps engineer specializing in creating optimized Dockerfiles. 
-Generate a production-ready Dockerfile based on the user's requirements.
-
-Rules:
-1. Use best practices for Docker (multi-stage builds when beneficial, minimal layers, proper caching)
-2. Always include a non-root user named 'agent' with UID 1000
-3. Create /workspace and /artifacts directories owned by the agent user
-4. Set proper environment variables (DEBIAN_FRONTEND=noninteractive, HOME=/home/agent)
-5. Clean up package manager caches to reduce image size
-6. For harness tools (Claude Code, Codex, OpenCode, Zai), set appropriate environment variables
-7. Use specific version tags for base images, not 'latest'
-8. Include health considerations (no secrets in images, minimal attack surface)
-9. The WORKDIR should be /workspace
-10. Default CMD should be an interactive shell
-
-Output ONLY the Dockerfile content, no explanations or markdown formatting.";
-
-            var requestBody = new
-            {
-                model = "glm-4-plus",
-                messages = new[]
-                {
-                    new { role = "system", content = systemPrompt },
-                    new { role = "user", content = $"Create a Dockerfile for the following requirements:\n\n{description}" }
-                },
-                temperature = 0.3,
-                max_tokens = 4096
-            };
-
-            var response = await httpClient.PostAsJsonAsync(
-                "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-                requestBody,
-                cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                logger.LogWarning("ZhipuAI API returned {StatusCode}: {Error}", response.StatusCode, errorContent);
-                return new AiDockerfileResult(false, string.Empty, $"AI service error: {response.StatusCode}");
-            }
-
-            var jsonResponse = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
-
-            if (jsonResponse.TryGetProperty("choices", out var choices) &&
-                choices.GetArrayLength() > 0 &&
-                choices[0].TryGetProperty("message", out var message) &&
-                message.TryGetProperty("content", out var content))
-            {
-                var dockerfile = content.GetString() ?? string.Empty;
-
-                dockerfile = System.Text.RegularExpressions.Regex.Replace(
-                    dockerfile,
-                    @"^```dockerfile?\s*\n|\n```$",
-                    "",
-                    System.Text.RegularExpressions.RegexOptions.Multiline);
-                dockerfile = dockerfile.Trim();
-
-                if (!dockerfile.Contains("FROM", StringComparison.OrdinalIgnoreCase))
-                {
-                    return new AiDockerfileResult(false, string.Empty, "Generated content does not appear to be a valid Dockerfile");
-                }
-
-                logger.LogInformation("Successfully generated Dockerfile via AI for description: {Description}", description);
-                return new AiDockerfileResult(true, dockerfile, null);
-            }
-
-            return new AiDockerfileResult(false, string.Empty, "Unexpected response format from AI service");
-        }
-        catch (TaskCanceledException)
-        {
-            return new AiDockerfileResult(false, string.Empty, "AI request timed out. Please try again.");
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogWarning(ex, "Network error during AI Dockerfile generation");
-            return new AiDockerfileResult(false, string.Empty, $"Network error: {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error generating Dockerfile with AI");
-            return new AiDockerfileResult(false, string.Empty, $"Error: {ex.Message}");
-        }
+        return await llmTornadoGatewayService.GenerateDockerfileAsync(description, zaiApiKey, cancellationToken);
     }
 
     public async Task<ImageBuildResult> BuildImageAsync(

@@ -26,6 +26,7 @@ public sealed class TerminalSessionManager : ITerminalSessionManager
         _logger = logger;
         _terminalOptions = terminalOptions.Value;
         _workerOptions = workerOptions.Value;
+        _terminalOptions.MaxConcurrentSessionsPerWorker = 1;
         _docker = new DockerClientConfiguration().CreateClient();
         _idleTimer = new Timer(CheckIdleSessions, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
     }
@@ -41,19 +42,14 @@ public sealed class TerminalSessionManager : ITerminalSessionManager
             throw new InvalidOperationException(
                 $"Maximum concurrent sessions ({_terminalOptions.MaxConcurrentSessionsPerWorker}) reached");
 
+        if (!string.IsNullOrEmpty(runId))
+            throw new InvalidOperationException("Run-attached terminal sessions are disabled in single-occupancy worker mode.");
+
         string containerId;
         bool isStandalone;
 
-        if (!string.IsNullOrEmpty(runId))
-        {
-            containerId = await FindContainerByRunIdAsync(runId, cancellationToken);
-            isStandalone = false;
-        }
-        else
-        {
-            containerId = await CreateStandaloneContainerAsync(sessionId, cancellationToken);
-            isStandalone = true;
-        }
+        containerId = await CreateStandaloneContainerAsync(sessionId, cancellationToken);
+        isStandalone = true;
 
         var shell = await DetectShellAsync(containerId, cancellationToken);
 
@@ -272,6 +268,7 @@ public sealed class TerminalSessionManager : ITerminalSessionManager
     private async Task<string> CreateStandaloneContainerAsync(string sessionId, CancellationToken cancellationToken)
     {
         var image = _terminalOptions.DefaultImage;
+        var envVars = BuildStandaloneEnvironmentVariables();
 
         var response = await _docker.Containers.CreateContainerAsync(
             new CreateContainerParameters
@@ -280,6 +277,7 @@ public sealed class TerminalSessionManager : ITerminalSessionManager
                 Cmd = ["sleep", "infinity"],
                 Tty = true,
                 OpenStdin = true,
+                Env = envVars,
                 Labels = new Dictionary<string, string>
                 {
                     [$"{_workerOptions.ContainerLabelPrefix}.terminal-session-id"] = sessionId
@@ -299,6 +297,39 @@ public sealed class TerminalSessionManager : ITerminalSessionManager
             response.ID[..Math.Min(12, response.ID.Length)], sessionId);
 
         return response.ID;
+    }
+
+    private static IList<string>? BuildStandaloneEnvironmentVariables()
+    {
+        var codexApiKey = Environment.GetEnvironmentVariable("CODEX_API_KEY");
+        var openAiApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        var opencodeApiKey = Environment.GetEnvironmentVariable("OPENCODE_API_KEY");
+        var anthropicApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+        var zaiApiKey = Environment.GetEnvironmentVariable("Z_AI_API_KEY");
+
+        if (string.IsNullOrWhiteSpace(openAiApiKey) && !string.IsNullOrWhiteSpace(codexApiKey))
+        {
+            openAiApiKey = codexApiKey;
+        }
+
+        var env = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(codexApiKey))
+            env.Add($"CODEX_API_KEY={codexApiKey}");
+
+        if (!string.IsNullOrWhiteSpace(openAiApiKey))
+            env.Add($"OPENAI_API_KEY={openAiApiKey}");
+
+        if (!string.IsNullOrWhiteSpace(opencodeApiKey))
+            env.Add($"OPENCODE_API_KEY={opencodeApiKey}");
+
+        if (!string.IsNullOrWhiteSpace(anthropicApiKey))
+            env.Add($"ANTHROPIC_API_KEY={anthropicApiKey}");
+
+        if (!string.IsNullOrWhiteSpace(zaiApiKey))
+            env.Add($"Z_AI_API_KEY={zaiApiKey}");
+
+        return env.Count == 0 ? null : env;
     }
 
     private async Task<string> DetectShellAsync(string containerId, CancellationToken cancellationToken)

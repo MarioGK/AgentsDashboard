@@ -13,11 +13,10 @@ public sealed class WorkerIdleShutdownService(
         {
             try
             {
+                await lifecycleManager.EnsureMinimumWorkersAsync(stoppingToken);
                 var active = await store.CountActiveRunsAsync(stoppingToken);
                 if (active == 0)
-                {
-                    await lifecycleManager.StopWorkerIfIdleAsync(stoppingToken);
-                }
+                    await lifecycleManager.ScaleDownIdleWorkersAsync(stoppingToken);
             }
             catch (Exception ex)
             {

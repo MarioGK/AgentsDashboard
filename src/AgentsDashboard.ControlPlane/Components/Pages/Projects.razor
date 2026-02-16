@@ -1,19 +1,26 @@
-@page "/projects"
+@page "/settings/projects"
+@layout SettingsLayout
 @rendermode InteractiveServer
-@inject Data.OrchestratorStore Store
+@inject Data.IOrchestratorStore Store
 @inject NavigationManager Nav
 @inject IDialogService DialogService
 
 <PageTitle>Projects</PageTitle>
 
 <MudStack Spacing="2">
-    <MudText Typo="Typo.h4">Projects</MudText>
+    <MudStack Row AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h4">Projects</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="StartNewProject">
+            New Project
+        </MudButton>
+    </MudStack>
 
     <MudPaper Class="pa-4">
         <MudText Typo="Typo.h6" Class="mb-3">Create Project</MudText>
         <MudGrid>
             <MudItem xs="12" md="4">
-                <MudTextField @bind-Value="_newProjectName" Label="Project Name" Required="true" />
+                <MudTextField @bind-Value="_newProjectName" Label="Project Name" Placeholder="Project Name" Required="true" />
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudTextField @bind-Value="_newProjectDescription" Label="Description" />
@@ -37,7 +44,7 @@
             <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
             <MudTd>
                 <MudButtonGroup Variant="Variant.Outlined">
-                    <MudButton Color="Color.Primary" OnClick='@(() => Nav.NavigateTo($"/projects/{context.Id}"))'>
+                    <MudButton Color="Color.Primary" OnClick='@(() => Nav.NavigateTo($"/settings/projects/{context.Id}"))'>
                         Open
                     </MudButton>
                     <MudButton Color="Color.Error" OnClick="@(() => ConfirmDeleteProjectAsync(context))">
@@ -78,6 +85,10 @@
         _projects.AddRange(await Store.ListProjectsAsync(CancellationToken.None));
     }
 
+    private void StartNewProject()
+    {
+    }
+
     private async Task ConfirmDeleteProjectAsync(ProjectDocument project)
     {
         var result = await DialogService.ShowMessageBox(
@@ -88,8 +99,7 @@
 
         if (result == true)
         {
-            using var httpClient = new HttpClient { BaseAddress = new Uri(Nav.BaseUri) };
-            await httpClient.DeleteAsync($"/api/projects/{project.Id}");
+            await Store.DeleteProjectAsync(project.Id, CancellationToken.None);
             await LoadAsync();
         }
     }

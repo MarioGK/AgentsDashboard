@@ -19,7 +19,9 @@ public sealed class RecoveryService(
     IRunEventPublisher publisher,
     IContainerReaper containerReaper,
     IOptions<OrchestratorOptions> options,
-    ILogger<RecoveryService> logger) : IHostedService, IDisposable
+    IHostApplicationLifetime applicationLifetime,
+    ILogger<RecoveryService> logger,
+    TimeProvider? timeProvider = null) : IHostedService, IDisposable
 {
     private static readonly Meter s_meter = new("AgentsDashboard.ControlPlane.Recovery");
     private static readonly Counter<int> s_orphanedContainersDetected = s_meter.CreateCounter<int>("orphaned_containers_detected", "containers");
@@ -29,16 +31,41 @@ public sealed class RecoveryService(
     private readonly StageTimeoutConfig _stageTimeoutConfig = options.Value.StageTimeout;
     private Timer? _monitoringTimer;
     private readonly object _lock = new();
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Recovery service starting — checking for orphaned runs, workflows, and containers");
 
-        await RecoverOrphanedRunsAsync(cancellationToken);
-        await RecoverOrphanedWorkflowExecutionsAsync(cancellationToken);
-        await LogPendingApprovalRunsAsync(cancellationToken);
-        await LogQueuedRunsAsync(cancellationToken);
-        await ReconcileOrphanedContainersAsync(cancellationToken);
+        if (!applicationLifetime.ApplicationStarted.IsCancellationRequested)
+        {
+            applicationLifetime.ApplicationStarted.Register(() =>
+            {
+                _ = Task.Run(() => RunStartupRecoveryAsync(CancellationToken.None));
+            });
+        }
+        else
+        {
+            _ = Task.Run(() => RunStartupRecoveryAsync(cancellationToken));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task RunStartupRecoveryAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RecoverOrphanedRunsAsync(cancellationToken);
+            await RecoverOrphanedWorkflowExecutionsAsync(cancellationToken);
+            await LogPendingApprovalRunsAsync(cancellationToken);
+            await LogQueuedRunsAsync(cancellationToken);
+            await ReconcileOrphanedContainersAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Recovery startup pass failed");
+        }
 
         if (_config.EnableAutoTermination)
         {
@@ -92,7 +119,7 @@ public sealed class RecoveryService(
         }
     }
 
-    internal async Task<DeadRunDetectionResult> MonitorForDeadRunsAsync()
+    public async Task<DeadRunDetectionResult> MonitorForDeadRunsAsync()
     {
         var result = new DeadRunDetectionResult();
         try
@@ -108,10 +135,10 @@ public sealed class RecoveryService(
         return result;
     }
 
-    internal async Task<int> DetectAndTerminateStaleRunsAsync()
+    public async Task<int> DetectAndTerminateStaleRunsAsync()
     {
         var runningRuns = await store.ListRunsByStateAsync(RunState.Running, CancellationToken.None);
-        var staleThreshold = DateTime.UtcNow - TimeSpan.FromMinutes(_config.StaleRunThresholdMinutes);
+        var staleThreshold = _timeProvider.GetUtcNow().UtcDateTime - TimeSpan.FromMinutes(_config.StaleRunThresholdMinutes);
         var terminatedCount = 0;
 
         foreach (var run in runningRuns)
@@ -133,10 +160,10 @@ public sealed class RecoveryService(
         return terminatedCount;
     }
 
-    internal async Task<int> DetectAndTerminateZombieRunsAsync()
+    public async Task<int> DetectAndTerminateZombieRunsAsync()
     {
         var runningRuns = await store.ListRunsByStateAsync(RunState.Running, CancellationToken.None);
-        var zombieThreshold = DateTime.UtcNow - TimeSpan.FromMinutes(_config.ZombieRunThresholdMinutes);
+        var zombieThreshold = _timeProvider.GetUtcNow().UtcDateTime - TimeSpan.FromMinutes(_config.ZombieRunThresholdMinutes);
         var terminatedCount = 0;
 
         foreach (var run in runningRuns)
@@ -158,10 +185,10 @@ public sealed class RecoveryService(
         return terminatedCount;
     }
 
-    internal async Task<int> DetectAndTerminateOverdueRunsAsync()
+    public async Task<int> DetectAndTerminateOverdueRunsAsync()
     {
         var runningRuns = await store.ListRunsByStateAsync(RunState.Running, CancellationToken.None);
-        var maxAgeThreshold = DateTime.UtcNow - TimeSpan.FromHours(_config.MaxRunAgeHours);
+        var maxAgeThreshold = _timeProvider.GetUtcNow().UtcDateTime - TimeSpan.FromHours(_config.MaxRunAgeHours);
         var terminatedCount = 0;
 
         foreach (var run in runningRuns)

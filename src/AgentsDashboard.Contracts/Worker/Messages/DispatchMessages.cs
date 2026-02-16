@@ -28,11 +28,11 @@ public record DispatchJobRequest
     [Key(18)] public string? CustomArgs { get; init; }
     [Key(19)] public DateTimeOffset DispatchedAt { get; init; }
     [Key(20)] public Dictionary<string, string>? ContainerLabels { get; init; }
-    [Key(21)] public int Attempt { get; init; } = 1;
+    [Key(21)] public int Attempt { get; set; } = 1;
     [Key(22)] public double? SandboxProfileCpuLimit { get; init; }
     [Key(23)] public long? SandboxProfileMemoryLimit { get; init; }
-    [Key(24)] public bool SandboxProfileNetworkDisabled { get; init; } = false;
-    [Key(25)] public bool SandboxProfileReadOnlyRootFs { get; init; } = false;
+    [Key(24)] public bool SandboxProfileNetworkDisabled { get; set; } = false;
+    [Key(25)] public bool SandboxProfileReadOnlyRootFs { get; set; } = false;
     [Key(26)] public int? ArtifactPolicyMaxArtifacts { get; init; }
     [Key(27)] public long? ArtifactPolicyMaxTotalSizeBytes { get; init; }
 }
@@ -106,4 +106,28 @@ public record ReconcileOrphanedContainersReply
     [Key(1)] public string? ErrorMessage { get; init; }
     [Key(2)] public int ReconciledCount { get; init; }
     [Key(3)] public List<string>? ContainerIds { get; init; }
+}
+
+[MessagePackObject]
+public record GetHarnessToolsRequest
+{
+    [Key(0)] public required string RequestId { get; init; }
+}
+
+[MessagePackObject]
+public record HarnessToolStatus
+{
+    [Key(0)] public required string Command { get; init; }
+    [Key(1)] public required string DisplayName { get; init; }
+    [Key(2)] public required string Status { get; init; }
+    [Key(3)] public string? Version { get; init; }
+}
+
+[MessagePackObject]
+public record GetHarnessToolsReply
+{
+    [Key(0)] public bool Success { get; init; }
+    [Key(1)] public string? ErrorMessage { get; init; }
+    [Key(2)] public List<HarnessToolStatus> Tools { get; set; } = [];
+    [Key(3)] public DateTimeOffset CheckedAt { get; init; }
 }
