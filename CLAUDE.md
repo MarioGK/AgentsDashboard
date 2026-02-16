@@ -89,6 +89,7 @@ Centralized build configuration using:
 - Policies enforced on API endpoints and Blazor pages
 
 ### Agent Workflow Rules
+- **ALWAYS use the main branch** — do not create feature branches. Commit directly to main.
 - Always use `dotnet build -m --tl` (never bare `dotnet build`)
 - TUnit runs tests in parallel by default — no extra flags needed
 - Use `--filter` for focused testing when changing a single service
