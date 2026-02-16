@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class RunsApprovalApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class RunsApprovalApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -31,7 +30,7 @@ public class RunsApprovalApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         return (project, repo, task, run);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveRun_ReturnsNotFound_WhenRunDoesNotExist()
     {
         var response = await _client.PostAsync("/api/runs/nonexistent/approve", null);
@@ -39,7 +38,7 @@ public class RunsApprovalApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveRun_ReturnsBadRequest_WhenRunNotPendingApproval()
     {
         var (_, _, _, run) = await SetupAsync();
@@ -49,7 +48,7 @@ public class RunsApprovalApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task RejectRun_ReturnsNotFound_WhenRunDoesNotExist()
     {
         var response = await _client.PostAsync("/api/runs/nonexistent/reject", null);
@@ -57,7 +56,7 @@ public class RunsApprovalApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task RejectRun_ReturnsBadRequest_WhenRunNotPendingApproval()
     {
         var (_, _, _, run) = await SetupAsync();
@@ -67,7 +66,7 @@ public class RunsApprovalApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task CancelRun_ReturnsBadRequest_WhenRunAlreadyCompleted()
     {
         var (_, _, _, run) = await SetupAsync();
@@ -78,7 +77,7 @@ public class RunsApprovalApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task CancelRun_ReturnsBadRequest_WhenRunInTerminalState()
     {
         var (_, _, task) = await SetupWithoutRunAsync();

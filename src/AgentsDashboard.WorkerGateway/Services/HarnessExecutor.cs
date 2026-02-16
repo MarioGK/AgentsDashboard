@@ -226,8 +226,8 @@ public sealed class HarnessExecutor(
                 if (!string.IsNullOrWhiteSpace(workspaceHostPath) && Directory.Exists(workspaceHostPath))
                 {
                     var policy = new ArtifactPolicyConfig(
-                        MaxArtifacts: request.ArtifactPolicyMaxArtifacts > 0 ? request.ArtifactPolicyMaxArtifacts : 50,
-                        MaxTotalSizeBytes: request.ArtifactPolicyMaxTotalSizeBytes > 0 ? request.ArtifactPolicyMaxTotalSizeBytes : 104_857_600);
+                        MaxArtifacts: request.ArtifactPolicyMaxArtifacts is > 0 ? request.ArtifactPolicyMaxArtifacts.Value : 50,
+                        MaxTotalSizeBytes: request.ArtifactPolicyMaxTotalSizeBytes is > 0 ? request.ArtifactPolicyMaxTotalSizeBytes.Value : 104_857_600);
 
                     var extractedArtifacts = await artifactExtractor.ExtractArtifactsAsync(
                         workspaceHostPath,
@@ -369,8 +369,11 @@ public sealed class HarnessExecutor(
         try
         {
             var envVars = new Dictionary<string, string?>();
-            foreach (var kv in request.Env)
-                envVars[kv.Key] = kv.Value;
+            if (request.EnvironmentVars is not null)
+            {
+                foreach (var kv in request.EnvironmentVars)
+                    envVars[kv.Key] = kv.Value;
+            }
 
             var result = await Cli.Wrap("gh")
                 .WithArguments(["pr", "create", "--repo", repository, "--head", branch, "--base", baseBranch, "--title", title, "--body", body])
@@ -442,13 +445,13 @@ public sealed class HarnessExecutor(
 
     private static string BuildPrBody(DispatchJobRequest request, HarnessResultEnvelope envelope)
     {
-        if (request.Env.TryGetValue("PR_BODY", out var customBody) && !string.IsNullOrWhiteSpace(customBody))
+        if (request.EnvironmentVars is not null && request.EnvironmentVars.TryGetValue("PR_BODY", out var customBody) && !string.IsNullOrWhiteSpace(customBody))
             return customBody;
 
         var sb = new StringBuilder();
         sb.AppendLine("## Agent Pull Request");
         sb.AppendLine();
-        sb.AppendLine($"**Harness:** {request.Harness}");
+        sb.AppendLine($"**Harness:** {request.HarnessType}");
         sb.AppendLine($"**Run ID:** `{request.RunId}`");
         sb.AppendLine($"**Task ID:** `{request.TaskId}`");
         sb.AppendLine();
@@ -532,7 +535,7 @@ public sealed class HarnessExecutor(
                 {
                     var str = chunk.ToString() ?? string.Empty;
                     stdoutBuf.Append(str);
-                    var redacted = secretRedactor.Redact(str, request.Env);
+                    var redacted = secretRedactor.Redact(str, request.EnvironmentVars);
                     await onLogChunk(redacted, ct);
                 }))
             : PipeTarget.ToStringBuilder(stdoutBuf);
@@ -544,22 +547,22 @@ public sealed class HarnessExecutor(
                 {
                     var str = chunk.ToString() ?? string.Empty;
                     stderrBuf.Append(str);
-                    var redacted = secretRedactor.Redact(str, request.Env);
+                    var redacted = secretRedactor.Redact(str, request.EnvironmentVars);
                     await onLogChunk(redacted, ct);
                 }))
             : PipeTarget.ToStringBuilder(stderrBuf);
 
         var cmd = Cli.Wrap("sh")
-            .WithArguments(["-lc", request.Command])
+            .WithArguments(["-lc", request.CustomArgs])
             .WithValidation(CommandResultValidation.None)
             .WithStandardOutputPipe(stdoutPipe)
             .WithStandardErrorPipe(stderrPipe);
 
-        if (request.Env.Count > 0)
+        if (request.EnvironmentVars is not null && request.EnvironmentVars.Count > 0)
         {
             cmd = cmd.WithEnvironmentVariables(env =>
             {
-                foreach (var kv in request.Env)
+                foreach (var kv in request.EnvironmentVars)
                     env.Set(kv.Key, kv.Value);
             });
         }
@@ -568,8 +571,8 @@ public sealed class HarnessExecutor(
 
         var stdout = stdoutBuf.ToString();
         var stderr = stderrBuf.ToString();
-        var redactedStdout = secretRedactor.Redact(stdout, request.Env);
-        var redactedStderr = secretRedactor.Redact(stderr, request.Env);
+        var redactedStdout = secretRedactor.Redact(stdout, request.EnvironmentVars);
+        var redactedStderr = secretRedactor.Redact(stderr, request.EnvironmentVars);
         var envelope = CreateEnvelope(result.ExitCode, redactedStdout, redactedStderr);
         envelope.RunId = request.RunId;
         envelope.TaskId = request.TaskId;

@@ -5,19 +5,22 @@ using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
+using MagicOnion;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-public sealed class ApiTestFixture : IAsyncLifetime
+public sealed class ApiTestFixture : IAsyncInitializer, IAsyncDisposable
 {
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"agentsdashboard-api-{Guid.NewGuid():N}.db");
 
@@ -38,10 +41,16 @@ public sealed class ApiTestFixture : IAsyncLifetime
             await dbContext.Database.MigrateAsync();
         }
 
-        Environment.SetEnvironmentVariable("Orchestrator__SqliteConnectionString", ConnectionString);
-
         Factory = new WebApplicationFactory<AgentsDashboard.ControlPlane.Program>().WithWebHostBuilder(builder =>
         {
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Orchestrator:SqliteConnectionString"] = ConnectionString
+                });
+            });
+
             builder.ConfigureTestServices(services =>
             {
                 var hostedServices = services.Where(d => d.ServiceType == typeof(IHostedService)).ToList();
@@ -54,6 +63,27 @@ public sealed class ApiTestFixture : IAsyncLifetime
                 if (dispatcherDescriptor != null)
                     services.Remove(dispatcherDescriptor);
 
+                var mockWorkerService = new Mock<IWorkerGatewayService>();
+                mockWorkerService
+                    .Setup(x => x.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+                    .Returns(new UnaryResult<DispatchJobReply>(new DispatchJobReply { Success = true }));
+                mockWorkerService
+                    .Setup(x => x.CancelJobAsync(It.IsAny<CancelJobRequest>()))
+                    .Returns(new UnaryResult<CancelJobReply>(new CancelJobReply { Success = true }));
+                mockWorkerService
+                    .Setup(x => x.KillContainerAsync(It.IsAny<KillContainerRequest>()))
+                    .Returns(new UnaryResult<KillContainerReply>(new KillContainerReply { Success = true }));
+                mockWorkerService
+                    .Setup(x => x.ReconcileOrphanedContainersAsync(It.IsAny<ReconcileOrphanedContainersRequest>()))
+                    .Returns(new UnaryResult<ReconcileOrphanedContainersReply>(new ReconcileOrphanedContainersReply { Success = true, ReconciledCount = 0 }));
+
+                var mockClientFactory = new Mock<IMagicOnionClientFactory>();
+                mockClientFactory
+                    .Setup(x => x.CreateWorkerGatewayService())
+                    .Returns(mockWorkerService.Object);
+
+                services.AddSingleton<IMagicOnionClientFactory>(mockClientFactory.Object);
+
                 services.AddSingleton<RunDispatcher>(sp =>
                 {
                     var store = sp.GetRequiredService<OrchestratorStore>();
@@ -63,7 +93,7 @@ public sealed class ApiTestFixture : IAsyncLifetime
                     var yarpProvider = sp.GetService<AgentsDashboard.ControlPlane.Proxy.InMemoryYarpConfigProvider>() ?? new AgentsDashboard.ControlPlane.Proxy.InMemoryYarpConfigProvider();
                     var lifecycle = sp.GetService<IWorkerLifecycleManager>() ?? new MockWorkerLifecycleManager();
                     return new RunDispatcher(
-                        new MockWorkerClient(),
+                        sp.GetRequiredService<IMagicOnionClientFactory>(),
                         store,
                         lifecycle,
                         sp.GetService<ISecretCryptoService>()!,
@@ -100,17 +130,13 @@ public sealed class ApiTestFixture : IAsyncLifetime
         });
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await Factory.DisposeAsync();
-        Environment.SetEnvironmentVariable("Orchestrator__SqliteConnectionString", null);
         if (File.Exists(_databasePath))
             File.Delete(_databasePath);
     }
 }
-
-[CollectionDefinition("Api")]
-public class ApiCollection : ICollectionFixture<ApiTestFixture>;
 
 public sealed class NullRunEventPublisher : IRunEventPublisher
 {
@@ -123,52 +149,6 @@ public sealed class NullRunEventPublisher : IRunEventPublisher
     public Task PublishWorkflowV2NodeStateAsync(WorkflowExecutionV2Document execution, WorkflowNodeResult nodeResult, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
-public sealed class MockWorkerClient : AgentsDashboard.Contracts.Worker.WorkerGateway.WorkerGatewayClient
-{
-    public override Grpc.Core.AsyncUnaryCall<DispatchJobReply> DispatchJobAsync(DispatchJobRequest request, Grpc.Core.Metadata? headers = null, DateTime? deadline = null, CancellationToken cancellationToken = default)
-    {
-        var reply = new DispatchJobReply { Accepted = true };
-        return new Grpc.Core.AsyncUnaryCall<DispatchJobReply>(
-            Task.FromResult(reply),
-            Task.FromResult(new Grpc.Core.Metadata()),
-            () => Grpc.Core.Status.DefaultSuccess,
-            () => new Grpc.Core.Metadata(),
-            () => { });
-    }
-
-    public override Grpc.Core.AsyncUnaryCall<CancelJobReply> CancelJobAsync(CancelJobRequest request, Grpc.Core.Metadata? headers = null, DateTime? deadline = null, CancellationToken cancellationToken = default)
-    {
-        var reply = new CancelJobReply { Accepted = true };
-        return new Grpc.Core.AsyncUnaryCall<CancelJobReply>(
-            Task.FromResult(reply),
-            Task.FromResult(new Grpc.Core.Metadata()),
-            () => Grpc.Core.Status.DefaultSuccess,
-            () => new Grpc.Core.Metadata(),
-            () => { });
-    }
-
-    public override Grpc.Core.AsyncUnaryCall<KillContainerReply> KillContainerAsync(KillContainerRequest request, Grpc.Core.Metadata? headers = null, DateTime? deadline = null, CancellationToken cancellationToken = default)
-    {
-        var reply = new KillContainerReply { Killed = true, ContainerId = "mock-container-id" };
-        return new Grpc.Core.AsyncUnaryCall<KillContainerReply>(
-            Task.FromResult(reply),
-            Task.FromResult(new Grpc.Core.Metadata()),
-            () => Grpc.Core.Status.DefaultSuccess,
-            () => new Grpc.Core.Metadata(),
-            () => { });
-    }
-
-    public override Grpc.Core.AsyncUnaryCall<ReconcileOrphanedContainersReply> ReconcileOrphanedContainersAsync(ReconcileOrphanedContainersRequest request, Grpc.Core.Metadata? headers = null, DateTime? deadline = null, CancellationToken cancellationToken = default)
-    {
-        var reply = new ReconcileOrphanedContainersReply { OrphanedCount = 0 };
-        return new Grpc.Core.AsyncUnaryCall<ReconcileOrphanedContainersReply>(
-            Task.FromResult(reply),
-            Task.FromResult(new Grpc.Core.Metadata()),
-            () => Grpc.Core.Status.DefaultSuccess,
-            () => new Grpc.Core.Metadata(),
-            () => { });
-    }
-}
 
 public sealed class MockContainerReaper : IContainerReaper
 {

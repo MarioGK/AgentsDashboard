@@ -39,6 +39,14 @@ else
                 Reject
             </MudButton>
         }
+        @if (_run.State is RunState.Running)
+        {
+            <MudTooltip Text="Open in Terminal">
+                <MudIconButton Icon="@Icons.Material.Filled.Terminal"
+                               Color="Color.Info"
+                               OnClick="@(() => Navigation.NavigateTo($"/terminals?runId={Id}", forceLoad: true))" />
+            </MudTooltip>
+        }
         @if (_run.State is RunState.Queued or RunState.Running or RunState.PendingApproval)
         {
             <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop"

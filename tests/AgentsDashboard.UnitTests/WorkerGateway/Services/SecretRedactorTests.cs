@@ -15,7 +15,7 @@ public class SecretRedactorTests
         return new SecretRedactor(options);
     }
 
-    [Fact]
+    [Test]
     public void Redact_MasksKnownSecretValues()
     {
         var redactor = CreateRedactor();
@@ -33,7 +33,7 @@ public class SecretRedactorTests
         result.Should().Contain("not-a-secret");
     }
 
-    [Fact]
+    [Test]
     public void Redact_IgnoresShortValues()
     {
         var redactor = CreateRedactor();
@@ -44,7 +44,7 @@ public class SecretRedactorTests
         result.Should().Contain("abc");
     }
 
-    [Fact]
+    [Test]
     public void Redact_EmptyInput_ReturnsEmpty()
     {
         var redactor = CreateRedactor();
@@ -53,7 +53,7 @@ public class SecretRedactorTests
         redactor.Redact("", new Dictionary<string, string>()).Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void Redact_NullEnv_ReturnsInput()
     {
         var redactor = CreateRedactor();
@@ -63,7 +63,7 @@ public class SecretRedactorTests
         result.Should().Be("some text");
     }
 
-    [Fact]
+    [Test]
     public void Redact_EmptyEnv_ReturnsInput()
     {
         var redactor = CreateRedactor();
@@ -73,7 +73,7 @@ public class SecretRedactorTests
         result.Should().Be("some text");
     }
 
-    [Fact]
+    [Test]
     public void Redact_MultipleSecrets_AllRedacted()
     {
         var redactor = CreateRedactor();
@@ -91,7 +91,7 @@ public class SecretRedactorTests
         result.Should().Contain("***REDACTED***");
     }
 
-    [Fact]
+    [Test]
     public void Redact_PrefixPattern_MatchesSuffix()
     {
         var redactor = CreateRedactor(["MY_*"]);
@@ -103,7 +103,7 @@ public class SecretRedactorTests
         result.Should().NotContain("secret-value");
     }
 
-    [Fact]
+    [Test]
     public void Redact_SuffixPattern_MatchesPrefix()
     {
         var redactor = CreateRedactor(["*_KEY"]);
@@ -115,7 +115,7 @@ public class SecretRedactorTests
         result.Should().NotContain("key-123");
     }
 
-    [Fact]
+    [Test]
     public void Redact_ExactPattern_MatchesExactly()
     {
         var redactor = CreateRedactor(["GH_TOKEN"]);
@@ -127,7 +127,7 @@ public class SecretRedactorTests
         result.Should().NotContain("ghp_xxx");
     }
 
-    [Fact]
+    [Test]
     public void Redact_NonSecretVariable_NotRedacted()
     {
         var redactor = CreateRedactor();
@@ -138,7 +138,7 @@ public class SecretRedactorTests
         result.Should().Contain("normal-value");
     }
 
-    [Fact]
+    [Test]
     public void Redact_ValueWithMinimumLength_IsRedacted()
     {
         var redactor = CreateRedactor(["*_KEY"]);
@@ -149,7 +149,7 @@ public class SecretRedactorTests
         result.Should().Contain("***REDACTED***");
     }
 
-    [Fact]
+    [Test]
     public void Redact_ValueBelowMinimumLength_NotRedacted()
     {
         var redactor = CreateRedactor(["*_KEY"]);
@@ -160,7 +160,7 @@ public class SecretRedactorTests
         result.Should().Contain("abc");
     }
 
-    [Fact]
+    [Test]
     public void Redact_MultipleOccurrences_AllRedacted()
     {
         var redactor = CreateRedactor();
@@ -172,7 +172,7 @@ public class SecretRedactorTests
         result.Split("***REDACTED***").Should().HaveCount(3);
     }
 
-    [Fact]
+    [Test]
     public void Redact_EmptyEnvValue_NotProcessed()
     {
         var redactor = CreateRedactor();
@@ -183,7 +183,7 @@ public class SecretRedactorTests
         result.Should().Be("Token: ");
     }
 
-    [Fact]
+    [Test]
     public void Redact_CaseInsensitivePatternMatch()
     {
         var redactor = CreateRedactor(["*_TOKEN"]);

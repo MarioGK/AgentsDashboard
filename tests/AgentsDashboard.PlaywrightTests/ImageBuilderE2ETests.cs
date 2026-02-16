@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class ImageBuilderE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_LoadsAfterLogin()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("text=Container Image Builder")).ToBeVisibleAsync();
     }
@@ -19,7 +18,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_HasTemplateSelector()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("label:has-text('Template')")).ToBeVisibleAsync();
     }
@@ -27,7 +26,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_HasImageTagField()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("label:has-text('Image Tag')")).ToBeVisibleAsync();
     }
@@ -35,7 +34,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_HasDockerfileEditor()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("text=Dockerfile")).ToBeVisibleAsync();
     }
@@ -43,7 +42,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_HasBuildButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("button:has-text('Build Image')")).ToBeVisibleAsync();
     }
@@ -51,7 +50,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_HasRefreshButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("button:has-text('Refresh Images')")).ToBeVisibleAsync();
     }
@@ -59,7 +58,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_AvailableImagesSection()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("text=Available Images")).ToBeVisibleAsync();
     }
@@ -67,7 +66,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ListImages_TableHeaders()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         await Expect(Page.Locator("th:has-text('Tag')")).ToBeVisibleAsync();
@@ -80,7 +79,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ListImages_RefreshList()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var refreshButton = Page.Locator("button:has-text('Refresh Images')");
@@ -91,7 +90,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_ImageTableHeaders()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -108,7 +107,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_ImageTagHasDefaultValue()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tagInput = Page.Locator("input[value*='myharness'], input[label='Image Tag']");
@@ -118,7 +117,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_TemplateDropdownHasOptions()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var templateSelect = Page.Locator(".mud-select:has(label:text('Template'))");
@@ -135,7 +134,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task BuildImage_SetTag()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tagInput = Page.Locator("input[label='Image Tag']").First;
@@ -145,7 +144,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task BuildImage_SelectTemplate()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var templateSelect = Page.Locator(".mud-select:has(label:text('Template'))");
@@ -158,7 +157,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task BuildImage_ClickBuild()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var buildButton = Page.Locator("button:has-text('Build Image')");
@@ -168,7 +167,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_DeleteImageButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -182,7 +181,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task DeleteImage_OpenConfirmation()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -198,7 +197,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task DeleteImage_Confirm()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -218,7 +217,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilder_EditorVisible()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var editor = Page.Locator(".monaco-editor, textarea");
@@ -231,7 +230,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilder_TemplateChangesDockerfile()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var templateSelect = Page.Locator(".mud-select:has(label:text('Template'))");
@@ -243,7 +242,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilder_ImageListEmpty()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -256,7 +255,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilder_ImageSizeDisplayed()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -270,7 +269,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilder_ImageCreatedDateDisplayed()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -284,7 +283,7 @@ public class ImageBuilderE2ETests : PageTest
     [Test]
     public async Task ImageBuilder_BuildStatus_Shown()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/image-builder");
 
         var buildButton = Page.Locator("button:has-text('Build Image')");

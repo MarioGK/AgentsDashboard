@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
 
-[Trait("Category", "Docker")]
+[Property("Category", "Docker")]
 public class ImagePrePullServiceTests
 {
     private readonly Mock<ILogger<ImagePrePullService>> _loggerMock;
@@ -16,8 +16,8 @@ public class ImagePrePullServiceTests
         _loggerMock = new Mock<ILogger<ImagePrePullService>>();
     }
 
-    [Fact(Skip = "Docker client not available in test environment")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Docker client not available in test environment")]
+    [Property("Requires", "Docker")]
     public async Task StartAsync_WithNoImages_LogsNoImages()
     {
         var options = new WorkerOptions
@@ -39,8 +39,8 @@ public class ImagePrePullServiceTests
             Times.Once);
     }
 
-    [Fact(Skip = "Docker client not available in test environment")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Docker client not available in test environment")]
+    [Property("Requires", "Docker")]
     public async Task StartAsync_CompletesSuccessfully()
     {
         var options = new WorkerOptions
@@ -55,8 +55,8 @@ public class ImagePrePullServiceTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact(Skip = "Docker client not available in test environment")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Docker client not available in test environment")]
+    [Property("Requires", "Docker")]
     public async Task StopAsync_ReturnsCompletedTask()
     {
         var options = new WorkerOptions();
@@ -65,8 +65,8 @@ public class ImagePrePullServiceTests
         task.IsCompleted.Should().BeTrue();
     }
 
-    [Fact(Skip = "Docker client not available in test environment")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Docker client not available in test environment")]
+    [Property("Requires", "Docker")]
     public async Task StartAsync_WithCancellationToken_RespectsCancellation()
     {
         var options = new WorkerOptions
@@ -83,8 +83,8 @@ public class ImagePrePullServiceTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact(Skip = "Docker client not available in test environment")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Docker client not available in test environment")]
+    [Property("Requires", "Docker")]
     public async Task StopAsync_CanBeCalledMultipleTimes()
     {
         var options = new WorkerOptions();
@@ -96,8 +96,8 @@ public class ImagePrePullServiceTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact(Skip = "Docker client not available in test environment")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Docker client not available in test environment")]
+    [Property("Requires", "Docker")]
     public async Task StartStop_CanBeCalledInSequence()
     {
         var options = new WorkerOptions

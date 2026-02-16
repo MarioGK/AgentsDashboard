@@ -5,7 +5,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class DeadLetterTests
 {
-    [Fact]
+    [Test]
     public void DefaultId_IsGenerated()
     {
         var dl = new WorkflowDeadLetterDocument();
@@ -14,7 +14,7 @@ public class DeadLetterTests
         dl.Id.Should().HaveLength(32);
     }
 
-    [Fact]
+    [Test]
     public void DefaultReplayed_IsFalse()
     {
         var dl = new WorkflowDeadLetterDocument();
@@ -22,7 +22,7 @@ public class DeadLetterTests
         dl.Replayed.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void DefaultAttempt_IsOne()
     {
         var dl = new WorkflowDeadLetterDocument();
@@ -30,7 +30,7 @@ public class DeadLetterTests
         dl.Attempt.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public void DefaultCreatedAtUtc_IsRecentUtc()
     {
         var dl = new WorkflowDeadLetterDocument();
@@ -38,7 +38,7 @@ public class DeadLetterTests
         dl.CreatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(2));
     }
 
-    [Fact]
+    [Test]
     public void Replayed_CanBeSetTrue()
     {
         var dl = new WorkflowDeadLetterDocument { Replayed = true };
@@ -46,7 +46,7 @@ public class DeadLetterTests
         dl.Replayed.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ReplayedExecutionId_CanBeSet()
     {
         var dl = new WorkflowDeadLetterDocument { ReplayedExecutionId = "exec-replay-1" };
@@ -54,7 +54,7 @@ public class DeadLetterTests
         dl.ReplayedExecutionId.Should().Be("exec-replay-1");
     }
 
-    [Fact]
+    [Test]
     public void ReplayedAtUtc_CanBeSet()
     {
         var now = DateTime.UtcNow;
@@ -63,7 +63,7 @@ public class DeadLetterTests
         dl.ReplayedAtUtc.Should().Be(now);
     }
 
-    [Fact]
+    [Test]
     public void FailureReason_CanBeSet()
     {
         var dl = new WorkflowDeadLetterDocument { FailureReason = "Agent timed out after 30 minutes" };
@@ -71,7 +71,7 @@ public class DeadLetterTests
         dl.FailureReason.Should().Be("Agent timed out after 30 minutes");
     }
 
-    [Fact]
+    [Test]
     public void InputContextSnapshot_DefaultEmpty()
     {
         var dl = new WorkflowDeadLetterDocument();
@@ -79,7 +79,7 @@ public class DeadLetterTests
         dl.InputContextSnapshot.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void InputContextSnapshot_CanStoreData()
     {
         var dl = new WorkflowDeadLetterDocument();
@@ -91,7 +91,7 @@ public class DeadLetterTests
         dl.InputContextSnapshot["retryCount"].GetInt32().Should().Be(3);
     }
 
-    [Fact]
+    [Test]
     public void FailedNodeName_CanBeSet()
     {
         var dl = new WorkflowDeadLetterDocument { FailedNodeName = "RunTests" };
@@ -99,7 +99,7 @@ public class DeadLetterTests
         dl.FailedNodeName.Should().Be("RunTests");
     }
 
-    [Fact]
+    [Test]
     public void ExecutionId_CanBeSet()
     {
         var dl = new WorkflowDeadLetterDocument { ExecutionId = "exec-42" };

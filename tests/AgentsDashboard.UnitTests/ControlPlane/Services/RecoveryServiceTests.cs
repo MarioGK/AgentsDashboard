@@ -12,13 +12,13 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class RecoveryServiceTests
 {
-    [Fact]
+    [Test]
     public void RecoveryService_ImplementsIHostedService()
     {
         typeof(RecoveryService).GetInterfaces().Should().Contain(typeof(IHostedService));
     }
 
-    [Fact]
+    [Test]
     public async Task StopAsync_CompletesImmediately()
     {
         var store = CreateMockStore();
@@ -34,7 +34,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_NoOrphanedRuns_CompletesWithoutPublishing()
     {
         var store = CreateMockStore();
@@ -60,7 +60,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_WithOrphanedRuns_MarksThemAsFailed()
     {
         var orphanRun = new RunDocument
@@ -111,7 +111,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_WithOrphanedRuns_CreatesFinding()
     {
         var orphanRun = new RunDocument
@@ -162,7 +162,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_MarkRunReturnsNull_SkipsPublishAndFinding()
     {
         var orphanRun = new RunDocument
@@ -202,7 +202,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_MultipleOrphanedRuns_ProcessesAll()
     {
         var runs = Enumerable.Range(1, 3).Select(i => new RunDocument
@@ -242,7 +242,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_WithOrphanedWorkflowExecutions_MarksThemAsFailed()
     {
         var orphanExecution = new WorkflowExecutionDocument
@@ -279,7 +279,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_WithPendingApprovalRuns_LogsThem()
     {
         var pendingRun = new RunDocument
@@ -313,7 +313,7 @@ public class RecoveryServiceTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_ReconcilesOrphanedContainers()
     {
         var store = CreateMockStore();

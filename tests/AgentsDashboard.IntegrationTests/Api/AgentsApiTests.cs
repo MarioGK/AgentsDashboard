@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class AgentsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -26,7 +25,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
     private static CreateAgentRequest MakeAgentRequest(string repositoryId, string name = "Test Agent") =>
         new(repositoryId, name, "A test agent", "codex", "Do something", "echo hello", false);
 
-    [Fact]
+    [Test]
     public async Task ListAgentsByRepository_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -38,7 +37,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         agents.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task GetAgent_NotFound_Returns404()
     {
         var response = await _client.GetAsync("/api/agents/nonexistent");
@@ -46,7 +45,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAgent_Valid_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -68,7 +67,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         agent.Id.Should().NotBeNullOrEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAgent_MissingName_ReturnsValidationError()
     {
         var (_, repo) = await SetupAsync();
@@ -79,7 +78,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAgent_InvalidRepository_ReturnsValidationError()
     {
         var request = MakeAgentRequest("nonexistent-repo");
@@ -89,7 +88,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAgent_Valid_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -112,7 +111,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         updated.AutoCreatePullRequest.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAgent_NotFound_Returns404()
     {
         var request = new UpdateAgentRequest(
@@ -123,7 +122,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteAgent_Valid_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -135,7 +134,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteAgent_NotFound_Returns404()
     {
         var response = await _client.DeleteAsync("/api/agents/nonexistent");
@@ -143,7 +142,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAndGetAgent_RoundTrip()
     {
         var (_, repo) = await SetupAsync();
@@ -161,7 +160,7 @@ public class AgentsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         fetched.RepositoryId.Should().Be(repo.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task ListAgents_AfterCreate_ContainsNew()
     {
         var (_, repo) = await SetupAsync();

@@ -6,7 +6,7 @@ public class HarnessEnvelopeValidatorTests
 {
     private readonly HarnessEnvelopeValidator _validator = new();
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsSuccess_ForValidMinimalEnvelope()
     {
         var json = """{"status":"succeeded"}""";
@@ -16,7 +16,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsSuccess_ForFullyPopulatedEnvelope()
     {
         var json = """
@@ -42,12 +42,12 @@ public class HarnessEnvelopeValidatorTests
         result.Warnings.Should().BeEmpty();
     }
 
-    [Theory]
-    [InlineData("succeeded")]
-    [InlineData("failed")]
-    [InlineData("unknown")]
-    [InlineData("cancelled")]
-    [InlineData("pending")]
+    [Test]
+    [Arguments("succeeded")]
+    [Arguments("failed")]
+    [Arguments("unknown")]
+    [Arguments("cancelled")]
+    [Arguments("pending")]
     public void Validate_AcceptsValidStatusValues(string status)
     {
         var json = $"{{\"status\":\"{status}\"}}";
@@ -57,7 +57,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_ForMissingStatus()
     {
         var json = """{"runId":"run-123"}""";
@@ -68,7 +68,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("'status'"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_ForInvalidStatus()
     {
         var json = """{"status":"invalid_status"}""";
@@ -79,7 +79,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("status") && e.Contains("succeeded"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_ForEmptyStatus()
     {
         var json = """{"status":""}""";
@@ -90,7 +90,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("'status'") && e.Contains("empty"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_ForNonStringStatus()
     {
         var json = """{"status":123}""";
@@ -101,7 +101,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("'status'") && e.Contains("string"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_ForEmptyJson()
     {
         var result = _validator.Validate("");
@@ -110,7 +110,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("empty"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_ForNullJson()
     {
         var result = _validator.Validate(null!);
@@ -119,7 +119,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("empty"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_ForWhitespaceJson()
     {
         var result = _validator.Validate("   ");
@@ -128,7 +128,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("empty"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_ForInvalidJson()
     {
         var result = _validator.Validate("{invalid json}");
@@ -137,7 +137,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("Invalid JSON"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenRootIsNotObject()
     {
         var json = """["status","succeeded"]""";
@@ -148,7 +148,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("object"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenActionsIsNotArray()
     {
         var json = """{"status":"succeeded","actions":"not-array"}""";
@@ -159,7 +159,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("'actions'") && e.Contains("array"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenActionItemIsNotObject()
     {
         var json = """{"status":"succeeded","actions":["string"]}""";
@@ -170,7 +170,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("actions[0]") && e.Contains("object"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenActionMissingType()
     {
         var json = """{"status":"succeeded","actions":[{"description":"test"}]}""";
@@ -181,7 +181,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("actions[0].type") && e.Contains("required"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenActionTypeIsEmpty()
     {
         var json = """{"status":"succeeded","actions":[{"type":""}]}""";
@@ -192,7 +192,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("actions[0].type") && e.Contains("non-empty"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenActionHasUnknownProperty()
     {
         var json = """{"status":"succeeded","actions":[{"type":"test","unknown":"value"}]}""";
@@ -203,7 +203,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("actions[0]") && e.Contains("unknown property"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenArtifactsIsNotArray()
     {
         var json = """{"status":"succeeded","artifacts":"not-array"}""";
@@ -214,7 +214,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("'artifacts'") && e.Contains("array"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenArtifactItemIsNotString()
     {
         var json = """{"status":"succeeded","artifacts":[123]}""";
@@ -225,7 +225,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("artifacts[0]") && e.Contains("string"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenArtifactIsEmpty()
     {
         var json = """{"status":"succeeded","artifacts":[""]}""";
@@ -236,7 +236,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("artifacts[0]") && e.Contains("empty"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenMetricsIsNotObject()
     {
         var json = """{"status":"succeeded","metrics":"not-object"}""";
@@ -247,7 +247,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("'metrics'") && e.Contains("object"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenMetricValueIsNotNumber()
     {
         var json = """{"status":"succeeded","metrics":{"duration":"not-number"}}""";
@@ -258,7 +258,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("metrics['duration']") && e.Contains("number"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_AcceptsNumericMetricValues()
     {
         var json = """{"status":"succeeded","metrics":{"int":100,"float":1.5,"negative":-10}}""";
@@ -268,7 +268,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenMetadataIsNotObject()
     {
         var json = """{"status":"succeeded","metadata":"not-object"}""";
@@ -279,7 +279,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("'metadata'") && e.Contains("object"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenMetadataValueIsNotString()
     {
         var json = """{"status":"succeeded","metadata":{"key":123}}""";
@@ -290,7 +290,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("metadata['key']") && e.Contains("string"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsWarning_ForMissingRunId()
     {
         var json = """{"status":"succeeded"}""";
@@ -300,7 +300,7 @@ public class HarnessEnvelopeValidatorTests
         result.Warnings.Should().Contain(w => w.Contains("'runId'"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsWarning_ForMissingTaskId()
     {
         var json = """{"status":"succeeded"}""";
@@ -310,7 +310,7 @@ public class HarnessEnvelopeValidatorTests
         result.Warnings.Should().Contain(w => w.Contains("'taskId'"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsWarning_ForUnknownProperties()
     {
         var json = """{"status":"succeeded","unknownField":"value"}""";
@@ -321,7 +321,7 @@ public class HarnessEnvelopeValidatorTests
         result.Warnings.Should().Contain(w => w.Contains("unknownField"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_HandlesMultipleErrors()
     {
         var json = """{"status":"invalid","artifacts":[123],"metrics":{"a":"b"}}""";
@@ -332,7 +332,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().HaveCountGreaterThan(1);
     }
 
-    [Fact]
+    [Test]
     public void Validate_AcceptsStatusCaseInsensitively()
     {
         var json = """{"status":"SUCCEEDED"}""";
@@ -342,7 +342,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_AcceptsEmptyActionsArray()
     {
         var json = """{"status":"succeeded","actions":[]}""";
@@ -352,7 +352,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_AcceptsEmptyArtifactsArray()
     {
         var json = """{"status":"succeeded","artifacts":[]}""";
@@ -362,7 +362,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_AcceptsEmptyMetricsObject()
     {
         var json = """{"status":"succeeded","metrics":{}}""";
@@ -372,7 +372,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_AcceptsEmptyMetadataObject()
     {
         var json = """{"status":"succeeded","metadata":{}}""";
@@ -382,7 +382,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_AcceptsActionWithOnlyType()
     {
         var json = """{"status":"succeeded","actions":[{"type":"test"}]}""";
@@ -392,7 +392,7 @@ public class HarnessEnvelopeValidatorTests
         result.IsValid.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenActionDescriptionIsNotString()
     {
         var json = """{"status":"succeeded","actions":[{"type":"test","description":123}]}""";
@@ -403,7 +403,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("actions[0].description") && e.Contains("string"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsError_WhenActionTargetIsNotString()
     {
         var json = """{"status":"succeeded","actions":[{"type":"test","target":123}]}""";
@@ -414,7 +414,7 @@ public class HarnessEnvelopeValidatorTests
         result.Errors.Should().Contain(e => e.Contains("actions[0].target") && e.Contains("string"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsWarning_WhenRawOutputRefIsNotString()
     {
         var json = """{"status":"succeeded","rawOutputRef":123}""";
@@ -424,7 +424,7 @@ public class HarnessEnvelopeValidatorTests
         result.Warnings.Should().Contain(w => w.Contains("'rawOutputRef'") && w.Contains("string"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsWarning_WhenRunIdIsNotString()
     {
         var json = """{"status":"succeeded","runId":123}""";
@@ -434,7 +434,7 @@ public class HarnessEnvelopeValidatorTests
         result.Warnings.Should().Contain(w => w.Contains("'runId'") && w.Contains("string"));
     }
 
-    [Fact]
+    [Test]
     public void Validate_ReturnsWarning_WhenTaskIdIsNotString()
     {
         var json = """{"status":"succeeded","taskId":123}""";

@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class TasksApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -23,7 +22,7 @@ public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtur
         return (project, repo);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateTask_ReturnsCreatedTask()
     {
         var (_, repo) = await SetupAsync();
@@ -42,7 +41,7 @@ public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtur
         task.RepositoryId.Should().Be(repo.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateTask_ReturnsNotFound_WhenRepositoryDoesNotExist()
     {
         var request = new CreateTaskRequest("nonexistent", "Task", TaskKind.OneShot, "codex", "prompt", "cmd", false, "", true);
@@ -51,7 +50,7 @@ public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtur
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateCronTask_ReturnsValidationProblem_WhenCronExpressionMissing()
     {
         var (_, repo) = await SetupAsync();
@@ -63,7 +62,7 @@ public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtur
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateCronTask_ReturnsCreatedTask_WhenCronExpressionProvided()
     {
         var (_, repo) = await SetupAsync();
@@ -78,7 +77,7 @@ public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtur
         task!.CronExpression.Should().Be("0 * * * *");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateTask_ReturnsUpdatedTask()
     {
         var (_, repo) = await SetupAsync();
@@ -97,7 +96,7 @@ public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtur
         updated.Prompt.Should().Be("new prompt");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateTask_ReturnsNotFound_WhenTaskDoesNotExist()
     {
         var request = new UpdateTaskRequest("Name", TaskKind.OneShot, "codex", "prompt", "cmd", false, "", true);
@@ -106,7 +105,7 @@ public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtur
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteTask_ReturnsOk_WhenTaskExists()
     {
         var (_, repo) = await SetupAsync();
@@ -119,14 +118,14 @@ public class TasksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtur
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteTask_ReturnsNotFound_WhenTaskDoesNotExist()
     {
         var response = await _client.DeleteAsync("/api/tasks/nonexistent");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ListRepositoryTasks_ReturnsTasksForRepository()
     {
         var (_, repo) = await SetupAsync();

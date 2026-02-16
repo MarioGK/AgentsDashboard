@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class RepositoriesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class RepositoriesApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -17,7 +16,7 @@ public class RepositoriesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         return (await response.Content.ReadFromJsonAsync<ProjectDocument>())!;
     }
 
-    [Fact]
+    [Test]
     public async Task CreateRepository_ReturnsCreatedRepository()
     {
         var project = await CreateProjectAsync();
@@ -35,7 +34,7 @@ public class RepositoriesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         repo.ProjectId.Should().Be(project.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateRepository_ReturnsNotFound_WhenProjectDoesNotExist()
     {
         var request = new CreateRepositoryRequest("nonexistent", "Repo", "https://github.com/test.git", "main");
@@ -44,7 +43,7 @@ public class RepositoriesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateRepository_ReturnsUpdatedRepository()
     {
         var project = await CreateProjectAsync();
@@ -63,7 +62,7 @@ public class RepositoriesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         updated.DefaultBranch.Should().Be("develop");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateRepository_ReturnsNotFound_WhenRepositoryDoesNotExist()
     {
         var request = new UpdateRepositoryRequest("Name", "https://github.com/test.git", "main");
@@ -72,7 +71,7 @@ public class RepositoriesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteRepository_ReturnsOk_WhenRepositoryExists()
     {
         var project = await CreateProjectAsync();
@@ -85,7 +84,7 @@ public class RepositoriesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteRepository_ReturnsNotFound_WhenRepositoryDoesNotExist()
     {
         var response = await _client.DeleteAsync("/api/repositories/nonexistent");

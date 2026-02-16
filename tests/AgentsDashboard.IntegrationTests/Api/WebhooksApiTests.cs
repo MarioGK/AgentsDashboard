@@ -3,14 +3,13 @@ using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
-using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class WebhooksApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
     private readonly WebApplicationFactory<AgentsDashboard.ControlPlane.Program> _factory = fixture.Factory;
@@ -31,7 +30,7 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         return (project, repo, task);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWebhook_ReturnsCreatedWebhook()
     {
         var (_, repo, task) = await SetupAsync();
@@ -42,7 +41,7 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWebhook_ReturnsNotFound_WhenRepositoryDoesNotExist()
     {
         var request = new CreateWebhookRequest("nonexistent", "task", "push", "secret");
@@ -51,7 +50,7 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_ReturnsNotFound_WhenRepositoryDoesNotExist()
     {
         var response = await _client.PostAsync("/api/webhooks/nonexistent", null);
@@ -59,7 +58,7 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_ReturnsOk_WhenRepositoryExists()
     {
         var (_, repo, _) = await SetupAsync();
@@ -69,7 +68,7 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_DispatchesEventDrivenTask()
     {
         var (_, repo, task) = await SetupAsync();
@@ -83,7 +82,7 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         result!.Dispatched.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_ReturnsZero_WhenNoEventDrivenTasks()
     {
         var projectResponse = await _client.PostAsJsonAsync("/api/projects", new CreateProjectRequest("WP2", "d"));

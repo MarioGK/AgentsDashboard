@@ -15,7 +15,7 @@ public class SecretCryptoServiceTests
         _service = new SecretCryptoService(provider);
     }
 
-    [Fact]
+    [Test]
     public void Encrypt_WithPlaintext_ReturnsNonEmptyString()
     {
         var plaintext = "my-secret-value";
@@ -26,7 +26,7 @@ public class SecretCryptoServiceTests
         encrypted.Should().NotBe(plaintext);
     }
 
-    [Fact]
+    [Test]
     public void Decrypt_WithEncryptedValue_ReturnsOriginalPlaintext()
     {
         var plaintext = "my-secret-value";
@@ -37,11 +37,11 @@ public class SecretCryptoServiceTests
         decrypted.Should().Be(plaintext);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("a")]
-    [InlineData("api-key-12345")]
-    [InlineData("This is a much longer secret with special chars: !@#$%^&*()")]
+    [Test]
+    [Arguments("")]
+    [Arguments("a")]
+    [Arguments("api-key-12345")]
+    [Arguments("This is a much longer secret with special chars: !@#$%^&*()")]
     public void EncryptDecrypt_Roundtrip_PreservesOriginal(string plaintext)
     {
         var encrypted = _service.Encrypt(plaintext);
@@ -50,7 +50,7 @@ public class SecretCryptoServiceTests
         decrypted.Should().Be(plaintext);
     }
 
-    [Fact]
+    [Test]
     public void Encrypt_DifferentValues_ReturnDifferentCiphertexts()
     {
         var value1 = "secret-one";
@@ -62,7 +62,7 @@ public class SecretCryptoServiceTests
         encrypted1.Should().NotBe(encrypted2);
     }
 
-    [Fact]
+    [Test]
     public void Encrypt_SameValueTwice_ReturnsDifferentCiphertexts()
     {
         var plaintext = "my-secret-value";
@@ -73,7 +73,7 @@ public class SecretCryptoServiceTests
         encrypted1.Should().NotBe(encrypted2);
     }
 
-    [Fact]
+    [Test]
     public void FixedTimeEquals_SameStrings_ReturnsTrue()
     {
         var left = "token-12345";
@@ -84,7 +84,7 @@ public class SecretCryptoServiceTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void FixedTimeEquals_DifferentStrings_ReturnsFalse()
     {
         var left = "token-12345";
@@ -95,10 +95,10 @@ public class SecretCryptoServiceTests
         result.Should().BeFalse();
     }
 
-    [Theory]
-    [InlineData("", "")]
-    [InlineData("a", "a")]
-    [InlineData("same-value", "same-value")]
+    [Test]
+    [Arguments("", "")]
+    [Arguments("a", "a")]
+    [Arguments("same-value", "same-value")]
     public void FixedTimeEquals_IdenticalStrings_ReturnsTrue(string left, string right)
     {
         var result = SecretCryptoService.FixedTimeEquals(left, right);
@@ -106,10 +106,10 @@ public class SecretCryptoServiceTests
         result.Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData("short", "much-longer-value")]
-    [InlineData("prefix-value", "prefix-other")]
-    [InlineData("abc", "abd")]
+    [Test]
+    [Arguments("short", "much-longer-value")]
+    [Arguments("prefix-value", "prefix-other")]
+    [Arguments("abc", "abd")]
     public void FixedTimeEquals_DifferentValues_ReturnsFalse(string left, string right)
     {
         var result = SecretCryptoService.FixedTimeEquals(left, right);
@@ -117,7 +117,7 @@ public class SecretCryptoServiceTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void FixedTimeEquals_DifferentLengths_ReturnsFalse()
     {
         var left = "short";
@@ -128,7 +128,7 @@ public class SecretCryptoServiceTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void FixedTimeEquals_EmptyStrings_ReturnsTrue()
     {
         var result = SecretCryptoService.FixedTimeEquals("", "");

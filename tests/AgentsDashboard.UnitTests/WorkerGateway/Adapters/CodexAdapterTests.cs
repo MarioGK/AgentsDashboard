@@ -19,13 +19,13 @@ public class CodexAdapterTests
         _adapter = new CodexAdapter(options, redactor, NullLogger<CodexAdapter>.Instance);
     }
 
-    [Fact]
+    [Test]
     public void HarnessName_ReturnsCodex()
     {
         _adapter.HarnessName.Should().Be("codex");
     }
 
-    [Fact]
+    [Test]
     public void PrepareContext_SetsDefaultValues()
     {
         var request = CreateRequest();
@@ -43,7 +43,7 @@ public class CodexAdapterTests
         context.ReadOnlyRootFs.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void PrepareContext_UsesCustomTimeout_WhenProvided()
     {
         var request = CreateRequest();
@@ -54,7 +54,7 @@ public class CodexAdapterTests
         context.TimeoutSeconds.Should().Be(300);
     }
 
-    [Fact]
+    [Test]
     public void PrepareContext_UsesCustomSandboxSettings()
     {
         var request = CreateRequest();
@@ -71,7 +71,7 @@ public class CodexAdapterTests
         context.ReadOnlyRootFs.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesRequiredEnvVariables()
     {
         var request = CreateRequest();
@@ -86,7 +86,7 @@ public class CodexAdapterTests
         command.Arguments.Should().Contain("HARNESS=codex");
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesOptionalEnvVariables_WhenPresent()
     {
         var request = CreateRequest();
@@ -100,7 +100,7 @@ public class CodexAdapterTests
         command.Arguments.Should().Contain("CODEX_MAX_TOKENS=4096");
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesContainerLabels()
     {
         var request = CreateRequest();
@@ -115,7 +115,7 @@ public class CodexAdapterTests
         command.Arguments.Should().Contain("env=test");
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesNetworkDisabled_WhenSet()
     {
         var request = CreateRequest();
@@ -128,7 +128,7 @@ public class CodexAdapterTests
         command.Arguments.Should().Contain("none");
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesReadOnlyRootFs_WhenSet()
     {
         var request = CreateRequest();
@@ -140,7 +140,7 @@ public class CodexAdapterTests
         command.Arguments.Should().Contain("--read-only");
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsSuccess_WhenEnvelopeSucceeded()
     {
         var envelope = new HarnessResultEnvelope { Status = "succeeded" };
@@ -151,7 +151,7 @@ public class CodexAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsSandboxError_WhenCodeexError()
     {
         var envelope = new HarnessResultEnvelope
@@ -168,7 +168,7 @@ public class CodexAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(30);
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsToolError_WhenToolExecutionFailed()
     {
         var envelope = new HarnessResultEnvelope
@@ -184,7 +184,7 @@ public class CodexAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsResourceExhausted_WhenExitCode137()
     {
         var envelope = new HarnessResultEnvelope
@@ -202,17 +202,17 @@ public class CodexAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(60);
     }
 
-    [Theory]
-    [InlineData("unauthorized", FailureClass.AuthenticationError)]
-    [InlineData("invalid api key", FailureClass.AuthenticationError)]
-    [InlineData("rate limit", FailureClass.RateLimitExceeded)]
-    [InlineData("timeout", FailureClass.Timeout)]
-    [InlineData("out of memory", FailureClass.ResourceExhausted)]
-    [InlineData("invalid input", FailureClass.InvalidInput)]
-    [InlineData("not found", FailureClass.NotFound)]
-    [InlineData("permission denied", FailureClass.PermissionDenied)]
-    [InlineData("network error", FailureClass.NetworkError)]
-    [InlineData("config error", FailureClass.ConfigurationError)]
+    [Test]
+    [Arguments("unauthorized", FailureClass.AuthenticationError)]
+    [Arguments("invalid api key", FailureClass.AuthenticationError)]
+    [Arguments("rate limit", FailureClass.RateLimitExceeded)]
+    [Arguments("timeout", FailureClass.Timeout)]
+    [Arguments("out of memory", FailureClass.ResourceExhausted)]
+    [Arguments("invalid input", FailureClass.InvalidInput)]
+    [Arguments("not found", FailureClass.NotFound)]
+    [Arguments("permission denied", FailureClass.PermissionDenied)]
+    [Arguments("network error", FailureClass.NetworkError)]
+    [Arguments("config error", FailureClass.ConfigurationError)]
     public void ClassifyFailure_ReturnsCorrectBaseClassification(string error, FailureClass expectedClass)
     {
         var envelope = new HarnessResultEnvelope
@@ -226,7 +226,7 @@ public class CodexAdapterTests
         classification.Class.Should().Be(expectedClass);
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsUnknown_WhenNoPatternMatches()
     {
         var envelope = new HarnessResultEnvelope
@@ -241,7 +241,7 @@ public class CodexAdapterTests
         classification.IsRetryable.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_ReturnsEmptyList_WhenNoArtifacts()
     {
         var envelope = new HarnessResultEnvelope();
@@ -251,7 +251,7 @@ public class CodexAdapterTests
         artifacts.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_MapsArtifactPaths()
     {
         var envelope = new HarnessResultEnvelope
@@ -266,7 +266,7 @@ public class CodexAdapterTests
         artifacts.Should().Contain(a => a.Name == "result.json" && a.Type == "json");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesPatchFile_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -279,7 +279,7 @@ public class CodexAdapterTests
         artifacts.Should().Contain(a => a.Name == "changes.patch" && a.Type == "diff");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesOutputFile_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -292,7 +292,7 @@ public class CodexAdapterTests
         artifacts.Should().Contain(a => a.Name == "output.md" && a.Type == "markdown");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_DeterminesCorrectTypes()
     {
         var envelope = new HarnessResultEnvelope
@@ -330,7 +330,7 @@ public class CodexAdapterTests
         artifacts.First(a => a.Path.EndsWith(".rs")).Type.Should().Be("rust");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_ParsesValidJsonEnvelope()
     {
         var stdout = """{"status":"succeeded","summary":"Task completed","error":""}""";
@@ -341,7 +341,7 @@ public class CodexAdapterTests
         envelope.Summary.Should().Be("Task completed");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_CreatesFallback_WhenInvalidJson()
     {
         var stdout = "plain text output";
@@ -355,7 +355,7 @@ public class CodexAdapterTests
         envelope.Metadata["exitCode"].Should().Be("1");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_CreatesSuccessFallback_WhenExitCodeZero()
     {
         var stdout = "plain text output";

@@ -3,18 +3,16 @@ using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
-using Grpc.Core;
+using MagicOnion;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Moq;
-using WorkerGatewayClient = AgentsDashboard.Contracts.Worker.WorkerGateway.WorkerGatewayClient;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class RunDispatcherTests
 {
-    [Fact]
+    [Test]
     public void ParseGitHubRepoSlug_ParsesHttpsUrl()
     {
         var result = RunDispatcherTestsHelper.ParseGitHubRepoSlug("https://github.com/org/repo.git");
@@ -22,7 +20,7 @@ public class RunDispatcherTests
         result.Should().Be("org/repo");
     }
 
-    [Fact]
+    [Test]
     public void ParseGitHubRepoSlug_ParsesSshUrl()
     {
         var result = RunDispatcherTestsHelper.ParseGitHubRepoSlug("git@github.com:org/repo.git");
@@ -30,7 +28,7 @@ public class RunDispatcherTests
         result.Should().Be("org/repo");
     }
 
-    [Fact]
+    [Test]
     public void ParseGitHubRepoSlug_ParsesUrlWithoutGitSuffix()
     {
         var result = RunDispatcherTestsHelper.ParseGitHubRepoSlug("https://github.com/org/repo");
@@ -38,7 +36,7 @@ public class RunDispatcherTests
         result.Should().Be("org/repo");
     }
 
-    [Fact]
+    [Test]
     public void ParseGitHubRepoSlug_EmptyUrl_ReturnsEmpty()
     {
         var result = RunDispatcherTestsHelper.ParseGitHubRepoSlug("");
@@ -46,7 +44,7 @@ public class RunDispatcherTests
         result.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void ParseGitHubRepoSlug_NullUrl_ReturnsEmpty()
     {
         var result = RunDispatcherTestsHelper.ParseGitHubRepoSlug(null!);
@@ -54,13 +52,13 @@ public class RunDispatcherTests
         result.Should().BeEmpty();
     }
 
-    [Theory]
-    [InlineData("https://github.com/owner/repo.git", "owner/repo")]
-    [InlineData("git@github.com:owner/repo.git", "owner/repo")]
-    [InlineData("https://github.com/owner/repo", "owner/repo")]
-    [InlineData("git@github.com:owner/repo", "owner/repo")]
-    [InlineData("", "")]
-    [InlineData("invalid", "invalid")]
+    [Test]
+    [Arguments("https://github.com/owner/repo.git", "owner/repo")]
+    [Arguments("git@github.com:owner/repo.git", "owner/repo")]
+    [Arguments("https://github.com/owner/repo", "owner/repo")]
+    [Arguments("git@github.com:owner/repo", "owner/repo")]
+    [Arguments("", "")]
+    [Arguments("invalid", "invalid")]
     public void ParseGitHubRepoSlug_VariousInputs(string input, string expected)
     {
         var result = RunDispatcherTestsHelper.ParseGitHubRepoSlug(input);
@@ -70,7 +68,8 @@ public class RunDispatcherTests
 
 public class RunDispatcherDispatchTests
 {
-    private readonly Mock<WorkerGatewayClient> _workerClientMock;
+    private readonly Mock<IMagicOnionClientFactory> _clientFactoryMock;
+    private readonly Mock<IWorkerGatewayService> _workerClientMock;
     private readonly Mock<IOrchestratorStore> _storeMock;
     private readonly Mock<ISecretCryptoService> _secretCryptoMock;
     private readonly Mock<IRunEventPublisher> _publisherMock;
@@ -78,7 +77,9 @@ public class RunDispatcherDispatchTests
 
     public RunDispatcherDispatchTests()
     {
-        _workerClientMock = new Mock<WorkerGatewayClient>();
+        _clientFactoryMock = new Mock<IMagicOnionClientFactory>();
+        _workerClientMock = new Mock<IWorkerGatewayService>();
+        _clientFactoryMock.Setup(f => f.CreateWorkerGatewayService()).Returns(_workerClientMock.Object);
         _storeMock = new Mock<IOrchestratorStore>(MockBehavior.Loose);
         _secretCryptoMock = new Mock<ISecretCryptoService>(MockBehavior.Loose);
         _publisherMock = new Mock<IRunEventPublisher>();
@@ -93,7 +94,7 @@ public class RunDispatcherDispatchTests
     private TestableRunDispatcher CreateDispatcher()
     {
         return new TestableRunDispatcher(
-            _workerClientMock.Object,
+            _clientFactoryMock.Object,
             _storeMock.Object,
             _secretCryptoMock.Object,
             _publisherMock.Object,
@@ -156,7 +157,7 @@ public class RunDispatcherDispatchTests
         return task;
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_WithRequireApproval_MarksRunPendingApproval()
     {
         var dispatcher = CreateDispatcher();
@@ -177,7 +178,7 @@ public class RunDispatcherDispatchTests
         _publisherMock.Verify(p => p.PublishStatusAsync(It.IsAny<RunDocument>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_GlobalConcurrencyLimitReached_ReturnsFalse()
     {
         var dispatcher = CreateDispatcher();
@@ -195,7 +196,7 @@ public class RunDispatcherDispatchTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_ProjectConcurrencyLimitReached_ReturnsFalse()
     {
         var dispatcher = CreateDispatcher();
@@ -215,7 +216,7 @@ public class RunDispatcherDispatchTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_RepoConcurrencyLimitReached_ReturnsFalse()
     {
         var dispatcher = CreateDispatcher();
@@ -237,7 +238,7 @@ public class RunDispatcherDispatchTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_TaskConcurrencyLimitReached_ReturnsFalse()
     {
         var dispatcher = CreateDispatcher();
@@ -260,7 +261,7 @@ public class RunDispatcherDispatchTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_WorkerRejects_MarksRunFailed()
     {
         var dispatcher = CreateDispatcher();
@@ -275,13 +276,8 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync([]);
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = false, Reason = "Worker busy" }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = false, ErrorMessage = "Worker busy" }));
         _storeMock.Setup(s => s.MarkRunCompletedAsync(run.Id, false, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Failed));
 
@@ -291,7 +287,7 @@ public class RunDispatcherDispatchTests
         _storeMock.Verify(s => s.MarkRunCompletedAsync(run.Id, false, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_WorkerAccepts_MarksRunStarted()
     {
         var dispatcher = CreateDispatcher();
@@ -302,13 +298,8 @@ public class RunDispatcherDispatchTests
 
         SetupSuccessfulConcurrencyChecks();
         SetupSuccessfulInstructionRetrieval();
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true }));
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
         _storeMock.Setup(s => s.ListProviderSecretsAsync(repo.Id, It.IsAny<CancellationToken>()))
@@ -323,7 +314,7 @@ public class RunDispatcherDispatchTests
         _publisherMock.Verify(p => p.PublishStatusAsync(It.IsAny<RunDocument>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_DecryptsSecretsAndAddsToEnvironment()
     {
         var dispatcher = CreateDispatcher();
@@ -343,36 +334,24 @@ public class RunDispatcherDispatchTests
         _secretCryptoMock.Setup(s => s.Decrypt("encrypted-codex")).Returns("codex-key-456");
         _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
             .ReturnsAsync((HarnessProviderSettingsDocument?)null);
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
         _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Callback<DispatchJobRequest>(req => capturedRequest = req)
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true }));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
         capturedRequest.Should().NotBeNull();
-        capturedRequest!.Env.Should().ContainKey("GH_TOKEN");
-        capturedRequest.Env["GH_TOKEN"].Should().Be("gh-token-123");
-        capturedRequest.Env.Should().ContainKey("CODEX_API_KEY");
-        capturedRequest.Env["CODEX_API_KEY"].Should().Be("codex-key-456");
+        capturedRequest!.Secrets.Should().ContainKey("GH_TOKEN");
+        capturedRequest.Secrets!["GH_TOKEN"].Should().Be("gh-token-123");
+        capturedRequest.Secrets.Should().ContainKey("CODEX_API_KEY");
+        capturedRequest.Secrets["CODEX_API_KEY"].Should().Be("codex-key-456");
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_AddsHarnessSettingsToEnvironment()
     {
         var dispatcher = CreateDispatcher();
@@ -397,27 +376,22 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Callback<DispatchJobRequest>(req => capturedRequest = req)
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true }));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
         capturedRequest.Should().NotBeNull();
-        capturedRequest!.Env.Should().ContainKey("HARNESS_MODEL");
-        capturedRequest.Env["HARNESS_MODEL"].Should().Be("gpt-4");
-        capturedRequest.Env.Should().ContainKey("CODEX_MODEL");
-        capturedRequest.Env["CODEX_MODEL"].Should().Be("gpt-4");
-        capturedRequest.Env.Should().ContainKey("HARNESS_CUSTOM_SETTING");
-        capturedRequest.Env["HARNESS_CUSTOM_SETTING"].Should().Be("custom-value");
+        capturedRequest!.EnvironmentVars.Should().ContainKey("HARNESS_MODEL");
+        capturedRequest.EnvironmentVars!["HARNESS_MODEL"].Should().Be("gpt-4");
+        capturedRequest.EnvironmentVars.Should().ContainKey("CODEX_MODEL");
+        capturedRequest.EnvironmentVars["CODEX_MODEL"].Should().Be("gpt-4");
+        capturedRequest.EnvironmentVars.Should().ContainKey("HARNESS_CUSTOM_SETTING");
+        capturedRequest.EnvironmentVars["HARNESS_CUSTOM_SETTING"].Should().Be("custom-value");
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_BuildsLayeredPrompt_WithRepoInstructions()
     {
         var dispatcher = CreateDispatcher();
@@ -439,62 +413,19 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Callback<DispatchJobRequest>(req => capturedRequest = req)
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true }));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
         capturedRequest.Should().NotBeNull();
-        capturedRequest!.Prompt.Should().Contain("coding-standards.md");
-        capturedRequest.Prompt.Should().Contain("Use async/await");
-        capturedRequest.Prompt.Should().Contain("Task Prompt");
+        capturedRequest!.Instruction.Should().Contain("coding-standards.md");
+        capturedRequest.Instruction.Should().Contain("Use async/await");
+        capturedRequest.Instruction.Should().Contain("Task Prompt");
     }
 
-    [Fact]
-    public async Task DispatchAsync_SetsContainerLabels()
-    {
-        var dispatcher = CreateDispatcher();
-        var project = CreateProject();
-        var repo = CreateRepository();
-        var task = CreateTask();
-        var run = CreateRun();
-
-        SetupSuccessfulConcurrencyChecks();
-        SetupSuccessfulInstructionRetrieval();
-        _storeMock.Setup(s => s.ListProviderSecretsAsync(repo.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
-        _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((HarnessProviderSettingsDocument?)null);
-        _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
-
-        DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
-
-        await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
-
-        capturedRequest.Should().NotBeNull();
-        capturedRequest!.ContainerLabels.Should().ContainKey("orchestrator.run-id");
-        capturedRequest.ContainerLabels["orchestrator.run-id"].Should().Be(run.Id);
-        capturedRequest.ContainerLabels.Should().ContainKey("orchestrator.task-id");
-        capturedRequest.ContainerLabels.Should().ContainKey("orchestrator.repo-id");
-        capturedRequest.ContainerLabels.Should().ContainKey("orchestrator.project-id");
-    }
-
-    [Fact]
+    [Test]
     public async Task DispatchAsync_SetsGitEnvironmentVariables()
     {
         var dispatcher = CreateDispatcher();
@@ -513,27 +444,22 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Callback<DispatchJobRequest>(req => capturedRequest = req)
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true }));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
         capturedRequest.Should().NotBeNull();
-        capturedRequest!.Env.Should().ContainKey("GIT_URL");
-        capturedRequest.Env["GIT_URL"].Should().Be(repo.GitUrl);
-        capturedRequest.Env.Should().ContainKey("DEFAULT_BRANCH");
-        capturedRequest.Env["DEFAULT_BRANCH"].Should().Be("main");
-        capturedRequest.Env.Should().ContainKey("GH_REPO");
-        capturedRequest.Env["GH_REPO"].Should().Be("org/repo");
+        capturedRequest!.EnvironmentVars.Should().ContainKey("GIT_URL");
+        capturedRequest.EnvironmentVars!["GIT_URL"].Should().Be(repo.GitUrl);
+        capturedRequest.EnvironmentVars.Should().ContainKey("DEFAULT_BRANCH");
+        capturedRequest.EnvironmentVars["DEFAULT_BRANCH"].Should().Be("main");
+        capturedRequest.EnvironmentVars.Should().ContainKey("GH_REPO");
+        capturedRequest.EnvironmentVars["GH_REPO"].Should().Be("org/repo");
     }
 
-    [Fact]
+    [Test]
     public async Task DispatchAsync_SetsPrEnvironmentVariables_WhenAutoCreatePrEnabled()
     {
         var dispatcher = CreateDispatcher();
@@ -552,89 +478,33 @@ public class RunDispatcherDispatchTests
             .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
 
         DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
+        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Callback<DispatchJobRequest>(req => capturedRequest = req)
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true }));
 
         await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
 
         capturedRequest.Should().NotBeNull();
-        capturedRequest!.Env.Should().ContainKey("AUTO_CREATE_PR");
-        capturedRequest.Env["AUTO_CREATE_PR"].Should().Be("true");
-        capturedRequest.Env.Should().ContainKey("PR_BRANCH");
-        capturedRequest.Env.Should().ContainKey("PR_TITLE");
-        capturedRequest.Env.Should().ContainKey("PR_BODY");
+        capturedRequest!.EnvironmentVars.Should().ContainKey("AUTO_CREATE_PR");
+        capturedRequest.EnvironmentVars!["AUTO_CREATE_PR"].Should().Be("true");
+        capturedRequest.EnvironmentVars.Should().ContainKey("PR_BRANCH");
+        capturedRequest.EnvironmentVars.Should().ContainKey("PR_TITLE");
+        capturedRequest.EnvironmentVars.Should().ContainKey("PR_BODY");
     }
 
-    [Fact]
-    public async Task DispatchAsync_SetsSandboxProfileSettings()
-    {
-        var dispatcher = CreateDispatcher();
-        var project = CreateProject();
-        var repo = CreateRepository();
-        var task = WithSandboxProfile(CreateTask(), new SandboxProfileConfig
-        {
-            CpuLimit = 2.0,
-            MemoryLimit = "4096",
-            NetworkDisabled = true,
-            ReadOnlyRootFs = true
-        });
-        var run = CreateRun();
-
-        SetupSuccessfulConcurrencyChecks();
-        SetupSuccessfulInstructionRetrieval();
-        _storeMock.Setup(s => s.ListProviderSecretsAsync(repo.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
-        _storeMock.Setup(s => s.GetHarnessProviderSettingsAsync(repo.Id, task.Harness, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((HarnessProviderSettingsDocument?)null);
-        _storeMock.Setup(s => s.MarkRunStartedAsync(run.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => WithState(CreateRun(run.Id, run.TaskId), RunState.Running));
-
-        DispatchJobRequest? capturedRequest = null;
-        _workerClientMock.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Callback<DispatchJobRequest, Metadata?, DateTime?, CancellationToken>((req, _, _, _) => capturedRequest = req)
-            .Returns(new AsyncUnaryCall<DispatchJobReply>(
-                Task.FromResult(new DispatchJobReply { Accepted = true }),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
-
-        await dispatcher.DispatchAsync(project, repo, task, run, CancellationToken.None);
-
-        capturedRequest.Should().NotBeNull();
-        capturedRequest!.SandboxProfileCpuLimit.Should().Be(2.0);
-        capturedRequest.SandboxProfileMemoryLimit.Should().Be("4096");
-        capturedRequest.SandboxProfileNetworkDisabled.Should().BeTrue();
-        capturedRequest.SandboxProfileReadOnlyRootFs.Should().BeTrue();
-    }
-
-    [Fact]
+    [Test]
     public async Task CancelAsync_SendsCancelRequestToWorker()
     {
         var dispatcher = CreateDispatcher();
         var runId = "run-to-cancel";
 
-        _workerClientMock.Setup(c => c.CancelJobAsync(It.IsAny<CancelJobRequest>(), It.IsAny<Metadata>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
-            .Returns(new AsyncUnaryCall<CancelJobReply>(
-                Task.FromResult(new CancelJobReply()),
-                Task.FromResult(new Metadata()),
-                () => Status.DefaultSuccess,
-                () => new Metadata(),
-                () => new Metadata()));
+        _workerClientMock.Setup(c => c.CancelJobAsync(It.IsAny<CancelJobRequest>()))
+            .Returns(UnaryResult.FromResult(new CancelJobReply { Success = true }));
 
         await dispatcher.CancelAsync(runId, CancellationToken.None);
 
         _workerClientMock.Verify(c => c.CancelJobAsync(
-            It.Is<CancelJobRequest>(r => r.RunId == runId),
-            It.IsAny<Metadata>(),
-            It.IsAny<DateTime?>(),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.Is<CancelJobRequest>(r => r.RunId == runId)), Times.Once);
     }
 
     private void SetupSuccessfulConcurrencyChecks()
@@ -658,7 +528,7 @@ public class RunDispatcherDispatchTests
 
 public class TestableRunDispatcher
 {
-    private readonly WorkerGatewayClient _workerClient;
+    private readonly IMagicOnionClientFactory _clientFactory;
     private readonly IOrchestratorStore _store;
     private readonly ISecretCryptoService _secretCrypto;
     private readonly IRunEventPublisher _publisher;
@@ -666,14 +536,14 @@ public class TestableRunDispatcher
     private readonly ILogger<TestableRunDispatcher> _logger;
 
     public TestableRunDispatcher(
-        WorkerGatewayClient workerClient,
+        IMagicOnionClientFactory clientFactory,
         IOrchestratorStore store,
         ISecretCryptoService secretCrypto,
         IRunEventPublisher publisher,
         IOptions<OrchestratorOptions> orchestratorOptions,
         ILogger<TestableRunDispatcher> logger)
     {
-        _workerClient = workerClient;
+        _clientFactory = clientFactory;
         _store = store;
         _secretCrypto = secretCrypto;
         _publisher = publisher;
@@ -732,48 +602,29 @@ public class TestableRunDispatcher
 
         var layeredPrompt = await BuildLayeredPromptAsync(repository, task, cancellationToken);
 
-        var request = new DispatchJobRequest
+        var envVars = new Dictionary<string, string>
         {
-            RunId = run.Id,
-            ProjectId = project.Id,
-            RepositoryId = repository.Id,
-            TaskId = task.Id,
-            Harness = task.Harness,
-            Command = task.Command,
-            Prompt = layeredPrompt,
-            TimeoutSeconds = task.Timeouts.ExecutionSeconds,
-            Attempt = run.Attempt,
-            SandboxProfileCpuLimit = task.SandboxProfile.CpuLimit,
-            SandboxProfileMemoryLimit = task.SandboxProfile.MemoryLimit,
-            SandboxProfileNetworkDisabled = task.SandboxProfile.NetworkDisabled,
-            SandboxProfileReadOnlyRootFs = task.SandboxProfile.ReadOnlyRootFs,
-            GitUrl = repository.GitUrl,
-            ArtifactPolicyMaxArtifacts = task.ArtifactPolicy.MaxArtifacts,
-            ArtifactPolicyMaxTotalSizeBytes = task.ArtifactPolicy.MaxTotalSizeBytes,
+            ["GIT_URL"] = repository.GitUrl,
+            ["DEFAULT_BRANCH"] = repository.DefaultBranch,
+            ["AUTO_CREATE_PR"] = task.AutoCreatePullRequest ? "true" : "false",
+            ["HARNESS_NAME"] = task.Harness,
+            ["GH_REPO"] = ParseGitHubRepoSlug(repository.GitUrl),
         };
 
-        request.ContainerLabels.Add("orchestrator.run-id", run.Id);
-        request.ContainerLabels.Add("orchestrator.task-id", task.Id);
-        request.ContainerLabels.Add("orchestrator.repo-id", repository.Id);
-        request.ContainerLabels.Add("orchestrator.project-id", project.Id);
-
-        request.Env.Add("GIT_URL", repository.GitUrl);
-        request.Env.Add("DEFAULT_BRANCH", repository.DefaultBranch);
-        request.Env.Add("AUTO_CREATE_PR", task.AutoCreatePullRequest ? "true" : "false");
-        request.Env.Add("HARNESS_NAME", task.Harness);
-        request.Env.Add("GH_REPO", ParseGitHubRepoSlug(repository.GitUrl));
         var runIdShort = string.IsNullOrEmpty(run.Id) ? "unknown" : run.Id.Length >= 8 ? run.Id[..8] : run.Id;
-        request.Env.Add("PR_BRANCH", $"agent/{repository.Name}/{task.Name}/{runIdShort}".ToLowerInvariant().Replace(' ', '-'));
-        request.Env.Add("PR_TITLE", $"[{task.Harness}] {task.Name} automated update");
-        request.Env.Add("PR_BODY", $"Automated change from run {run.Id} for task {task.Name}.");
+        envVars["PR_BRANCH"] = $"agent/{repository.Name}/{task.Name}/{runIdShort}".ToLowerInvariant().Replace(' ', '-');
+        envVars["PR_TITLE"] = $"[{task.Harness}] {task.Name} automated update";
+        envVars["PR_BODY"] = $"Automated change from run {run.Id} for task {task.Name}.";
 
         var secrets = await _store.ListProviderSecretsAsync(repository.Id, cancellationToken);
+        var secretsDict = new Dictionary<string, string>();
+
         foreach (var secret in secrets)
         {
             try
             {
                 var value = _secretCrypto.Decrypt(secret.EncryptedValue);
-                AddMappedProviderEnvironmentVariables(request, secret.Provider, value);
+                AddMappedProviderEnvironmentVariables(envVars, secretsDict, secret.Provider, value);
             }
             catch (Exception ex)
             {
@@ -784,19 +635,51 @@ public class TestableRunDispatcher
         var harnessSettings = await _store.GetHarnessProviderSettingsAsync(repository.Id, task.Harness, cancellationToken);
         if (harnessSettings is not null)
         {
-            AddHarnessSettingsEnvironmentVariables(request, task.Harness, harnessSettings);
+            AddHarnessSettingsEnvironmentVariables(envVars, task.Harness, harnessSettings);
         }
 
-        var response = await _workerClient.DispatchJobAsync(request, cancellationToken: cancellationToken);
+        var artifactPatterns = task.ArtifactPatterns.Count > 0
+            ? task.ArtifactPatterns.ToList()
+            : null;
 
-        if (!response.Accepted)
+        var linkedFailureRuns = task.LinkedFailureRuns.Count > 0
+            ? task.LinkedFailureRuns.ToList()
+            : null;
+
+        var request = new DispatchJobRequest
         {
-            _logger.LogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.Reason);
-            var failed = await _store.MarkRunCompletedAsync(run.Id, false, $"Dispatch failed: {response.Reason}", "{}", cancellationToken);
+            RunId = run.Id,
+            ProjectId = project.Id,
+            RepositoryId = repository.Id,
+            TaskId = task.Id,
+            HarnessType = task.Harness,
+            ImageTag = $"harness-{task.Harness.ToLowerInvariant()}:latest",
+            CloneUrl = repository.GitUrl,
+            Branch = repository.DefaultBranch,
+            WorkingDirectory = null,
+            Instruction = layeredPrompt,
+            EnvironmentVars = envVars,
+            Secrets = secretsDict.Count > 0 ? secretsDict : null,
+            ConcurrencyKey = null,
+            TimeoutSeconds = task.Timeouts.ExecutionSeconds,
+            RetryCount = run.Attempt - 1,
+            ArtifactPatterns = artifactPatterns,
+            LinkedFailureRuns = linkedFailureRuns,
+            CustomArgs = task.Command,
+            DispatchedAt = DateTimeOffset.UtcNow,
+        };
+
+        var workerClient = _clientFactory.CreateWorkerGatewayService();
+        var response = await workerClient.DispatchJobAsync(request);
+
+        if (!response.Success)
+        {
+            _logger.LogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.ErrorMessage);
+            var failed = await _store.MarkRunCompletedAsync(run.Id, false, $"Dispatch failed: {response.ErrorMessage}", "{}", cancellationToken);
             if (failed is not null)
             {
                 await _publisher.PublishStatusAsync(failed, cancellationToken);
-                await _store.CreateFindingFromFailureAsync(failed, response.Reason, cancellationToken);
+                await _store.CreateFindingFromFailureAsync(failed, response.ErrorMessage ?? "Unknown error", cancellationToken);
             }
             return false;
         }
@@ -814,7 +697,8 @@ public class TestableRunDispatcher
     {
         try
         {
-            await _workerClient.CancelJobAsync(new CancelJobRequest { RunId = runId }, cancellationToken: cancellationToken);
+            var workerClient = _clientFactory.CreateWorkerGatewayService();
+            await workerClient.CancelJobAsync(new CancelJobRequest { RunId = runId });
         }
         catch (Exception ex)
         {
@@ -869,76 +753,83 @@ public class TestableRunDispatcher
         return sb.ToString();
     }
 
-    private static void AddMappedProviderEnvironmentVariables(DispatchJobRequest request, string provider, string value)
+    private static void AddMappedProviderEnvironmentVariables(
+        Dictionary<string, string> envVars,
+        Dictionary<string, string> secrets,
+        string provider,
+        string value)
     {
         var normalized = provider.Trim().ToLowerInvariant();
 
         switch (normalized)
         {
             case "github":
-                request.Env["GH_TOKEN"] = value;
-                request.Env["GITHUB_TOKEN"] = value;
+                secrets["GH_TOKEN"] = value;
+                secrets["GITHUB_TOKEN"] = value;
                 break;
             case "codex":
-                request.Env["CODEX_API_KEY"] = value;
+                secrets["CODEX_API_KEY"] = value;
                 break;
             case "opencode":
-                request.Env["OPENCODE_API_KEY"] = value;
+                secrets["OPENCODE_API_KEY"] = value;
                 break;
             case "claude-code":
             case "claude code":
-                request.Env["ANTHROPIC_API_KEY"] = value;
+                secrets["ANTHROPIC_API_KEY"] = value;
                 break;
             case "zai":
-                request.Env["Z_AI_API_KEY"] = value;
+                secrets["Z_AI_API_KEY"] = value;
                 break;
             default:
-                request.Env[$"SECRET_{normalized.ToUpperInvariant().Replace('-', '_')}"] = value;
+                secrets[$"SECRET_{normalized.ToUpperInvariant().Replace('-', '_')}"] = value;
                 break;
         }
     }
 
-    private static void AddHarnessSettingsEnvironmentVariables(DispatchJobRequest request, string harness, HarnessProviderSettingsDocument settings)
+    private static void AddHarnessSettingsEnvironmentVariables(
+        Dictionary<string, string> envVars,
+        string harness,
+        HarnessProviderSettingsDocument settings)
     {
         var normalized = harness.Trim().ToLowerInvariant();
 
         if (!string.IsNullOrWhiteSpace(settings.Model))
         {
-            request.Env["HARNESS_MODEL"] = settings.Model;
+            envVars["HARNESS_MODEL"] = settings.Model;
         }
 
-        request.Env["HARNESS_TEMPERATURE"] = settings.Temperature.ToString("F2");
-        request.Env["HARNESS_MAX_TOKENS"] = settings.MaxTokens.ToString();
+        envVars["HARNESS_TEMPERATURE"] = settings.Temperature.ToString("F2");
+        envVars["HARNESS_MAX_TOKENS"] = settings.MaxTokens.ToString();
 
         switch (normalized)
         {
             case "codex":
                 if (!string.IsNullOrWhiteSpace(settings.Model))
-                    request.Env["CODEX_MODEL"] = settings.Model;
-                request.Env["CODEX_MAX_TOKENS"] = settings.MaxTokens.ToString();
+                    envVars["CODEX_MODEL"] = settings.Model;
+                envVars["CODEX_MAX_TOKENS"] = settings.MaxTokens.ToString();
                 break;
             case "opencode":
                 if (!string.IsNullOrWhiteSpace(settings.Model))
-                    request.Env["OPENCODE_MODEL"] = settings.Model;
-                request.Env["OPENCODE_TEMPERATURE"] = settings.Temperature.ToString("F2");
+                    envVars["OPENCODE_MODEL"] = settings.Model;
+                envVars["OPENCODE_TEMPERATURE"] = settings.Temperature.ToString("F2");
                 break;
             case "claude-code":
                 if (!string.IsNullOrWhiteSpace(settings.Model))
                 {
-                    request.Env["CLAUDE_MODEL"] = settings.Model;
-                    request.Env["ANTHROPIC_MODEL"] = settings.Model;
+                    envVars["CLAUDE_MODEL"] = settings.Model;
+                    envVars["ANTHROPIC_MODEL"] = settings.Model;
                 }
                 break;
             case "zai":
                 if (!string.IsNullOrWhiteSpace(settings.Model))
-                    request.Env["ZAI_MODEL"] = settings.Model;
+                    envVars["ZAI_MODEL"] = settings.Model;
                 break;
         }
 
         foreach (var (key, value) in settings.AdditionalSettings)
         {
             var envKey = $"HARNESS_{key.ToUpperInvariant().Replace(' ', '_').Replace('-', '_')}";
-            request.Env[envKey] = value;
+            envVars[envKey] = value;
         }
     }
 

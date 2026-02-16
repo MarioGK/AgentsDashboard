@@ -1,30 +1,29 @@
 using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class ImagesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class ImagesApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ListImages_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/images");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task ListImages_WithFilter_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/images?filter=test");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task BuildImage_ReturnsValidationProblem_WhenDockerfileEmpty()
     {
         var request = new BuildImageRequest("", "test-image:latest");
@@ -33,7 +32,7 @@ public class ImagesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task BuildImage_ReturnsValidationProblem_WhenTagEmpty()
     {
         var request = new BuildImageRequest("FROM alpine", "");
@@ -42,7 +41,7 @@ public class ImagesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteImage_ReturnsBadRequest_WhenImageDoesNotExist()
     {
         var response = await _client.DeleteAsync("/api/images/nonexistent:latest");

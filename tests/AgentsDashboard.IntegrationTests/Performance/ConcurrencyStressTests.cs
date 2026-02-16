@@ -12,19 +12,19 @@ using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Models;
 using AgentsDashboard.WorkerGateway.Services;
 using FluentAssertions;
+using MagicOnion;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
-using Xunit;
 
 namespace AgentsDashboard.IntegrationTests.Performance;
 
-[Trait("Category", "Performance")]
-[Collection("Performance")]
-public sealed class ConcurrencyStressTests : IAsyncLifetime
+[Category("Performance")]
+[NotInParallel("Performance")]
+public sealed class ConcurrencyStressTests : IAsyncInitializer, IAsyncDisposable
 {
     private OrchestratorStore _store = null!;
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"agentsdashboard-perf-{Guid.NewGuid():N}.db");
@@ -45,21 +45,38 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         await _store.InitializeAsync(CancellationToken.None);
     }
 
-    public async Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        await Task.CompletedTask;
         if (File.Exists(_databasePath))
             File.Delete(_databasePath);
+        return ValueTask.CompletedTask;
     }
 
-    [Fact]
+    [Test]
     public async Task ConcurrentJobDispatch_50Jobs_AllHandledWithoutException()
     {
         const int jobCount = 50;
         var results = new ConcurrentBag<(string RunId, bool Success, TimeSpan Duration)>();
         var errors = new ConcurrentBag<Exception>();
-        var mockWorkerClient = new MockStressWorkerClient();
         var mockPublisher = new MockStressRunEventPublisher();
+
+        var dispatchCount = 0;
+        var mockWorkerService = new Mock<IWorkerGatewayService>();
+        mockWorkerService
+            .Setup(x => x.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Returns(() =>
+            {
+                Interlocked.Increment(ref dispatchCount);
+                return new UnaryResult<DispatchJobReply>(new DispatchJobReply { Success = true });
+            });
+        mockWorkerService
+            .Setup(x => x.CancelJobAsync(It.IsAny<CancelJobRequest>()))
+            .Returns(new UnaryResult<CancelJobReply>(new CancelJobReply { Success = true }));
+
+        var mockClientFactory = new Mock<IMagicOnionClientFactory>();
+        mockClientFactory
+            .Setup(x => x.CreateWorkerGatewayService())
+            .Returns(mockWorkerService.Object);
 
         var options = Options.Create(new OrchestratorOptions
         {
@@ -71,7 +88,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         var mockCrypto = CreateMockCryptoService();
         var yarpProvider = new AgentsDashboard.ControlPlane.Proxy.InMemoryYarpConfigProvider();
         var dispatcher = new RunDispatcher(
-            mockWorkerClient,
+            mockClientFactory.Object,
             _store,
             new MockWorkerLifecycleManager(),
             mockCrypto,
@@ -112,7 +129,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
 
         errors.Should().BeEmpty($"all {jobCount} dispatches should complete without exceptions");
         results.Count.Should().Be(jobCount);
-        mockWorkerClient.DispatchCount.Should().Be(jobCount);
+        dispatchCount.Should().Be(jobCount);
 
         var successfulDispatches = results.Count(r => r.Success);
         successfulDispatches.Should().Be(jobCount);
@@ -124,7 +141,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         OutputMetrics($"50 concurrent dispatches", jobCount, overallSw.Elapsed, avgDuration, p95Duration, p99Duration, errors.Count);
     }
 
-    [Fact]
+    [Test]
     public async Task SignalRStatusUpdate_Sub2SecondsP95Latency_MeetsTarget()
     {
         const int updateCount = 100;
@@ -178,7 +195,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         max.Should().BeLessThan(TimeSpan.FromSeconds(3), "Max latency should be under 3 seconds");
     }
 
-    [Fact]
+    [Test]
     public async Task WorkerSlotSaturation_RespectsMaxSlots_QueuesExcess()
     {
         const int maxSlots = 4;
@@ -245,7 +262,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         OutputMetrics($"Worker slot saturation", totalJobs, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, 0);
     }
 
-    [Fact]
+    [Test]
     public async Task QueueBacklogHandling_100Jobs_ProcessesAllJobs()
     {
         const int jobCount = 100;
@@ -301,7 +318,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         processedOrder.Count.Should().Be(jobCount, "all jobs should be processed");
     }
 
-    [Fact]
+    [Test]
     public async Task ConcurrentEnqueueDequeue_50Operations_NoRaceConditions()
     {
         const int operationsPerThread = 100;
@@ -366,7 +383,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         OutputMetrics($"Concurrent enqueue/dequeue", operationsPerThread * threadCount, sw.Elapsed, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, errors.Count);
     }
 
-    [Fact]
+    [Test]
     public async Task HighThroughputLogPublishing_1000Logs_Under500msP95()
     {
         const int logCount = 1000;
@@ -420,7 +437,7 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
         overallSw.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Total time for 1000 logs should be under 10 seconds");
     }
 
-    [Fact]
+    [Test]
     public async Task SqliteWriteThroughput_MultipleRuns_CompletesEfficiently()
     {
         const int runCount = 100;
@@ -474,7 +491,13 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
             Request = new DispatchJobRequest
             {
                 RunId = runId,
-                Command = "echo test",
+                ProjectId = "proj-perf",
+                RepositoryId = "repo-perf",
+                TaskId = "task-perf",
+                HarnessType = "codex",
+                ImageTag = "latest",
+                CloneUrl = "https://github.com/test/perf.git",
+                Instruction = "echo test",
             }
         };
     }
@@ -540,43 +563,6 @@ public sealed class ConcurrencyStressTests : IAsyncLifetime
     }
 }
 
-public sealed class MockStressWorkerClient : AgentsDashboard.Contracts.Worker.WorkerGateway.WorkerGatewayClient
-{
-    private int _dispatchCount;
-    public int DispatchCount => _dispatchCount;
-
-    public override Grpc.Core.AsyncUnaryCall<DispatchJobReply> DispatchJobAsync(
-        DispatchJobRequest request,
-        Grpc.Core.Metadata? headers = null,
-        DateTime? deadline = null,
-        CancellationToken cancellationToken = default)
-    {
-        Interlocked.Increment(ref _dispatchCount);
-        var reply = new DispatchJobReply { Accepted = true };
-        return new Grpc.Core.AsyncUnaryCall<DispatchJobReply>(
-            Task.FromResult(reply),
-            Task.FromResult(new Grpc.Core.Metadata()),
-            () => Grpc.Core.Status.DefaultSuccess,
-            () => new Grpc.Core.Metadata(),
-            () => { });
-    }
-
-    public override Grpc.Core.AsyncUnaryCall<CancelJobReply> CancelJobAsync(
-        CancelJobRequest request,
-        Grpc.Core.Metadata? headers = null,
-        DateTime? deadline = null,
-        CancellationToken cancellationToken = default)
-    {
-        var reply = new CancelJobReply { Accepted = true };
-        return new Grpc.Core.AsyncUnaryCall<CancelJobReply>(
-            Task.FromResult(reply),
-            Task.FromResult(new Grpc.Core.Metadata()),
-            () => Grpc.Core.Status.DefaultSuccess,
-            () => new Grpc.Core.Metadata(),
-            () => { });
-    }
-}
-
 public sealed class MockStressRunEventPublisher : IRunEventPublisher
 {
     private int _statusCount;
@@ -638,6 +624,3 @@ public sealed class MockWorkerLifecycleManager : IWorkerLifecycleManager
 
     public Task StopWorkerIfIdleAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
-
-[CollectionDefinition("Performance", DisableParallelization = true)]
-public class PerformanceCollection;

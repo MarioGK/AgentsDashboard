@@ -8,7 +8,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class WebhookServiceTests
 {
-    [Fact]
+    [Test]
     public async Task RegisterAsync_DelegatesToStore()
     {
         var store = new Mock<IOrchestratorStore>() { CallBase = false };
@@ -32,7 +32,7 @@ public class WebhookServiceTests
         store.Verify(s => s.CreateWebhookAsync(request, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task ListAsync_DelegatesToStore()
     {
         var store = new Mock<IOrchestratorStore>() { CallBase = false };
@@ -53,7 +53,7 @@ public class WebhookServiceTests
         result.Should().BeEquivalentTo(webhooks);
     }
 
-    [Fact]
+    [Test]
     public async Task ListAsync_EmptyRepository_ReturnsEmpty()
     {
         var store = new Mock<IOrchestratorStore>() { CallBase = false };

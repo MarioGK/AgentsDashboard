@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class AgentE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_PageLoads()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
         await Expect(Page.Locator("text=Agents")).ToBeVisibleAsync();
     }
@@ -19,7 +18,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_ShowsCreateButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
         await Expect(Page.Locator("button:has-text('Create Agent')")).ToBeVisibleAsync();
     }
@@ -27,7 +26,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_CreateAgent_OpensDialog()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Page.ClickAsync("button:has-text('Create Agent')");
@@ -38,7 +37,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentDialog_RequiresName()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Page.ClickAsync("button:has-text('Create Agent')");
@@ -54,14 +53,14 @@ public class AgentE2ETests : PageTest
         if (await createButton.IsVisibleAsync())
         {
             var isDisabled = await createButton.IsDisabledAsync();
-            Assert.That(isDisabled, Is.True, "Create button should be disabled when form is invalid");
+            await Assert.That(isDisabled).IsTrue();
         }
     }
 
     [Test]
     public async Task AgentDialog_CanSelectHarness()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Page.ClickAsync("button:has-text('Create Agent')");
@@ -79,15 +78,15 @@ public class AgentE2ETests : PageTest
             var hasCodex = await codexOption.IsVisibleAsync();
             var hasClaude = await claudeOption.IsVisibleAsync();
 
-            Assert.That(hasCodex || hasClaude, Is.True, "Harness dropdown should show at least one harness option");
+            await Assert.That(hasCodex || hasClaude).IsTrue();
         }
     }
 
     [Test]
-    [Ignore("Requires API setup and pre-existing repository data")]
+    [Skip("Requires API setup and pre-existing repository data")]
     public async Task AgentList_AfterCreate_ShowsAgent()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Page.ClickAsync("button:has-text('Create Agent')");
@@ -109,7 +108,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_DeleteButton_ShowsConfirmation()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -127,7 +126,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_RepositoryFilter_Works()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         var repoFilter = Page.Locator(".mud-select:has(label:text('Filter by Repository'))").First;
@@ -149,7 +148,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_Title_IsCorrect()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Expect(Page.Locator("h4:has-text('Agents'), .mud-typography-h4:has-text('Agents')")).ToBeVisibleAsync();
@@ -158,7 +157,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_Navigation_FromSidebar()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
         await Page.ClickAsync("a[href='/agents']");
         await Expect(Page).ToHaveURLAsync($"{BaseUrl}/agents");

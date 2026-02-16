@@ -1,17 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
-using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class FindingsTaskCreationApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class FindingsTaskCreationApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task CreateTaskFromFinding_ReturnsNotFound_WhenFindingDoesNotExist()
     {
         var request = new CreateTaskFromFindingRequest("New Task", "codex", "npm test", "Fix the issue");

@@ -1,18 +1,16 @@
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[Parallelizable(ParallelScope.Self)]
-[TestFixture]
 public class InstructionFilesE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
     private string _testProjectId = string.Empty;
     private string _testRepoId = string.Empty;
 
-    [SetUp]
+    [Before(Test)]
     public async Task SetupAsync()
     {
         (_testProjectId, _testRepoId) = await CreateTestProjectAndRepoAsync();
@@ -263,7 +261,6 @@ public class InstructionFilesE2ETests : PageTest
 
     private async Task<(string projectId, string repoId)> CreateTestProjectAndRepoAsync()
     {
-        
 
         await Page.GotoAsync($"{BaseUrl}/projects");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);

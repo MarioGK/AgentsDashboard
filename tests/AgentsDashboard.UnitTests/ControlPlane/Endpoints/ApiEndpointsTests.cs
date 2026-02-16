@@ -26,7 +26,7 @@ public class ApiEndpointsTests
 
     #region Projects API Tests
 
-    [Fact]
+    [Test]
     public async Task ListProjects_ReturnsOkWithProjects()
     {
         var projects = new List<ProjectDocument>
@@ -43,7 +43,7 @@ public class ApiEndpointsTests
         result[0].Name.Should().Be("Project 1");
     }
 
-    [Fact]
+    [Test]
     public async Task CreateProject_WithValidRequest_ReturnsProject()
     {
         var request = new CreateProjectRequest("New Project", "Description");
@@ -57,7 +57,7 @@ public class ApiEndpointsTests
         result.Description.Should().Be("Description");
     }
 
-    [Fact]
+    [Test]
     public void CreateProject_WithEmptyName_ReturnsValidationProblem()
     {
         var request = new CreateProjectRequest("", "Description");
@@ -69,16 +69,16 @@ public class ApiEndpointsTests
         }
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments(null)]
     public void CreateProject_WithInvalidName_ShouldFailValidation(string? name)
     {
         string.IsNullOrWhiteSpace(name).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateProject_WithValidRequest_ReturnsUpdatedProject()
     {
         var request = new UpdateProjectRequest("Updated Name", "Updated Desc");
@@ -92,7 +92,7 @@ public class ApiEndpointsTests
         result!.Name.Should().Be("Updated Name");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateProject_WithNonExistentId_ReturnsNull()
     {
         var request = new UpdateProjectRequest("Updated Name", "Updated Desc");
@@ -104,7 +104,7 @@ public class ApiEndpointsTests
         result.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteProject_WithExistingId_ReturnsTrue()
     {
         _mockStore.Setup(s => s.DeleteProjectAsync("proj-1", _ct)).ReturnsAsync(true);
@@ -114,7 +114,7 @@ public class ApiEndpointsTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteProject_WithNonExistentId_ReturnsFalse()
     {
         _mockStore.Setup(s => s.DeleteProjectAsync("nonexistent", _ct)).ReturnsAsync(false);
@@ -124,7 +124,7 @@ public class ApiEndpointsTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task ListRepositoriesByProject_ReturnsRepositories()
     {
         var repos = new List<RepositoryDocument>
@@ -144,7 +144,7 @@ public class ApiEndpointsTests
 
     #region Repositories API Tests
 
-    [Fact]
+    [Test]
     public async Task CreateRepository_WithValidProject_ReturnsRepository()
     {
         var request = new CreateRepositoryRequest("proj-1", "New Repo", "https://github.com/org/repo.git", "main");
@@ -161,7 +161,7 @@ public class ApiEndpointsTests
         repoResult.Name.Should().Be("New Repo");
     }
 
-    [Fact]
+    [Test]
     public async Task CreateRepository_WithNonExistentProject_ReturnsNotFound()
     {
         var request = new CreateRepositoryRequest("nonexistent", "New Repo", "https://github.com/org/repo.git", "main");
@@ -173,7 +173,7 @@ public class ApiEndpointsTests
         result.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateRepository_WithValidId_ReturnsUpdatedRepository()
     {
         var request = new UpdateRepositoryRequest("Updated Repo", "https://github.com/org/new-repo.git", "develop");
@@ -187,7 +187,7 @@ public class ApiEndpointsTests
         result!.Name.Should().Be("Updated Repo");
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteRepository_WithExistingId_ReturnsTrue()
     {
         _mockStore.Setup(s => s.DeleteRepositoryAsync("repo-1", _ct)).ReturnsAsync(true);
@@ -201,7 +201,7 @@ public class ApiEndpointsTests
 
     #region Tasks API Tests
 
-    [Fact]
+    [Test]
     public async Task ListTasks_ReturnsTasksForRepository()
     {
         var tasks = new List<TaskDocument>
@@ -217,7 +217,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public void CreateTask_WithCronKindAndNoExpression_ReturnsValidationProblem()
     {
         var request = new CreateTaskRequest(
@@ -239,7 +239,7 @@ public class ApiEndpointsTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task CreateTask_WithNonExistentRepository_ReturnsNotFound()
     {
         var request = new CreateTaskRequest(
@@ -261,7 +261,7 @@ public class ApiEndpointsTests
         result.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateTask_WithValidRequest_ReturnsTask()
     {
         var request = new CreateTaskRequest(
@@ -289,7 +289,7 @@ public class ApiEndpointsTests
         taskResult.Name.Should().Be("New Task");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateTask_WithValidRequest_ReturnsTask()
     {
         var request = new UpdateTaskRequest(
@@ -313,7 +313,7 @@ public class ApiEndpointsTests
         result!.Name.Should().Be("Updated Task");
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteTask_WithExistingId_ReturnsTrue()
     {
         _mockStore.Setup(s => s.DeleteTaskAsync("task-1", _ct)).ReturnsAsync(true);
@@ -323,10 +323,10 @@ public class ApiEndpointsTests
         result.Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData(TaskKind.OneShot)]
-    [InlineData(TaskKind.Cron)]
-    [InlineData(TaskKind.EventDriven)]
+    [Test]
+    [Arguments(TaskKind.OneShot)]
+    [Arguments(TaskKind.Cron)]
+    [Arguments(TaskKind.EventDriven)]
     public void TaskKind_AllValuesAreValid(TaskKind kind)
     {
         Enum.IsDefined(typeof(TaskKind), kind).Should().BeTrue();
@@ -336,7 +336,7 @@ public class ApiEndpointsTests
 
     #region Runs API Tests
 
-    [Fact]
+    [Test]
     public async Task ListRuns_ReturnsRecentRuns()
     {
         var runs = new List<RunDocument>
@@ -352,7 +352,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task GetRun_WithExistingId_ReturnsRun()
     {
         var run = new RunDocument { Id = "run-1", State = RunState.Running };
@@ -365,7 +365,7 @@ public class ApiEndpointsTests
         result!.State.Should().Be(RunState.Running);
     }
 
-    [Fact]
+    [Test]
     public async Task GetRun_WithNonExistentId_ReturnsNull()
     {
         _mockStore.Setup(s => s.GetRunAsync("nonexistent", _ct)).ReturnsAsync((RunDocument?)null);
@@ -375,7 +375,7 @@ public class ApiEndpointsTests
         result.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateRun_WithValidTask_ReturnsRun()
     {
         var task = new TaskDocument { Id = "task-1", RepositoryId = "repo-1" };
@@ -395,7 +395,7 @@ public class ApiEndpointsTests
         runResult.State.Should().Be(RunState.Queued);
     }
 
-    [Fact]
+    [Test]
     public async Task CancelRun_WithCancellableState_ReturnsCancelledRun()
     {
         var run = new RunDocument { Id = "run-1", State = RunState.Running };
@@ -412,17 +412,17 @@ public class ApiEndpointsTests
         result!.State.Should().Be(RunState.Cancelled);
     }
 
-    [Theory]
-    [InlineData(RunState.Succeeded)]
-    [InlineData(RunState.Failed)]
-    [InlineData(RunState.Cancelled)]
+    [Test]
+    [Arguments(RunState.Succeeded)]
+    [Arguments(RunState.Failed)]
+    [Arguments(RunState.Cancelled)]
     public void CancelRun_WithNonCancellableState_ShouldReturnBadRequest(RunState state)
     {
         var isValidState = state is RunState.Queued or RunState.Running or RunState.PendingApproval;
         isValidState.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task RetryRun_WithValidRun_ReturnsNewRun()
     {
         var task = new TaskDocument { Id = "task-1", RepositoryId = "repo-1" };
@@ -435,7 +435,7 @@ public class ApiEndpointsTests
         result.Attempt.Should().Be(2);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveRun_WithPendingApprovalState_ReturnsApprovedRun()
     {
         var run = new RunDocument { Id = "run-1", State = RunState.PendingApproval, TaskId = "task-1" };
@@ -451,7 +451,7 @@ public class ApiEndpointsTests
         result!.State.Should().Be(RunState.Queued);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveRun_WithNonPendingState_ReturnsBadRequest()
     {
         var run = new RunDocument { Id = "run-1", State = RunState.Running };
@@ -464,7 +464,7 @@ public class ApiEndpointsTests
         isPendingApproval.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task RejectRun_WithPendingApprovalState_ReturnsRejectedRun()
     {
         var run = new RunDocument { Id = "run-1", State = RunState.PendingApproval };
@@ -480,7 +480,7 @@ public class ApiEndpointsTests
         result!.State.Should().Be(RunState.Cancelled);
     }
 
-    [Fact]
+    [Test]
     public async Task ListRunLogs_ReturnsLogsForRun()
     {
         var logs = new List<RunLogEvent>
@@ -496,7 +496,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task ListArtifacts_ReturnsArtifactsForRun()
     {
         var artifacts = new List<string> { "output.txt", "result.json" };
@@ -513,7 +513,7 @@ public class ApiEndpointsTests
 
     #region Findings API Tests
 
-    [Fact]
+    [Test]
     public async Task ListFindings_ReturnsAllFindings()
     {
         var findings = new List<FindingDocument>
@@ -529,7 +529,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task GetFinding_WithExistingId_ReturnsFinding()
     {
         var finding = new FindingDocument { Id = "finding-1", Title = "Issue 1" };
@@ -542,7 +542,7 @@ public class ApiEndpointsTests
         result!.Title.Should().Be("Issue 1");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateFindingState_WithValidId_ReturnsUpdatedFinding()
     {
         var finding = new FindingDocument { Id = "finding-1", State = FindingState.InProgress };
@@ -555,7 +555,7 @@ public class ApiEndpointsTests
         result!.State.Should().Be(FindingState.InProgress);
     }
 
-    [Fact]
+    [Test]
     public async Task AssignFinding_WithValidId_ReturnsAssignedFinding()
     {
         var finding = new FindingDocument { Id = "finding-1", AssignedTo = "user@example.com", State = FindingState.InProgress };
@@ -569,12 +569,12 @@ public class ApiEndpointsTests
         result.State.Should().Be(FindingState.InProgress);
     }
 
-    [Theory]
-    [InlineData(FindingState.New)]
-    [InlineData(FindingState.Acknowledged)]
-    [InlineData(FindingState.InProgress)]
-    [InlineData(FindingState.Resolved)]
-    [InlineData(FindingState.Ignored)]
+    [Test]
+    [Arguments(FindingState.New)]
+    [Arguments(FindingState.Acknowledged)]
+    [Arguments(FindingState.InProgress)]
+    [Arguments(FindingState.Resolved)]
+    [Arguments(FindingState.Ignored)]
     public void FindingState_AllValuesAreValid(FindingState state)
     {
         Enum.IsDefined(typeof(FindingState), state).Should().BeTrue();
@@ -584,7 +584,7 @@ public class ApiEndpointsTests
 
     #region Workers API Tests
 
-    [Fact]
+    [Test]
     public async Task ListWorkers_ReturnsAllWorkers()
     {
         var workers = new List<WorkerRegistration>
@@ -600,7 +600,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task WorkerHeartbeat_WithValidRequest_UpsertsWorker()
     {
         _mockStore.Setup(s => s.UpsertWorkerHeartbeatAsync(
@@ -611,7 +611,7 @@ public class ApiEndpointsTests
         _mockStore.Verify(s => s.UpsertWorkerHeartbeatAsync("worker-1", "http://localhost:5001", 2, 4, _ct), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public void WorkerHeartbeat_WithEmptyWorkerId_ShouldFailValidation()
     {
         var request = new WorkerHeartbeatRequest("", "http://localhost:5001", 0, 4);
@@ -619,7 +619,7 @@ public class ApiEndpointsTests
         string.IsNullOrWhiteSpace(request.WorkerId).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void UpsertWorkerHeartbeat_SetsOnlineAndLastHeartbeat()
     {
         var worker = new WorkerRegistration
@@ -639,7 +639,7 @@ public class ApiEndpointsTests
 
     #region Schedules API Tests
 
-    [Fact]
+    [Test]
     public async Task ListScheduledTasks_ReturnsCronTasks()
     {
         var tasks = new List<TaskDocument>
@@ -660,7 +660,7 @@ public class ApiEndpointsTests
 
     #region Secrets API Tests
 
-    [Fact]
+    [Test]
     public async Task ListSecrets_ReturnsSecretsForRepository()
     {
         var secrets = new List<ProviderSecretDocument>
@@ -676,7 +676,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task SetSecret_WithValidRequest_UpsertsSecret()
     {
         var encrypted = "encrypted-value";
@@ -688,7 +688,7 @@ public class ApiEndpointsTests
         _mockStore.Verify(s => s.UpsertProviderSecretAsync("repo-1", "github", encrypted, _ct), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public void SetSecret_WithEmptyValue_ShouldFailValidation()
     {
         var request = new SetProviderSecretRequest("");
@@ -700,7 +700,7 @@ public class ApiEndpointsTests
 
     #region Webhooks API Tests
 
-    [Fact]
+    [Test]
     public async Task CreateWebhook_WithValidRequest_ReturnsWebhook()
     {
         var request = new CreateWebhookRequest("repo-1", "task-1", "push", "secret");
@@ -717,7 +717,7 @@ public class ApiEndpointsTests
         result.RepositoryId.Should().Be("repo-1");
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWebhook_WithNonExistentRepository_ReturnsNotFound()
     {
         var request = new CreateWebhookRequest("nonexistent", "task-1", "push", "secret");
@@ -729,7 +729,7 @@ public class ApiEndpointsTests
         result.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task HandleWebhook_DispatchesTasks()
     {
         var repo = new RepositoryDocument { Id = "repo-1", ProjectId = "proj-1" };
@@ -754,7 +754,7 @@ public class ApiEndpointsTests
 
     #region Settings API Tests
 
-    [Fact]
+    [Test]
     public async Task GetSettings_ReturnsCurrentSettings()
     {
         var settings = new SystemSettingsDocument
@@ -773,7 +773,7 @@ public class ApiEndpointsTests
         result.RetentionDaysLogs.Should().Be(30);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateSettings_WithValidRequest_UpdatesSettings()
     {
         var request = new UpdateSystemSettingsRequest(
@@ -800,7 +800,7 @@ public class ApiEndpointsTests
 
     #region Workflows API Tests
 
-    [Fact]
+    [Test]
     public async Task ListWorkflows_ReturnsAllWorkflows()
     {
         var workflows = new List<WorkflowDocument>
@@ -816,7 +816,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task GetWorkflow_WithExistingId_ReturnsWorkflow()
     {
         var workflow = new WorkflowDocument { Id = "wf-1", Name = "Test Workflow" };
@@ -829,7 +829,7 @@ public class ApiEndpointsTests
         result!.Name.Should().Be("Test Workflow");
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorkflow_WithValidRequest_ReturnsWorkflow()
     {
         var repo = new RepositoryDocument { Id = "repo-1", Name = "Repo 1" };
@@ -845,7 +845,7 @@ public class ApiEndpointsTests
         result.Name.Should().Be("New Workflow");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateWorkflow_WithValidRequest_ReturnsWorkflow()
     {
         var workflow = new WorkflowDocument { Id = "wf-1", Name = "Updated Workflow" };
@@ -860,7 +860,7 @@ public class ApiEndpointsTests
         result.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteWorkflow_WithValidId_ReturnsTrue()
     {
         _mockStore.Setup(s => s.DeleteWorkflowAsync("wf-1", _ct)).ReturnsAsync(true);
@@ -870,7 +870,7 @@ public class ApiEndpointsTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteWorkflow_WithEnabledWorkflow_ReturnsExecution()
     {
         var workflow = new WorkflowDocument { Id = "wf-1", RepositoryId = "repo-1", Enabled = true };
@@ -890,7 +890,7 @@ public class ApiEndpointsTests
         result.WorkflowId.Should().Be("wf-1");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteWorkflow_WithDisabledWorkflow_ReturnsBadRequest()
     {
         var workflow = new WorkflowDocument { Id = "wf-1", RepositoryId = "repo-1", Enabled = false };
@@ -902,7 +902,7 @@ public class ApiEndpointsTests
         result!.Enabled.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task ListWorkflowExecutions_ReturnsExecutions()
     {
         var executions = new List<WorkflowExecutionDocument>
@@ -918,7 +918,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveWorkflowStage_WithPendingApproval_ReturnsApprovedExecution()
     {
         var execution = new WorkflowExecutionDocument
@@ -946,11 +946,11 @@ public class ApiEndpointsTests
         result!.State.Should().Be(WorkflowExecutionState.Running);
     }
 
-    [Theory]
-    [InlineData(WorkflowStageType.Task)]
-    [InlineData(WorkflowStageType.Approval)]
-    [InlineData(WorkflowStageType.Delay)]
-    [InlineData(WorkflowStageType.Parallel)]
+    [Test]
+    [Arguments(WorkflowStageType.Task)]
+    [Arguments(WorkflowStageType.Approval)]
+    [Arguments(WorkflowStageType.Delay)]
+    [Arguments(WorkflowStageType.Parallel)]
     public void WorkflowStageType_AllValuesAreValid(WorkflowStageType type)
     {
         Enum.IsDefined(typeof(WorkflowStageType), type).Should().BeTrue();
@@ -960,7 +960,7 @@ public class ApiEndpointsTests
 
     #region Images API Tests
 
-    [Fact]
+    [Test]
     public async Task ListImages_ReturnsImages()
     {
         var images = new List<ImageInfo>
@@ -976,7 +976,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task ListImages_WithFilter_ReturnsFilteredImages()
     {
         var images = new List<ImageInfo>
@@ -992,7 +992,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public void BuildImage_WithEmptyDockerfile_ShouldFailValidation()
     {
         var request = new BuildImageRequest("", "myimage:v1");
@@ -1000,7 +1000,7 @@ public class ApiEndpointsTests
         string.IsNullOrWhiteSpace(request.DockerfileContent).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void BuildImage_WithEmptyTag_ShouldFailValidation()
     {
         var request = new BuildImageRequest("FROM alpine", "");
@@ -1008,7 +1008,7 @@ public class ApiEndpointsTests
         string.IsNullOrWhiteSpace(request.Tag).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteImage_WithExistingTag_ReturnsTrue()
     {
         _mockImageBuilder.Setup(b => b.DeleteImageAsync("myimage:v1", _ct)).ReturnsAsync(true);
@@ -1018,7 +1018,7 @@ public class ApiEndpointsTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteImage_WithNonExistentTag_ReturnsFalse()
     {
         _mockImageBuilder.Setup(b => b.DeleteImageAsync("nonexistent:v1", _ct)).ReturnsAsync(false);
@@ -1032,7 +1032,7 @@ public class ApiEndpointsTests
 
     #region Alert Rules API Tests
 
-    [Fact]
+    [Test]
     public async Task ListAlertRules_ReturnsRules()
     {
         var rules = new List<AlertRuleDocument>
@@ -1048,7 +1048,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public void CreateAlertRule_WithEmptyName_ShouldFailValidation()
     {
         var request = new CreateAlertRuleRequest("", AlertRuleType.FailureRateSpike, 5, 10);
@@ -1056,7 +1056,7 @@ public class ApiEndpointsTests
         string.IsNullOrWhiteSpace(request.Name).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void CreateAlertRule_WithZeroThreshold_ShouldFailValidation()
     {
         var request = new CreateAlertRuleRequest("Test Rule", AlertRuleType.FailureRateSpike, 0, 10);
@@ -1064,7 +1064,7 @@ public class ApiEndpointsTests
         (request.Threshold <= 0).Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAlertRule_WithValidRequest_ReturnsRule()
     {
         var request = new CreateAlertRuleRequest("Test Rule", AlertRuleType.FailureRateSpike, 5, 10, null, true);
@@ -1084,7 +1084,7 @@ public class ApiEndpointsTests
         result.Name.Should().Be("Test Rule");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAlertRule_WithValidRequest_ReturnsRule()
     {
         var rule = new AlertRuleDocument { Id = "rule-1", Name = "Updated Rule", RuleType = AlertRuleType.QueueBacklog };
@@ -1097,7 +1097,7 @@ public class ApiEndpointsTests
         result!.Name.Should().Be("Updated Rule");
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteAlertRule_WithExistingId_ReturnsTrue()
     {
         _mockStore.Setup(s => s.DeleteAlertRuleAsync("rule-1", _ct)).ReturnsAsync(true);
@@ -1107,7 +1107,7 @@ public class ApiEndpointsTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteAlertRule_WithNonExistentId_ReturnsFalse()
     {
         _mockStore.Setup(s => s.DeleteAlertRuleAsync("nonexistent", _ct)).ReturnsAsync(false);
@@ -1117,12 +1117,12 @@ public class ApiEndpointsTests
         result.Should().BeFalse();
     }
 
-    [Theory]
-    [InlineData(AlertRuleType.MissingHeartbeat)]
-    [InlineData(AlertRuleType.FailureRateSpike)]
-    [InlineData(AlertRuleType.QueueBacklog)]
-    [InlineData(AlertRuleType.RepeatedPrFailures)]
-    [InlineData(AlertRuleType.RouteLeakDetection)]
+    [Test]
+    [Arguments(AlertRuleType.MissingHeartbeat)]
+    [Arguments(AlertRuleType.FailureRateSpike)]
+    [Arguments(AlertRuleType.QueueBacklog)]
+    [Arguments(AlertRuleType.RepeatedPrFailures)]
+    [Arguments(AlertRuleType.RouteLeakDetection)]
     public void AlertRuleType_AllValuesAreValid(AlertRuleType type)
     {
         Enum.IsDefined(typeof(AlertRuleType), type).Should().BeTrue();
@@ -1132,7 +1132,7 @@ public class ApiEndpointsTests
 
     #region Alert Events API Tests
 
-    [Fact]
+    [Test]
     public async Task ListAlertEvents_ReturnsEvents()
     {
         var events = new List<AlertEventDocument>
@@ -1148,7 +1148,7 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task RecordAlertEvent_CreatesEvent()
     {
         var alertEvent = new AlertEventDocument
@@ -1169,7 +1169,7 @@ public class ApiEndpointsTests
 
     #region Harness Health API Tests
 
-    [Fact]
+    [Test]
     public void GetHarnessHealth_ReturnsAllHealth()
     {
         var health = new Dictionary<string, HarnessHealth>
@@ -1191,19 +1191,19 @@ public class ApiEndpointsTests
 
     #region Validation Tests
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments(null)]
     public void ValidateProjectName_WithInvalidInput_FailsValidation(string? name)
     {
         string.IsNullOrWhiteSpace(name).Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments(null)]
     public void ValidateCronExpression_WithCronTaskAndEmptyExpression_FailsValidation(string? expression)
     {
         var kind = TaskKind.Cron;
@@ -1211,19 +1211,19 @@ public class ApiEndpointsTests
         isInvalid.Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    [InlineData(-100)]
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    [Arguments(-100)]
     public void ValidateAlertThreshold_WithInvalidValue_FailsValidation(int threshold)
     {
         (threshold <= 0).Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments(null)]
     public void ValidateSecretValue_WithEmptyValue_FailsValidation(string? value)
     {
         string.IsNullOrWhiteSpace(value).Should().BeTrue();
@@ -1233,27 +1233,27 @@ public class ApiEndpointsTests
 
     #region Run State Tests
 
-    [Theory]
-    [InlineData(RunState.Queued)]
-    [InlineData(RunState.Running)]
-    [InlineData(RunState.PendingApproval)]
+    [Test]
+    [Arguments(RunState.Queued)]
+    [Arguments(RunState.Running)]
+    [Arguments(RunState.PendingApproval)]
     public void CancellableStates_AreCorrect(RunState state)
     {
         var isCancellable = state is RunState.Queued or RunState.Running or RunState.PendingApproval;
         isCancellable.Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData(RunState.Succeeded)]
-    [InlineData(RunState.Failed)]
-    [InlineData(RunState.Cancelled)]
+    [Test]
+    [Arguments(RunState.Succeeded)]
+    [Arguments(RunState.Failed)]
+    [Arguments(RunState.Cancelled)]
     public void NonCancellableStates_AreCorrect(RunState state)
     {
         var isCancellable = state is RunState.Queued or RunState.Running or RunState.PendingApproval;
         isCancellable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void PendingApproval_IsRequiredForApproveReject()
     {
         var requiredState = RunState.PendingApproval;
@@ -1264,21 +1264,21 @@ public class ApiEndpointsTests
 
     #region Error Response Tests
 
-    [Fact]
+    [Test]
     public void NotFoundResponse_ContainsMessage()
     {
         var response = new { message = "Project not found" };
         response.message.Should().Contain("not found");
     }
 
-    [Fact]
+    [Test]
     public void BadRequestResponse_ContainsMessage()
     {
         var response = new { message = "Run is not in a cancellable state" };
         response.message.Should().Contain("not");
     }
 
-    [Fact]
+    [Test]
     public void ValidationProblem_ContainsFieldErrors()
     {
         var errors = new Dictionary<string, string[]>

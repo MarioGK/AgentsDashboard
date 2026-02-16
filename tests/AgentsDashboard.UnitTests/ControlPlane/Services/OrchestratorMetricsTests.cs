@@ -11,7 +11,7 @@ public class OrchestratorMetricsTests
         _metrics = new OrchestratorMetrics();
     }
 
-    [Fact]
+    [Test]
     public void Constructor_CreatesInstance()
     {
         var metrics = new OrchestratorMetrics();
@@ -20,7 +20,7 @@ public class OrchestratorMetricsTests
         metrics.Should().BeAssignableTo<IOrchestratorMetrics>();
     }
 
-    [Fact]
+    [Test]
     public void RecordRunStart_WithValidParameters_DoesNotThrow()
     {
         var action = () => _metrics.RecordRunStart("codex", "project-1", "repo-1");
@@ -28,7 +28,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordRunStart_WithMultipleHarnesses_DoesNotThrow()
     {
         var action = () =>
@@ -42,7 +42,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordRunComplete_WithValidParameters_DoesNotThrow()
     {
         var action = () => _metrics.RecordRunComplete("codex", "Succeeded", 120.5, "project-1", "repo-1");
@@ -50,7 +50,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordRunComplete_WithDifferentStates_DoesNotThrow()
     {
         var action = () =>
@@ -63,7 +63,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordJobDispatch_WithValidHarness_DoesNotThrow()
     {
         var action = () => _metrics.RecordJobDispatch("codex");
@@ -71,7 +71,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordJobDispatch_WithMultipleHarnesses_DoesNotThrow()
     {
         var action = () =>
@@ -85,7 +85,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordError_WithValidParameters_DoesNotThrow()
     {
         var action = () => _metrics.RecordError("TimeoutException", "execution");
@@ -93,7 +93,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordError_WithMultipleErrorTypes_DoesNotThrow()
     {
         var action = () =>
@@ -106,7 +106,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void SetPendingJobs_WithValidCount_DoesNotThrow()
     {
         var action = () => _metrics.SetPendingJobs(10);
@@ -114,7 +114,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void SetPendingJobs_WithZero_DoesNotThrow()
     {
         var action = () => _metrics.SetPendingJobs(0);
@@ -122,7 +122,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void SetActiveJobs_WithValidCount_DoesNotThrow()
     {
         var action = () => _metrics.SetActiveJobs(5);
@@ -130,7 +130,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void SetQueuedRuns_WithValidCount_DoesNotThrow()
     {
         var action = () => _metrics.SetQueuedRuns(20);
@@ -138,7 +138,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void SetActiveRuns_WithValidCount_DoesNotThrow()
     {
         var action = () => _metrics.SetActiveRuns(8);
@@ -146,7 +146,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordQueueWaitTime_WithValidSeconds_DoesNotThrow()
     {
         var action = () => _metrics.RecordQueueWaitTime(5.5);
@@ -154,7 +154,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void SetWorkerSlots_WithValidParameters_DoesNotThrow()
     {
         var action = () => _metrics.SetWorkerSlots("worker-1", 2, 4);
@@ -162,7 +162,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void SetWorkerSlots_WithMultipleWorkers_DoesNotThrow()
     {
         var action = () =>
@@ -175,7 +175,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordStatusUpdateLatency_WithValidSeconds_DoesNotThrow()
     {
         var action = () => _metrics.RecordStatusUpdateLatency(0.5);
@@ -183,7 +183,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordProxyRequest_WithSuccessStatus_DoesNotThrow()
     {
         var action = () => _metrics.RecordProxyRequest("success", 0.1);
@@ -191,7 +191,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordProxyRequest_WithErrorStatus_DoesNotThrow()
     {
         var action = () => _metrics.RecordProxyRequest("error", 0.2);
@@ -199,7 +199,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordProxyRequest_WithMultipleStatuses_DoesNotThrow()
     {
         var action = () =>
@@ -212,7 +212,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordAlertFired_WithValidRuleId_DoesNotThrow()
     {
         var action = () => _metrics.RecordAlertFired("alert-rule-1");
@@ -220,7 +220,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordWebhookDelivery_WithSuccessStatus_DoesNotThrow()
     {
         var action = () => _metrics.RecordWebhookDelivery("success");
@@ -228,7 +228,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordWebhookDelivery_WithFailedStatus_DoesNotThrow()
     {
         var action = () => _metrics.RecordWebhookDelivery("failed");
@@ -236,7 +236,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void SetSignalRConnections_WithValidCount_DoesNotThrow()
     {
         var action = () => _metrics.SetSignalRConnections(10);
@@ -244,7 +244,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordGrpcDuration_WithValidParameters_DoesNotThrow()
     {
         var action = () => _metrics.RecordGrpcDuration("DispatchJob", 0.05);
@@ -252,7 +252,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordGrpcDuration_WithMultipleMethods_DoesNotThrow()
     {
         var action = () =>
@@ -265,7 +265,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordFinding_WithValidSeverity_DoesNotThrow()
     {
         var action = () => _metrics.RecordFinding("high");
@@ -273,7 +273,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordFinding_WithMultipleSeverities_DoesNotThrow()
     {
         var action = () =>
@@ -287,7 +287,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordArtifactGenerated_WithValidHarness_DoesNotThrow()
     {
         var action = () => _metrics.RecordArtifactGenerated("codex");
@@ -295,7 +295,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordContainerMetrics_WithValidParameters_DoesNotThrow()
     {
         var action = () => _metrics.RecordContainerMetrics("codex", 25.5, 536_870_912);
@@ -303,7 +303,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RecordContainerMetrics_WithZeroValues_DoesNotThrow()
     {
         var action = () => _metrics.RecordContainerMetrics("opencode", 0.0, 0.0);
@@ -311,7 +311,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void MultipleOperationsSequentially_DoesNotThrow()
     {
         var action = () =>
@@ -338,7 +338,7 @@ public class OrchestratorMetricsTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void Interface_HasAllRequiredMethods()
     {
         var interfaceType = typeof(IOrchestratorMetrics);

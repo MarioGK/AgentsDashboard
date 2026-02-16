@@ -3,14 +3,13 @@ using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
-using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class WorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class WorkflowExecutionsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
     private readonly WebApplicationFactory<AgentsDashboard.ControlPlane.Program> _factory = fixture.Factory;
@@ -45,7 +44,7 @@ public class WorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFixture<
         return (await response.Content.ReadFromJsonAsync<WorkflowDocument>())!;
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteWorkflow_ReturnsNotFound_WhenWorkflowDoesNotExist()
     {
         var response = await _client.PostAsync("/api/workflows/nonexistent/execute", null);
@@ -53,7 +52,7 @@ public class WorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFixture<
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteWorkflow_ReturnsBadRequest_WhenWorkflowDisabled()
     {
         var (_, repo, workflow) = await SetupAsync();
@@ -65,7 +64,7 @@ public class WorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFixture<
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task ListExecutions_ReturnsEmptyList_WhenNoExecutions()
     {
         var (_, _, workflow) = await SetupAsync();
@@ -78,7 +77,7 @@ public class WorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFixture<
         executions.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task GetExecution_ReturnsNotFound_WhenDoesNotExist()
     {
         var (_, _, workflow) = await SetupAsync();
@@ -88,7 +87,7 @@ public class WorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFixture<
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveExecution_ReturnsNotFound_WhenExecutionDoesNotExist()
     {
         var (_, _, workflow) = await SetupAsync();
@@ -99,7 +98,7 @@ public class WorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFixture<
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveExecution_ReturnsBadRequest_WhenWrongWorkflowId()
     {
         var (_, repo, workflow) = await SetupAsync();

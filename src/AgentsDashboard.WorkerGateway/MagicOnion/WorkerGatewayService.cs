@@ -55,11 +55,11 @@ public sealed class WorkerGatewayService(
     {
         var accepted = queue.Cancel(request.RunId);
 
-        return new CancelJobReply
+        return new UnaryResult<CancelJobReply>(new CancelJobReply
         {
             Success = accepted,
             ErrorMessage = accepted ? null : $"Run {request.RunId} not found or already completed"
-        };
+        });
     }
 
     public async UnaryResult<KillContainerReply> KillContainerAsync(KillContainerRequest request)
@@ -108,11 +108,11 @@ public sealed class WorkerGatewayService(
         logger.LogDebug("Heartbeat received from worker {WorkerId} on {HostName}: {ActiveSlots}/{MaxSlots} slots",
             request.WorkerId, request.HostName, request.ActiveSlots, request.MaxSlots);
 
-        return new HeartbeatReply
+        return new UnaryResult<HeartbeatReply>(new HeartbeatReply
         {
             Success = true,
             ErrorMessage = null
-        };
+        });
     }
 
     public async UnaryResult<ReconcileOrphanedContainersReply> ReconcileOrphanedContainersAsync(

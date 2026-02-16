@@ -13,7 +13,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Proxy;
 
 public class InMemoryYarpConfigProviderTests
 {
-    [Fact]
+    [Test]
     public void GetConfig_InitiallyEmpty()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -23,7 +23,7 @@ public class InMemoryYarpConfigProviderTests
         config.Clusters.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_CreatesRouteAndCluster()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -45,7 +45,7 @@ public class InMemoryYarpConfigProviderTests
         cluster.Destinations["d1"].Address.Should().Be("http://localhost:8080");
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_WithTtl_SetsTtlEntry()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -57,7 +57,7 @@ public class InMemoryYarpConfigProviderTests
         config.Routes.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_WithoutTtl_NoTtlEntry()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -68,7 +68,7 @@ public class InMemoryYarpConfigProviderTests
         config.Routes.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_ExistingRoute_UpdatesDestination()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -84,7 +84,7 @@ public class InMemoryYarpConfigProviderTests
         cluster.Destinations["d1"].Address.Should().Be("http://localhost:2222");
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_ExistingRoute_UpdatesPathPattern()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -97,10 +97,10 @@ public class InMemoryYarpConfigProviderTests
         route.Match.Path.Should().Be("/proxy/run-xyz/updated/{**catch-all}");
     }
 
-    [Theory]
-    [InlineData("run-1", "/proxy/run-1/{**catch-all}", "http://localhost:1001")]
-    [InlineData("run-2", "/api/run-2/{**catch-all}", "http://localhost:1002")]
-    [InlineData("run-3", "/proxy/run-3/{**catch-all}", "https://example.com:8443")]
+    [Test]
+    [Arguments("run-1", "/proxy/run-1/{**catch-all}", "http://localhost:1001")]
+    [Arguments("run-2", "/api/run-2/{**catch-all}", "http://localhost:1002")]
+    [Arguments("run-3", "/proxy/run-3/{**catch-all}", "https://example.com:8443")]
     public void UpsertRoute_VariousInputs_CreatesCorrectRoute(string routeId, string path, string destination)
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -115,7 +115,7 @@ public class InMemoryYarpConfigProviderTests
         cluster.Destinations["d1"].Address.Should().Be(destination);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_MultipleRoutes_AllPresent()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -129,7 +129,7 @@ public class InMemoryYarpConfigProviderTests
         config.Clusters.Should().HaveCount(3);
     }
 
-    [Fact]
+    [Test]
     public void RemoveRoute_RemovesRouteAndCluster()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -142,7 +142,7 @@ public class InMemoryYarpConfigProviderTests
         config.Clusters.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void RemoveRoute_NonExistent_NoException()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -152,7 +152,7 @@ public class InMemoryYarpConfigProviderTests
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void RemoveRoute_WithOtherRoutes_OnlyRemovesTarget()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -169,7 +169,7 @@ public class InMemoryYarpConfigProviderTests
         config.Routes.Select(r => r.RouteId).Should().BeEquivalentTo(["run-keep-1", "run-keep-2"]);
     }
 
-    [Fact]
+    [Test]
     public void RemoveRoute_WithTtl_RemovesTtlEntry()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -181,7 +181,7 @@ public class InMemoryYarpConfigProviderTests
         config.Routes.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void GetConfig_ReturnsCurrentConfig()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -195,7 +195,7 @@ public class InMemoryYarpConfigProviderTests
         config2.Routes.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void ChangeToken_SignalsOnUpsert()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -210,7 +210,7 @@ public class InMemoryYarpConfigProviderTests
         callbackInvoked.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ChangeToken_SignalsOnRemove()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -227,7 +227,7 @@ public class InMemoryYarpConfigProviderTests
         callbackInvoked.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ChangeToken_NewConfigAfterChange()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -239,7 +239,7 @@ public class InMemoryYarpConfigProviderTests
         config2.Should().NotBeSameAs(config1);
     }
 
-    [Fact]
+    [Test]
     public void Dispose_DisposesCleanupTimer()
     {
         var provider = new InMemoryYarpConfigProvider();
@@ -249,7 +249,7 @@ public class InMemoryYarpConfigProviderTests
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void Dispose_CalledMultipleTimes_NoException()
     {
         var provider = new InMemoryYarpConfigProvider();
@@ -407,7 +407,7 @@ public class ProxyAuditMiddlewareTests
         _middleware = new TestableProxyAuditMiddleware(_recorder, NullLogger<TestableProxyAuditMiddleware>.Instance);
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_NonProxyPath_CallsNextWithoutRecording()
     {
         var context = CreateHttpContext("/api/something");
@@ -419,7 +419,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ProxyPath_RecordsAudit()
     {
         var context = CreateHttpContext("/proxy/run-abc123");
@@ -433,7 +433,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].RunId.Should().Be("run-abc123");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ProxyPath_RecordsLatency()
     {
         var context = CreateHttpContext("/proxy/run-latency");
@@ -450,7 +450,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].LatencyMs.Should().BeGreaterThanOrEqualTo(50);
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ProxyPath_RecordsStatusCode()
     {
         var context = CreateHttpContext("/proxy/run-status");
@@ -465,7 +465,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].StatusCode.Should().Be(201);
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ProxyPath_RecordsPath()
     {
         var context = CreateHttpContext("/proxy/run-path/some/resource");
@@ -479,7 +479,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].Path.Should().Be("/proxy/run-path/some/resource");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ExtractsTaskId()
     {
         var context = CreateHttpContext("/proxy/run-task");
@@ -494,7 +494,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].TaskId.Should().Be("task-xyz");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ExtractsRepoId()
     {
         var context = CreateHttpContext("/proxy/run-repo");
@@ -509,7 +509,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].RepoId.Should().Be("repo-123");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ExtractsProjectId()
     {
         var context = CreateHttpContext("/proxy/run-project");
@@ -524,7 +524,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].ProjectId.Should().Be("proj-456");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ExtractsAllIds()
     {
         var context = CreateHttpContext("/proxy/run-all");
@@ -545,7 +545,7 @@ public class ProxyAuditMiddlewareTests
         audit.ProjectId.Should().Be("proj-all");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_NoRouteValues_ExtractsRunIdFromPath()
     {
         var context = CreateHttpContext("/proxy/run-from-path/resource");
@@ -559,7 +559,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].RunId.Should().Be("run-from-path");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_NoRouteValues_ShortPath_EmptyRunId()
     {
         var context = CreateHttpContext("/proxy");
@@ -573,10 +573,10 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].RunId.Should().BeEmpty();
     }
 
-    [Theory]
-    [InlineData("/proxy/run-1")]
-    [InlineData("/proxy/run-2/resource")]
-    [InlineData("/proxy/run-3/api/endpoint")]
+    [Test]
+    [Arguments("/proxy/run-1")]
+    [Arguments("/proxy/run-2/resource")]
+    [Arguments("/proxy/run-3/api/endpoint")]
     public async Task InvokeAsync_VariousProxyPaths_RecordsAudit(string path)
     {
         _recorder.Reset();
@@ -589,11 +589,11 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits.Should().HaveCount(1);
     }
 
-    [Theory]
-    [InlineData("/api/runs")]
-    [InlineData("/runs")]
-    [InlineData("/health")]
-    [InlineData("/")]
+    [Test]
+    [Arguments("/api/runs")]
+    [Arguments("/runs")]
+    [Arguments("/health")]
+    [Arguments("/")]
     public async Task InvokeAsync_NonProxyPaths_SkipsAudit(string path)
     {
         _recorder.Reset();
@@ -604,7 +604,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_StoreThrows_StillCompletes()
     {
         _recorder.ShouldThrow = true;
@@ -618,7 +618,7 @@ public class ProxyAuditMiddlewareTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_RecordsTimestamp()
     {
         var before = DateTime.UtcNow;
@@ -634,7 +634,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].TimestampUtc.Should().BeOnOrBefore(after);
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ErrorStatusCode_RecordsCorrectStatus()
     {
         var context = CreateHttpContext("/proxy/run-error-status");
@@ -649,7 +649,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].StatusCode.Should().Be(500);
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_NextThrows_StillAttemptsAudit()
     {
         var context = CreateHttpContext("/proxy/run-throw");
@@ -660,7 +660,7 @@ public class ProxyAuditMiddlewareTests
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ExtractsUpstreamTarget_WhenProxyFeaturePresent()
     {
         var context = CreateHttpContextWithProxyFeature("/proxy/run-upstream", "destination-123");
@@ -674,7 +674,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].UpstreamTarget.Should().Be("destination-123");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_UpstreamTargetEmpty_WhenNoProxyFeature()
     {
         var context = CreateHttpContext("/proxy/run-no-proxy");
@@ -688,7 +688,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].UpstreamTarget.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_ConcurrentRequests_AllRecordedCorrectly()
     {
         var tasks = Enumerable.Range(0, 10).Select(async i =>
@@ -704,7 +704,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits.Should().HaveCount(10);
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_RecordsMethod_GET()
     {
         var context = CreateHttpContext("/proxy/run-method");
@@ -717,7 +717,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].Path.Should().Be("/proxy/run-method");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_RecordsMethod_POST()
     {
         var context = CreateHttpContext("/proxy/run-post");
@@ -730,7 +730,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_LatencyIsPositive()
     {
         var context = CreateHttpContext("/proxy/run-lat-positive");
@@ -742,7 +742,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].LatencyMs.Should().BeGreaterThanOrEqualTo(0);
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_HandlesQueryParameters()
     {
         var context = CreateHttpContext("/proxy/run-query?param1=value1&param2=value2");
@@ -755,7 +755,7 @@ public class ProxyAuditMiddlewareTests
         _recorder.RecordedAudits[0].Path.Should().Contain("param1");
     }
 
-    [Fact]
+    [Test]
     public async Task InvokeAsync_AllowedStatusCodes()
     {
         var statusCodes = new[] { 200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503 };
@@ -804,7 +804,7 @@ public class ProxyAuditMiddlewareTests
 
 public class RouteOwnershipTests
 {
-    [Fact]
+    [Test]
     public void UpsertRoute_ClusterIdMatchesRouteId()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -820,7 +820,7 @@ public class RouteOwnershipTests
         route.ClusterId.Should().Be(cluster.ClusterId);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_VerifiesClusterOwnershipConsistency()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -837,7 +837,7 @@ public class RouteOwnershipTests
         route!.ClusterId.Should().Be(cluster!.ClusterId, "route must reference its owning cluster");
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_ClusterHasExactlyOneDestination()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -849,7 +849,7 @@ public class RouteOwnershipTests
         cluster.Destinations.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void RemoveRoute_RemovesAssociatedCluster()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -863,7 +863,7 @@ public class RouteOwnershipTests
         config.Clusters.Should().NotContain(c => c.ClusterId == clusterId, "removing route should also remove its cluster to prevent orphans");
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_NoCrossOwnershipBetweenRoutes()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -878,7 +878,7 @@ public class RouteOwnershipTests
         routeX.ClusterId.Should().NotBe(routeY.ClusterId, "routes must not share clusters");
     }
 
-    [Fact]
+    [Test]
     public void RemoveRoute_OneRouteDoesNotAffectOthersOwnership()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -901,7 +901,7 @@ public class RouteOwnershipTests
         keepCAfter.ClusterId.Should().Be(keepCBefore.ClusterId, "remaining routes should keep their clusters");
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_MultipleRoutes_EachHasOwnCluster()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -924,7 +924,7 @@ public class RouteOwnershipTests
         }
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_RouteToCluster_OneToOneMapping()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -949,7 +949,7 @@ public class RouteOwnershipTests
         }
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_DestinationKey_IsD1()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -963,7 +963,7 @@ public class RouteOwnershipTests
         cluster.Destinations.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_UpdatePreservesOwnership()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -983,7 +983,7 @@ public class RouteOwnershipTests
         route.ClusterId.Should().Be(cluster.ClusterId);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_SpecialCharactersInRouteId_CreatesCorrectCluster()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -998,7 +998,7 @@ public class RouteOwnershipTests
         route.ClusterId.Should().Be("cluster-run-abc-123-xyz");
     }
 
-    [Fact]
+    [Test]
     public void RemoveRoute_CleansUpCluster()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1011,7 +1011,7 @@ public class RouteOwnershipTests
         config.Clusters.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_ThenRemove_OtherRoutesUnaffected()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1032,7 +1032,7 @@ public class RouteOwnershipTests
 
 public class TtlCleanupTests
 {
-    [Fact]
+    [Test]
     public void UpsertRoute_WithExpiredTtl_CanBeCleanedUp()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1043,7 +1043,7 @@ public class TtlCleanupTests
         provider.GetConfig().Routes.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_WithoutTtl_IsNotCleanedUp()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1055,7 +1055,7 @@ public class TtlCleanupTests
         provider.GetConfig().Routes.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void MultipleRoutes_WithMixedTtls_OnlyExpiredOnesRemoved()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1067,7 +1067,7 @@ public class TtlCleanupTests
         provider.GetConfig().Routes.Should().HaveCount(3);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_TtlUpdated_ResetsExpiration()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1081,7 +1081,7 @@ public class TtlCleanupTests
         provider.GetConfig().Routes.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_RemovingTtl_PreventsCleanup()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1095,7 +1095,7 @@ public class TtlCleanupTests
         provider.GetConfig().Routes.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void RemoveRoute_WithTtl_CleansUpTtlEntry()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1107,7 +1107,7 @@ public class TtlCleanupTests
         provider.GetConfig().Clusters.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_ZeroTtl_StillSet()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1117,7 +1117,7 @@ public class TtlCleanupTests
         provider.GetConfig().Routes.Should().HaveCount(1);
     }
 
-    [Fact]
+    [Test]
     public void UpsertRoute_NegativeTtl_StillSet()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1130,7 +1130,7 @@ public class TtlCleanupTests
 
 public class YarpConfigIntegrationTests
 {
-    [Fact]
+    [Test]
     public void FullLifecycle_CreateUpdateRemove()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1153,7 +1153,7 @@ public class YarpConfigIntegrationTests
         provider.GetConfig().Routes.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void ConfigChangeTokens_FireOnEachChange()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1169,7 +1169,7 @@ public class YarpConfigIntegrationTests
         changeCount.Should().Be(5);
     }
 
-    [Fact]
+    [Test]
     public void RapidUpdates_LastWriteWins()
     {
         using var provider = new InMemoryYarpConfigProvider();
@@ -1186,7 +1186,7 @@ public class YarpConfigIntegrationTests
         cluster.Destinations["d1"].Address.Should().Be("http://localhost:11099");
     }
 
-    [Fact]
+    [Test]
     public void MultipleRoutes_RemovalOrder_DoesNotAffectOthers()
     {
         using var provider = new InMemoryYarpConfigProvider();

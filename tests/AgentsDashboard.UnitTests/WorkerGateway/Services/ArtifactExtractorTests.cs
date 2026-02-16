@@ -38,7 +38,7 @@ public class ArtifactExtractorTests : IDisposable
             Directory.Delete(_testArtifactPath, recursive: true);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_WithNonExistentWorkspace_ReturnsEmptyList()
     {
         var policy = new ArtifactPolicyConfig { MaxArtifacts = 10, MaxTotalSizeBytes = 1024 * 1024 };
@@ -48,7 +48,7 @@ public class ArtifactExtractorTests : IDisposable
         result.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_WithEmptyWorkspace_ReturnsEmptyList()
     {
         var policy = new ArtifactPolicyConfig { MaxArtifacts = 10, MaxTotalSizeBytes = 1024 * 1024 };
@@ -58,7 +58,7 @@ public class ArtifactExtractorTests : IDisposable
         result.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_WithMatchingFiles_ReturnsArtifacts()
     {
         await File.WriteAllTextAsync(Path.Combine(_testWorkspacePath, "test.md"), "# Test Content");
@@ -71,30 +71,30 @@ public class ArtifactExtractorTests : IDisposable
         result[0].MimeType.Should().Be("text/markdown");
     }
 
-    [Theory]
-    [InlineData("test.md", "text/markdown")]
-    [InlineData("test.json", "application/json")]
-    [InlineData("test.yaml", "application/x-yaml")]
-    [InlineData("test.yml", "application/x-yaml")]
-    [InlineData("test.log", "text/plain")]
-    [InlineData("test.txt", "text/plain")]
-    [InlineData("test.xml", "application/xml")]
-    [InlineData("test.html", "text/html")]
-    [InlineData("test.png", "image/png")]
-    [InlineData("test.jpg", "image/jpeg")]
-    [InlineData("test.jpeg", "image/jpeg")]
-    [InlineData("test.gif", "image/gif")]
-    [InlineData("test.webp", "image/webp")]
-    [InlineData("test.svg", "image/svg+xml")]
-    [InlineData("test.mp4", "video/mp4")]
-    [InlineData("test.webm", "video/webm")]
-    [InlineData("test.zip", "application/zip")]
-    [InlineData("test.tar", "application/x-tar")]
-    [InlineData("test.gz", "application/gzip")]
-    [InlineData("test.patch", "text/plain")]
-    [InlineData("test.diff", "text/plain")]
-    [InlineData("test.har", "application/json")]
-    [InlineData("test.trace", "application/json")]
+    [Test]
+    [Arguments("test.md", "text/markdown")]
+    [Arguments("test.json", "application/json")]
+    [Arguments("test.yaml", "application/x-yaml")]
+    [Arguments("test.yml", "application/x-yaml")]
+    [Arguments("test.log", "text/plain")]
+    [Arguments("test.txt", "text/plain")]
+    [Arguments("test.xml", "application/xml")]
+    [Arguments("test.html", "text/html")]
+    [Arguments("test.png", "image/png")]
+    [Arguments("test.jpg", "image/jpeg")]
+    [Arguments("test.jpeg", "image/jpeg")]
+    [Arguments("test.gif", "image/gif")]
+    [Arguments("test.webp", "image/webp")]
+    [Arguments("test.svg", "image/svg+xml")]
+    [Arguments("test.mp4", "video/mp4")]
+    [Arguments("test.webm", "video/webm")]
+    [Arguments("test.zip", "application/zip")]
+    [Arguments("test.tar", "application/x-tar")]
+    [Arguments("test.gz", "application/gzip")]
+    [Arguments("test.patch", "text/plain")]
+    [Arguments("test.diff", "text/plain")]
+    [Arguments("test.har", "application/json")]
+    [Arguments("test.trace", "application/json")]
     public async Task ExtractArtifactsAsync_ReturnsCorrectMimeType(string fileName, string expectedMimeType)
     {
         await File.WriteAllTextAsync(Path.Combine(_testWorkspacePath, fileName), "content");
@@ -106,7 +106,7 @@ public class ArtifactExtractorTests : IDisposable
         result[0].MimeType.Should().Be(expectedMimeType);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_RespectsMaxArtifactsLimit()
     {
         for (int i = 0; i < 20; i++)
@@ -120,7 +120,7 @@ public class ArtifactExtractorTests : IDisposable
         result.Should().HaveCount(5);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_RespectsMaxTotalSizeLimit()
     {
         for (int i = 0; i < 10; i++)
@@ -135,7 +135,7 @@ public class ArtifactExtractorTests : IDisposable
         result.Sum(r => r.SizeBytes).Should().BeLessThanOrEqualTo(2500);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_ComputesChecksum()
     {
         var content = "test content for checksum";
@@ -149,7 +149,7 @@ public class ArtifactExtractorTests : IDisposable
         result[0].Checksum.Should().HaveLength(64);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_CopiesFilesToDestination()
     {
         await File.WriteAllTextAsync(Path.Combine(_testWorkspacePath, "copy.md"), "content to copy");
@@ -162,7 +162,7 @@ public class ArtifactExtractorTests : IDisposable
         File.ReadAllText(result[0].DestinationPath).Should().Be("content to copy");
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_ExcludesGitDirectory()
     {
         Directory.CreateDirectory(Path.Combine(_testWorkspacePath, ".git"));
@@ -176,7 +176,7 @@ public class ArtifactExtractorTests : IDisposable
         result[0].FileName.Should().Be("include.md");
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_ExcludesNodeModulesDirectory()
     {
         Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "node_modules"));
@@ -190,7 +190,7 @@ public class ArtifactExtractorTests : IDisposable
         result[0].FileName.Should().Be("src.md");
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_HandlesNestedDirectories()
     {
         var subDir = Path.Combine(_testWorkspacePath, "sub", "dir");
@@ -204,7 +204,7 @@ public class ArtifactExtractorTests : IDisposable
         result[0].SourcePath.Should().Contain("sub" + Path.DirectorySeparatorChar + "dir");
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_OnlyIncludesMatchingPatterns()
     {
         await File.WriteAllTextAsync(Path.Combine(_testWorkspacePath, "included.md"), "md file");
@@ -218,7 +218,7 @@ public class ArtifactExtractorTests : IDisposable
         result[0].FileName.Should().Be("included.md");
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_RecordsCorrectSize()
     {
         var content = new string('x', 500);
@@ -231,7 +231,7 @@ public class ArtifactExtractorTests : IDisposable
         result[0].SizeBytes.Should().Be(500);
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_CancellationRequested_Throws()
     {
         await File.WriteAllTextAsync(Path.Combine(_testWorkspacePath, "cancel.md"), "content");
@@ -244,7 +244,7 @@ public class ArtifactExtractorTests : IDisposable
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
-    [Fact]
+    [Test]
     public async Task ExtractArtifactsAsync_DefaultMimeType_ForUnknownExtension()
     {
         await File.WriteAllTextAsync(Path.Combine(_testWorkspacePath, "test.unknownext"), "content");

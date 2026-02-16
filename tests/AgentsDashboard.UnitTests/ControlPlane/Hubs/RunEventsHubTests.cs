@@ -54,13 +54,13 @@ public class RunEventsHubTests
         };
     }
 
-    [Fact]
+    [Test]
     public void RunEventsHub_InheritsFromHub()
     {
         typeof(RunEventsHub).Should().BeAssignableTo<Hub>();
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_SendsRunStatusChangedToAllClients()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -87,7 +87,7 @@ public class RunEventsHubTests
         capturedArgs[4].Should().Be(run.EndedAtUtc);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithDifferentStates_SendsCorrectStateString()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -118,7 +118,7 @@ public class RunEventsHubTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithNullDates_SendsNullValues()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -141,7 +141,7 @@ public class RunEventsHubTests
         capturedArgs[4].Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithCancellationToken_PassesToClientProxy()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -158,7 +158,7 @@ public class RunEventsHubTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_CallsClientsAll()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -169,7 +169,7 @@ public class RunEventsHubTests
         _mockClients.Verify(x => x.All, Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_SendsRunLogChunkToAllClients()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -195,7 +195,7 @@ public class RunEventsHubTests
         capturedArgs[3].Should().Be(timestamp);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithDifferentLevels_SendsCorrectLevelString()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -218,7 +218,7 @@ public class RunEventsHubTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithCancellationToken_PassesToClientProxy()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -235,7 +235,7 @@ public class RunEventsHubTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_CallsClientsAll()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -246,7 +246,7 @@ public class RunEventsHubTests
         _mockClients.Verify(x => x.All, Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithEmptyMessage_SendsEmptyString()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -263,7 +263,7 @@ public class RunEventsHubTests
         ((string)capturedArgs![2]).Should().Be("");
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithMultilineMessage_PreservesNewlines()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -281,7 +281,7 @@ public class RunEventsHubTests
         ((string)capturedArgs![2]).Should().Be(multilineMessage);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithEmptySummary_SendsEmptyString()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -298,13 +298,13 @@ public class RunEventsHubTests
         ((string)capturedArgs![2]).Should().Be("");
     }
 
-    [Fact]
+    [Test]
     public void SignalRRunEventPublisher_ImplementsIRunEventPublisher()
     {
         typeof(SignalRRunEventPublisher).Should().BeAssignableTo<IRunEventPublisher>();
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_MultipleSequentialCalls_SendsAllEvents()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -320,7 +320,7 @@ public class RunEventsHubTests
             Times.Exactly(5));
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_MultipleSequentialCalls_SendsAllEvents()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -336,7 +336,7 @@ public class RunEventsHubTests
             Times.Exactly(5));
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithCancelledToken_StillAttemptsSend()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -351,7 +351,7 @@ public class RunEventsHubTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithCancelledToken_StillAttemptsSend()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -366,7 +366,7 @@ public class RunEventsHubTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_ConcurrentCalls_AllSucceed()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -382,7 +382,7 @@ public class RunEventsHubTests
             Times.Exactly(10));
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_ConcurrentCalls_AllSucceed()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -405,14 +405,14 @@ public class RunEventsHubTests
         return new RunEventsHub(metrics.Object, logger.Object);
     }
 
-    [Fact]
+    [Test]
     public void RunEventsHub_CanBeInstantiated()
     {
         var hub = CreateHub();
         hub.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void RunEventsHub_IsSealed()
     {
         typeof(RunEventsHub).IsSealed.Should().BeTrue();
@@ -438,7 +438,7 @@ public class RunEventsHubConnectionTests
         _mockClients.Setup(x => x.All).Returns(_mockClientProxy.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_BroadcastsToAllClients()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -457,7 +457,7 @@ public class RunEventsHubConnectionTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_BroadcastsToAllClients()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -476,7 +476,7 @@ public class RunEventsHubConnectionTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task Publisher_DoesNotUseGroups()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -494,7 +494,7 @@ public class RunEventsHubConnectionTests
             Times.Never);
     }
 
-    [Fact]
+    [Test]
     public async Task Publisher_DoesNotTargetSpecificClients_OnlyUsesAll()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -506,7 +506,7 @@ public class RunEventsHubConnectionTests
         _mockClients.Verify(x => x.Client(It.IsAny<string>()), Times.Never);
     }
 
-    [Fact]
+    [Test]
     public async Task Publisher_DoesNotTargetGroups_OnlyUsesAll()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -518,7 +518,7 @@ public class RunEventsHubConnectionTests
         _mockClients.Verify(x => x.Group(It.IsAny<string>()), Times.Never);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithAllProperties_SendsCompletePayload()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -549,7 +549,7 @@ public class RunEventsHubConnectionTests
         capturedArgs[4].Should().Be(endedAt);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithAllProperties_SendsCompletePayload()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -577,7 +577,7 @@ public class RunEventsHubConnectionTests
         capturedArgs[3].Should().Be(timestamp);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_MixedWithLogAsync_BothSucceed()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -613,7 +613,7 @@ public class RunEventsHubEventFormatTests
         _mockClients.Setup(x => x.All).Returns(_mockClientProxy.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task StatusEvent_Name_IsRunStatusChanged()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -626,7 +626,7 @@ public class RunEventsHubEventFormatTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task LogEvent_Name_IsRunLogChunk()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -639,7 +639,7 @@ public class RunEventsHubEventFormatTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task StatusEvent_PayloadOrder_IsIdStateSummaryStartedAtEndedAt()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -666,7 +666,7 @@ public class RunEventsHubEventFormatTests
         capturedArgs[2].Should().BeOfType<string>();
     }
 
-    [Fact]
+    [Test]
     public async Task LogEvent_PayloadOrder_IsRunIdLevelMessageTimestamp()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -693,13 +693,13 @@ public class RunEventsHubEventFormatTests
         capturedArgs[3].Should().BeOfType<DateTime>();
     }
 
-    [Theory]
-    [InlineData(RunState.Queued)]
-    [InlineData(RunState.Running)]
-    [InlineData(RunState.Succeeded)]
-    [InlineData(RunState.Failed)]
-    [InlineData(RunState.Cancelled)]
-    [InlineData(RunState.PendingApproval)]
+    [Test]
+    [Arguments(RunState.Queued)]
+    [Arguments(RunState.Running)]
+    [Arguments(RunState.Succeeded)]
+    [Arguments(RunState.Failed)]
+    [Arguments(RunState.Cancelled)]
+    [Arguments(RunState.PendingApproval)]
     public async Task StatusEvent_AllRunStates_SentAsString(RunState state)
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -716,13 +716,13 @@ public class RunEventsHubEventFormatTests
         capturedArgs![1].Should().Be(state.ToString());
     }
 
-    [Theory]
-    [InlineData("trace")]
-    [InlineData("debug")]
-    [InlineData("info")]
-    [InlineData("warn")]
-    [InlineData("error")]
-    [InlineData("fatal")]
+    [Test]
+    [Arguments("trace")]
+    [Arguments("debug")]
+    [Arguments("info")]
+    [Arguments("warn")]
+    [Arguments("error")]
+    [Arguments("fatal")]
     public async Task LogEvent_AllLogLevels_SentAsString(string level)
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -763,7 +763,7 @@ public class RunEventsHubLifecycleTests
 
     private RunEventsHub CreateHub() => new(_mockMetrics.Object, _mockLogger.Object);
 
-    [Fact]
+    [Test]
     public async Task OnConnectedAsync_WithAuthenticatedUser_CompletesSuccessfully()
     {
         var hub = CreateHub();
@@ -774,7 +774,7 @@ public class RunEventsHubLifecycleTests
         hub.Context.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task OnDisconnectedAsync_WithNullException_CompletesSuccessfully()
     {
         var hub = CreateHub();
@@ -785,7 +785,7 @@ public class RunEventsHubLifecycleTests
         hub.Context.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task OnDisconnectedAsync_WithException_CompletesSuccessfully()
     {
         var hub = CreateHub();
@@ -797,7 +797,7 @@ public class RunEventsHubLifecycleTests
         hub.Context.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Hub_HasCorrectContext_AfterSetup()
     {
         var hub = CreateHub();
@@ -807,7 +807,7 @@ public class RunEventsHubLifecycleTests
         hub.Context.ConnectionId.Should().Be("connection-123");
     }
 
-    [Fact]
+    [Test]
     public void Hub_HasGroups_AfterSetup()
     {
         var hub = CreateHub();
@@ -816,7 +816,7 @@ public class RunEventsHubLifecycleTests
         hub.Groups.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Hub_HasClients_AfterSetup()
     {
         var hub = CreateHub();
@@ -825,7 +825,7 @@ public class RunEventsHubLifecycleTests
         hub.Clients.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task MultipleLifecycleCalls_DoNotThrow()
     {
         var hub = CreateHub();
@@ -837,7 +837,7 @@ public class RunEventsHubLifecycleTests
         await hub.OnDisconnectedAsync(new Exception("Test"));
     }
 
-    [Fact]
+    [Test]
     public async Task OnDisconnectedAsync_WithCancelledToken_Completes()
     {
         var hub = CreateHub();
@@ -876,7 +876,7 @@ public class RunEventsHubAuthorizationTests
         return new RunEventsHub(metrics.Object, logger.Object);
     }
 
-    [Fact]
+    [Test]
     public void Hub_RequiresAuthorization_AccordingToConfiguration()
     {
         var hubType = typeof(RunEventsHub);
@@ -885,28 +885,28 @@ public class RunEventsHubAuthorizationTests
         authorizeAttr.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void Hub_CanBeInstantiatedWithNullContext()
     {
         var hub = CreateHub();
         hub.Context.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void Hub_CanBeInstantiatedWithNullClients()
     {
         var hub = CreateHub();
         hub.Clients.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void Hub_CanBeInstantiatedWithNullGroups()
     {
         var hub = CreateHub();
         hub.Groups.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task OnConnectedAsync_WithNullContext_DoesNotThrow()
     {
         var hub = CreateHub();
@@ -916,7 +916,7 @@ public class RunEventsHubAuthorizationTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact]
+    [Test]
     public async Task OnDisconnectedAsync_WithNullContext_DoesNotThrow()
     {
         var hub = CreateHub();
@@ -946,7 +946,7 @@ public class RunEventsHubGroupTests
         return new RunEventsHub(metrics.Object, logger.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task Groups_AddToGroupAsync_CanBeCalled()
     {
         _mockGroups
@@ -958,7 +958,7 @@ public class RunEventsHubGroupTests
         _mockGroups.Verify(x => x.AddToGroupAsync("conn-1", "run-123", CancellationToken.None), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task Groups_RemoveFromGroupAsync_CanBeCalled()
     {
         _mockGroups
@@ -970,7 +970,7 @@ public class RunEventsHubGroupTests
         _mockGroups.Verify(x => x.RemoveFromGroupAsync("conn-1", "run-123", CancellationToken.None), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task Hub_WithMockedGroups_CanJoinRunGroup()
     {
         var hub = CreateHub();
@@ -992,7 +992,7 @@ public class RunEventsHubGroupTests
         mockGroups.Verify(x => x.AddToGroupAsync("conn-test", "run-456", CancellationToken.None), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task Hub_WithMockedGroups_CanLeaveRunGroup()
     {
         var hub = CreateHub();
@@ -1014,7 +1014,7 @@ public class RunEventsHubGroupTests
         mockGroups.Verify(x => x.RemoveFromGroupAsync("conn-test", "run-456", CancellationToken.None), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task Groups_MultipleConnectionsToSameGroup_AllAdded()
     {
         var mockGroups = new Mock<IGroupManager>();
@@ -1031,7 +1031,7 @@ public class RunEventsHubGroupTests
         mockGroups.Verify(x => x.AddToGroupAsync(It.IsAny<string>(), "run-shared", CancellationToken.None), Times.Exactly(3));
     }
 
-    [Fact]
+    [Test]
     public async Task Groups_SingleConnectionToMultipleGroups_AllAdded()
     {
         var mockGroups = new Mock<IGroupManager>();
@@ -1048,7 +1048,7 @@ public class RunEventsHubGroupTests
         mockGroups.Verify(x => x.AddToGroupAsync("conn-single", It.IsAny<string>(), CancellationToken.None), Times.Exactly(3));
     }
 
-    [Fact]
+    [Test]
     public async Task Groups_AddThenRemove_GroupOperationsSucceed()
     {
         var mockGroups = new Mock<IGroupManager>();
@@ -1066,7 +1066,7 @@ public class RunEventsHubGroupTests
         mockGroups.Verify(x => x.RemoveFromGroupAsync("conn-1", "run-123", CancellationToken.None), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task Groups_RemoveNonExistentMembership_DoesNotThrow()
     {
         var mockGroups = new Mock<IGroupManager>();
@@ -1081,7 +1081,7 @@ public class RunEventsHubGroupTests
 
 public class RunEventsHubContextTests
 {
-    [Fact]
+    [Test]
     public void Context_ConnectionId_CanBeRetrieved()
     {
         var mockContext = new Mock<HubCallerContext>();
@@ -1090,7 +1090,7 @@ public class RunEventsHubContextTests
         mockContext.Object.ConnectionId.Should().Be("test-connection-id");
     }
 
-    [Fact]
+    [Test]
     public void Context_UserIdentifier_CanBeNull()
     {
         var mockContext = new Mock<HubCallerContext>();
@@ -1099,7 +1099,7 @@ public class RunEventsHubContextTests
         mockContext.Object.UserIdentifier.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void Context_UserIdentifier_CanBeSet()
     {
         var mockContext = new Mock<HubCallerContext>();
@@ -1108,7 +1108,7 @@ public class RunEventsHubContextTests
         mockContext.Object.UserIdentifier.Should().Be("user-123");
     }
 
-    [Fact]
+    [Test]
     public void Context_User_CanBeNull()
     {
         var mockContext = new Mock<HubCallerContext>();
@@ -1117,7 +1117,7 @@ public class RunEventsHubContextTests
         mockContext.Object.User.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void Context_User_CanBeAuthenticated()
     {
         var mockContext = new Mock<HubCallerContext>();
@@ -1129,7 +1129,7 @@ public class RunEventsHubContextTests
         mockContext.Object.User!.Identity!.IsAuthenticated.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Context_Items_CanStoreData()
     {
         var mockContext = new Mock<HubCallerContext>();
@@ -1139,7 +1139,7 @@ public class RunEventsHubContextTests
         mockContext.Object.Items["key"].Should().Be("value");
     }
 
-    [Fact]
+    [Test]
     public void Context_Features_CanBeNull()
     {
         var mockContext = new Mock<HubCallerContext>();
@@ -1148,7 +1148,7 @@ public class RunEventsHubContextTests
         mockContext.Object.Features.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public void Context_ConnectionAborted_ReturnsCancellationToken()
     {
         var mockContext = new Mock<HubCallerContext>();
@@ -1167,7 +1167,7 @@ public class RunEventsHubConcurrencyTests
         return new RunEventsHub(metrics.Object, logger.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task MultipleHubs_CanBeCreatedConcurrently()
     {
         var tasks = Enumerable.Range(0, 10)
@@ -1180,7 +1180,7 @@ public class RunEventsHubConcurrencyTests
         hubs.Should().HaveCount(10);
     }
 
-    [Fact]
+    [Test]
     public async Task MultipleConnections_CanConnectSimultaneously()
     {
         var mockGroups = new Mock<IGroupManager>();
@@ -1203,7 +1203,7 @@ public class RunEventsHubConcurrencyTests
         connectionIds.Should().OnlyHaveUniqueItems();
     }
 
-    [Fact]
+    [Test]
     public async Task Hub_OnConnectedAsync_ThreadSafe()
     {
         var hubs = new List<RunEventsHub>();
@@ -1239,7 +1239,7 @@ public class RunEventsHubDisposeTests
         return new RunEventsHub(metrics.Object, logger.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task Hub_CanBeDisposedAfterUse()
     {
         var hub = CreateHub();
@@ -1258,7 +1258,7 @@ public class RunEventsHubDisposeTests
         hub.Dispose();
     }
 
-    [Fact]
+    [Test]
     public void Hub_Dispose_CalledMultipleTimes_DoesNotThrow()
     {
         var hub = CreateHub();
@@ -1273,7 +1273,7 @@ public class RunEventsHubDisposeTests
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public async Task Hub_OnDisconnectedAsync_CalledBeforeDispose()
     {
         var hub = CreateHub();

@@ -27,7 +27,6 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
 
     protected override ValueTask OnConnecting()
     {
-        _receiver = Receiver;
         _logger.LogDebug("Client connecting to event hub");
         return ValueTask.CompletedTask;
     }

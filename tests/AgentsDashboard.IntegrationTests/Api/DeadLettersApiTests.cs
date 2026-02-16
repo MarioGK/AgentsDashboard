@@ -2,16 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class DeadLettersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class DeadLettersApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ListDeadLetters_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/workflow-deadletters");
@@ -22,7 +21,7 @@ public class DeadLettersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         deadLetters.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task GetDeadLetter_NotFound_Returns404()
     {
         var response = await _client.GetAsync("/api/workflow-deadletters/nonexistent");
@@ -30,7 +29,7 @@ public class DeadLettersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ReplayDeadLetter_NotFound_Returns404()
     {
         var request = new ReplayDeadLetterRequest("test-user");
@@ -40,7 +39,7 @@ public class DeadLettersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ListDeadLetters_EmptyByDefault()
     {
         var response = await _client.GetAsync("/api/workflow-deadletters");
@@ -52,7 +51,7 @@ public class DeadLettersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         deadLetters!.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task GetDeadLetter_NonExistent_Returns404()
     {
         var response = await _client.GetAsync($"/api/workflow-deadletters/{Guid.NewGuid():N}");
@@ -60,7 +59,7 @@ public class DeadLettersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ReplayDeadLetter_NonExistent_Returns404()
     {
         var request = new ReplayDeadLetterRequest("integration-test");

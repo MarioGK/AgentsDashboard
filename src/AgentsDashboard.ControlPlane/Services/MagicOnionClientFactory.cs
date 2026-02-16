@@ -11,6 +11,7 @@ public interface IMagicOnionClientFactory
 {
     IWorkerGatewayService CreateWorkerGatewayService();
     Task<IWorkerEventHub> ConnectEventHubAsync(IWorkerEventReceiver receiver, CancellationToken ct = default);
+    Task<ITerminalHub> ConnectTerminalHubAsync(ITerminalReceiver receiver, CancellationToken ct = default);
 }
 
 public class MagicOnionClientFactory : IMagicOnionClientFactory
@@ -31,6 +32,15 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
     public async Task<IWorkerEventHub> ConnectEventHubAsync(IWorkerEventReceiver receiver, CancellationToken ct = default)
     {
         return await StreamingHubClient.ConnectAsync<IWorkerEventHub, IWorkerEventReceiver>(
+            _channel,
+            receiver,
+            cancellationToken: ct
+        );
+    }
+
+    public async Task<ITerminalHub> ConnectTerminalHubAsync(ITerminalReceiver receiver, CancellationToken ct = default)
+    {
+        return await StreamingHubClient.ConnectAsync<ITerminalHub, ITerminalReceiver>(
             _channel,
             receiver,
             cancellationToken: ct

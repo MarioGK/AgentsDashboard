@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class WorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class WorkflowsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -29,14 +28,14 @@ public class WorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
             new WorkflowStageConfigRequest("Stage 2", WorkflowStageType.Delay, DelaySeconds: 5, Order: 1)
         ]);
 
-    [Fact]
+    [Test]
     public async Task ListWorkflows_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/workflows");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorkflow_ReturnsCreatedWorkflow()
     {
         var (_, repo) = await SetupAsync();
@@ -54,7 +53,7 @@ public class WorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         workflow.Enabled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorkflow_ReturnsNotFound_WhenRepositoryDoesNotExist()
     {
         var request = MakeWorkflowRequest("nonexistent");
@@ -63,7 +62,7 @@ public class WorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task GetWorkflow_ReturnsWorkflow_WhenExists()
     {
         var (_, repo) = await SetupAsync();
@@ -78,14 +77,14 @@ public class WorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         workflow!.Id.Should().Be(created.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task GetWorkflow_ReturnsNotFound_WhenDoesNotExist()
     {
         var response = await _client.GetAsync("/api/workflows/nonexistent");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateWorkflow_ReturnsUpdatedWorkflow()
     {
         var (_, repo) = await SetupAsync();
@@ -106,7 +105,7 @@ public class WorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         updated.Stages.Should().ContainSingle();
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateWorkflow_ReturnsNotFound_WhenDoesNotExist()
     {
         var request = new UpdateWorkflowRequest("Name", "Desc", [], true);
@@ -115,7 +114,7 @@ public class WorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteWorkflow_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -127,7 +126,7 @@ public class WorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task ListRepositoryWorkflows_ReturnsWorkflowsForRepository()
     {
         var (_, repo) = await SetupAsync();

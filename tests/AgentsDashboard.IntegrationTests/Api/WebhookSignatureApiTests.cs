@@ -5,14 +5,13 @@ using System.Text;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
-using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class WebhookSignatureApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
     private readonly WebApplicationFactory<AgentsDashboard.ControlPlane.Program> _factory = fixture.Factory;
@@ -33,7 +32,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         return (project, repo, task);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_WithValidSignature_Succeeds()
     {
         var (_, repo, _) = await SetupAsync();
@@ -50,7 +49,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_WithGithubPayload_ParsesCorrectly()
     {
         var (_, repo, _) = await SetupAsync();
@@ -65,7 +64,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_WithPushEvent_ExtractsBranch()
     {
         var (_, repo, _) = await SetupAsync();
@@ -80,7 +79,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_WithPullRequestEvent_ProcessesEvent()
     {
         var (_, repo, _) = await SetupAsync();
@@ -95,7 +94,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_WithEmptyPayload_Succeeds()
     {
         var (_, repo, _) = await SetupAsync();
@@ -105,7 +104,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_WithJsonContentType_AcceptsPayload()
     {
         var (_, repo, _) = await SetupAsync();
@@ -117,7 +116,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_ConcurrentRequests_HandleGracefully()
     {
         var (_, repo, _) = await SetupAsync();
@@ -132,7 +131,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
             r.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.TooManyRequests));
     }
 
-    [Fact]
+    [Test]
     public async Task TriggerWebhook_WithCustomEventHeader_ProcessedCorrectly()
     {
         var (_, repo, _) = await SetupAsync();

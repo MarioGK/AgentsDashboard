@@ -18,7 +18,7 @@ public class CredentialValidationServiceTests
         _service = new CredentialValidationService(_httpClientFactoryMock.Object, _loggerMock.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateAsync_WithUnknownProvider_ReturnsFalse()
     {
         var result = await _service.ValidateAsync("unknown-provider", "some-key", CancellationToken.None);
@@ -27,10 +27,10 @@ public class CredentialValidationServiceTests
         result.Message.Should().Contain("Unknown provider");
     }
 
-    [Theory]
-    [InlineData("GITHUB")]
-    [InlineData("github")]
-    [InlineData("GitHub")]
+    [Test]
+    [Arguments("GITHUB")]
+    [Arguments("github")]
+    [Arguments("GitHub")]
     public async Task ValidateAsync_GitHubProvider_CallsCorrectEndpoint(string provider)
     {
         var handler = new MockHttpMessageHandler(HttpStatusCode.OK, """{"login":"testuser"}""");
@@ -44,7 +44,7 @@ public class CredentialValidationServiceTests
         handler.RequestUri?.ToString().Should().Contain("api.github.com/user");
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateAsync_GitHubUnauthorized_ReturnsFalse()
     {
         var handler = new MockHttpMessageHandler(HttpStatusCode.Unauthorized, "");
@@ -57,9 +57,9 @@ public class CredentialValidationServiceTests
         result.Message.Should().Contain("401");
     }
 
-    [Theory]
-    [InlineData("claude-code")]
-    [InlineData("CLAUDE-CODE")]
+    [Test]
+    [Arguments("claude-code")]
+    [Arguments("CLAUDE-CODE")]
     public async Task ValidateAsync_ClaudeCodeProvider_CallsAnthropicApi(string provider)
     {
         var handler = new MockHttpMessageHandler(HttpStatusCode.OK, """{"content":[]}""");
@@ -73,7 +73,7 @@ public class CredentialValidationServiceTests
         handler.RequestUri?.ToString().Should().Contain("api.anthropic.com");
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateAsync_ClaudeCodeRateLimited_ReturnsTrue()
     {
         var handler = new MockHttpMessageHandler((HttpStatusCode)429, "");
@@ -85,7 +85,7 @@ public class CredentialValidationServiceTests
         result.Success.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateAsync_ClaudeCodeUnauthorized_ReturnsFalse()
     {
         var handler = new MockHttpMessageHandler(HttpStatusCode.Unauthorized, "");
@@ -98,9 +98,9 @@ public class CredentialValidationServiceTests
         result.Message.Should().Contain("Invalid Anthropic API key");
     }
 
-    [Theory]
-    [InlineData("codex")]
-    [InlineData("opencode")]
+    [Test]
+    [Arguments("codex")]
+    [Arguments("opencode")]
     public async Task ValidateAsync_OpenAiProvider_CallsOpenAiApi(string provider)
     {
         var handler = new MockHttpMessageHandler(HttpStatusCode.OK, """{"data":[]}""");
@@ -114,7 +114,7 @@ public class CredentialValidationServiceTests
         handler.RequestUri?.ToString().Should().Contain("api.openai.com/v1/models");
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateAsync_OpenAiUnauthorized_ReturnsFalse()
     {
         var handler = new MockHttpMessageHandler(HttpStatusCode.Unauthorized, "");
@@ -127,7 +127,7 @@ public class CredentialValidationServiceTests
         result.Message.Should().Contain("Invalid OpenAI API key");
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateAsync_ZaiProvider_CallsZaiApi()
     {
         var handler = new MockHttpMessageHandler(HttpStatusCode.OK, """{"data":[]}""");
@@ -141,7 +141,7 @@ public class CredentialValidationServiceTests
         handler.RequestUri?.ToString().Should().Contain("open.bigmodel.cn");
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateAsync_ZaiUnauthorized_ReturnsFalse()
     {
         var handler = new MockHttpMessageHandler(HttpStatusCode.Unauthorized, "");
@@ -154,7 +154,7 @@ public class CredentialValidationServiceTests
         result.Message.Should().Contain("Invalid Z.ai API key");
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateAsync_NetworkError_ReturnsFalse()
     {
         var handler = new MockHttpMessageHandler(new HttpRequestException("Network error"));

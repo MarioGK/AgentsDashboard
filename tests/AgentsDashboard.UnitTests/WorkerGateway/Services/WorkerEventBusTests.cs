@@ -6,7 +6,7 @@ namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
 
 public class WorkerEventBusTests
 {
-    [Fact]
+    [Test]
     public async Task PublishAsync_MessageIsPublishedSuccessfully()
     {
         var bus = new WorkerEventBus();
@@ -15,7 +15,7 @@ public class WorkerEventBusTests
         await bus.PublishAsync(message, CancellationToken.None);
     }
 
-    [Fact]
+    [Test]
     public async Task ReadAllAsync_ReturnsPublishedMessages()
     {
         var bus = new WorkerEventBus();
@@ -40,7 +40,7 @@ public class WorkerEventBusTests
         messages[1].RunId.Should().Be("run-2");
     }
 
-    [Fact]
+    [Test]
     public async Task ReadAllAsync_MultipleReaders_ReceiveSameMessages()
     {
         var bus = new WorkerEventBus();
@@ -63,7 +63,7 @@ public class WorkerEventBusTests
         result.RunId.Should().Be("run-1");
     }
 
-    [Fact]
+    [Test]
     public async Task PublishAsync_MultipleMessages_AreQueuedInOrder()
     {
         var bus = new WorkerEventBus();
@@ -93,7 +93,7 @@ public class WorkerEventBusTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task ReadAllAsync_WhenCancelled_ThrowsOperationCanceledException()
     {
         var bus = new WorkerEventBus();
@@ -109,7 +109,7 @@ public class WorkerEventBusTests
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
-    [Fact]
+    [Test]
     public void EventBus_CanBeCreatedAndUsed()
     {
         var bus = new WorkerEventBus();

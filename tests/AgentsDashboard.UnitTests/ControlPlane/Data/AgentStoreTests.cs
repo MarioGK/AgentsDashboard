@@ -4,7 +4,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Data;
 
 public class AgentStoreTests
 {
-    [Fact]
+    [Test]
     public void Create_AgentDocument_HasDefaults()
     {
         var agent = new AgentDocument();
@@ -19,7 +19,7 @@ public class AgentStoreTests
         agent.Enabled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Create_AgentDocument_WithCustomProperties()
     {
         var agent = new AgentDocument
@@ -46,7 +46,7 @@ public class AgentStoreTests
         agent.Enabled.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_RetryPolicy_Default()
     {
         var agent = new AgentDocument();
@@ -57,7 +57,7 @@ public class AgentStoreTests
         agent.RetryPolicy.BackoffMultiplier.Should().Be(2.0);
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_Timeouts_Default()
     {
         var agent = new AgentDocument();
@@ -67,7 +67,7 @@ public class AgentStoreTests
         agent.Timeouts.OverallSeconds.Should().Be(1800);
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_SandboxProfile_Default()
     {
         var agent = new AgentDocument();
@@ -79,7 +79,7 @@ public class AgentStoreTests
         agent.SandboxProfile.ReadOnlyRootFs.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_ArtifactPolicy_Default()
     {
         var agent = new AgentDocument();
@@ -89,7 +89,7 @@ public class AgentStoreTests
         agent.ArtifactPolicy.MaxTotalSizeBytes.Should().Be(104_857_600);
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_ArtifactPatterns_DefaultEmpty()
     {
         var agent = new AgentDocument();
@@ -97,7 +97,7 @@ public class AgentStoreTests
         agent.ArtifactPatterns.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_InstructionFiles_DefaultEmpty()
     {
         var agent = new AgentDocument();
@@ -105,7 +105,7 @@ public class AgentStoreTests
         agent.InstructionFiles.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_Enabled_DefaultTrue()
     {
         var agent = new AgentDocument();
@@ -113,7 +113,7 @@ public class AgentStoreTests
         agent.Enabled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_Harness_DefaultCodex()
     {
         var agent = new AgentDocument();
@@ -121,7 +121,7 @@ public class AgentStoreTests
         agent.Harness.Should().Be("codex");
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_AutoCreatePullRequest_DefaultFalse()
     {
         var agent = new AgentDocument();
@@ -129,7 +129,7 @@ public class AgentStoreTests
         agent.AutoCreatePullRequest.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_Id_IsGenerated()
     {
         var agent1 = new AgentDocument();
@@ -140,7 +140,7 @@ public class AgentStoreTests
         agent1.Id.Should().NotBe(agent2.Id);
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_CreatedAtUtc_IsRecentUtc()
     {
         var agent = new AgentDocument();
@@ -148,7 +148,7 @@ public class AgentStoreTests
         agent.CreatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(2));
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_UpdatedAtUtc_IsRecentUtc()
     {
         var agent = new AgentDocument();
@@ -156,7 +156,7 @@ public class AgentStoreTests
         agent.UpdatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(2));
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_Description_DefaultEmpty()
     {
         var agent = new AgentDocument();

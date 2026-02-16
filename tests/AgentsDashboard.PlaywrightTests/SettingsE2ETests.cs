@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class SettingsE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -56,7 +55,7 @@ public class SettingsE2ETests : PageTest
 
         var textareas = Page.Locator("textarea");
         var count = await textareas.CountAsync();
-        Assert.That(count, Is.GreaterThan(0), "Should have at least one textarea for Docker images");
+        await Assert.That(count).IsGreaterThan(0);
     }
 
     [Test]

@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.SectionName));
 builder.Services.AddOptionsWithValidateOnStart<WorkerOptions>();
+builder.Services.Configure<TerminalOptions>(builder.Configuration.GetSection(TerminalOptions.SectionName));
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -20,15 +21,10 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 StaticCompositeResolver.Instance.Register(
-    MessagePack.Resolvers.GeneratedResolver.Instance,
     MessagePack.Resolvers.StandardResolver.Instance
 );
 
-builder.Services.AddMagicOnion(options =>
-{
-    options.MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
-        .WithResolver(StaticCompositeResolver.Instance);
-});
+builder.Services.AddMagicOnion();
 
 builder.Services.AddSingleton<WorkerQueue>(sp =>
 {
@@ -39,6 +35,7 @@ builder.Services.AddSingleton<WorkerEventBus>();
 builder.Services.AddSingleton<SecretRedactor>();
 builder.Services.AddSingleton<HarnessAdapterFactory>();
 builder.Services.AddSingleton<DockerContainerService>();
+builder.Services.AddSingleton<ITerminalSessionManager, TerminalSessionManager>();
 builder.Services.AddSingleton<IArtifactExtractor, ArtifactExtractor>();
 builder.Services.AddSingleton<IHarnessExecutor, HarnessExecutor>();
 builder.Services.AddSingleton<IContainerOrphanReconciler, ContainerOrphanReconciler>();

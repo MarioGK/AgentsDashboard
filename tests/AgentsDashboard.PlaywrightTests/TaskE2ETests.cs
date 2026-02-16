@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class TaskE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task CreateTask_OneShot_UsingForm()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Task Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -29,7 +28,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task CreateTask_Cron_UsingForm()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Cron Task Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -47,7 +46,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task CreateTask_Cron_WithValidCronExpression()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Valid Cron {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -67,7 +66,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task CreateTask_EventDriven_UsingForm()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Event Task Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -84,7 +83,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task ApplyTaskTemplate()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Template Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -102,7 +101,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task TriggerTask_CreatesRun()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Trigger Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -122,7 +121,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task TaskTable_DisplaysColumns()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Task Columns Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -140,7 +139,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task EditTask_UpdateName()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Edit Task {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -166,7 +165,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task DeleteTask_RemovesFromList()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Delete Task {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -192,7 +191,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task ToggleTask_EnableDisable()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Toggle Task {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -212,7 +211,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_AppearsInList_AfterCreation()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Task List {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -227,7 +226,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_HarnessSelection_AvailableOptions()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Harness Test {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -244,7 +243,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_KindSelection_AvailableOptions()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Kind Test {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -260,7 +259,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_RunButton_CreatesRun()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Run Button {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -279,7 +278,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_ShellCommand_Input()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Shell Cmd {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -294,7 +293,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_InstructionFile_Editor()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Instruction {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");

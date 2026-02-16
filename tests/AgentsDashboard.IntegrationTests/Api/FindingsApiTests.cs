@@ -3,14 +3,13 @@ using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
-using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class FindingsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
     private readonly WebApplicationFactory<AgentsDashboard.ControlPlane.Program> _factory = fixture.Factory;
@@ -48,7 +47,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         return finding;
     }
 
-    [Fact]
+    [Test]
     public async Task ListFindings_ReturnsEmptyList_WhenNoFindings()
     {
         var response = await _client.GetAsync("/api/findings");
@@ -58,7 +57,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         findings.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListFindings_ReturnsAllFindings()
     {
         var (_, _, _, run) = await SetupWithRunAsync();
@@ -72,7 +71,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         findings.Should().Contain(f => f.Id == finding.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task GetFinding_ReturnsFinding_WhenExists()
     {
         var (_, _, _, run) = await SetupWithRunAsync();
@@ -86,14 +85,14 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         result!.Id.Should().Be(finding.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task GetFinding_ReturnsNotFound_WhenDoesNotExist()
     {
         var response = await _client.GetAsync("/api/findings/nonexistent");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateFindingState_ReturnsUpdatedFinding()
     {
         var (_, _, _, run) = await SetupWithRunAsync();
@@ -108,7 +107,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         updated!.State.Should().Be(FindingState.Acknowledged);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateFindingState_ReturnsNotFound_WhenFindingDoesNotExist()
     {
         var request = new UpdateFindingStateRequest(FindingState.Acknowledged);
@@ -117,7 +116,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ListRepositoryFindings_ReturnsFindingsForRepository()
     {
         var (_, repo, _, run) = await SetupWithRunAsync();
@@ -131,7 +130,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         findings.Should().ContainSingle(f => f.RepositoryId == repo.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task AssignFinding_ReturnsUpdatedFinding()
     {
         var (_, _, _, run) = await SetupWithRunAsync();
@@ -146,7 +145,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         updated!.AssignedTo.Should().Be("test-user@example.com");
     }
 
-    [Fact]
+    [Test]
     public async Task AssignFinding_ReturnsNotFound_WhenFindingDoesNotExist()
     {
         var request = new AssignFindingRequest("test@example.com");
@@ -155,7 +154,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task RetryFinding_ReturnsNewRun()
     {
         var (_, _, _, run) = await SetupWithRunAsync();
@@ -170,7 +169,7 @@ public class FindingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         retryRun!.State.Should().Be(RunState.Queued);
     }
 
-    [Fact]
+    [Test]
     public async Task RetryFinding_ReturnsNotFound_WhenFindingDoesNotExist()
     {
         var response = await _client.PostAsync("/api/findings/nonexistent/retry", null);

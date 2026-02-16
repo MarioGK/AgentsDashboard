@@ -15,7 +15,7 @@ public class HarnessHealthServiceTests
         _service = new HarnessHealthService(_loggerMock.Object);
     }
 
-    [Fact]
+    [Test]
     public void GetAllHealth_Initially_ReturnsEmpty()
     {
         var health = _service.GetAllHealth();
@@ -23,7 +23,7 @@ public class HarnessHealthServiceTests
         health.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task StartAsync_TriggersInitialRefresh()
     {
         await _service.StartAsync(CancellationToken.None);
@@ -38,7 +38,7 @@ public class HarnessHealthServiceTests
         health.Keys.Should().Contain("zai");
     }
 
-    [Fact]
+    [Test]
     public async Task StopAsync_DoesNotThrow()
     {
         await _service.StartAsync(CancellationToken.None);
@@ -48,7 +48,7 @@ public class HarnessHealthServiceTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact]
+    [Test]
     public async Task GetAllHealth_ReturnsReadOnlyDictionary()
     {
         await _service.RefreshAsync(CancellationToken.None);
@@ -58,7 +58,7 @@ public class HarnessHealthServiceTests
         health.Should().BeAssignableTo<IReadOnlyDictionary<string, HarnessHealth>>();
     }
 
-    [Fact]
+    [Test]
     public async Task RefreshAsync_CanBeCalledMultipleTimes()
     {
         await _service.RefreshAsync(CancellationToken.None);
@@ -69,7 +69,7 @@ public class HarnessHealthServiceTests
         health.Should().HaveCount(4);
     }
 
-    [Fact]
+    [Test]
     public void Dispose_AfterStart_DoesNotThrow()
     {
         _service.StartAsync(CancellationToken.None).Wait();
@@ -79,7 +79,7 @@ public class HarnessHealthServiceTests
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public async Task HarnessHealth_Record_HasExpectedProperties()
     {
         await _service.RefreshAsync(CancellationToken.None);

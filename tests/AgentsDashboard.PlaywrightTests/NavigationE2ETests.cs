@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class NavigationE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class NavigationE2ETests : PageTest
     [Test]
     public async Task Sidebar_HasAgentsLink()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
 
         var agentsLink = Page.Locator("a[href='/agents']");
@@ -21,7 +20,7 @@ public class NavigationE2ETests : PageTest
     [Test]
     public async Task Sidebar_HasWorkflowsGroup()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -31,7 +30,7 @@ public class NavigationE2ETests : PageTest
     [Test]
     public async Task Sidebar_WorkflowsGroup_HasStagesLink()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -42,13 +41,13 @@ public class NavigationE2ETests : PageTest
         await Expect(stagesLink).ToBeVisibleAsync();
 
         var stagesText = await stagesLink.TextContentAsync();
-        Assert.That(stagesText, Does.Contain("Stages"), "Stages link should have correct text");
+        await Assert.That(stagesText!).Contains("Stages");
     }
 
     [Test]
     public async Task Sidebar_WorkflowsGroup_HasGraphLink()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -59,13 +58,13 @@ public class NavigationE2ETests : PageTest
         await Expect(graphLink).ToBeVisibleAsync();
 
         var graphText = await graphLink.TextContentAsync();
-        Assert.That(graphText, Does.Contain("Graph"), "Graph link should have correct text");
+        await Assert.That(graphText!).Contains("Graph");
     }
 
     [Test]
     public async Task Sidebar_WorkflowsGroup_HasDeadLettersLink()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -76,7 +75,7 @@ public class NavigationE2ETests : PageTest
         await Expect(deadLettersLink).ToBeVisibleAsync();
 
         var deadLettersText = await deadLettersLink.TextContentAsync();
-        Assert.That(deadLettersText, Does.Contain("Dead Letters"), "Dead Letters link should have correct text");
+        await Assert.That(deadLettersText!).Contains("Dead Letters");
     }
 
 }

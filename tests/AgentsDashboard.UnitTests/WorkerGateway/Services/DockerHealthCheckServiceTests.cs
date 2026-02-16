@@ -13,7 +13,7 @@ public class DockerHealthCheckServiceTests
         _loggerMock = new Mock<ILogger<DockerHealthCheckService>>();
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task CheckHealthAsync_InitialState_ReturnsUnhealthy()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -24,7 +24,7 @@ public class DockerHealthCheckServiceTests
         result.Description.Should().Be("Initial health check pending");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task CheckHealthAsync_DoesNotBlockOnSlowHealthCheck()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -36,7 +36,7 @@ public class DockerHealthCheckServiceTests
         sw.ElapsedMilliseconds.Should().BeLessThan(100);
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task CheckHealthAsync_MultipleCallsReturnCachedResult()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -48,7 +48,7 @@ public class DockerHealthCheckServiceTests
         result1.Description.Should().Be(result2.Description);
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task CheckHealthAsync_ThreadSafe()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -65,7 +65,7 @@ public class DockerHealthCheckServiceTests
         results.Should().OnlyContain(r => r.Status == HealthStatus.Unhealthy);
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public void Dispose_DoesNotThrow()
     {
         var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -75,7 +75,7 @@ public class DockerHealthCheckServiceTests
         act.Should().NotThrow();
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public void Dispose_CanBeCalledMultipleTimes()
     {
         var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -86,7 +86,7 @@ public class DockerHealthCheckServiceTests
         act.Should().NotThrow();
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task ExecuteAsync_StartsAfterInitialDelay()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -104,7 +104,7 @@ public class DockerHealthCheckServiceTests
         resultBefore.Description.Should().Be("Initial health check pending");
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task ExecuteAsync_StopsOnCancellation()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -119,7 +119,7 @@ public class DockerHealthCheckServiceTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task ExecuteAsync_HandlesExceptionsGracefully()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -133,7 +133,7 @@ public class DockerHealthCheckServiceTests
         result.Status.Should().BeOneOf(HealthStatus.Healthy, HealthStatus.Unhealthy);
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task CheckHealthAsync_WithContext_ReturnsResult()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -152,7 +152,7 @@ public class DockerHealthCheckServiceTests
         result.Status.Should().Be(HealthStatus.Unhealthy);
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task CheckHealthAsync_WithCancellationToken_ReturnsImmediately()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -164,7 +164,7 @@ public class DockerHealthCheckServiceTests
         result.Status.Should().Be(HealthStatus.Unhealthy);
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task CheckHealthAsync_ResultHasDescription()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);
@@ -174,7 +174,7 @@ public class DockerHealthCheckServiceTests
         result.Description.Should().NotBeNullOrEmpty();
     }
 
-    [Fact(Skip = "Requires Docker runtime - Docker.DotNet version mismatch")]
+    [Test, Skip("Requires Docker runtime - Docker.DotNet version mismatch")]
     public async Task ExecuteAsync_ServiceCancellation_StopsGracefully()
     {
         using var service = new DockerHealthCheckService(_loggerMock.Object);

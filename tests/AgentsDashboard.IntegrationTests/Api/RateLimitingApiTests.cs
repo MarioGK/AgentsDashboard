@@ -1,15 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class RateLimitingApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ApiEndpoint_WithinRateLimit_ReturnsSuccess()
     {
         var response = await _client.GetAsync("/api/projects");
@@ -17,7 +16,8 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact(Skip = "Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
+    [Test]
+    [Skip("Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
     public async Task ApiEndpoint_ReturnsRateLimitHeaders()
     {
         var response = await _client.GetAsync("/api/projects");
@@ -26,17 +26,16 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.Headers.Should().ContainKey("X-RateLimit-Remaining");
     }
 
-    [Fact]
+    [Test]
     public async Task WebhookEndpoint_WithinRateLimit_ReturnsExpectedStatus()
     {
         var response = await _client.PostAsJsonAsync("/api/webhooks/test-repo/test-token", new { });
 
-        // Without auth, webhook returns 404 for non-existent repositories or 200 for valid routing
         response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound);
         response.StatusCode.Should().NotBe(HttpStatusCode.TooManyRequests);
     }
 
-    [Fact]
+    [Test]
     public async Task BurstRequest_WithinBurstLimit_Succeeds()
     {
         var tasks = Enumerable.Range(0, 10)
@@ -48,7 +47,8 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         responses.Should().AllSatisfy(r => r.StatusCode.Should().Be(HttpStatusCode.OK));
     }
 
-    [Fact(Skip = "Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
+    [Test]
+    [Skip("Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
     public async Task GlobalRateLimit_IsApplied()
     {
         var response = await _client.GetAsync("/api/settings");
@@ -56,7 +56,8 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         response.Headers.Should().ContainKey("X-RateLimit-Limit");
     }
 
-    [Fact(Skip = "Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
+    [Test]
+    [Skip("Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
     public async Task ApiRequest_HasRateLimitPolicy()
     {
         var response = await _client.GetAsync("/api/projects");
@@ -65,7 +66,8 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         limit.Should().NotBeNullOrEmpty();
     }
 
-    [Fact(Skip = "Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
+    [Test]
+    [Skip("Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
     public async Task RateLimitHeaders_ContainResetTime()
     {
         var response = await _client.GetAsync("/api/projects");
@@ -75,7 +77,8 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         resetValue.Should().NotBeNullOrEmpty();
     }
 
-    [Fact(Skip = "Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
+    [Test]
+    [Skip("Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
     public async Task MultipleRequests_DecreaseRemainingCount()
     {
         var response1 = await _client.GetAsync("/api/projects");
@@ -87,7 +90,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
         remaining2.Should().BeLessThanOrEqualTo(remaining1);
     }
 
-    [Fact]
+    [Test]
     public async Task HealthEndpoint_IsNotRateLimited()
     {
         var responses = new List<HttpResponseMessage>();

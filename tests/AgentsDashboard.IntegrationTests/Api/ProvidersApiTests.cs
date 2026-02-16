@@ -1,16 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class ProvidersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class ProvidersApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ValidateProvider_ReturnsValidationProblem_WhenProviderEmpty()
     {
         var request = new ValidateProviderRequest("", "sk-test");
@@ -19,7 +18,7 @@ public class ProvidersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateProvider_ReturnsValidationProblem_WhenSecretValueEmpty()
     {
         var request = new ValidateProviderRequest("openai", "");
@@ -28,7 +27,7 @@ public class ProvidersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task ValidateProvider_ReturnsOk_WithValidationResult()
     {
         var request = new ValidateProviderRequest("github", "ghp_test_token");
@@ -40,7 +39,7 @@ public class ProvidersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         result.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task GetHarnessHealth_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/health/harnesses");

@@ -14,7 +14,7 @@ public class EdgeConditionEvaluatorTests
         return dict;
     }
 
-    [Fact]
+    [Test]
     public void NullCondition_ReturnsTrue()
     {
         var result = EdgeConditionEvaluator.Evaluate(null!, null, null, []);
@@ -22,7 +22,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void EmptyCondition_ReturnsTrue()
     {
         var result = EdgeConditionEvaluator.Evaluate("", null, null, []);
@@ -30,7 +30,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void WhitespaceCondition_ReturnsTrue()
     {
         var result = EdgeConditionEvaluator.Evaluate("   ", null, null, []);
@@ -38,7 +38,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void RunStateEquals_Succeeded_ReturnsTrue()
     {
         var run = new RunDocument { State = RunState.Succeeded };
@@ -48,7 +48,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void RunStateEquals_Failed_ReturnsFalse()
     {
         var run = new RunDocument { State = RunState.Succeeded };
@@ -58,7 +58,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void RunStateNotEquals_Succeeded_ReturnsTrue()
     {
         var run = new RunDocument { State = RunState.Failed };
@@ -68,7 +68,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ContextKeyEquals_ReturnsTrue()
     {
         var ctx = Context(("status", "ready"));
@@ -78,7 +78,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ContextKeyNumericGreaterThan_ReturnsTrue()
     {
         var ctx = Context(("score", 85));
@@ -88,7 +88,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ContextKeyNumericLessThan_ReturnsTrue()
     {
         var ctx = Context(("score", 30));
@@ -98,7 +98,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ContextKeyNumericGreaterEqual_ReturnsTrue()
     {
         var ctx = Context(("score", 50));
@@ -108,7 +108,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ContextKeyNumericLessEqual_ReturnsTrue()
     {
         var ctx = Context(("score", 50));
@@ -118,7 +118,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ContextKeyNotEquals_ReturnsTrue()
     {
         var ctx = Context(("env", "staging"));
@@ -128,7 +128,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void NodeStateEquals_ReturnsTrue()
     {
         var nodeResult = new WorkflowNodeResult { State = WorkflowNodeState.Succeeded };
@@ -138,7 +138,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void NodeAttemptEquals_ReturnsTrue()
     {
         var nodeResult = new WorkflowNodeResult { Attempt = 3 };
@@ -148,7 +148,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void InvalidExpression_ReturnsFalse()
     {
         var result = EdgeConditionEvaluator.Evaluate("this is not a valid expression", null, null, []);
@@ -156,7 +156,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void MissingContextKey_ReturnsFalse()
     {
         var result = EdgeConditionEvaluator.Evaluate("context.missing == value", null, null, []);
@@ -164,7 +164,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void NullRun_WithRunCondition_ReturnsFalse()
     {
         var result = EdgeConditionEvaluator.Evaluate("run.state == Succeeded", null, null, []);
@@ -172,7 +172,7 @@ public class EdgeConditionEvaluatorTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void CaseInsensitiveComparison_ReturnsTrue()
     {
         var run = new RunDocument { State = RunState.Succeeded };

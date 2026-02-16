@@ -5,7 +5,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class ImageBuilderServiceTests
 {
-    [Fact]
+    [Test]
     public void ImageBuildResult_RecordProperties()
     {
         var result = new ImageBuildResult(true, "sha256:abc123", ["Step 1/3", "Step 2/3", "Step 3/3"]);
@@ -15,7 +15,7 @@ public class ImageBuilderServiceTests
         result.Logs.Should().HaveCount(3);
     }
 
-    [Fact]
+    [Test]
     public void ImageBuildResult_FailedBuild()
     {
         var result = new ImageBuildResult(false, string.Empty, ["Error: invalid Dockerfile"]);
@@ -25,7 +25,7 @@ public class ImageBuilderServiceTests
         result.Logs.Should().ContainSingle().Which.Should().Contain("Error");
     }
 
-    [Fact]
+    [Test]
     public void ImageInfo_RecordProperties()
     {
         var created = new DateTime(2025, 1, 15, 10, 0, 0, DateTimeKind.Utc);
@@ -37,7 +37,7 @@ public class ImageBuilderServiceTests
         info.Created.Should().Be(created);
     }
 
-    [Fact]
+    [Test]
     public void ImageBuildResult_RecordEquality()
     {
         var a = new ImageBuildResult(true, "id1", ["log1"]);
@@ -46,7 +46,7 @@ public class ImageBuilderServiceTests
         (a == b).Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ImageInfo_RecordEquality()
     {
         var dt = DateTime.UtcNow;
@@ -56,7 +56,7 @@ public class ImageBuilderServiceTests
         a.Should().Be(b);
     }
 
-    [Fact]
+    [Test]
     public async Task DisposeAsync_CompletesWithoutError()
     {
         var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -66,7 +66,7 @@ public class ImageBuilderServiceTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact]
+    [Test]
     public void ImageBuildResult_EmptyLogs()
     {
         var result = new ImageBuildResult(true, "sha256:def", []);
@@ -75,7 +75,7 @@ public class ImageBuilderServiceTests
         result.Success.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ImageInfo_LargeSize()
     {
         var info = new ImageInfo("big:latest", "sha256:big", 5L * 1024 * 1024 * 1024, DateTime.UtcNow);
@@ -83,7 +83,7 @@ public class ImageBuilderServiceTests
         info.Size.Should().BeGreaterThan(0);
     }
 
-    [Fact]
+    [Test]
     public async Task BuildImageAsync_WithValidDockerfile_ReturnsResult()
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -95,7 +95,7 @@ public class ImageBuilderServiceTests
         result.Logs.Should().NotBeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task BuildImageAsync_LogCallback_IsInvoked()
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -107,7 +107,7 @@ public class ImageBuilderServiceTests
         logs.Should().NotBeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task BuildImageAsync_WithCancellation_ReturnsResult()
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -119,7 +119,7 @@ public class ImageBuilderServiceTests
         result.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListImagesAsync_ReturnsList()
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -129,7 +129,7 @@ public class ImageBuilderServiceTests
         result.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListImagesAsync_WithFilter_ReturnsFilteredList()
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -139,7 +139,7 @@ public class ImageBuilderServiceTests
         result.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListImagesAsync_WithEmptyFilter_ReturnsAllImages()
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -149,7 +149,7 @@ public class ImageBuilderServiceTests
         result.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteImageAsync_WithNonExistentImage_ReturnsFalse()
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -159,7 +159,7 @@ public class ImageBuilderServiceTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task TagImageAsync_WithNonExistentImage_ReturnsFalse()
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -169,10 +169,10 @@ public class ImageBuilderServiceTests
         result.Should().BeFalse();
     }
 
-    [Theory]
-    [InlineData("FROM alpine", "test:v1")]
-    [InlineData("FROM ubuntu:22.04\nRUN apt-get update", "myapp:latest")]
-    [InlineData("# Comment\nFROM node:18\nCOPY . /app", "nodeapp:dev")]
+    [Test]
+    [Arguments("FROM alpine", "test:v1")]
+    [Arguments("FROM ubuntu:22.04\nRUN apt-get update", "myapp:latest")]
+    [Arguments("# Comment\nFROM node:18\nCOPY . /app", "nodeapp:dev")]
     public async Task BuildImageAsync_WithVariousDockerfiles_ReturnsResult(string dockerfile, string tag)
     {
         await using var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -183,7 +183,7 @@ public class ImageBuilderServiceTests
         result.Logs.Should().NotBeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task DisposeAsync_CalledMultipleTimes_DoesNotThrow()
     {
         var service = new ImageBuilderService(NullLogger<ImageBuilderService>.Instance);
@@ -194,7 +194,7 @@ public class ImageBuilderServiceTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact]
+    [Test]
     public void ImageBuildResult_Deconstruct_HasCorrectValues()
     {
         var result = new ImageBuildResult(true, "id123", ["log"]);
@@ -206,7 +206,7 @@ public class ImageBuilderServiceTests
         logs.Should().ContainSingle();
     }
 
-    [Fact]
+    [Test]
     public void ImageInfo_Deconstruct_HasCorrectValues()
     {
         var created = DateTime.UtcNow;
@@ -220,7 +220,7 @@ public class ImageBuilderServiceTests
         createdTime.Should().Be(created);
     }
 
-    [Fact]
+    [Test]
     public void ImageBuildResult_WithErrors_LogsContainErrors()
     {
         var logs = new List<string> { "Step 1/3", "Error: build failed" };
@@ -230,10 +230,10 @@ public class ImageBuilderServiceTests
         result.Logs.Should().Contain(l => l.Contains("Error", StringComparison.OrdinalIgnoreCase));
     }
 
-    [Theory]
-    [InlineData("sha256:abc123")]
-    [InlineData("sha256:def4567890123456789012345678901234567890")]
-    [InlineData("")]
+    [Test]
+    [Arguments("sha256:abc123")]
+    [Arguments("sha256:def4567890123456789012345678901234567890")]
+    [Arguments("")]
     public void ImageBuildResult_VariousImageIds(string imageId)
     {
         var result = new ImageBuildResult(true, imageId, []);
@@ -241,7 +241,7 @@ public class ImageBuilderServiceTests
         result.ImageId.Should().Be(imageId);
     }
 
-    [Fact]
+    [Test]
     public void ImageInfo_WithVariousSizes_HandlesCorrectly()
     {
         var sizes = new[] { 0L, 1024L, 1024L * 1024, 1024L * 1024 * 1024, 5L * 1024 * 1024 * 1024 };

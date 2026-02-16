@@ -44,7 +44,7 @@ public class WorkflowDagValidatorTests
         };
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_SimpleLinearWorkflow_Passes()
     {
         var workflow = CreateWorkflow(
@@ -60,7 +60,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_BranchingWorkflow_Passes()
     {
         var workflow = CreateWorkflow(
@@ -76,7 +76,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_NoStartNode_Fails()
     {
         var workflow = CreateWorkflow(
@@ -89,7 +89,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("Start node"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_MultipleStartNodes_Fails()
     {
         var workflow = CreateWorkflow(
@@ -102,7 +102,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("Start nodes"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_NoEndNode_Fails()
     {
         var workflow = CreateWorkflow(
@@ -115,7 +115,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("End node"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_DuplicateNodeIds_Fails()
     {
         var workflow = CreateWorkflow(
@@ -131,7 +131,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("unique"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_CycleDetection_Fails()
     {
         var workflow = CreateWorkflow(
@@ -147,7 +147,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("cycle"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_UnreachableNode_Fails()
     {
         var workflow = CreateWorkflow(
@@ -163,7 +163,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("reachable") || e.Contains("Orphan"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_StartNodeHasIncomingEdge_Fails()
     {
         var workflow = CreateWorkflow(
@@ -179,7 +179,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("Start") && e.Contains("incoming"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_EndNodeHasOutgoingEdge_Fails()
     {
         var workflow = CreateWorkflow(
@@ -195,7 +195,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("End") && e.Contains("outgoing"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_DuplicateEdgePriorities_Fails()
     {
         var workflow = CreateWorkflow(
@@ -211,7 +211,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("duplicate priorities"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_EdgeReferencesUnknownSource_Fails()
     {
         var workflow = CreateWorkflow(
@@ -224,7 +224,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("unknown source"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_EdgeReferencesUnknownTarget_Fails()
     {
         var workflow = CreateWorkflow(
@@ -237,7 +237,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("unknown target"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_AgentNodeWithoutAgentId_Fails()
     {
         var workflow = CreateWorkflow(
@@ -250,7 +250,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("AgentId"));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_AgentNodeWithNonExistentAgent_Fails()
     {
         var workflow = CreateWorkflow(
@@ -266,7 +266,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("non-existent"));
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_AgentNodeWithValidAgent_Passes()
     {
         var workflow = CreateWorkflow(
@@ -282,7 +282,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_DelayNode_Passes()
     {
         var workflow = CreateWorkflow(
@@ -295,7 +295,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_ApprovalNode_Passes()
     {
         var workflow = CreateWorkflow(
@@ -308,7 +308,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_MultipleEndNodes_Passes()
     {
         var workflow = CreateWorkflow(
@@ -324,7 +324,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_SelfLoop_Fails()
     {
         var workflow = CreateWorkflow(
@@ -340,7 +340,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("cycle"));
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_EmptyConditions_Passes()
     {
         var workflow = CreateWorkflow(
@@ -353,7 +353,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_ComplexDag_Passes()
     {
         var workflow = CreateWorkflow(
@@ -369,7 +369,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_DisconnectedSubgraph_Fails()
     {
         var workflow = CreateWorkflow(
@@ -385,7 +385,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().Contain(e => e.Contains("reachable") || e.Contains("Detached"));
     }
 
-    [Fact]
+    [Test]
     public async Task Valid_SingleStartAndEnd_Passes()
     {
         var workflow = CreateWorkflow(
@@ -398,7 +398,7 @@ public class WorkflowDagValidatorTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_OnlyStartNode_Fails()
     {
         var workflow = CreateWorkflow(

@@ -19,13 +19,13 @@ public class ZaiAdapterTests
         _adapter = new ZaiAdapter(options, redactor, NullLogger<ZaiAdapter>.Instance);
     }
 
-    [Fact]
+    [Test]
     public void HarnessName_ReturnsZai()
     {
         _adapter.HarnessName.Should().Be("zai");
     }
 
-    [Fact]
+    [Test]
     public void PrepareContext_SetsDefaultValues()
     {
         var request = CreateRequest();
@@ -39,7 +39,7 @@ public class ZaiAdapterTests
         context.TimeoutSeconds.Should().Be(600);
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesRequiredEnvVariables()
     {
         var request = CreateRequest();
@@ -54,7 +54,7 @@ public class ZaiAdapterTests
         command.Arguments.Should().Contain("HARNESS=zai");
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesOptionalEnvVariables_WhenPresent()
     {
         var request = CreateRequest();
@@ -70,7 +70,7 @@ public class ZaiAdapterTests
         command.Arguments.Should().Contain("ZAI_MAX_THINKING_TOKENS=8000");
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsSuccess_WhenEnvelopeSucceeded()
     {
         var envelope = new HarnessResultEnvelope { Status = "succeeded" };
@@ -81,7 +81,7 @@ public class ZaiAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsRateLimitExceeded_WhenServiceOverloaded()
     {
         var envelope = new HarnessResultEnvelope
@@ -98,7 +98,7 @@ public class ZaiAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(60);
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsResourceExhausted_WhenPromptTooLong()
     {
         var envelope = new HarnessResultEnvelope
@@ -115,7 +115,7 @@ public class ZaiAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(30);
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsInvalidInput_WhenContentPolicyViolation()
     {
         var envelope = new HarnessResultEnvelope
@@ -131,7 +131,7 @@ public class ZaiAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsConfigurationError_WhenToolError()
     {
         var envelope = new HarnessResultEnvelope
@@ -147,7 +147,7 @@ public class ZaiAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsPermissionDenied_WhenApprovalDenied()
     {
         var envelope = new HarnessResultEnvelope
@@ -163,7 +163,7 @@ public class ZaiAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsInternalError_WhenCliError()
     {
         var envelope = new HarnessResultEnvelope
@@ -181,7 +181,7 @@ public class ZaiAdapterTests
         classification.RemediationHints.Should().Contain(h => h.Contains("cc-mirror"));
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsConfigurationError_WhenGlmApiError()
     {
         var envelope = new HarnessResultEnvelope
@@ -198,12 +198,12 @@ public class ZaiAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(30);
     }
 
-    [Theory]
-    [InlineData("unauthorized", FailureClass.AuthenticationError)]
-    [InlineData("rate limit", FailureClass.RateLimitExceeded)]
-    [InlineData("timeout", FailureClass.Timeout)]
-    [InlineData("not found", FailureClass.NotFound)]
-    [InlineData("network error", FailureClass.NetworkError)]
+    [Test]
+    [Arguments("unauthorized", FailureClass.AuthenticationError)]
+    [Arguments("rate limit", FailureClass.RateLimitExceeded)]
+    [Arguments("timeout", FailureClass.Timeout)]
+    [Arguments("not found", FailureClass.NotFound)]
+    [Arguments("network error", FailureClass.NetworkError)]
     public void ClassifyFailure_ReturnsCorrectBaseClassification(string error, FailureClass expectedClass)
     {
         var envelope = new HarnessResultEnvelope
@@ -217,7 +217,7 @@ public class ZaiAdapterTests
         classification.Class.Should().Be(expectedClass);
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_ReturnsEmptyList_WhenNoArtifacts()
     {
         var envelope = new HarnessResultEnvelope();
@@ -227,7 +227,7 @@ public class ZaiAdapterTests
         artifacts.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_MapsArtifactPaths()
     {
         var envelope = new HarnessResultEnvelope
@@ -242,7 +242,7 @@ public class ZaiAdapterTests
         artifacts.Should().Contain(a => a.Name == "file2.py");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesEditedFiles_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -256,7 +256,7 @@ public class ZaiAdapterTests
         artifacts.Should().Contain(a => a.Path == "/src/utils.py");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesThinkingOutput_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -269,7 +269,7 @@ public class ZaiAdapterTests
         artifacts.Should().Contain(a => a.Name == "thinking.md" && a.Type == "markdown");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesToolUseLog_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -282,7 +282,7 @@ public class ZaiAdapterTests
         artifacts.Should().Contain(a => a.Name == "tool_calls.json" && a.Type == "json");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_DoesNotDuplicateEditedFiles_WhenAlreadyInArtifacts()
     {
         var envelope = new HarnessResultEnvelope
@@ -297,7 +297,7 @@ public class ZaiAdapterTests
         artifacts.Should().Contain(a => a.Path == "/src/file2.py");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_ParsesValidJsonEnvelope()
     {
         var stdout = """{"status":"succeeded","summary":"GLM-5 task completed"}""";
@@ -308,7 +308,7 @@ public class ZaiAdapterTests
         envelope.Summary.Should().Be("GLM-5 task completed");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_AddsHasThinking_WhenThinkingPresent()
     {
         var stdout = """{"status":"succeeded","metadata":{"thinking":"reasoning content"}}""";
@@ -318,7 +318,7 @@ public class ZaiAdapterTests
         envelope.Metadata["hasThinking"].Should().Be("true");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_DoesNotAddHasThinking_WhenThinkingAbsent()
     {
         var stdout = """{"status":"succeeded"}""";
@@ -328,7 +328,7 @@ public class ZaiAdapterTests
         envelope.Metadata.Should().NotContainKey("hasThinking");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_AddsToolCallCount_WhenToolCallsPresent()
     {
         var stdout = """{"status":"succeeded","metadata":{"toolCalls":"read,write,execute"}}""";
@@ -338,7 +338,7 @@ public class ZaiAdapterTests
         envelope.Metadata["toolCallCount"].Should().Be("3");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_CreatesFallback_WhenInvalidJson()
     {
         var stdout = "raw zai output";
@@ -350,7 +350,7 @@ public class ZaiAdapterTests
         envelope.Metadata["stdout"].Should().Be("raw zai output");
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_UsesSummaryAsFallback_WhenErrorIsEmpty()
     {
         var envelope = new HarnessResultEnvelope

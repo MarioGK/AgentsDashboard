@@ -4,7 +4,7 @@ namespace AgentsDashboard.UnitTests.WorkerGateway.Adapters;
 
 public class FailureClassificationTests
 {
-    [Fact]
+    [Test]
     public void Success_ReturnsSuccessfulClassification()
     {
         var classification = FailureClassification.Success();
@@ -13,7 +13,7 @@ public class FailureClassificationTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void FromClass_WithNoHints_CreatesClassification()
     {
         var classification = FailureClassification.FromClass(
@@ -29,7 +29,7 @@ public class FailureClassificationTests
         classification.RemediationHints.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void FromClass_WithHints_CreatesClassificationWithHints()
     {
         var classification = FailureClassification.FromClass(
@@ -51,19 +51,19 @@ public class FailureClassificationTests
         classification.RemediationHints.Should().Contain("Contact support");
     }
 
-    [Theory]
-    [InlineData(FailureClass.None)]
-    [InlineData(FailureClass.AuthenticationError)]
-    [InlineData(FailureClass.RateLimitExceeded)]
-    [InlineData(FailureClass.Timeout)]
-    [InlineData(FailureClass.ResourceExhausted)]
-    [InlineData(FailureClass.InvalidInput)]
-    [InlineData(FailureClass.ConfigurationError)]
-    [InlineData(FailureClass.NetworkError)]
-    [InlineData(FailureClass.PermissionDenied)]
-    [InlineData(FailureClass.NotFound)]
-    [InlineData(FailureClass.InternalError)]
-    [InlineData(FailureClass.Unknown)]
+    [Test]
+    [Arguments(FailureClass.None)]
+    [Arguments(FailureClass.AuthenticationError)]
+    [Arguments(FailureClass.RateLimitExceeded)]
+    [Arguments(FailureClass.Timeout)]
+    [Arguments(FailureClass.ResourceExhausted)]
+    [Arguments(FailureClass.InvalidInput)]
+    [Arguments(FailureClass.ConfigurationError)]
+    [Arguments(FailureClass.NetworkError)]
+    [Arguments(FailureClass.PermissionDenied)]
+    [Arguments(FailureClass.NotFound)]
+    [Arguments(FailureClass.InternalError)]
+    [Arguments(FailureClass.Unknown)]
     public void FromClass_AllFailureClasses_AreValid(FailureClass failureClass)
     {
         var classification = FailureClassification.FromClass(failureClass, "Test reason", true, 10, "Hint");

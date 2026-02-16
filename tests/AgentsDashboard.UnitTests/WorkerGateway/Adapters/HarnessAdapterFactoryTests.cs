@@ -21,7 +21,7 @@ public class HarnessAdapterFactoryTests
         return new HarnessAdapterFactory(options, redactor, serviceProvider);
     }
 
-    [Fact]
+    [Test]
     public void Create_WithCodex_ReturnsCodexAdapter()
     {
         var factory = CreateFactory();
@@ -30,7 +30,7 @@ public class HarnessAdapterFactoryTests
         adapter.HarnessName.Should().Be("codex");
     }
 
-    [Fact]
+    [Test]
     public void Create_WithOpenCode_ReturnsOpenCodeAdapter()
     {
         var factory = CreateFactory();
@@ -39,7 +39,7 @@ public class HarnessAdapterFactoryTests
         adapter.HarnessName.Should().Be("opencode");
     }
 
-    [Fact]
+    [Test]
     public void Create_WithClaudeCode_ReturnsClaudeCodeAdapter()
     {
         var factory = CreateFactory();
@@ -48,7 +48,7 @@ public class HarnessAdapterFactoryTests
         adapter.HarnessName.Should().Be("claude-code");
     }
 
-    [Fact]
+    [Test]
     public void Create_WithClaudeCodeAlternateName_ReturnsClaudeCodeAdapter()
     {
         var factory = CreateFactory();
@@ -57,7 +57,7 @@ public class HarnessAdapterFactoryTests
         adapter.HarnessName.Should().Be("claude-code");
     }
 
-    [Fact]
+    [Test]
     public void Create_WithZai_ReturnsZaiAdapter()
     {
         var factory = CreateFactory();
@@ -66,10 +66,10 @@ public class HarnessAdapterFactoryTests
         adapter.HarnessName.Should().Be("zai");
     }
 
-    [Theory]
-    [InlineData("CODEX")]
-    [InlineData("CoDeX")]
-    [InlineData("  codex  ")]
+    [Test]
+    [Arguments("CODEX")]
+    [Arguments("CoDeX")]
+    [Arguments("  codex  ")]
     public void Create_WithDifferentCasing_ReturnsCorrectAdapter(string harnessName)
     {
         var factory = CreateFactory();
@@ -77,7 +77,7 @@ public class HarnessAdapterFactoryTests
         adapter.Should().BeOfType<CodexAdapter>();
     }
 
-    [Fact]
+    [Test]
     public void Create_WithUnknownHarness_ThrowsNotSupportedException()
     {
         var factory = CreateFactory();
@@ -86,10 +86,10 @@ public class HarnessAdapterFactoryTests
             .WithMessage("*not supported*");
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments(null)]
     public void Create_WithEmptyOrNullHarness_ThrowsArgumentException(string? harnessName)
     {
         var factory = CreateFactory();
@@ -98,7 +98,7 @@ public class HarnessAdapterFactoryTests
             .WithMessage("*cannot be empty*");
     }
 
-    [Fact]
+    [Test]
     public void IsSupported_WithKnownHarness_ReturnsTrue()
     {
         var factory = CreateFactory();
@@ -109,23 +109,23 @@ public class HarnessAdapterFactoryTests
         factory.IsSupported("zai").Should().BeTrue();
     }
 
-    [Theory]
-    [InlineData("codex", true)]
-    [InlineData("opencode", true)]
-    [InlineData("claude-code", true)]
-    [InlineData("claude code", true)]
-    [InlineData("zai", true)]
-    [InlineData("CODEX", true)]
-    [InlineData("unknown", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
+    [Test]
+    [Arguments("codex", true)]
+    [Arguments("opencode", true)]
+    [Arguments("claude-code", true)]
+    [Arguments("claude code", true)]
+    [Arguments("zai", true)]
+    [Arguments("CODEX", true)]
+    [Arguments("unknown", false)]
+    [Arguments("", false)]
+    [Arguments(null, false)]
     public void IsSupported_ReturnsExpectedResult(string? harnessName, bool expected)
     {
         var factory = CreateFactory();
         factory.IsSupported(harnessName!).Should().Be(expected);
     }
 
-    [Fact]
+    [Test]
     public void GetSupportedHarnesses_ReturnsAllHarnesses()
     {
         var factory = CreateFactory();
@@ -137,7 +137,7 @@ public class HarnessAdapterFactoryTests
         harnesses.Should().Contain("zai");
     }
 
-    [Fact]
+    [Test]
     public void RegisterAdapter_AddsNewHarness()
     {
         var factory = CreateFactory();
@@ -147,7 +147,7 @@ public class HarnessAdapterFactoryTests
         adapter.Should().BeOfType<TestAdapter>();
     }
 
-    [Fact]
+    [Test]
     public void RegisterAdapter_OverwritesExistingHarness()
     {
         var factory = CreateFactory();
@@ -156,10 +156,10 @@ public class HarnessAdapterFactoryTests
         adapter.Should().BeOfType<TestAdapter>();
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments(null)]
     public void RegisterAdapter_WithEmptyName_ThrowsArgumentException(string? harnessName)
     {
         var factory = CreateFactory();
@@ -168,7 +168,7 @@ public class HarnessAdapterFactoryTests
             .WithMessage("*cannot be empty*");
     }
 
-    [Fact]
+    [Test]
     public void RegisterAdapter_WithNullFactory_ThrowsArgumentNullException()
     {
         var factory = CreateFactory();

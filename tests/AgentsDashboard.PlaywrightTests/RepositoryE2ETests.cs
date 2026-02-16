@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class RepositoryE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task ProjectDetailPage_LoadsAfterLogin()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/projects");
         await Expect(Page.Locator("text=Projects")).ToBeVisibleAsync();
     }
@@ -19,7 +18,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task ProjectDetailPage_CreateRepository()
     {
-        
+
         var projectId = await CreateProjectAsync("E2E Repo Test Project");
 
         await Page.GotoAsync($"{BaseUrl}/projects/{projectId}");
@@ -36,7 +35,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task CreateRepository_UnderProject()
     {
-        
+
         var projectName = $"E2E Create Repo {Guid.NewGuid():N}";
         var projectId = await CreateProjectAsync(projectName);
 
@@ -53,7 +52,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task CreateRepository_WithDescription()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Repo Desc {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -68,7 +67,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task Repository_AppearsUnderCorrectProject()
     {
-        
+
         var projectName = $"E2E Correct Project {Guid.NewGuid():N}";
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync(projectName);
 
@@ -79,7 +78,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task EditRepository_UpdateName()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Edit Repo {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -101,7 +100,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task DeleteRepository_RemovesFromProject()
     {
-        
+
         var projectName = $"E2E Delete Repo {Guid.NewGuid():N}";
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync(projectName);
 
@@ -123,7 +122,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task RepositoryDetailPage_LoadsAndShowsTabs()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Repo Detail Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -137,7 +136,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task RepositoryDetailPage_SaveSecrets()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Secrets Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -152,7 +151,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task RepositoryDetailPage_TasksTab()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Tasks Tab {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -165,7 +164,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task RepositoryDetailPage_RunsTab()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Runs Tab {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -177,7 +176,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task RepositoryDetailPage_FindingsTab()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Findings Tab {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -189,7 +188,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task RepositoryDetailPage_BackNavigation()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Back Nav {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -203,7 +202,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task RepositoryList_InProjectDetail()
     {
-        
+
         var projectName = $"E2E Repo List {Guid.NewGuid():N}";
         var projectId = await CreateProjectAsync(projectName);
 
@@ -223,7 +222,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task Repository_OpenButton_NavigatesToDetail()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Open Button {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/projects/{projectId}");
@@ -235,7 +234,7 @@ public class RepositoryE2ETests : PageTest
     [Test]
     public async Task Repository_WebhookUrl_Displayed()
     {
-        
+
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Webhook URL {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");

@@ -5,61 +5,61 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class GraphWorkflowModelsTests
 {
-    [Fact]
+    [Test]
     public void WorkflowNodeType_Start_Is0()
     {
         ((int)WorkflowNodeType.Start).Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeType_Agent_Is1()
     {
         ((int)WorkflowNodeType.Agent).Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeType_Delay_Is2()
     {
         ((int)WorkflowNodeType.Delay).Should().Be(2);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeType_Approval_Is3()
     {
         ((int)WorkflowNodeType.Approval).Should().Be(3);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeType_End_Is4()
     {
         ((int)WorkflowNodeType.End).Should().Be(4);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2ExecutionState_Running_Is0()
     {
         ((int)WorkflowV2ExecutionState.Running).Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2ExecutionState_Succeeded_Is1()
     {
         ((int)WorkflowV2ExecutionState.Succeeded).Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeState_Pending_Is0()
     {
         ((int)WorkflowNodeState.Pending).Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeState_DeadLettered_Is6()
     {
         ((int)WorkflowNodeState.DeadLettered).Should().Be(6);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeConfig_Defaults()
     {
         var node = new WorkflowNodeConfig();
@@ -78,7 +78,7 @@ public class GraphWorkflowModelsTests
         node.PositionY.Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowEdgeConfig_Defaults()
     {
         var edge = new WorkflowEdgeConfig();
@@ -91,7 +91,7 @@ public class GraphWorkflowModelsTests
         edge.Label.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2TriggerConfig_Defaults()
     {
         var trigger = new WorkflowV2TriggerConfig();
@@ -101,7 +101,7 @@ public class GraphWorkflowModelsTests
         trigger.WebhookEventFilter.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2Document_Defaults()
     {
         var workflow = new WorkflowV2Document();
@@ -121,7 +121,7 @@ public class GraphWorkflowModelsTests
         workflow.UpdatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(2));
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecutionV2Document_Defaults()
     {
         var execution = new WorkflowExecutionV2Document();
@@ -143,7 +143,7 @@ public class GraphWorkflowModelsTests
         execution.EndedAtUtc.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeResult_Defaults()
     {
         var result = new WorkflowNodeResult();
@@ -160,7 +160,7 @@ public class GraphWorkflowModelsTests
         result.EndedAtUtc.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowDeadLetterDocument_Defaults()
     {
         var dl = new WorkflowDeadLetterDocument();
@@ -180,7 +180,7 @@ public class GraphWorkflowModelsTests
         dl.ReplayedAtUtc.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeResult_Serialization_RoundTrips()
     {
         var original = new WorkflowNodeResult
@@ -211,7 +211,7 @@ public class GraphWorkflowModelsTests
         deserialized.EndedAtUtc.Should().Be(new DateTime(2026, 2, 14, 10, 5, 0, DateTimeKind.Utc));
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2Document_Serialization_RoundTrips()
     {
         var original = new WorkflowV2Document

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
 
-[Trait("Category", "Docker")]
+[Property("Category", "Docker")]
 public class ContainerOrphanReconcilerTests
 {
     private readonly Mock<ILogger<ContainerOrphanReconciler>> _loggerMock;
@@ -14,13 +14,13 @@ public class ContainerOrphanReconcilerTests
         _loggerMock = new Mock<ILogger<ContainerOrphanReconciler>>();
     }
 
-    [Fact]
+    [Test]
     public void Implements_IContainerOrphanReconciler()
     {
         typeof(ContainerOrphanReconciler).Should().Implement<IContainerOrphanReconciler>();
     }
 
-    [Fact]
+    [Test]
     public void OrphanReconciliationResult_PropertiesAreSetCorrectly()
     {
         var removedContainers = new List<OrphanedContainer>
@@ -35,7 +35,7 @@ public class ContainerOrphanReconcilerTests
         result.RemovedContainers.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public void OrphanedContainer_PropertiesAreSetCorrectly()
     {
         var container = new OrphanedContainer("abc123", "run-456");
@@ -44,7 +44,7 @@ public class ContainerOrphanReconcilerTests
         container.RunId.Should().Be("run-456");
     }
 
-    [Fact]
+    [Test]
     public void OrphanReconciliationResult_WithEmptyContainers_IsValid()
     {
         var result = new OrphanReconciliationResult(0, []);
@@ -53,7 +53,7 @@ public class ContainerOrphanReconcilerTests
         result.RemovedContainers.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void OrphanedContainer_IsRecord_EqualityWorks()
     {
         var container1 = new OrphanedContainer("abc", "run1");
@@ -64,7 +64,7 @@ public class ContainerOrphanReconcilerTests
         container1.Should().NotBe(container3);
     }
 
-    [Fact]
+    [Test]
     public void OrphanReconciliationResult_IsRecord_EqualityWorks()
     {
         var containers = new List<OrphanedContainer> { new("abc", "run1") };
@@ -76,38 +76,38 @@ public class ContainerOrphanReconcilerTests
         result1.Should().NotBe(result3);
     }
 
-    [Fact(Skip = "Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
+    [Property("Requires", "Docker")]
     public async Task ReconcileAsync_WithNoContainers_ReturnsZeroOrphans()
     {
     }
 
-    [Fact(Skip = "Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
+    [Property("Requires", "Docker")]
     public async Task ReconcileAsync_WithAllActiveRuns_ReturnsZeroOrphans()
     {
     }
 
-    [Fact(Skip = "Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
+    [Property("Requires", "Docker")]
     public async Task ReconcileAsync_WithOrphanedContainers_ReturnsOrphans()
     {
     }
 
-    [Fact(Skip = "Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
+    [Property("Requires", "Docker")]
     public async Task ReconcileAsync_WithEmptyActiveRunIds_TreatsAllAsOrphans()
     {
     }
 
-    [Fact(Skip = "Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
+    [Property("Requires", "Docker")]
     public async Task ReconcileAsync_WithFailedRemoval_ReportsCorrectCount()
     {
     }
 
-    [Fact(Skip = "Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
-    [Trait("Requires", "Docker")]
+    [Test, Skip("Requires Docker - DockerContainerService is sealed and creates DockerClient in constructor")]
+    [Property("Requires", "Docker")]
     public async Task ReconcileAsync_IsCaseInsensitive()
     {
     }

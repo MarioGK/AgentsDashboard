@@ -2,16 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class SettingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class SettingsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task GetSettings_ReturnsDefaultSettings()
     {
         var response = await _client.GetAsync("/api/settings");
@@ -21,7 +20,7 @@ public class SettingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         settings.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateSettings_ReturnsUpdatedSettings()
     {
         var request = new UpdateSystemSettingsRequest(
@@ -43,7 +42,7 @@ public class SettingsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         updated.VmUiEndpoint.Should().Be("http://vmui:8081");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateSettings_PartialUpdate_PreservesExistingValues()
     {
         var fullRequest = new UpdateSystemSettingsRequest(

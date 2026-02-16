@@ -2,16 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class WorkersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class WorkersApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ListWorkers_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/workers");
@@ -21,7 +20,7 @@ public class WorkersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
         workers.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task WorkerHeartbeat_ReturnsAcknowledged()
     {
         var request = new WorkerHeartbeatRequest("worker-1", "http://localhost:5001", 2, 4);
@@ -30,7 +29,7 @@ public class WorkersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task WorkerHeartbeat_ReturnsValidationProblem_WhenWorkerIdEmpty()
     {
         var request = new WorkerHeartbeatRequest("", "http://localhost:5001", 0, 4);
@@ -39,7 +38,7 @@ public class WorkersApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task WorkerHeartbeat_WorkerAppearsInList()
     {
         var request = new WorkerHeartbeatRequest("worker-list-test", "http://localhost:5002", 1, 8);

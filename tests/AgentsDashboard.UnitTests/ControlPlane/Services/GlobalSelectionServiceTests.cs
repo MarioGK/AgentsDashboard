@@ -53,7 +53,7 @@ public class GlobalSelectionServiceTests
         return new GlobalSelectionService(_storeMock.Object, _localStorageMock.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_LoadsProjectsFromStore()
     {
         SetupDefaultStoreMocks();
@@ -67,7 +67,7 @@ public class GlobalSelectionServiceTests
         service.IsInitialized.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithNoSavedSelection_SelectsFirstProject()
     {
         SetupDefaultStoreMocks();
@@ -81,7 +81,7 @@ public class GlobalSelectionServiceTests
         service.SelectedRepositoryId.Should().Be("repo-1");
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithValidSavedProjectId_RestoresSelection()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -97,7 +97,7 @@ public class GlobalSelectionServiceTests
         service.SelectedProjectId.Should().Be("proj-2");
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithInvalidSavedProjectId_SelectsFirstProject()
     {
         SetupDefaultStoreMocks();
@@ -110,7 +110,7 @@ public class GlobalSelectionServiceTests
         service.SelectedProjectId.Should().Be("proj-1");
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithValidSavedRepoId_RestoresRepoSelection()
     {
         SetupDefaultStoreMocks();
@@ -124,7 +124,7 @@ public class GlobalSelectionServiceTests
         service.SelectedRepositoryId.Should().Be("repo-2");
     }
 
-    [Fact]
+    [Test]
     public async Task SelectProjectAsync_UpdatesSelection()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -144,7 +144,7 @@ public class GlobalSelectionServiceTests
         service.SelectedProject?.Name.Should().Be("Project 2");
     }
 
-    [Fact]
+    [Test]
     public async Task SelectProjectAsync_RaisesSelectionChangedEvent()
     {
         SetupDefaultStoreMocks();
@@ -162,7 +162,7 @@ public class GlobalSelectionServiceTests
         eventArgs!.ProjectId.Should().Be("proj-2");
     }
 
-    [Fact]
+    [Test]
     public async Task SelectProjectAsync_WithNull_ClearsSelection()
     {
         SetupDefaultStoreMocks();
@@ -178,7 +178,7 @@ public class GlobalSelectionServiceTests
         service.Repositories.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task SelectProjectAsync_SameProjectId_DoesNothing()
     {
         SetupDefaultStoreMocks();
@@ -194,7 +194,7 @@ public class GlobalSelectionServiceTests
         service.SelectedProjectId.Should().Be(initialProjectId);
     }
 
-    [Fact]
+    [Test]
     public async Task SelectRepositoryAsync_UpdatesSelection()
     {
         SetupDefaultStoreMocks();
@@ -209,7 +209,7 @@ public class GlobalSelectionServiceTests
         service.SelectedRepository?.Name.Should().Be("Repo 2");
     }
 
-    [Fact]
+    [Test]
     public async Task SelectRepositoryAsync_RaisesSelectionChangedEvent()
     {
         SetupDefaultStoreMocks();
@@ -227,7 +227,7 @@ public class GlobalSelectionServiceTests
         eventArgs!.RepositoryId.Should().Be("repo-2");
     }
 
-    [Fact]
+    [Test]
     public async Task SelectRepositoryAsync_WithNull_ClearsSelection()
     {
         SetupDefaultStoreMocks();
@@ -242,7 +242,7 @@ public class GlobalSelectionServiceTests
         service.SelectedRepository.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task SelectRepositoryAsync_SameRepoId_DoesNothing()
     {
         SetupDefaultStoreMocks();
@@ -258,7 +258,7 @@ public class GlobalSelectionServiceTests
         service.SelectedRepositoryId.Should().Be(initialRepoId);
     }
 
-    [Fact]
+    [Test]
     public async Task RefreshAsync_ReloadsProjectsAndRepositories()
     {
         var updatedProjects = new List<ProjectDocument>
@@ -289,7 +289,7 @@ public class GlobalSelectionServiceTests
         service.Projects.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public async Task Subscribe_ReceivesNotifications()
     {
         SetupDefaultStoreMocks();
@@ -306,7 +306,7 @@ public class GlobalSelectionServiceTests
         subscription.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task Subscribe_MultipleSubscribers_AllReceiveNotifications()
     {
         SetupDefaultStoreMocks();
@@ -328,7 +328,7 @@ public class GlobalSelectionServiceTests
         sub2.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task Subscribe_AfterDispose_StopsReceivingNotifications()
     {
         SetupDefaultStoreMocks();
@@ -345,7 +345,7 @@ public class GlobalSelectionServiceTests
         callCount.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithEmptyProjects_NoSelection()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -361,7 +361,7 @@ public class GlobalSelectionServiceTests
         service.IsInitialized.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithEmptyRepos_SelectsProjectButNoRepo()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -378,7 +378,7 @@ public class GlobalSelectionServiceTests
         service.SelectedRepositoryId.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_CalledTwice_OnlyInitializesOnce()
     {
         var callCount = 0;
@@ -397,7 +397,7 @@ public class GlobalSelectionServiceTests
         callCount.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public void Dispose_CleansUpResources()
     {
         SetupDefaultStoreMocks();
@@ -411,7 +411,7 @@ public class GlobalSelectionServiceTests
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void Dispose_CalledMultipleTimes_NoException()
     {
         var service = CreateService();
@@ -422,7 +422,7 @@ public class GlobalSelectionServiceTests
         act.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public async Task SelectRepositoryAsync_WithInvalidId_DoesNotThrow()
     {
         SetupDefaultStoreMocks();
@@ -436,7 +436,7 @@ public class GlobalSelectionServiceTests
         await act.Should().NotThrowAsync();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_ConcurrentCalls_OnlyInitializesOnce()
     {
         var callCount = 0;

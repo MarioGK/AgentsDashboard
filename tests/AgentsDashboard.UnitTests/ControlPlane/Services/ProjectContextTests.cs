@@ -35,7 +35,7 @@ public class ProjectContextTests
         return new ProjectContext(_storeMock.Object, _jsRuntimeMock.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WhenAlreadyInitialized_SkipsReload()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -50,7 +50,7 @@ public class ProjectContextTests
         _storeMock.Verify(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithNoProjects_SetsEmptyLists()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -65,7 +65,7 @@ public class ProjectContextTests
         context.SelectedProjectId.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithProjectsNoSavedState_AutoSelectsFirstProject()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -81,7 +81,7 @@ public class ProjectContextTests
         context.SelectedRepositoryId.Should().Be("repo-1");
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithSavedProjectId_RestoresSelection()
     {
         var proj2Repos = new List<RepositoryDocument>
@@ -103,7 +103,7 @@ public class ProjectContextTests
         context.SelectedRepositoryId.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithInvalidSavedProjectId_FallsBackToFirstProject()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -120,7 +120,7 @@ public class ProjectContextTests
         context.SelectedProjectId.Should().Be("proj-1");
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithSavedProjectAndRepo_RestoresBothSelections()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -138,7 +138,7 @@ public class ProjectContextTests
         context.SelectedRepositoryId.Should().Be("repo-2");
     }
 
-    [Fact]
+    [Test]
     public async Task InitializeAsync_WithInvalidSavedRepoId_FallsBackToFirstRepo()
     {
         _storeMock.Setup(s => s.ListProjectsAsync(It.IsAny<CancellationToken>()))
@@ -156,7 +156,7 @@ public class ProjectContextTests
         context.SelectedRepositoryId.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task SelectProjectAsync_WithValidId_UpdatesSelectionAndLoadsRepos()
     {
         var proj2Repos = new List<RepositoryDocument>
@@ -175,7 +175,7 @@ public class ProjectContextTests
         context.Repositories[0].Id.Should().Be("repo-3");
     }
 
-    [Fact]
+    [Test]
     public async Task SelectProjectAsync_WithNullId_ClearsSelection()
     {
         var context = CreateContext();
@@ -187,7 +187,7 @@ public class ProjectContextTests
         context.Repositories.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task SelectProjectAsync_WithProjectHavingNoRepos_SetsEmptyRepoList()
     {
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
@@ -202,7 +202,7 @@ public class ProjectContextTests
         context.SelectedRepositoryId.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task SelectProjectAsync_AutoSelectsFirstRepository()
     {
         _storeMock.Setup(s => s.ListRepositoriesAsync("proj-1", It.IsAny<CancellationToken>()))
@@ -215,7 +215,7 @@ public class ProjectContextTests
         context.SelectedRepositoryId.Should().Be("repo-1");
     }
 
-    [Fact]
+    [Test]
     public async Task SelectRepositoryAsync_WithValidId_UpdatesSelection()
     {
         var context = CreateContext();
@@ -225,7 +225,7 @@ public class ProjectContextTests
         context.SelectedRepositoryId.Should().Be("repo-2");
     }
 
-    [Fact]
+    [Test]
     public async Task SelectRepositoryAsync_WithNullId_ClearsSelection()
     {
         var context = CreateContext();

@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -64,7 +63,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFix
         return (await response.Content.ReadFromJsonAsync<WorkflowV2Document>())!;
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteWorkflowV2_ReturnsOk()
     {
         var (_, _, _, workflow) = await SetupAsync();
@@ -80,7 +79,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFix
         execution.Id.Should().NotBeNullOrEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteWorkflowV2_NotFound_Returns404()
     {
         var request = new ExecuteWorkflowV2Request();
@@ -90,7 +89,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFix
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ListExecutionsV2_ReturnsOk()
     {
         var (_, _, _, workflow) = await SetupAsync();
@@ -103,7 +102,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFix
         executions.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task GetExecutionV2_NotFound_Returns404()
     {
         var response = await _client.GetAsync("/api/workflows-v2/executions/nonexistent");
@@ -111,7 +110,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFix
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task CancelExecutionV2_ReturnsOk()
     {
         var (_, _, _, workflow) = await SetupAsync();
@@ -128,7 +127,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFix
         cancelled!.State.Should().Be(WorkflowV2ExecutionState.Cancelled);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveExecutionV2_ReturnsOk()
     {
         var (_, repo, _, _) = await SetupAsync();
@@ -146,7 +145,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFix
         response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteWorkflowV2_WithInitialContext_ReturnsOk()
     {
         var (_, _, _, workflow) = await SetupAsync();
@@ -167,7 +166,7 @@ public class GraphWorkflowExecutionsApiTests(ApiTestFixture fixture) : IClassFix
         execution!.TriggeredBy.Should().Be("integration-test");
     }
 
-    [Fact]
+    [Test]
     public async Task GetExecutionV2_AfterExecute_HasRunningState()
     {
         var (_, _, _, workflow) = await SetupAsync();

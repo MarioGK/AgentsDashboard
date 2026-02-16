@@ -130,11 +130,15 @@ jobs:
 
       - name: Run unit tests
         run: |
-          dotnet test tests/AgentsDashboard.UnitTests \
+          dotnet run --project tests/AgentsDashboard.UnitTests \
             --configuration Release \
-            --collect:"XPlat Code Coverage" \
+            -- \
+            --report-trx \
+            --report-trx-filename unit-tests.trx \
             --results-directory TestResults/unit \
-            --logger "trx;LogFileName=unit-tests.trx"
+            --coverage \
+            --coverage-output-format cobertura \
+            --coverage-output TestResults/unit/coverage.cobertura.xml
 
       - name: Upload unit test results
         if: failure()
@@ -147,7 +151,7 @@ jobs:
       - name: Generate coverage report
         uses: danielpalme/ReportGenerator-GitHub-Action@5.4.5
         with:
-          reports: 'TestResults/unit/**/coverage.cobertura.xml'
+          reports: 'TestResults/unit/coverage.cobertura.xml'
           targetdir: 'CoverageReport/unit'
           reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
           verbosity: 'Warning'
@@ -187,11 +191,15 @@ jobs:
 
       - name: Run integration tests
         run: |
-          dotnet test tests/AgentsDashboard.IntegrationTests \
+          dotnet run --project tests/AgentsDashboard.IntegrationTests \
             --configuration Release \
-            --collect:"XPlat Code Coverage" \
+            -- \
+            --report-trx \
+            --report-trx-filename integration-tests.trx \
             --results-directory TestResults/integration \
-            --logger "trx;LogFileName=integration-tests.trx"
+            --coverage \
+            --coverage-output-format cobertura \
+            --coverage-output TestResults/integration/coverage.cobertura.xml
 
       - name: Upload integration test results
         if: failure()
@@ -204,7 +212,7 @@ jobs:
       - name: Generate coverage report
         uses: danielpalme/ReportGenerator-GitHub-Action@5.4.5
         with:
-          reports: 'TestResults/integration/**/coverage.cobertura.xml'
+          reports: 'TestResults/integration/coverage.cobertura.xml'
           targetdir: 'CoverageReport/integration'
           reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
           verbosity: 'Warning'
@@ -264,10 +272,12 @@ jobs:
 
       - name: Run Playwright tests
         run: |
-          dotnet test tests/AgentsDashboard.PlaywrightTests \
+          dotnet run --project tests/AgentsDashboard.PlaywrightTests \
             --configuration Release \
             --no-build \
-            --logger "trx;LogFileName=e2e-tests.trx" \
+            -- \
+            --report-trx \
+            --report-trx-filename e2e-tests.trx \
             --results-directory TestResults/e2e
 
       - name: Upload e2e test results

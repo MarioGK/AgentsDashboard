@@ -11,7 +11,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class DeadRunDetectionTests
 {
-    [Fact]
+    [Test]
     public async Task DetectStaleRun_TerminatesRunExceedingThreshold()
     {
         var staleRun = new RunDocument
@@ -56,7 +56,7 @@ public class DeadRunDetectionTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task DetectZombieRun_ForceTerminatesRunExceedingZombieThreshold()
     {
         var zombieRun = new RunDocument
@@ -104,7 +104,7 @@ public class DeadRunDetectionTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task DetectOverdueRun_TerminatesRunExceedingMaxAge()
     {
         var overdueRun = new RunDocument
@@ -151,7 +151,7 @@ public class DeadRunDetectionTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task RecentRun_NotTerminated()
     {
         var recentRun = new RunDocument
@@ -182,7 +182,7 @@ public class DeadRunDetectionTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task ForceKillOnTimeoutDisabled_DoesNotCallReaper()
     {
         var zombieRun = new RunDocument
@@ -215,7 +215,7 @@ public class DeadRunDetectionTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task MultipleDeadRuns_AllTerminated()
     {
         var runs = new List<RunDocument>
@@ -247,7 +247,7 @@ public class DeadRunDetectionTests
         service.Dispose();
     }
 
-    [Fact]
+    [Test]
     public async Task MonitorForDeadRunsAsync_ReturnsCorrectCounts()
     {
         var runs = new List<RunDocument>

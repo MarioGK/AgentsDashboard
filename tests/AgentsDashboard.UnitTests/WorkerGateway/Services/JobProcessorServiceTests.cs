@@ -120,7 +120,7 @@ public class JobProcessorServiceTests
         };
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_EmptyCommand_PublishesFailedCompleted()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -170,7 +170,7 @@ public class JobProcessorServiceTests
         envelope!.Status.Should().Be("failed");
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_ValidCommand_PublishesJobStartedAndCompleted()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -215,7 +215,7 @@ public class JobProcessorServiceTests
         completedEvent.RunId.Should().Be("test-run-id");
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_AfterCompletion_MarksJobAsCompleted()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -250,7 +250,7 @@ public class JobProcessorServiceTests
         queue.ActiveSlots.Should().Be(0);
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_MultipleJobs_ProcessesAllSequentially()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -293,7 +293,7 @@ public class JobProcessorServiceTests
         completedEvents.Should().Contain(e => e.RunId == "run-3");
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_JobCancelledViaQueue_HandlesGracefully()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -330,7 +330,7 @@ public class JobProcessorServiceTests
         }
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_EventTimestamps_ArePopulated()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -363,7 +363,7 @@ public class JobProcessorServiceTests
         collector.Events.Should().AllSatisfy(e => e.TimestampUnixMs.Should().BeGreaterThan(0));
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_CompletedEventPayload_ContainsValidJson()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -409,7 +409,7 @@ public class JobProcessorServiceTests
         payload!.RunId.Should().Be("test-run-id");
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_NoJobs_DoesNotPublishEvents()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -439,7 +439,7 @@ public class JobProcessorServiceTests
         collector.Events.Should().BeEmpty();
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_ServiceStopsImmediately_HandlesGracefully()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());
@@ -454,7 +454,7 @@ public class JobProcessorServiceTests
         await action.Should().NotThrowAsync();
     }
 
-    [Fact(Skip = "BackgroundService tests require full async runtime - run manually")]
+    [Test, Skip("BackgroundService tests require full async runtime - run manually")]
     public async Task ProcessJobs_AllJobsComplete_QueueBecomesEmpty()
     {
         var queue = new WorkerQueue(CreateDefaultOptions());

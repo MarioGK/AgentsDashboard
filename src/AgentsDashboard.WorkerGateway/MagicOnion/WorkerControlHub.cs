@@ -12,7 +12,6 @@ namespace AgentsDashboard.WorkerGateway.MagicOnion;
 public sealed class WorkerControlHub : StreamingHubBase<IWorkerControlHub, IWorkerControlReceiver>, IWorkerControlHub
 {
     private readonly ILogger<WorkerControlHub> _logger;
-    private IWorkerControlReceiver? _receiver;
     private string? _registeredWorkerId;
 
     public WorkerControlHub(ILogger<WorkerControlHub> logger)
@@ -22,7 +21,6 @@ public sealed class WorkerControlHub : StreamingHubBase<IWorkerControlHub, IWork
 
     protected override async ValueTask OnConnecting()
     {
-        _receiver = Receiver;
         _logger.LogDebug("Worker connecting to control hub");
         await Task.CompletedTask;
     }

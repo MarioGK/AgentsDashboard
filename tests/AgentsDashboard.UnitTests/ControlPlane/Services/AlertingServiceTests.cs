@@ -62,7 +62,7 @@ public class AlertingServiceTests
         };
     }
 
-    [Fact]
+    [Test]
     public async Task CheckMissingHeartbeat_NoStaleWorkers_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.MissingHeartbeat, threshold: 5);
@@ -80,7 +80,7 @@ public class AlertingServiceTests
         message.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckMissingHeartbeat_WithStaleWorkers_ReturnsTriggered()
     {
         var rule = CreateRule(AlertRuleType.MissingHeartbeat, threshold: 5);
@@ -99,7 +99,7 @@ public class AlertingServiceTests
         message.Should().Contain("worker-1");
     }
 
-    [Fact]
+    [Test]
     public async Task CheckMissingHeartbeat_MultipleStaleWorkers_ReportsAll()
     {
         var rule = CreateRule(AlertRuleType.MissingHeartbeat, threshold: 5);
@@ -120,7 +120,7 @@ public class AlertingServiceTests
         message.Should().NotContain("worker-3");
     }
 
-    [Fact]
+    [Test]
     public async Task CheckMissingHeartbeat_OfflineWorkersNotIncluded()
     {
         var rule = CreateRule(AlertRuleType.MissingHeartbeat, threshold: 5);
@@ -137,7 +137,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckMissingHeartbeat_NoWorkers_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.MissingHeartbeat, threshold: 5);
@@ -150,7 +150,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckFailureRateSpike_BelowThreshold_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.FailureRateSpike, threshold: 5, windowMinutes: 10);
@@ -169,7 +169,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckFailureRateSpike_AtThreshold_ReturnsTriggered()
     {
         var rule = CreateRule(AlertRuleType.FailureRateSpike, threshold: 5, windowMinutes: 10);
@@ -192,7 +192,7 @@ public class AlertingServiceTests
         message.Should().Contain("last 10 minutes");
     }
 
-    [Fact]
+    [Test]
     public async Task CheckFailureRateSpike_AboveThreshold_ReturnsTriggered()
     {
         var rule = CreateRule(AlertRuleType.FailureRateSpike, threshold: 3, windowMinutes: 10);
@@ -214,7 +214,7 @@ public class AlertingServiceTests
         message.Should().Contain("5 runs failed");
     }
 
-    [Fact]
+    [Test]
     public async Task CheckFailureRateSpike_OldFailuresExcluded()
     {
         var rule = CreateRule(AlertRuleType.FailureRateSpike, threshold: 2, windowMinutes: 10);
@@ -233,7 +233,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckFailureRateSpike_NoFailures_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.FailureRateSpike, threshold: 5);
@@ -246,7 +246,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckQueueBacklog_BelowThreshold_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.QueueBacklog, threshold: 10);
@@ -259,7 +259,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckQueueBacklog_AtThreshold_ReturnsTriggered()
     {
         var rule = CreateRule(AlertRuleType.QueueBacklog, threshold: 10);
@@ -274,7 +274,7 @@ public class AlertingServiceTests
         message.Should().Contain("threshold: 10");
     }
 
-    [Fact]
+    [Test]
     public async Task CheckQueueBacklog_AboveThreshold_ReturnsTriggered()
     {
         var rule = CreateRule(AlertRuleType.QueueBacklog, threshold: 5);
@@ -288,7 +288,7 @@ public class AlertingServiceTests
         message.Should().Contain("25 active runs");
     }
 
-    [Fact]
+    [Test]
     public async Task CheckQueueBacklog_ZeroQueue_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.QueueBacklog, threshold: 1);
@@ -301,7 +301,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRepeatedPrFailures_NoPrFailures_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.RepeatedPrFailures, threshold: 3, windowMinutes: 60);
@@ -314,7 +314,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRepeatedPrFailures_BelowThresholdPerRepo_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.RepeatedPrFailures, threshold: 3, windowMinutes: 60);
@@ -332,7 +332,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRepeatedPrFailures_AboveThresholdForOneRepo_ReturnsTriggered()
     {
         var rule = CreateRule(AlertRuleType.RepeatedPrFailures, threshold: 3, windowMinutes: 60);
@@ -355,7 +355,7 @@ public class AlertingServiceTests
         message.Should().Contain("3 failures");
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRepeatedPrFailures_FailuresWithoutPrIgnored()
     {
         var rule = CreateRule(AlertRuleType.RepeatedPrFailures, threshold: 2, windowMinutes: 60);
@@ -374,7 +374,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRepeatedPrFailures_OldFailuresExcluded()
     {
         var rule = CreateRule(AlertRuleType.RepeatedPrFailures, threshold: 2, windowMinutes: 30);
@@ -392,7 +392,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRouteLeakDetection_BelowThreshold_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.RouteLeakDetection, threshold: 3, windowMinutes: 10);
@@ -409,7 +409,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRouteLeakDetection_AtThreshold_ReturnsTriggered()
     {
         var rule = CreateRule(AlertRuleType.RouteLeakDetection, threshold: 3, windowMinutes: 10);
@@ -430,7 +430,7 @@ public class AlertingServiceTests
         message.Should().Contain("threshold: 3");
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRouteLeakDetection_NoUrlsInOutput_ReturnsNotTriggered()
     {
         var rule = CreateRule(AlertRuleType.RouteLeakDetection, threshold: 2, windowMinutes: 10);
@@ -447,7 +447,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRouteLeakDetection_OldRunsExcluded()
     {
         var rule = CreateRule(AlertRuleType.RouteLeakDetection, threshold: 2, windowMinutes: 5);
@@ -465,7 +465,7 @@ public class AlertingServiceTests
         triggered.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRule_UnknownRuleType_ReturnsNotTriggered()
     {
         var rule = CreateRule((AlertRuleType)999, threshold: 5);
@@ -477,7 +477,7 @@ public class AlertingServiceTests
         message.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRule_MissingHeartbeatType_RoutesToCorrectChecker()
     {
         var rule = CreateRule(AlertRuleType.MissingHeartbeat, threshold: 5);
@@ -494,7 +494,7 @@ public class AlertingServiceTests
         _dataProvider.ListWorkersCalled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRule_FailureRateSpikeType_RoutesToCorrectChecker()
     {
         var rule = CreateRule(AlertRuleType.FailureRateSpike, threshold: 2);
@@ -513,7 +513,7 @@ public class AlertingServiceTests
         _dataProvider.ListFailedRunsCalled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task CheckRule_QueueBacklogType_RoutesToCorrectChecker()
     {
         var rule = CreateRule(AlertRuleType.QueueBacklog, threshold: 5);
@@ -527,7 +527,7 @@ public class AlertingServiceTests
         _dataProvider.CountActiveRunsCalled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void AlertRule_ThresholdZero_StillWorks()
     {
         var rule = CreateRule(AlertRuleType.QueueBacklog, threshold: 0);
@@ -535,7 +535,7 @@ public class AlertingServiceTests
         rule.Threshold.Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public void AlertRule_WindowMinutesDefault_IsTen()
     {
         var rule = new AlertRuleDocument
@@ -547,7 +547,7 @@ public class AlertingServiceTests
         rule.WindowMinutes.Should().Be(10);
     }
 
-    [Fact]
+    [Test]
     public async Task CheckMissingHeartbeat_EdgeCase_ExactThreshold()
     {
         var rule = CreateRule(AlertRuleType.MissingHeartbeat, threshold: 5);
@@ -564,7 +564,7 @@ public class AlertingServiceTests
         triggered.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void AlertRule_CooldownMinutesDefault_IsFifteen()
     {
         var rule = new AlertRuleDocument
@@ -576,7 +576,7 @@ public class AlertingServiceTests
         rule.CooldownMinutes.Should().Be(15);
     }
 
-    [Fact]
+    [Test]
     public void AlertRule_LastFiredAtUtc_DefaultIsNull()
     {
         var rule = new AlertRuleDocument
@@ -588,7 +588,7 @@ public class AlertingServiceTests
         rule.LastFiredAtUtc.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void AlertRule_CooldownCanBeCustomized()
     {
         var rule = new AlertRuleDocument
@@ -601,7 +601,7 @@ public class AlertingServiceTests
         rule.CooldownMinutes.Should().Be(30);
     }
 
-    [Fact]
+    [Test]
     public void AlertRule_LastFiredAtCanBeSet()
     {
         var now = DateTime.UtcNow;
@@ -615,7 +615,7 @@ public class AlertingServiceTests
         rule.LastFiredAtUtc.Should().Be(now);
     }
 
-    [Fact]
+    [Test]
     public void AlertRule_CooldownZero_DisablesCooldown()
     {
         var rule = new AlertRuleDocument

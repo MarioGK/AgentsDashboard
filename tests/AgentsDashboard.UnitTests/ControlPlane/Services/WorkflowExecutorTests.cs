@@ -8,7 +8,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class WorkflowExecutorTests
 {
-    [Fact]
+    [Test]
     public void WorkflowDocument_CreatedWithCorrectProperties()
     {
         var workflow = new WorkflowDocument
@@ -28,7 +28,7 @@ public class WorkflowExecutorTests
         workflow.Stages.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageConfig_TaskStage_CreatedCorrectly()
     {
         var stage = new WorkflowStageConfig
@@ -46,7 +46,7 @@ public class WorkflowExecutorTests
         stage.ParallelStageIds.Should().BeNull();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageConfig_ApprovalStage_CreatedCorrectly()
     {
         var stage = new WorkflowStageConfig
@@ -62,7 +62,7 @@ public class WorkflowExecutorTests
         stage.ApproverRole.Should().Be("admin");
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageConfig_DelayStage_CreatedCorrectly()
     {
         var stage = new WorkflowStageConfig
@@ -78,7 +78,7 @@ public class WorkflowExecutorTests
         stage.DelaySeconds.Should().Be(60);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageConfig_ParallelStage_CreatedCorrectly()
     {
         var stage = new WorkflowStageConfig
@@ -97,7 +97,7 @@ public class WorkflowExecutorTests
         stage.ParallelStageIds.Should().Contain("task-3");
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecutionDocument_CreatedWithCorrectProperties()
     {
         var execution = new WorkflowExecutionDocument
@@ -122,7 +122,7 @@ public class WorkflowExecutorTests
         execution.FailureReason.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecutionState_EnumValues()
     {
         ((int)WorkflowExecutionState.Running).Should().Be(0);
@@ -132,7 +132,7 @@ public class WorkflowExecutorTests
         ((int)WorkflowExecutionState.PendingApproval).Should().Be(4);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageType_EnumValues()
     {
         ((int)WorkflowStageType.Task).Should().Be(0);
@@ -141,7 +141,7 @@ public class WorkflowExecutorTests
         ((int)WorkflowStageType.Parallel).Should().Be(3);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageResult_CreatedCorrectly()
     {
         var result = new WorkflowStageResult
@@ -162,7 +162,7 @@ public class WorkflowExecutorTests
         result.RunIds.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageResult_DefaultValues()
     {
         var result = new WorkflowStageResult();
@@ -174,7 +174,7 @@ public class WorkflowExecutorTests
         result.StageName.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void Workflow_StagesOrderedCorrectly()
     {
         var workflow = new WorkflowDocument
@@ -195,28 +195,28 @@ public class WorkflowExecutorTests
         orderedStages[2].Name.Should().Be("Third");
     }
 
-    [Theory]
-    [InlineData(WorkflowStageType.Task, "Task")]
-    [InlineData(WorkflowStageType.Approval, "Approval")]
-    [InlineData(WorkflowStageType.Delay, "Delay")]
-    [InlineData(WorkflowStageType.Parallel, "Parallel")]
+    [Test]
+    [Arguments(WorkflowStageType.Task, "Task")]
+    [Arguments(WorkflowStageType.Approval, "Approval")]
+    [Arguments(WorkflowStageType.Delay, "Delay")]
+    [Arguments(WorkflowStageType.Parallel, "Parallel")]
     public void WorkflowStageType_Names(WorkflowStageType type, string expectedName)
     {
         type.ToString().Should().Be(expectedName);
     }
 
-    [Theory]
-    [InlineData(WorkflowExecutionState.Running, "Running")]
-    [InlineData(WorkflowExecutionState.Succeeded, "Succeeded")]
-    [InlineData(WorkflowExecutionState.Failed, "Failed")]
-    [InlineData(WorkflowExecutionState.Cancelled, "Cancelled")]
-    [InlineData(WorkflowExecutionState.PendingApproval, "PendingApproval")]
+    [Test]
+    [Arguments(WorkflowExecutionState.Running, "Running")]
+    [Arguments(WorkflowExecutionState.Succeeded, "Succeeded")]
+    [Arguments(WorkflowExecutionState.Failed, "Failed")]
+    [Arguments(WorkflowExecutionState.Cancelled, "Cancelled")]
+    [Arguments(WorkflowExecutionState.PendingApproval, "PendingApproval")]
     public void WorkflowExecutionState_Names(WorkflowExecutionState state, string expectedName)
     {
         state.ToString().Should().Be(expectedName);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecution_MultipleStageResults()
     {
         var execution = new WorkflowExecutionDocument
@@ -235,7 +235,7 @@ public class WorkflowExecutorTests
         execution.StageResults.Count(r => !r.Succeeded).Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecution_PendingApprovalState()
     {
         var execution = new WorkflowExecutionDocument
@@ -249,7 +249,7 @@ public class WorkflowExecutorTests
         execution.PendingApprovalStageId.Should().Be("stage-2");
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecution_AfterApproval()
     {
         var execution = new WorkflowExecutionDocument
@@ -268,7 +268,7 @@ public class WorkflowExecutorTests
         execution.ApprovedBy.Should().Be("admin@example.com");
     }
 
-    [Fact]
+    [Test]
     public void Workflow_AllStageTypesSupported()
     {
         var workflow = new WorkflowDocument
@@ -286,7 +286,7 @@ public class WorkflowExecutorTests
         workflow.Stages.Select(s => s.Type).Distinct().Should().HaveCount(4);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageConfig_DefaultValues()
     {
         var stage = new WorkflowStageConfig();
@@ -301,7 +301,7 @@ public class WorkflowExecutorTests
         stage.Order.Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowDocument_DefaultValues()
     {
         var workflow = new WorkflowDocument();
@@ -315,7 +315,7 @@ public class WorkflowExecutorTests
         workflow.CreatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecutionDocument_DefaultValues()
     {
         var execution = new WorkflowExecutionDocument();
@@ -333,7 +333,7 @@ public class WorkflowExecutorTests
         execution.CreatedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageResult_CanTrackMultipleRunIds()
     {
         var result = new WorkflowStageResult
@@ -348,7 +348,7 @@ public class WorkflowExecutorTests
         result.RunIds.Should().Contain("run-3");
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageResult_CanAddRunIds()
     {
         var result = new WorkflowStageResult
@@ -362,10 +362,10 @@ public class WorkflowExecutorTests
         result.RunIds.Should().HaveCount(2);
     }
 
-    [Theory]
-    [InlineData(0, 1)]
-    [InlineData(1, 2)]
-    [InlineData(2, 3)]
+    [Test]
+    [Arguments(0, 1)]
+    [Arguments(1, 2)]
+    [Arguments(2, 3)]
     public void WorkflowStageResult_StartedAndEndedAt_AreSet(int delayMs, int expectedOrder)
     {
         var result = new WorkflowStageResult
@@ -380,7 +380,7 @@ public class WorkflowExecutorTests
         result.EndedAtUtc.Should().BeOnOrAfter(result.StartedAtUtc);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowDocument_CanBeDisabled()
     {
         var workflow = new WorkflowDocument
@@ -391,7 +391,7 @@ public class WorkflowExecutorTests
         workflow.Enabled.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecutionDocument_CanTrackProgress()
     {
         var execution = new WorkflowExecutionDocument
@@ -408,7 +408,7 @@ public class WorkflowExecutorTests
         execution.StageResults.Should().HaveCount(2);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageConfig_GeneratesUniqueId()
     {
         var stage1 = new WorkflowStageConfig();
@@ -419,7 +419,7 @@ public class WorkflowExecutorTests
         stage2.Id.Should().NotBeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecutionDocument_GeneratesUniqueId()
     {
         var exec1 = new WorkflowExecutionDocument();
@@ -428,7 +428,7 @@ public class WorkflowExecutorTests
         exec1.Id.Should().NotBe(exec2.Id);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowDocument_GeneratesUniqueId()
     {
         var workflow1 = new WorkflowDocument();
@@ -437,7 +437,7 @@ public class WorkflowExecutorTests
         workflow1.Id.Should().NotBe(workflow2.Id);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecutionDocument_HasCorrectDefaultState()
     {
         var execution = new WorkflowExecutionDocument();
@@ -447,7 +447,7 @@ public class WorkflowExecutorTests
         execution.StageResults.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageResult_HasCorrectDefaults()
     {
         var result = new WorkflowStageResult();
@@ -457,7 +457,7 @@ public class WorkflowExecutorTests
         result.RunIds.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowDocument_WithMultipleStages_TracksCorrectly()
     {
         var workflow = new WorkflowDocument
@@ -476,7 +476,7 @@ public class WorkflowExecutorTests
         workflow.Stages[2].Type.Should().Be(WorkflowStageType.Approval);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowExecutionDocument_StageResults_CanBeEnumerated()
     {
         var execution = new WorkflowExecutionDocument
@@ -496,11 +496,11 @@ public class WorkflowExecutorTests
         failedCount.Should().Be(1);
     }
 
-    [Theory]
-    [InlineData(WorkflowStageType.Task)]
-    [InlineData(WorkflowStageType.Approval)]
-    [InlineData(WorkflowStageType.Delay)]
-    [InlineData(WorkflowStageType.Parallel)]
+    [Test]
+    [Arguments(WorkflowStageType.Task)]
+    [Arguments(WorkflowStageType.Approval)]
+    [Arguments(WorkflowStageType.Delay)]
+    [Arguments(WorkflowStageType.Parallel)]
     public void WorkflowStageConfig_AllTypesSupported(WorkflowStageType type)
     {
         var stage = new WorkflowStageConfig

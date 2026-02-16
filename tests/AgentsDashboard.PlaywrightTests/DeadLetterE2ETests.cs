@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class DeadLetterE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class DeadLetterE2ETests : PageTest
     [Test]
     public async Task DeadLetterList_PageLoads()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflow-deadletters");
         await Expect(Page.Locator("text=Dead Letters")).ToBeVisibleAsync();
     }
@@ -19,7 +18,7 @@ public class DeadLetterE2ETests : PageTest
     [Test]
     public async Task DeadLetterList_Title_IsCorrect()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflow-deadletters");
 
         await Expect(Page.Locator("h4:has-text('Dead Letters'), .mud-typography-h4:has-text('Dead Letters')")).ToBeVisibleAsync();
@@ -28,11 +27,10 @@ public class DeadLetterE2ETests : PageTest
     [Test]
     public async Task DeadLetterList_ShowsTable()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflow-deadletters");
         await Page.WaitForTimeoutAsync(500);
 
-        // Page shows either a table with dead letters or a success alert for no dead letters
         var table = Page.Locator(".mud-table");
         var emptyState = Page.Locator("text=No unreplayed dead letters found");
         var progressBar = Page.Locator(".mud-progress-linear");
@@ -41,28 +39,26 @@ public class DeadLetterE2ETests : PageTest
         var hasEmpty = await emptyState.IsVisibleAsync();
         var hasProgress = await progressBar.IsVisibleAsync();
 
-        Assert.That(hasTable || hasEmpty || hasProgress, Is.True,
-            "Dead letter page should show table, empty state, or loading indicator");
+        await Assert.That(hasTable || hasEmpty || hasProgress).IsTrue();
     }
 
     [Test]
     public async Task DeadLetterList_EmptyState_NoErrors()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflow-deadletters");
         await Page.WaitForTimeoutAsync(500);
 
-        // Verify no error alerts are shown on page load
         var errorAlert = Page.Locator(".mud-alert-error, .mud-alert-filled-error");
         var errorCount = await errorAlert.CountAsync();
 
-        Assert.That(errorCount, Is.EqualTo(0), "Dead letter page should not show error alerts on initial load");
+        await Assert.That(errorCount).IsEqualTo(0);
     }
 
     [Test]
     public async Task DeadLetterList_Navigation_FromSidebar()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;

@@ -3,17 +3,16 @@ using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
-using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class AlertsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ListAlertRules_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/alerts/rules");
@@ -23,7 +22,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         rules.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAlertRule_ReturnsCreatedRule()
     {
         var request = new CreateAlertRuleRequest("High Failure Rate", AlertRuleType.FailureRateSpike, 5, 30, "https://hooks.example.com/alert");
@@ -41,7 +40,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         rule.Enabled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAlertRule_ReturnsValidationProblem_WhenNameIsEmpty()
     {
         var request = new CreateAlertRuleRequest("", AlertRuleType.FailureRateSpike, 5, 10);
@@ -50,7 +49,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAlertRule_ReturnsValidationProblem_WhenThresholdIsZero()
     {
         var request = new CreateAlertRuleRequest("Rule", AlertRuleType.FailureRateSpike, 0, 10);
@@ -59,7 +58,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAlertRule_ReturnsUpdatedRule()
     {
         var createRequest = new CreateAlertRuleRequest("Original", AlertRuleType.FailureRateSpike, 3, 15);
@@ -78,7 +77,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         updated.Enabled.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAlertRule_ReturnsNotFound_WhenRuleDoesNotExist()
     {
         var request = new UpdateAlertRuleRequest("Name", AlertRuleType.FailureRateSpike, 5, 10);
@@ -87,7 +86,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAlertRule_ReturnsValidationProblem_WhenNameIsEmpty()
     {
         var createRequest = new CreateAlertRuleRequest("Rule", AlertRuleType.FailureRateSpike, 3, 15);
@@ -100,7 +99,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteAlertRule_ReturnsOk_WhenRuleExists()
     {
         var createRequest = new CreateAlertRuleRequest("To Delete", AlertRuleType.FailureRateSpike, 1, 5);
@@ -112,21 +111,21 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteAlertRule_ReturnsNotFound_WhenRuleDoesNotExist()
     {
         var response = await _client.DeleteAsync("/api/alerts/rules/nonexistent");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ListAlertEvents_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/alerts/events");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task BulkResolveAlerts_ReturnsOk_WithValidEventIds()
     {
         var createRequest = new CreateAlertRuleRequest("Test Rule", AlertRuleType.FailureRateSpike, 5, 30);
@@ -146,7 +145,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task BulkResolveAlerts_ReturnsPartialSuccess_WithMixedEventIds()
     {
         var createRequest = new CreateAlertRuleRequest("Test Rule", AlertRuleType.FailureRateSpike, 5, 30);
@@ -164,7 +163,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         result!.AffectedCount.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public async Task BulkResolveAlerts_ReturnsBadRequest_WhenNoEventIdsProvided()
     {
         var request = new BulkResolveAlertsRequest([]);
@@ -173,7 +172,7 @@ public class AlertsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixtu
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task BulkResolveAlerts_ReturnsOk_WithOnlyInvalidEventIds()
     {
         var request = new BulkResolveAlertsRequest(["nonexistent1", "nonexistent2"]);

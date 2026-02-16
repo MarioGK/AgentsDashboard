@@ -33,8 +33,8 @@ public abstract class HarnessAdapterBase(
             ContainerLabels = request.ContainerLabels,
             TimeoutSeconds = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : options.Value.DefaultTimeoutSeconds,
             Attempt = request.Attempt,
-            CpuLimit = request.SandboxProfileCpuLimit > 0 ? request.SandboxProfileCpuLimit : 1.5,
-            MemoryLimit = !string.IsNullOrEmpty(request.SandboxProfileMemoryLimit) ? request.SandboxProfileMemoryLimit : "2g",
+            CpuLimit = request.SandboxProfileCpuLimit is > 0 ? request.SandboxProfileCpuLimit.Value : 1.5,
+            MemoryLimit = request.SandboxProfileMemoryLimit is > 0 ? $"{request.SandboxProfileMemoryLimit.Value / (1024 * 1024)}m" : "2g",
             NetworkDisabled = request.SandboxProfileNetworkDisabled,
             ReadOnlyRootFs = request.SandboxProfileReadOnlyRootFs
         };

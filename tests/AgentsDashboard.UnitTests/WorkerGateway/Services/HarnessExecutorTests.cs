@@ -69,7 +69,7 @@ public class HarnessExecutorTests
         };
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_EmptyCommand_ReturnsFailedEnvelope()
     {
         var executor = CreateExecutor(new WorkerOptions { UseDocker = false });
@@ -81,7 +81,7 @@ public class HarnessExecutorTests
         result.Summary.Should().Be("Task command is required");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_WhitespaceCommand_ReturnsFailedEnvelope()
     {
         var executor = CreateExecutor(new WorkerOptions { UseDocker = false });
@@ -93,7 +93,7 @@ public class HarnessExecutorTests
         result.Summary.Should().Be("Task command is required");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_NonAllowlistedImage_ReturnsFailedEnvelope()
     {
         var options = new WorkerOptions
@@ -114,7 +114,7 @@ public class HarnessExecutorTests
         result.Error.Should().Contain("not in the configured allowlist");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_AllowlistedImage_PassesCheck()
     {
         var options = new WorkerOptions
@@ -134,7 +134,7 @@ public class HarnessExecutorTests
         result.Error.Should().NotContain("not in the configured allowlist");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_EmptyAllowlist_AcceptsAnyImage()
     {
         var options = new WorkerOptions
@@ -152,7 +152,7 @@ public class HarnessExecutorTests
         result.Error.Should().NotContain("not in the configured allowlist");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_WildcardAllowlist_MatchesPrefix()
     {
         var options = new WorkerOptions
@@ -172,7 +172,7 @@ public class HarnessExecutorTests
         result.Error.Should().NotContain("not in the configured allowlist");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_ExactAllowlistMatch_AcceptsImage()
     {
         var options = new WorkerOptions
@@ -192,7 +192,7 @@ public class HarnessExecutorTests
         result.Error.Should().NotContain("not in the configured allowlist");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_CancelledJob_ReturnsFailedEnvelope()
     {
         var options = new WorkerOptions { UseDocker = false };
@@ -208,7 +208,7 @@ public class HarnessExecutorTests
         result.Error.Should().Contain("cancelled");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_DirectExecution_WithValidCommand_ReturnsSucceeded()
     {
         var options = new WorkerOptions { UseDocker = false };
@@ -220,7 +220,7 @@ public class HarnessExecutorTests
         result.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_DirectExecution_WithEnvelopeOutput_ParsesEnvelope()
     {
         var options = new WorkerOptions { UseDocker = false };
@@ -233,7 +233,7 @@ public class HarnessExecutorTests
         result.Summary.Should().Be("All done");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_DirectExecution_WithNonEnvelopeOutput_CreatesFallback()
     {
         var options = new WorkerOptions { UseDocker = false };
@@ -246,9 +246,9 @@ public class HarnessExecutorTests
         result.Metadata.Should().ContainKey("stdout");
     }
 
-    [Theory]
-    [InlineData("owner/repo", "test-task", "agent/repo/test-tas")]
-    [InlineData("simple-repo", "my-task", "agent/simple-repo/my-task")]
+    [Test]
+    [Arguments("owner/repo", "test-task", "agent/repo/test-tas")]
+    [Arguments("simple-repo", "my-task", "agent/simple-repo/my-task")]
     public void BuildExpectedBranchPrefix_ValidInputs_ReturnsCorrectFormat(string repository, string taskId, string expected)
     {
         var result = HarnessExecutor.BuildExpectedBranchPrefix(repository, taskId);
@@ -256,11 +256,11 @@ public class HarnessExecutorTests
         result.Should().Be(expected);
     }
 
-    [Theory]
-    [InlineData("agent/myrepo/mytask/abc123", "agent/myrepo/mytask", "abc123", true, "")]
-    [InlineData("agent/repo/task/wrong-id", "agent/myrepo/mytask", "abc123", false, "does not end with run ID")]
-    [InlineData("feature/some-branch", "agent/myrepo/mytask", "abc123", false, "does not follow naming convention")]
-    [InlineData("agent/repo", "agent/myrepo/mytask", "abc123", false, "at least 4 segments")]
+    [Test]
+    [Arguments("agent/myrepo/mytask/abc123", "agent/myrepo/mytask", "abc123", true, "")]
+    [Arguments("agent/repo/task/wrong-id", "agent/myrepo/mytask", "abc123", false, "does not end with run ID")]
+    [Arguments("feature/some-branch", "agent/myrepo/mytask", "abc123", false, "does not follow naming convention")]
+    [Arguments("agent/repo", "agent/myrepo/mytask", "abc123", false, "at least 4 segments")]
     public void ValidateBranchName_VariousInputs_ReturnsExpectedResult(
         string branch, string expectedPrefix, string runId, bool expectedValid, string expectedErrorContains)
     {
@@ -277,7 +277,7 @@ public class HarnessExecutorTests
         }
     }
 
-    [Fact]
+    [Test]
     public void ValidateBranchName_ExactMatch_ReturnsTrue()
     {
         var branch = "agent/my-repo/my-task/abc12345";
@@ -290,7 +290,7 @@ public class HarnessExecutorTests
         error.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void ValidateBranchName_WithoutAgentPrefix_ReturnsFalse()
     {
         var branch = "feature/my-branch";
@@ -303,7 +303,7 @@ public class HarnessExecutorTests
         error.Should().Contain("Must start with 'agent/'");
     }
 
-    [Fact]
+    [Test]
     public void ValidateBranchName_CaseInsensitivePrefix_ReturnsTrue()
     {
         var branch = "AGENT/MyRepo/MyTask/abc12345";
@@ -316,7 +316,7 @@ public class HarnessExecutorTests
         error.Should().NotBeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void BuildExpectedBranchPrefix_TruncatesTaskId()
     {
         var result = HarnessExecutor.BuildExpectedBranchPrefix("my-repo", "very-long-task-id-12345");

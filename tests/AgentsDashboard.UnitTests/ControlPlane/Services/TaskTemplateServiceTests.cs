@@ -6,14 +6,14 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class TaskTemplateServiceTests
 {
-    [Fact]
+    [Test]
     public void GetTemplates_ReturnsFourTemplates()
     {
         var templates = TaskTemplateService.GetTemplates();
         templates.Should().HaveCount(4);
     }
 
-    [Fact]
+    [Test]
     public void GetTemplates_ContainsQaBrowserSweep()
     {
         var templates = TaskTemplateService.GetTemplates();
@@ -27,7 +27,7 @@ public class TaskTemplateServiceTests
         template.Command.Should().Contain("playwright test");
     }
 
-    [Fact]
+    [Test]
     public void GetTemplates_ContainsUnitTestGuard()
     {
         var templates = TaskTemplateService.GetTemplates();
@@ -41,7 +41,7 @@ public class TaskTemplateServiceTests
         template.Command.Should().Contain("dotnet test");
     }
 
-    [Fact]
+    [Test]
     public void GetTemplates_ContainsDependencyHealthCheck()
     {
         var templates = TaskTemplateService.GetTemplates();
@@ -55,7 +55,7 @@ public class TaskTemplateServiceTests
         template.Command.Should().Contain("npm audit");
     }
 
-    [Fact]
+    [Test]
     public void GetTemplates_ContainsRegressionReplay()
     {
         var templates = TaskTemplateService.GetTemplates();
@@ -69,7 +69,7 @@ public class TaskTemplateServiceTests
         template.Command.Should().Contain("failures.json");
     }
 
-    [Fact]
+    [Test]
     public void AllTemplates_HaveNonEmptyPrompts()
     {
         var templates = TaskTemplateService.GetTemplates();
@@ -80,7 +80,7 @@ public class TaskTemplateServiceTests
         }
     }
 
-    [Fact]
+    [Test]
     public void AllTemplates_HaveValidHarnesses()
     {
         var validHarnesses = new[] { "codex", "opencode", "claude-code", "zai" };
@@ -92,7 +92,7 @@ public class TaskTemplateServiceTests
         }
     }
 
-    [Fact]
+    [Test]
     public void AllTemplates_HaveUniqueIds()
     {
         var templates = TaskTemplateService.GetTemplates();

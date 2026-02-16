@@ -24,7 +24,7 @@ public class WorkerQueueTests
         };
     }
 
-    [Fact]
+    [Test]
     public async Task EnqueueAsync_AddsJobToQueue()
     {
         var queue = CreateQueue();
@@ -42,7 +42,7 @@ public class WorkerQueueTests
         jobs.Should().ContainSingle().Which.Request.RunId.Should().Be("run-1");
     }
 
-    [Fact]
+    [Test]
     public async Task EnqueueAsync_MultipleJobs_AllAddedToQueue()
     {
         var queue = CreateQueue();
@@ -57,7 +57,7 @@ public class WorkerQueueTests
         queue.Cancel("run-3").Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Cancel_ExistingJob_ReturnsTrue()
     {
         var queue = CreateQueue();
@@ -71,7 +71,7 @@ public class WorkerQueueTests
         job.CancellationSource.IsCancellationRequested.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void Cancel_NonExistentJob_ReturnsFalse()
     {
         var queue = CreateQueue();
@@ -81,7 +81,7 @@ public class WorkerQueueTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void Cancel_IsCaseInsensitive()
     {
         var queue = CreateQueue();
@@ -94,7 +94,7 @@ public class WorkerQueueTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void MarkCompleted_RemovesJobFromActiveJobs()
     {
         var queue = CreateQueue();
@@ -108,7 +108,7 @@ public class WorkerQueueTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void MarkCompleted_Idempotent()
     {
         var queue = CreateQueue();
@@ -122,7 +122,7 @@ public class WorkerQueueTests
         action.Should().NotThrow();
     }
 
-    [Fact]
+    [Test]
     public void CanAcceptJob_WhenBelowMaxSlots_ReturnsTrue()
     {
         var queue = CreateQueue(maxSlots: 4);
@@ -132,7 +132,7 @@ public class WorkerQueueTests
         result.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task CanAcceptJob_WhenAtMaxSlots_ReturnsFalse()
     {
         var queue = CreateQueue(maxSlots: 2);
@@ -145,7 +145,7 @@ public class WorkerQueueTests
         result.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public async Task CanAcceptJob_AfterMarkCompleted_ReturnsTrue()
     {
         var queue = CreateQueue(maxSlots: 2);
@@ -160,7 +160,7 @@ public class WorkerQueueTests
         queue.CanAcceptJob().Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void ActiveSlots_InitiallyZero()
     {
         var queue = CreateQueue();
@@ -168,7 +168,7 @@ public class WorkerQueueTests
         queue.ActiveSlots.Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public async Task ActiveSlots_IncrementsOnEnqueue()
     {
         var queue = CreateQueue();
@@ -179,7 +179,7 @@ public class WorkerQueueTests
         queue.ActiveSlots.Should().Be(2);
     }
 
-    [Fact]
+    [Test]
     public async Task ActiveSlots_DecrementsOnMarkCompleted()
     {
         var queue = CreateQueue();
@@ -192,7 +192,7 @@ public class WorkerQueueTests
         queue.ActiveSlots.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public void MaxSlots_ReturnsConfiguredValue()
     {
         var queue = CreateQueue(maxSlots: 8);

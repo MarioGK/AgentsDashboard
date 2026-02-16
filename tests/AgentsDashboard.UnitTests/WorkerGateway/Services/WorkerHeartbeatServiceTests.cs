@@ -28,7 +28,7 @@ public class WorkerHeartbeatServiceTests
         _httpClient = new HttpClient(_mockHandler);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_SendsHeartbeatAfterInitialDelay()
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);
@@ -43,7 +43,7 @@ public class WorkerHeartbeatServiceTests
         _mockHandler.LastRequestUri.Should().Be("http://localhost:5266/api/workers/heartbeat");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_IncludesWorkerIdInPayload()
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);
@@ -59,7 +59,7 @@ public class WorkerHeartbeatServiceTests
         payload.GetProperty("workerId").GetString().Should().Be("test-worker");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_IncludesEndpointInPayload()
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);
@@ -76,7 +76,7 @@ public class WorkerHeartbeatServiceTests
         payload.GetProperty("endpoint").GetString().Should().Contain(":5201");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_IncludesActiveSlotsInPayload()
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);
@@ -92,7 +92,7 @@ public class WorkerHeartbeatServiceTests
         payload.GetProperty("activeSlots").GetInt32().Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_IncludesMaxSlotsInPayload()
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);
@@ -108,7 +108,7 @@ public class WorkerHeartbeatServiceTests
         payload.GetProperty("maxSlots").GetInt32().Should().Be(4);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_TrimsTrailingSlashFromControlPlaneUrl()
     {
         _options.ControlPlaneUrl = "http://localhost:5266/";
@@ -123,7 +123,7 @@ public class WorkerHeartbeatServiceTests
         _mockHandler.LastRequestUri.Should().Be("http://localhost:5266/api/workers/heartbeat");
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_HandlesHttpFailureGracefully()
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.InternalServerError);
@@ -137,7 +137,7 @@ public class WorkerHeartbeatServiceTests
         _mockHandler.RequestCount.Should().BeGreaterThanOrEqualTo(1);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_HandlesHttpExceptionGracefully()
     {
         _mockHandler.ThrowException = true;
@@ -151,7 +151,7 @@ public class WorkerHeartbeatServiceTests
         _mockHandler.RequestCount.Should().BeGreaterThanOrEqualTo(1);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_StopsOnCancellation()
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);
@@ -171,7 +171,7 @@ public class WorkerHeartbeatServiceTests
         _mockHandler.RequestCount.Should().Be(countBeforeStop);
     }
 
-    [Fact]
+    [Test]
     public async Task ExecuteAsync_ServiceCancellation_StopsGracefully()
     {
         _mockHandler.Response = new HttpResponseMessage(HttpStatusCode.OK);

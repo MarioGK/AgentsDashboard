@@ -135,8 +135,10 @@ builder.Services.AddSingleton<IMagicOnionClientFactory, MagicOnionClientFactory>
 // Worker registry service (depends on IMagicOnionClientFactory)
 builder.Services.AddSingleton<IWorkerRegistryService, WorkerRegistryService>();
 
-// Terminal bridge service (implementation to be provided in another task)
-// builder.Services.AddSingleton<ITerminalBridgeService, TerminalBridgeService>();
+// Terminal bridge service
+builder.Services.AddOptions<TerminalOptions>()
+    .Bind(builder.Configuration.GetSection(TerminalOptions.SectionName));
+builder.Services.AddSingleton<ITerminalBridgeService, TerminalBridgeService>();
 
 builder.Services.AddSingleton<InMemoryYarpConfigProvider>();
 builder.Services.AddSingleton<IProxyConfigProvider>(sp => sp.GetRequiredService<InMemoryYarpConfigProvider>());

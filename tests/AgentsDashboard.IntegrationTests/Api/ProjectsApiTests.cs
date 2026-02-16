@@ -2,16 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class ProjectsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class ProjectsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ListProjects_ReturnsEmptyList_WhenNoProjects()
     {
         var response = await _client.GetAsync("/api/projects");
@@ -21,7 +20,7 @@ public class ProjectsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         projects.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateProject_ReturnsCreatedProject()
     {
         var request = new CreateProjectRequest("Test Project", "Test description");
@@ -36,7 +35,7 @@ public class ProjectsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         project.Id.Should().NotBeNullOrEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateProject_ReturnsValidationProblem_WhenNameIsEmpty()
     {
         var request = new CreateProjectRequest("", "Test description");
@@ -45,7 +44,7 @@ public class ProjectsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateProject_ReturnsUpdatedProject()
     {
         var createRequest = new CreateProjectRequest("Original Name", "Original description");
@@ -62,7 +61,7 @@ public class ProjectsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         updated.Description.Should().Be("Updated description");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateProject_ReturnsNotFound_WhenProjectDoesNotExist()
     {
         var request = new UpdateProjectRequest("Name", "Description");
@@ -71,7 +70,7 @@ public class ProjectsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteProject_ReturnsOk_WhenProjectExists()
     {
         var createRequest = new CreateProjectRequest("To Delete", "Description");
@@ -83,14 +82,14 @@ public class ProjectsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteProject_ReturnsNotFound_WhenProjectDoesNotExist()
     {
         var response = await _client.DeleteAsync("/api/projects/nonexistent");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ListProjectRepositories_ReturnsRepositoriesForProject()
     {
         var projectResponse = await _client.PostAsJsonAsync("/api/projects", new CreateProjectRequest("P", "d"));

@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class RepositoryInstructionsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class RepositoryInstructionsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -23,7 +22,7 @@ public class RepositoryInstructionsApiTests(ApiTestFixture fixture) : IClassFixt
         return (project, repo);
     }
 
-    [Fact]
+    [Test]
     public async Task GetInstructions_ReturnsEmptyList_WhenNoInstructions()
     {
         var (_, repo) = await SetupAsync();
@@ -36,7 +35,7 @@ public class RepositoryInstructionsApiTests(ApiTestFixture fixture) : IClassFixt
         instructions.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateInstructions_ReturnsUpdatedInstructions()
     {
         var (_, repo) = await SetupAsync();
@@ -56,7 +55,7 @@ public class RepositoryInstructionsApiTests(ApiTestFixture fixture) : IClassFixt
         result!.Should().Contain(i => i.Name == "CLAUDE.md");
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateInstructions_ReturnsNotFound_WhenRepositoryDoesNotExist()
     {
         var request = new UpdateRepositoryInstructionsRequest([]);
@@ -66,7 +65,7 @@ public class RepositoryInstructionsApiTests(ApiTestFixture fixture) : IClassFixt
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task GetInstructions_ReturnsPreviouslySavedInstructions()
     {
         var (_, repo) = await SetupAsync();

@@ -2,16 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class SchedulesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class SchedulesApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ListSchedules_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/schedules");
@@ -21,7 +20,7 @@ public class SchedulesApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         schedules.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListSchedules_ReturnsCronTasks()
     {
         var projectResponse = await _client.PostAsJsonAsync("/api/projects", new CreateProjectRequest("SP", "d"));

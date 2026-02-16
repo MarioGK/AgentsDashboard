@@ -56,7 +56,7 @@ public class SignalRRunEventPublisherTests
         };
     }
 
-    [Fact]
+    [Test]
     public void Constructor_WithValidHubContext_CreatesInstance()
     {
         var publisher = new SignalRRunEventPublisher(_mockHubContext.Object);
@@ -65,7 +65,7 @@ public class SignalRRunEventPublisherTests
         publisher.Should().BeAssignableTo<IRunEventPublisher>();
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_SendsCorrectMethodName()
     {
         var run = CreateRun();
@@ -77,7 +77,7 @@ public class SignalRRunEventPublisherTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_SendsCorrectParameters()
     {
         var startedAt = DateTime.UtcNow.AddMinutes(-5);
@@ -105,7 +105,7 @@ public class SignalRRunEventPublisherTests
         capturedArgs[4].Should().Be(endedAt);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithNullDates_SendsNullValues()
     {
         var run = CreateRun(
@@ -126,13 +126,13 @@ public class SignalRRunEventPublisherTests
         capturedArgs[4].Should().BeNull();
     }
 
-    [Theory]
-    [InlineData(RunState.Queued, "Queued")]
-    [InlineData(RunState.Running, "Running")]
-    [InlineData(RunState.Succeeded, "Succeeded")]
-    [InlineData(RunState.Failed, "Failed")]
-    [InlineData(RunState.Cancelled, "Cancelled")]
-    [InlineData(RunState.PendingApproval, "PendingApproval")]
+    [Test]
+    [Arguments(RunState.Queued, "Queued")]
+    [Arguments(RunState.Running, "Running")]
+    [Arguments(RunState.Succeeded, "Succeeded")]
+    [Arguments(RunState.Failed, "Failed")]
+    [Arguments(RunState.Cancelled, "Cancelled")]
+    [Arguments(RunState.PendingApproval, "PendingApproval")]
     public async Task PublishStatusAsync_WithDifferentStates_SendsCorrectStateString(RunState state, string expected)
     {
         var run = CreateRun(state: state);
@@ -148,7 +148,7 @@ public class SignalRRunEventPublisherTests
         ((string)capturedArgs![1]).Should().Be(expected);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithCancellationToken_PassesToken()
     {
         var run = CreateRun();
@@ -161,7 +161,7 @@ public class SignalRRunEventPublisherTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_CallsClientsAll()
     {
         var run = CreateRun();
@@ -171,7 +171,7 @@ public class SignalRRunEventPublisherTests
         _mockClients.Verify(x => x.All, Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithEmptySummary_SendsEmptyString()
     {
         var run = CreateRun(summary: "");
@@ -187,7 +187,7 @@ public class SignalRRunEventPublisherTests
         ((string)capturedArgs![2]).Should().Be("");
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_SendsCorrectMethodName()
     {
         var logEvent = CreateLogEvent();
@@ -199,7 +199,7 @@ public class SignalRRunEventPublisherTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_SendsCorrectParameters()
     {
         var timestamp = DateTime.UtcNow;
@@ -224,12 +224,12 @@ public class SignalRRunEventPublisherTests
         capturedArgs[3].Should().Be(timestamp);
     }
 
-    [Theory]
-    [InlineData("debug")]
-    [InlineData("info")]
-    [InlineData("warn")]
-    [InlineData("error")]
-    [InlineData("chunk")]
+    [Test]
+    [Arguments("debug")]
+    [Arguments("info")]
+    [Arguments("warn")]
+    [Arguments("error")]
+    [Arguments("chunk")]
     public async Task PublishLogAsync_WithDifferentLevels_SendsCorrectLevel(string level)
     {
         var logEvent = CreateLogEvent(level: level);
@@ -245,7 +245,7 @@ public class SignalRRunEventPublisherTests
         ((string)capturedArgs![1]).Should().Be(level);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithCancellationToken_PassesToken()
     {
         var logEvent = CreateLogEvent();
@@ -258,7 +258,7 @@ public class SignalRRunEventPublisherTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_CallsClientsAll()
     {
         var logEvent = CreateLogEvent();
@@ -268,7 +268,7 @@ public class SignalRRunEventPublisherTests
         _mockClients.Verify(x => x.All, Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithEmptyMessage_SendsEmptyString()
     {
         var logEvent = CreateLogEvent(message: "");
@@ -284,7 +284,7 @@ public class SignalRRunEventPublisherTests
         ((string)capturedArgs![2]).Should().Be("");
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithMultilineMessage_PreservesNewlines()
     {
         var multilineMessage = "Line 1\nLine 2\nLine 3";
@@ -301,7 +301,7 @@ public class SignalRRunEventPublisherTests
         ((string)capturedArgs![2]).Should().Be(multilineMessage);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_MultipleSequentialCalls_SendsAllEvents()
     {
         for (int i = 0; i < 5; i++)
@@ -315,7 +315,7 @@ public class SignalRRunEventPublisherTests
             Times.Exactly(5));
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_MultipleSequentialCalls_SendsAllEvents()
     {
         for (int i = 0; i < 5; i++)
@@ -329,7 +329,7 @@ public class SignalRRunEventPublisherTests
             Times.Exactly(5));
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_ConcurrentCalls_AllSucceed()
     {
         var runs = Enumerable.Range(0, 10)
@@ -344,7 +344,7 @@ public class SignalRRunEventPublisherTests
             Times.Exactly(10));
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_ConcurrentCalls_AllSucceed()
     {
         var logEvents = Enumerable.Range(0, 10)
@@ -359,7 +359,7 @@ public class SignalRRunEventPublisherTests
             Times.Exactly(10));
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithCancelledToken_StillAttemptsSend()
     {
         var run = CreateRun();
@@ -373,7 +373,7 @@ public class SignalRRunEventPublisherTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithCancelledToken_StillAttemptsSend()
     {
         var logEvent = CreateLogEvent();
@@ -387,7 +387,7 @@ public class SignalRRunEventPublisherTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_MixedWithPublishLogAsync_BothSucceed()
     {
         var run = CreateRun(id: "run-mixed", state: RunState.Running);
@@ -405,7 +405,7 @@ public class SignalRRunEventPublisherTests
             Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishStatusAsync_WithLongSummary_SendsFullSummary()
     {
         var longSummary = new string('A', 1000);
@@ -422,7 +422,7 @@ public class SignalRRunEventPublisherTests
         ((string)capturedArgs![2]).Should().Be(longSummary);
     }
 
-    [Fact]
+    [Test]
     public async Task PublishLogAsync_WithLongMessage_SendsFullMessage()
     {
         var longMessage = new string('B', 5000);

@@ -14,7 +14,7 @@ public class WorkflowContextMapperTests
         return dict;
     }
 
-    [Fact]
+    [Test]
     public void InputMappings_EmptyMappings_ReturnsOriginalPrompt()
     {
         var prompt = "Run the tests";
@@ -24,7 +24,7 @@ public class WorkflowContextMapperTests
         result.Should().Be("Run the tests");
     }
 
-    [Fact]
+    [Test]
     public void InputMappings_SingleMapping_ReplacesPlaceholder()
     {
         var mappings = new Dictionary<string, string> { ["branch"] = "branchName" };
@@ -36,7 +36,7 @@ public class WorkflowContextMapperTests
         result.Should().Be("Run tests on feature/test");
     }
 
-    [Fact]
+    [Test]
     public void InputMappings_MultipleMapping_ReplacesAll()
     {
         var mappings = new Dictionary<string, string>
@@ -52,7 +52,7 @@ public class WorkflowContextMapperTests
         result.Should().Be("Deploy main to production");
     }
 
-    [Fact]
+    [Test]
     public void InputMappings_MissingContextKey_LeavesPlaceholder()
     {
         var mappings = new Dictionary<string, string> { ["branch"] = "nonexistent" };
@@ -63,7 +63,7 @@ public class WorkflowContextMapperTests
         result.Should().Be("Run tests on {{branch}}");
     }
 
-    [Fact]
+    [Test]
     public void InputMappings_NumericValue_ReplacesCorrectly()
     {
         var mappings = new Dictionary<string, string> { ["count"] = "retryCount" };
@@ -75,7 +75,7 @@ public class WorkflowContextMapperTests
         result.Should().Be("Retry up to 42 times");
     }
 
-    [Fact]
+    [Test]
     public void OutputMappings_RunSummary_WritesToContext()
     {
         var mappings = new Dictionary<string, string> { ["lastSummary"] = "run.summary" };
@@ -89,7 +89,7 @@ public class WorkflowContextMapperTests
         ctx["lastSummary"].GetString().Should().Be("All tests passed");
     }
 
-    [Fact]
+    [Test]
     public void OutputMappings_RunState_WritesToContext()
     {
         var mappings = new Dictionary<string, string> { ["runState"] = "run.state" };
@@ -103,7 +103,7 @@ public class WorkflowContextMapperTests
         ctx["runState"].GetString().Should().Be("Succeeded");
     }
 
-    [Fact]
+    [Test]
     public void OutputMappings_RunPrUrl_WritesToContext()
     {
         var mappings = new Dictionary<string, string> { ["prLink"] = "run.prurl" };
@@ -117,7 +117,7 @@ public class WorkflowContextMapperTests
         ctx["prLink"].GetString().Should().Be("https://github.com/org/repo/pull/42");
     }
 
-    [Fact]
+    [Test]
     public void OutputMappings_NodeState_WritesToContext()
     {
         var mappings = new Dictionary<string, string> { ["nodeState"] = "node.state" };
@@ -130,7 +130,7 @@ public class WorkflowContextMapperTests
         ctx["nodeState"].GetString().Should().Be("Succeeded");
     }
 
-    [Fact]
+    [Test]
     public void OutputMappings_NodeSummary_WritesToContext()
     {
         var mappings = new Dictionary<string, string> { ["nodeSummary"] = "node.summary" };
@@ -143,7 +143,7 @@ public class WorkflowContextMapperTests
         ctx["nodeSummary"].GetString().Should().Be("Completed in 5s");
     }
 
-    [Fact]
+    [Test]
     public void OutputMappings_NullRun_SkipsRunFields()
     {
         var mappings = new Dictionary<string, string> { ["summary"] = "run.summary" };
@@ -155,7 +155,7 @@ public class WorkflowContextMapperTests
         ctx.Should().NotContainKey("summary");
     }
 
-    [Fact]
+    [Test]
     public void OutputMappings_EmptyMappings_DoesNothing()
     {
         var run = new RunDocument { Summary = "Test" };

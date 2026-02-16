@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgentsDashboard.IntegrationTests.Infrastructure;
 
-public sealed class SqliteFixture : IAsyncLifetime
+public sealed class SqliteFixture : IAsyncInitializer, IAsyncDisposable
 {
     private readonly string _databasePath = Path.Combine(Path.GetTempPath(), $"agentsdashboard-integration-{Guid.NewGuid():N}.db");
 
@@ -19,13 +19,10 @@ public sealed class SqliteFixture : IAsyncLifetime
         await dbContext.Database.MigrateAsync();
     }
 
-    public async Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        await Task.CompletedTask;
         if (File.Exists(_databasePath))
             File.Delete(_databasePath);
+        return ValueTask.CompletedTask;
     }
 }
-
-[CollectionDefinition("Sqlite")]
-public class SqliteCollection : ICollectionFixture<SqliteFixture>;

@@ -19,13 +19,13 @@ public class OpenCodeAdapterTests
         _adapter = new OpenCodeAdapter(options, redactor, NullLogger<OpenCodeAdapter>.Instance);
     }
 
-    [Fact]
+    [Test]
     public void HarnessName_ReturnsOpenCode()
     {
         _adapter.HarnessName.Should().Be("opencode");
     }
 
-    [Fact]
+    [Test]
     public void PrepareContext_SetsDefaultValues()
     {
         var request = CreateRequest();
@@ -39,7 +39,7 @@ public class OpenCodeAdapterTests
         context.TimeoutSeconds.Should().Be(600);
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesRequiredEnvVariables()
     {
         var request = CreateRequest();
@@ -54,7 +54,7 @@ public class OpenCodeAdapterTests
         command.Arguments.Should().Contain("HARNESS=opencode");
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesOptionalEnvVariables_WhenPresent()
     {
         var request = CreateRequest();
@@ -70,7 +70,7 @@ public class OpenCodeAdapterTests
         command.Arguments.Should().Contain("OPENCODE_TEMPERATURE=0.7");
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsSuccess_WhenEnvelopeSucceeded()
     {
         var envelope = new HarnessResultEnvelope { Status = "succeeded" };
@@ -81,7 +81,7 @@ public class OpenCodeAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsResourceExhausted_WhenContextLimitExceeded()
     {
         var envelope = new HarnessResultEnvelope
@@ -101,7 +101,7 @@ public class OpenCodeAdapterTests
         classification.RemediationHints.Should().Contain("Use context compression");
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsPermissionDenied_WhenFileEditFailed()
     {
         var envelope = new HarnessResultEnvelope
@@ -117,7 +117,7 @@ public class OpenCodeAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsInternalError_WhenTerminalFailed()
     {
         var envelope = new HarnessResultEnvelope
@@ -134,7 +134,7 @@ public class OpenCodeAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(10);
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsConfigurationError_WhenProviderUnavailable()
     {
         var envelope = new HarnessResultEnvelope
@@ -150,12 +150,12 @@ public class OpenCodeAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Theory]
-    [InlineData("unauthorized", FailureClass.AuthenticationError)]
-    [InlineData("rate limit", FailureClass.RateLimitExceeded)]
-    [InlineData("timeout", FailureClass.Timeout)]
-    [InlineData("not found", FailureClass.NotFound)]
-    [InlineData("network error", FailureClass.NetworkError)]
+    [Test]
+    [Arguments("unauthorized", FailureClass.AuthenticationError)]
+    [Arguments("rate limit", FailureClass.RateLimitExceeded)]
+    [Arguments("timeout", FailureClass.Timeout)]
+    [Arguments("not found", FailureClass.NotFound)]
+    [Arguments("network error", FailureClass.NetworkError)]
     public void ClassifyFailure_ReturnsCorrectBaseClassification(string error, FailureClass expectedClass)
     {
         var envelope = new HarnessResultEnvelope
@@ -169,7 +169,7 @@ public class OpenCodeAdapterTests
         classification.Class.Should().Be(expectedClass);
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_ReturnsEmptyList_WhenNoArtifacts()
     {
         var envelope = new HarnessResultEnvelope();
@@ -179,7 +179,7 @@ public class OpenCodeAdapterTests
         artifacts.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_MapsArtifactPaths()
     {
         var envelope = new HarnessResultEnvelope
@@ -194,7 +194,7 @@ public class OpenCodeAdapterTests
         artifacts.Should().Contain(a => a.Name == "file2.md");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesChangedFiles_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -208,7 +208,7 @@ public class OpenCodeAdapterTests
         artifacts.Should().Contain(a => a.Path == "/src/file2.cs");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesLogFile_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -221,7 +221,7 @@ public class OpenCodeAdapterTests
         artifacts.Should().Contain(a => a.Name == "opencode.log" && a.Type == "log");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_DoesNotDuplicateChangedFiles_WhenAlreadyInArtifacts()
     {
         var envelope = new HarnessResultEnvelope
@@ -236,7 +236,7 @@ public class OpenCodeAdapterTests
         artifacts.Should().Contain(a => a.Path == "/src/file2.cs");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_ParsesValidJsonEnvelope()
     {
         var stdout = """{"status":"succeeded","summary":"All done"}""";
@@ -247,7 +247,7 @@ public class OpenCodeAdapterTests
         envelope.Summary.Should().Be("All done");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_CreatesFallback_WhenInvalidJson()
     {
         var stdout = "raw output";

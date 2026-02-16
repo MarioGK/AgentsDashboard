@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class AlertE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_LoadsAfterLogin()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
         await Expect(Page.Locator("text=Alert Settings")).ToBeVisibleAsync();
     }
@@ -19,7 +18,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_HasNewRuleButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
         await Expect(Page.Locator("button:has-text('New Alert Rule')")).ToBeVisibleAsync();
     }
@@ -27,7 +26,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_RulesTableHeaders()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Expect(Page.Locator("th:has-text('Name')")).ToBeVisibleAsync();
@@ -42,7 +41,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_RecentAlertEventsSection()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
         await Expect(Page.Locator("text=Recent Alert Events")).ToBeVisibleAsync();
     }
@@ -50,7 +49,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task CreateAlertRule_OpenDialog()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Page.ClickAsync("button:has-text('New Alert Rule')");
@@ -61,7 +60,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task CreateAlertRule_WithBasicInfo()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Page.ClickAsync("button:has-text('New Alert Rule')");
@@ -77,7 +76,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task CreateAlertRule_SelectType()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Page.ClickAsync("button:has-text('New Alert Rule')");
@@ -95,7 +94,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task CreateAlertRule_SetThreshold()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Page.ClickAsync("button:has-text('New Alert Rule')");
@@ -111,7 +110,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task CreateAlertRule_SetWindow()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Page.ClickAsync("button:has-text('New Alert Rule')");
@@ -127,7 +126,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_OpenNewRuleDialog()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Page.ClickAsync("button:has-text('New Alert Rule')");
@@ -138,7 +137,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task EditAlertRule_OpenDialog()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -156,7 +155,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task EditAlertRule_UpdateThreshold()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var editButton = Page.Locator("tbody tr button").First;
@@ -176,7 +175,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_EditRuleButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var editButton = Page.Locator("button:has(.mud-icon-root) >> [data-icon='edit'], [aria-label*='Edit']").First;
@@ -195,7 +194,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task DeleteAlertRule_OpenConfirmation()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -213,7 +212,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task DeleteAlertRule_Confirm()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -236,7 +235,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_DeleteRuleButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -253,7 +252,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_RuleTypeChips()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var typeChips = Page.Locator(".mud-table tbody .mud-chip");
@@ -272,7 +271,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertSettingsPage_EnabledStatusChip()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -291,7 +290,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertRule_ToggleEnabled()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -309,7 +308,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task ViewAlertEvents_List()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Expect(Page.Locator("text=Recent Alert Events")).ToBeVisibleAsync();
@@ -318,7 +317,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task ViewAlertEvents_TableHeaders()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         var eventsSection = Page.Locator("text=Recent Alert Events").First;
@@ -332,7 +331,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertRule_WebhookField()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Page.ClickAsync("button:has-text('New Alert Rule')");
@@ -348,7 +347,7 @@ public class AlertE2ETests : PageTest
     [Test]
     public async Task AlertRule_CancelDialog()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/alerts");
 
         await Page.ClickAsync("button:has-text('New Alert Rule')");

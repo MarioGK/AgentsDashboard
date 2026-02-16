@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class ArtifactsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class ArtifactsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -31,7 +30,7 @@ public class ArtifactsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         return (project, repo, task, run);
     }
 
-    [Fact]
+    [Test]
     public async Task ListArtifacts_ReturnsEmptyList_WhenNoArtifacts()
     {
         var (_, _, _, run) = await SetupAsync();
@@ -44,7 +43,7 @@ public class ArtifactsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         content.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task GetArtifact_ReturnsNotFound_WhenArtifactDoesNotExist()
     {
         var (_, _, _, run) = await SetupAsync();
@@ -54,7 +53,7 @@ public class ArtifactsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFi
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task GetArtifact_ReturnsNotFound_WhenRunDoesNotExist()
     {
         var response = await _client.GetAsync("/api/runs/nonexistent/artifacts/file.txt");

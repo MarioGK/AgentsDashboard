@@ -5,7 +5,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public class StageTimeoutConfigTests
 {
-    [Fact]
+    [Test]
     public void StageTimeoutConfig_DefaultValues()
     {
         var config = new StageTimeoutConfig();
@@ -16,7 +16,7 @@ public class StageTimeoutConfigTests
         config.MaxStageTimeoutHours.Should().Be(48);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageConfig_TimeoutMinutes_CanBeSet()
     {
         var stage = new WorkflowStageConfig
@@ -30,7 +30,7 @@ public class StageTimeoutConfigTests
         stage.TimeoutMinutes.Should().Be(120);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowStageConfig_TimeoutMinutes_DefaultsToNull()
     {
         var stage = new WorkflowStageConfig();
@@ -38,11 +38,11 @@ public class StageTimeoutConfigTests
         stage.TimeoutMinutes.Should().BeNull();
     }
 
-    [Theory]
-    [InlineData(WorkflowStageType.Task, 60)]
-    [InlineData(WorkflowStageType.Approval, 1440)]
-    [InlineData(WorkflowStageType.Parallel, 90)]
-    [InlineData(WorkflowStageType.Delay, 60)]
+    [Test]
+    [Arguments(WorkflowStageType.Task, 60)]
+    [Arguments(WorkflowStageType.Approval, 1440)]
+    [Arguments(WorkflowStageType.Parallel, 90)]
+    [Arguments(WorkflowStageType.Delay, 60)]
     public void GetStageTimeout_ReturnsCorrectDefault(WorkflowStageType type, int expectedMinutes)
     {
         var config = new StageTimeoutConfig();
@@ -60,7 +60,7 @@ public class StageTimeoutConfigTests
         expectedTimeout.Should().Be(timeout);
     }
 
-    [Fact]
+    [Test]
     public void StageTimeout_UsesCustomValueWhenSet()
     {
         var stage = new WorkflowStageConfig
@@ -72,7 +72,7 @@ public class StageTimeoutConfigTests
         stage.TimeoutMinutes.Should().Be(30);
     }
 
-    [Fact]
+    [Test]
     public void StageTimeout_CappedAtMaxStageTimeout()
     {
         var config = new StageTimeoutConfig
@@ -87,7 +87,7 @@ public class StageTimeoutConfigTests
         cappedTimeout.Should().Be(TimeSpan.FromHours(48));
     }
 
-    [Fact]
+    [Test]
     public void DeadRunDetectionConfig_DefaultValues()
     {
         var config = new DeadRunDetectionConfig();
@@ -100,7 +100,7 @@ public class StageTimeoutConfigTests
         config.ForceKillOnTimeout.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void DeadRunDetectionConfig_CanBeDisabled()
     {
         var config = new DeadRunDetectionConfig
@@ -111,7 +111,7 @@ public class StageTimeoutConfigTests
         config.EnableAutoTermination.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void DeadRunDetectionConfig_ThresholdsCanBeConfigured()
     {
         var config = new DeadRunDetectionConfig

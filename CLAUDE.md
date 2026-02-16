@@ -88,6 +88,13 @@ Centralized build configuration using:
 - Cookie-based auth with roles: viewer, operator, admin
 - Policies enforced on API endpoints and Blazor pages
 
+### Agent Workflow Rules
+- Always use `dotnet build -m --tl` (never bare `dotnet build`)
+- TUnit runs tests in parallel by default — no extra flags needed
+- Use `--filter` for focused testing when changing a single service
+- Run `dotnet build-server shutdown` when builds behave unexpectedly
+- Run `dotnet format --verify-no-changes --severity error` before committing
+
 ## API Design
 - REST endpoints under `/api/`
 - No versioning prefix (v1)
@@ -129,6 +136,18 @@ dotnet run --project src/AgentsDashboard.ControlPlane
 - Dashboard: http://localhost:5266
 - Swagger: http://localhost:5266/api/docs
 
+4. Health endpoints:
+- Readiness: `curl http://localhost:5266/health`
+- Liveness: `curl http://localhost:5266/alive`
+
+5. Useful curl commands:
+```bash
+curl -s http://localhost:5266/api/projects | jq          # list projects
+curl -s http://localhost:5266/api/docs/v1/swagger.json   # swagger JSON
+```
+
+6. Aspire Dashboard: traces, metrics, and logs — URL shown in terminal on `dotnet run --project src/AgentsDashboard.AppHost`
+
 ## Harness Setup
 
 ### Zai Harness (GLM-5)
@@ -161,19 +180,14 @@ docker build -f deploy/harness-images/Dockerfile.harness-zai -t harness-zai:late
 
 ## Testing
 
-```bash
-# Unit tests
-dotnet test tests/AgentsDashboard.UnitTests
+| Project | Framework | Parallelism |
+|---------|-----------|-------------|
+| UnitTests | TUnit 1.15.0 | Parallel by default |
+| IntegrationTests | TUnit 1.15.0 | `ClassDataSource<ApiTestFixture>(Shared=Keyed)` for fixture sharing |
+| PlaywrightTests | TUnit.Playwright 1.15.0 | Parallel by default, browser-bound |
+| Benchmarks | BenchmarkDotNet 0.14.0 | Sequential |
 
-# Integration tests (requires Docker)
-dotnet test tests/AgentsDashboard.IntegrationTests
-
-# Playwright E2E tests (requires app running on localhost:8080)
-dotnet test tests/AgentsDashboard.PlaywrightTests
-
-# All tests
-dotnet test
-```
+See **Build & Test Commands** section below for optimized commands.
 
 ## Implementation Status: 100% COMPLETE
 
@@ -316,13 +330,67 @@ projects, repositories, tasks, runs, run_events, findings, workers, webhooks, pr
 | Error | `/Error` |
 | Not Found | `/not-found` |
 
-## Build Commands
+## Build & Test Commands (56-Core Optimized)
 
-```bash
-dotnet build src/AgentsDashboard.slnx
-dotnet test
-dotnet format
+### Environment Variables (fish shell)
+```fish
+set -gx DOTNET_CLI_TELEMETRY_OPTOUT 1
+set -gx DOTNET_NOLOGO 1
+set -gx DOTNET_SKIP_FIRST_TIME_EXPERIENCE 1
 ```
+
+### Build
+```bash
+dotnet build src/AgentsDashboard.slnx -m --tl                          # all cores
+dotnet build src/AgentsDashboard.slnx -m --tl -c Release               # release
+dotnet build-server shutdown && dotnet build src/AgentsDashboard.slnx -m --tl  # clean
+dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error    # lint (CI match)
+dotnet format src/AgentsDashboard.slnx --severity error                        # autofix
+```
+
+### Test (TUnit — parallel by default)
+```bash
+# Unit tests (1,260 tests — TUnit parallelizes automatically)
+dotnet test tests/AgentsDashboard.UnitTests --tl
+
+# Integration tests (270 tests — fixtures shared via ClassDataSource keyed sharing)
+dotnet test tests/AgentsDashboard.IntegrationTests --tl
+
+# Playwright E2E tests (317 tests — requires app on localhost:5266)
+dotnet test tests/AgentsDashboard.PlaywrightTests --tl
+
+# All tests
+dotnet test src/AgentsDashboard.slnx --tl
+
+# Filter by class/name
+dotnet test tests/AgentsDashboard.UnitTests --filter "ClassName~RunDispatcherTests"
+
+# Detect hung tests
+dotnet test tests/AgentsDashboard.UnitTests --blame-hang-timeout 60s
+
+# With coverage
+dotnet test tests/AgentsDashboard.UnitTests --collect:"XPlat Code Coverage" \
+  --results-directory TestResults/unit --logger "trx;LogFileName=unit.trx"
+
+# With centralized settings
+dotnet test --settings test.runsettings
+```
+
+### Benchmarks & Watch
+```bash
+dotnet run --project tests/AgentsDashboard.Benchmarks -c Release
+dotnet watch --project src/AgentsDashboard.ControlPlane         # hot reload
+dotnet watch test --project tests/AgentsDashboard.UnitTests     # re-run on save
+```
+
+## Performance Tips
+
+- **MSBuild `-m` flag**: uses all 56 cores for parallel project compilation. Leave node reuse ON for dev (faster repeat builds), `dotnet build-server shutdown` for clean builds.
+- **TUnit parallelism**: all tests run in parallel by default. Use `[NotInParallel]` attribute to opt specific tests out. Use `[ParallelLimiter<T>]` to cap concurrency for resource-heavy tests.
+- **TUnit fixture sharing**: integration tests use `[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]` — tests sharing a fixture key get the same instance, serialized within that group.
+- **SQLite concurrency**: integration tests use per-fixture temp files (`/tmp/agentsdashboard-api-{guid}.db`), no lock contention.
+- **Docker parallel builds**: build 4 harness images concurrently with `&` + `wait`.
+- **Vulnerability audit**: `dotnet list src/AgentsDashboard.slnx package --vulnerable --include-transitive`
 
 ## Known Issues
 

@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class ProviderSettingsE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_Loads()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=Provider Settings")).ToBeVisibleAsync();
     }
@@ -19,7 +18,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_HasRepositorySelection()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=Repository Selection")).ToBeVisibleAsync();
     }
@@ -27,7 +26,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_HasSystemSettings()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=System Settings")).ToBeVisibleAsync();
     }
@@ -35,7 +34,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_HasDockerAllowedImagesField()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=Docker Allowed Images")).ToBeVisibleAsync();
     }
@@ -43,7 +42,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_HasRetentionFields()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=Log Retention")).ToBeVisibleAsync();
         await Expect(Page.Locator("text=Run Retention")).ToBeVisibleAsync();
@@ -52,7 +51,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_HasVictoriaMetricsFields()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=VictoriaMetrics Endpoint")).ToBeVisibleAsync();
         await Expect(Page.Locator("text=VMUI Endpoint")).ToBeVisibleAsync();
@@ -61,7 +60,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_HasSaveSystemSettingsButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("button:has-text('Save System Settings')")).ToBeVisibleAsync();
     }
@@ -69,7 +68,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_NavigationFromMenu()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
         await Page.ClickAsync("a[href='/providers']");
         await Expect(Page).ToHaveURLAsync($"{BaseUrl}/providers");
@@ -78,7 +77,7 @@ public class ProviderSettingsE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_ShowsEmptyState_WhenNoRepositories()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         var emptyAlert = Page.Locator("text=No repositories found");
         var repoSelect = Page.Locator(".mud-select");
@@ -86,13 +85,13 @@ public class ProviderSettingsE2ETests : PageTest
         var hasEmptyState = await emptyAlert.IsVisibleAsync();
         var hasSelect = await repoSelect.IsVisibleAsync();
 
-        Assert.That(hasEmptyState || hasSelect, Is.True, "Page should show either empty state or repository selector");
+        await Assert.That(hasEmptyState || hasSelect).IsTrue();
     }
 
     [Test]
     public async Task ProvidersPage_HasGlobalConfigurationHeader()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=Global Configuration")).ToBeVisibleAsync();
     }

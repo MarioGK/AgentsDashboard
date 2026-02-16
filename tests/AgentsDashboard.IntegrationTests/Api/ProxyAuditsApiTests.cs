@@ -1,17 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
-using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class ProxyAuditsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class ProxyAuditsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task ListProxyAudits_ReturnsEmptyList_WhenNoAudits()
     {
         var response = await _client.GetAsync("/api/proxy-audits");
@@ -21,7 +19,7 @@ public class ProxyAuditsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListProxyAudits_WithFilters_ReturnsFilteredResults()
     {
         var response = await _client.GetAsync("/api/proxy-audits?projectId=test-project&limit=10");
@@ -31,7 +29,7 @@ public class ProxyAuditsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListProxyAudits_WithDateRange_FiltersCorrectly()
     {
         var from = DateTime.UtcNow.AddDays(-7).ToString("o");
@@ -44,7 +42,7 @@ public class ProxyAuditsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListProxyAudits_WithRepositoryFilter_ReturnsFilteredResults()
     {
         var response = await _client.GetAsync("/api/proxy-audits?repositoryId=test-repo");
@@ -54,7 +52,7 @@ public class ProxyAuditsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListProxyAudits_WithRunFilter_ReturnsFilteredResults()
     {
         var response = await _client.GetAsync("/api/proxy-audits?runId=test-run");
@@ -64,7 +62,7 @@ public class ProxyAuditsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTest
         audits.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task ListProxyAudits_WithPagination_ReturnsLimitedResults()
     {
         var response = await _client.GetAsync("/api/proxy-audits?skip=0&limit=5");

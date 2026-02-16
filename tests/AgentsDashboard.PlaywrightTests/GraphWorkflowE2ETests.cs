@@ -1,9 +1,8 @@
 using Microsoft.Playwright;
-using Microsoft.Playwright.NUnit;
+using TUnit.Playwright;
 
 namespace AgentsDashboard.PlaywrightTests;
 
-[TestFixture]
 public class GraphWorkflowE2ETests : PageTest
 {
     private const string BaseUrl = "http://localhost:5266";
@@ -11,7 +10,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowList_PageLoads()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2");
         await Expect(Page.Locator("text=Graph Workflows")).ToBeVisibleAsync();
     }
@@ -19,7 +18,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowList_ShowsCreateButton()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2");
         await Expect(Page.Locator("a:has-text('Create Workflow'), button:has-text('Create Workflow')")).ToBeVisibleAsync();
     }
@@ -27,7 +26,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowList_CreateButton_NavigatesToEditor()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2");
 
         await Page.ClickAsync("a:has-text('Create Workflow')");
@@ -37,7 +36,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_NewMode_HasEmptyForm()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         await Expect(Page.Locator("text=New Graph Workflow")).ToBeVisibleAsync();
@@ -49,7 +48,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_NodePalette_HasAllTypes()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         await Expect(Page.Locator("text=Node Palette")).ToBeVisibleAsync();
@@ -63,7 +62,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_AddStartNode_AppearsInTable()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         await Page.ClickAsync("button:has-text('Start')");
@@ -79,7 +78,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_AddEndNode_AppearsInTable()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         await Page.ClickAsync("button:has-text('End')");
@@ -92,7 +91,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_NodesTab_ShowsTable()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         var nodesTab = Page.Locator(".mud-tab:has-text('Nodes')").First;
@@ -106,13 +105,13 @@ public class GraphWorkflowE2ETests : PageTest
         var hasEmpty = await emptyAlert.IsVisibleAsync();
         var hasTable = await nodesTable.First.IsVisibleAsync();
 
-        Assert.That(hasEmpty || hasTable, Is.True, "Nodes tab should show either empty state or table");
+        await Assert.That(hasEmpty || hasTable).IsTrue();
     }
 
     [Test]
     public async Task WorkflowEditor_EdgesTab_ShowsTable()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         var edgesTab = Page.Locator(".mud-tab:has-text('Edges')").First;
@@ -126,13 +125,13 @@ public class GraphWorkflowE2ETests : PageTest
         var hasEmpty = await emptyAlert.IsVisibleAsync();
         var hasButton = await addEdgeButton.IsVisibleAsync();
 
-        Assert.That(hasEmpty || hasButton, Is.True, "Edges tab should show empty state or Add Edge button");
+        await Assert.That(hasEmpty || hasButton).IsTrue();
     }
 
     [Test]
     public async Task WorkflowEditor_ValidationTab_ShowsErrors()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         var validationTab = Page.Locator(".mud-tab:has-text('Validation')").First;
@@ -148,7 +147,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_SaveButton_Exists()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         await Expect(Page.Locator("button:has-text('Save')")).ToBeVisibleAsync();
@@ -157,7 +156,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_BackButton_NavigatesToList()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         var backButton = Page.Locator("a[href='/workflows-v2'] .mud-icon-root, a[href='/workflows-v2']").First;
@@ -171,7 +170,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_Title_IsCorrect()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/new");
 
         await Expect(Page.Locator("h4:has-text('New Graph Workflow'), .mud-typography-h4:has-text('New Graph Workflow')")).ToBeVisibleAsync();
@@ -180,7 +179,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowList_Title_IsCorrect()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/workflows-v2");
 
         await Expect(Page.Locator("h4:has-text('Graph Workflows'), .mud-typography-h4:has-text('Graph Workflows')")).ToBeVisibleAsync();
@@ -189,7 +188,7 @@ public class GraphWorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowList_Navigation_FromSidebar()
     {
-        
+
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;

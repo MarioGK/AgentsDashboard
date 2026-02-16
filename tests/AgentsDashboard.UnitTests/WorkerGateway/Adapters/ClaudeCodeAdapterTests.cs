@@ -19,13 +19,13 @@ public class ClaudeCodeAdapterTests
         _adapter = new ClaudeCodeAdapter(options, redactor, NullLogger<ClaudeCodeAdapter>.Instance);
     }
 
-    [Fact]
+    [Test]
     public void HarnessName_ReturnsClaudeCode()
     {
         _adapter.HarnessName.Should().Be("claude-code");
     }
 
-    [Fact]
+    [Test]
     public void PrepareContext_SetsDefaultValues()
     {
         var request = CreateRequest();
@@ -39,7 +39,7 @@ public class ClaudeCodeAdapterTests
         context.TimeoutSeconds.Should().Be(600);
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesRequiredEnvVariables()
     {
         var request = CreateRequest();
@@ -54,7 +54,7 @@ public class ClaudeCodeAdapterTests
         command.Arguments.Should().Contain("HARNESS=claude-code");
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesOptionalEnvVariables_WhenPresent()
     {
         var request = CreateRequest();
@@ -72,7 +72,7 @@ public class ClaudeCodeAdapterTests
         command.Arguments.Should().Contain("CLAUDE_MCP_SERVERS=server1,server2");
     }
 
-    [Fact]
+    [Test]
     public void BuildCommand_IncludesSkipPermissions_WhenSetToTrue()
     {
         var request = CreateRequest();
@@ -84,10 +84,10 @@ public class ClaudeCodeAdapterTests
         command.Arguments.Should().Contain("CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true");
     }
 
-    [Theory]
-    [InlineData("false")]
-    [InlineData("FALSE")]
-    [InlineData("")]
+    [Test]
+    [Arguments("false")]
+    [Arguments("FALSE")]
+    [Arguments("")]
     public void BuildCommand_SkipsSkipPermissions_WhenNotTrue(string value)
     {
         var request = CreateRequest();
@@ -99,7 +99,7 @@ public class ClaudeCodeAdapterTests
         command.Arguments.Should().NotContain("CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true");
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsSuccess_WhenEnvelopeSucceeded()
     {
         var envelope = new HarnessResultEnvelope { Status = "succeeded" };
@@ -110,7 +110,7 @@ public class ClaudeCodeAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsRateLimitExceeded_WhenServiceOverloaded()
     {
         var envelope = new HarnessResultEnvelope
@@ -127,7 +127,7 @@ public class ClaudeCodeAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(60);
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsResourceExhausted_WhenPromptTooLong()
     {
         var envelope = new HarnessResultEnvelope
@@ -144,7 +144,7 @@ public class ClaudeCodeAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(30);
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsInvalidInput_WhenContentPolicyViolation()
     {
         var envelope = new HarnessResultEnvelope
@@ -160,7 +160,7 @@ public class ClaudeCodeAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsConfigurationError_WhenMcpToolError()
     {
         var envelope = new HarnessResultEnvelope
@@ -176,7 +176,7 @@ public class ClaudeCodeAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsPermissionDenied_WhenApprovalDenied()
     {
         var envelope = new HarnessResultEnvelope
@@ -192,7 +192,7 @@ public class ClaudeCodeAdapterTests
         classification.IsRetryable.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void ClassifyFailure_ReturnsInternalError_WhenCliError()
     {
         var envelope = new HarnessResultEnvelope
@@ -209,12 +209,12 @@ public class ClaudeCodeAdapterTests
         classification.SuggestedBackoffSeconds.Should().Be(30);
     }
 
-    [Theory]
-    [InlineData("unauthorized", FailureClass.AuthenticationError)]
-    [InlineData("rate limit", FailureClass.RateLimitExceeded)]
-    [InlineData("timeout", FailureClass.Timeout)]
-    [InlineData("not found", FailureClass.NotFound)]
-    [InlineData("network error", FailureClass.NetworkError)]
+    [Test]
+    [Arguments("unauthorized", FailureClass.AuthenticationError)]
+    [Arguments("rate limit", FailureClass.RateLimitExceeded)]
+    [Arguments("timeout", FailureClass.Timeout)]
+    [Arguments("not found", FailureClass.NotFound)]
+    [Arguments("network error", FailureClass.NetworkError)]
     public void ClassifyFailure_ReturnsCorrectBaseClassification(string error, FailureClass expectedClass)
     {
         var envelope = new HarnessResultEnvelope
@@ -228,7 +228,7 @@ public class ClaudeCodeAdapterTests
         classification.Class.Should().Be(expectedClass);
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_ReturnsEmptyList_WhenNoArtifacts()
     {
         var envelope = new HarnessResultEnvelope();
@@ -238,7 +238,7 @@ public class ClaudeCodeAdapterTests
         artifacts.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_MapsArtifactPaths()
     {
         var envelope = new HarnessResultEnvelope
@@ -253,7 +253,7 @@ public class ClaudeCodeAdapterTests
         artifacts.Should().Contain(a => a.Name == "file2.json");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesEditedFiles_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -267,7 +267,7 @@ public class ClaudeCodeAdapterTests
         artifacts.Should().Contain(a => a.Path == "/src/test.cs");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesThinkingOutput_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -280,7 +280,7 @@ public class ClaudeCodeAdapterTests
         artifacts.Should().Contain(a => a.Name == "thinking.md" && a.Type == "markdown");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_IncludesToolUseLog_WhenPresent()
     {
         var envelope = new HarnessResultEnvelope
@@ -293,7 +293,7 @@ public class ClaudeCodeAdapterTests
         artifacts.Should().Contain(a => a.Name == "toollog.json" && a.Type == "json");
     }
 
-    [Fact]
+    [Test]
     public void MapArtifacts_DoesNotDuplicateEditedFiles_WhenAlreadyInArtifacts()
     {
         var envelope = new HarnessResultEnvelope
@@ -308,7 +308,7 @@ public class ClaudeCodeAdapterTests
         artifacts.Should().Contain(a => a.Path == "/src/file2.cs");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_ParsesValidJsonEnvelope()
     {
         var stdout = """{"status":"succeeded","summary":"Task done"}""";
@@ -319,7 +319,7 @@ public class ClaudeCodeAdapterTests
         envelope.Summary.Should().Be("Task done");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_AddsHasThinking_WhenThinkingPresent()
     {
         var stdout = """{"status":"succeeded","metadata":{"thinking":"some thinking content"}}""";
@@ -329,7 +329,7 @@ public class ClaudeCodeAdapterTests
         envelope.Metadata["hasThinking"].Should().Be("true");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_DoesNotAddHasThinking_WhenThinkingAbsent()
     {
         var stdout = """{"status":"succeeded"}""";
@@ -339,7 +339,7 @@ public class ClaudeCodeAdapterTests
         envelope.Metadata.Should().NotContainKey("hasThinking");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_AddsToolCallCount_WhenToolCallsPresent()
     {
         var stdout = """{"status":"succeeded","metadata":{"toolCalls":"call1,call2,call3"}}""";
@@ -349,7 +349,7 @@ public class ClaudeCodeAdapterTests
         envelope.Metadata["toolCallCount"].Should().Be("3");
     }
 
-    [Fact]
+    [Test]
     public void ParseEnvelope_CreatesFallback_WhenInvalidJson()
     {
         var stdout = "plain text";

@@ -1,23 +1,22 @@
 using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class HarnessHealthApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
-    [Fact]
+    [Test]
     public async Task GetHarnessHealth_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/health/harnesses");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task GetHarnessHealth_ReturnsHarnessHealthDictionary()
     {
         var response = await _client.GetAsync("/api/health/harnesses");
@@ -27,7 +26,7 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
         health.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task GetHarnessHealth_ReturnsExpectedHarnessNames()
     {
         var response = await _client.GetAsync("/api/health/harnesses");
@@ -36,8 +35,6 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
         var health = await response.Content.ReadFromJsonAsync<Dictionary<string, HarnessHealthResponse>>();
         health.Should().NotBeNull();
 
-        // In CI/test environments without harness CLIs, the hosted service
-        // does not run and the health map stays empty.
         if (health!.Count > 0)
         {
             health.Keys.Should().Contain("codex");
@@ -47,7 +44,7 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
         }
     }
 
-    [Fact]
+    [Test]
     public async Task GetHarnessHealth_ReturnsValidStatus()
     {
         var response = await _client.GetAsync("/api/health/harnesses");
@@ -62,7 +59,7 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
         }
     }
 
-    [Fact]
+    [Test]
     public async Task GetHarnessHealth_ReturnsCorrectHarnessCount()
     {
         var response = await _client.GetAsync("/api/health/harnesses");
@@ -73,7 +70,7 @@ public class HarnessHealthApiTests(ApiTestFixture fixture) : IClassFixture<ApiTe
         health!.Count.Should().BeOneOf(0, 4);
     }
 
-    [Fact]
+    [Test]
     public async Task GetHarnessHealth_EachHarnessHasName()
     {
         var response = await _client.GetAsync("/api/health/harnesses");

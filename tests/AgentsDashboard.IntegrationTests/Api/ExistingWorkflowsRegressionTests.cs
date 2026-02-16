@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class ExistingWorkflowsRegressionTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class ExistingWorkflowsRegressionTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -30,7 +29,7 @@ public class ExistingWorkflowsRegressionTests(ApiTestFixture fixture) : IClassFi
             new WorkflowStageConfigRequest("Stage 2", WorkflowStageType.Delay, DelaySeconds: 5, Order: 1)
         ]);
 
-    [Fact]
+    [Test]
     public async Task ListWorkflows_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/workflows");
@@ -41,7 +40,7 @@ public class ExistingWorkflowsRegressionTests(ApiTestFixture fixture) : IClassFi
         workflows.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorkflow_Valid_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -59,7 +58,7 @@ public class ExistingWorkflowsRegressionTests(ApiTestFixture fixture) : IClassFi
         workflow.Enabled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task GetWorkflow_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -75,7 +74,7 @@ public class ExistingWorkflowsRegressionTests(ApiTestFixture fixture) : IClassFi
         workflow.Name.Should().Be("V1 Workflow");
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteWorkflow_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -87,7 +86,7 @@ public class ExistingWorkflowsRegressionTests(ApiTestFixture fixture) : IClassFi
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task BothWorkflowTypesCoexist()
     {
         var (_, repo) = await SetupAsync();

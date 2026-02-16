@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class SecretsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class SecretsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -23,7 +22,7 @@ public class SecretsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
         return (project, repo);
     }
 
-    [Fact]
+    [Test]
     public async Task ListSecrets_ReturnsEmptyList_WhenNoSecrets()
     {
         var (_, repo) = await SetupAsync();
@@ -36,7 +35,7 @@ public class SecretsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
         secrets.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task SetSecret_ReturnsOk()
     {
         var (_, repo) = await SetupAsync();
@@ -47,7 +46,7 @@ public class SecretsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task SetSecret_ReturnsValidationProblem_WhenSecretValueIsEmpty()
     {
         var (_, repo) = await SetupAsync();
@@ -58,7 +57,7 @@ public class SecretsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task SetSecret_AppearsInList()
     {
         var (_, repo) = await SetupAsync();
@@ -73,7 +72,7 @@ public class SecretsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
         content.Should().Contain("anthropic");
     }
 
-    [Fact]
+    [Test]
     public async Task TestSecret_ReturnsNotFound_WhenSecretDoesNotExist()
     {
         var (_, repo) = await SetupAsync();

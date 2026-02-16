@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class GraphWorkflowsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -41,7 +40,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
                 new WorkflowEdgeConfigRequest("agent-1", "end-1", Priority: 0)
             ]);
 
-    [Fact]
+    [Test]
     public async Task ListWorkflowsV2_ReturnsOk()
     {
         var response = await _client.GetAsync("/api/workflows-v2");
@@ -52,7 +51,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         workflows.Should().NotBeNull();
     }
 
-    [Fact]
+    [Test]
     public async Task GetWorkflowV2_NotFound_Returns404()
     {
         var response = await _client.GetAsync("/api/workflows-v2/nonexistent");
@@ -60,7 +59,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorkflowV2_Valid_ReturnsOk()
     {
         var (_, repo, agent) = await SetupAsync();
@@ -81,7 +80,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         workflow.Id.Should().NotBeNullOrEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorkflowV2_MissingName_ReturnsValidationError()
     {
         var (_, repo, agent) = await SetupAsync();
@@ -92,7 +91,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorkflowV2_InvalidGraph_ReturnsValidationError()
     {
         var (_, repo, _) = await SetupAsync();
@@ -110,7 +109,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateWorkflowV2_Valid_ReturnsOk()
     {
         var (_, repo, agent) = await SetupAsync();
@@ -145,7 +144,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         updated.Nodes.Should().HaveCount(3);
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateWorkflowV2_NotFound_Returns404()
     {
         var (_, repo, agent) = await SetupAsync();
@@ -167,7 +166,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteWorkflowV2_Valid_ReturnsOk()
     {
         var (_, repo, agent) = await SetupAsync();
@@ -179,7 +178,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteWorkflowV2_NotFound_Returns404()
     {
         var response = await _client.DeleteAsync("/api/workflows-v2/nonexistent");
@@ -187,7 +186,7 @@ public class GraphWorkflowsApiTests(ApiTestFixture fixture) : IClassFixture<ApiT
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ListWorkflowsV2ByRepository_ReturnsFiltered()
     {
         var (_, repo, agent) = await SetupAsync();

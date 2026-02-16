@@ -14,7 +14,7 @@ public class WorkflowDagExecutorTests
     private readonly Mock<IContainerReaper> _containerReaper = new();
     private readonly Mock<IRunEventPublisher> _publisher = new();
 
-    [Fact]
+    [Test]
     public void ExecutionV2Document_DefaultState_IsRunning()
     {
         var execution = new WorkflowExecutionV2Document();
@@ -22,7 +22,7 @@ public class WorkflowDagExecutorTests
         execution.State.Should().Be(WorkflowV2ExecutionState.Running);
     }
 
-    [Fact]
+    [Test]
     public void ExecutionV2Document_DefaultNodeResults_IsEmpty()
     {
         var execution = new WorkflowExecutionV2Document();
@@ -30,7 +30,7 @@ public class WorkflowDagExecutorTests
         execution.NodeResults.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void ExecutionV2Document_DefaultContext_IsEmpty()
     {
         var execution = new WorkflowExecutionV2Document();
@@ -38,7 +38,7 @@ public class WorkflowDagExecutorTests
         execution.Context.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void NodeResult_DefaultAttempt_IsOne()
     {
         var nodeResult = new WorkflowNodeResult();
@@ -46,7 +46,7 @@ public class WorkflowDagExecutorTests
         nodeResult.Attempt.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2Document_DefaultNodes_IsEmpty()
     {
         var workflow = new WorkflowV2Document();
@@ -54,7 +54,7 @@ public class WorkflowDagExecutorTests
         workflow.Nodes.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2Document_DefaultEdges_IsEmpty()
     {
         var workflow = new WorkflowV2Document();
@@ -62,7 +62,7 @@ public class WorkflowDagExecutorTests
         workflow.Edges.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2Document_DefaultTrigger_IsManual()
     {
         var workflow = new WorkflowV2Document();
@@ -70,7 +70,7 @@ public class WorkflowDagExecutorTests
         workflow.Trigger.Type.Should().Be("Manual");
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2Document_DefaultMaxConcurrentNodes_Is4()
     {
         var workflow = new WorkflowV2Document();
@@ -78,7 +78,7 @@ public class WorkflowDagExecutorTests
         workflow.MaxConcurrentNodes.Should().Be(4);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2Document_DefaultEnabled_IsTrue()
     {
         var workflow = new WorkflowV2Document();
@@ -86,7 +86,7 @@ public class WorkflowDagExecutorTests
         workflow.Enabled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void DeadLetterDocument_DefaultReplayed_IsFalse()
     {
         var deadLetter = new WorkflowDeadLetterDocument();
@@ -94,7 +94,7 @@ public class WorkflowDagExecutorTests
         deadLetter.Replayed.Should().BeFalse();
     }
 
-    [Fact]
+    [Test]
     public void DeadLetterDocument_DefaultAttempt_IsOne()
     {
         var deadLetter = new WorkflowDeadLetterDocument();
@@ -102,7 +102,7 @@ public class WorkflowDagExecutorTests
         deadLetter.Attempt.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_DefaultHarness_IsCodex()
     {
         var agent = new AgentDocument();
@@ -110,7 +110,7 @@ public class WorkflowDagExecutorTests
         agent.Harness.Should().Be("codex");
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_DefaultEnabled_IsTrue()
     {
         var agent = new AgentDocument();
@@ -118,7 +118,7 @@ public class WorkflowDagExecutorTests
         agent.Enabled.Should().BeTrue();
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_DefaultRetryPolicy_HasOneAttempt()
     {
         var agent = new AgentDocument();
@@ -126,7 +126,7 @@ public class WorkflowDagExecutorTests
         agent.RetryPolicy.MaxAttempts.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public async Task CancelExecution_ReturnsResult()
     {
         var expectedExecution = new WorkflowExecutionV2Document
@@ -146,7 +146,7 @@ public class WorkflowDagExecutorTests
         _store.Verify(s => s.MarkExecutionV2CompletedAsync("exec-1", WorkflowV2ExecutionState.Cancelled, "Cancelled by user", It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveNode_Approved_CallsApproveStore()
     {
         var expectedExecution = new WorkflowExecutionV2Document
@@ -167,7 +167,7 @@ public class WorkflowDagExecutorTests
         _store.Verify(s => s.ApproveExecutionV2NodeAsync("exec-1", "admin", It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task ApproveNode_Rejected_CancelsExecution()
     {
         var expectedExecution = new WorkflowExecutionV2Document
@@ -187,7 +187,7 @@ public class WorkflowDagExecutorTests
         _store.Verify(s => s.MarkExecutionV2CompletedAsync("exec-1", WorkflowV2ExecutionState.Cancelled, "Approval rejected", It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task ReplayDeadLetter_CreatesNewExecution()
     {
         var deadLetter = new WorkflowDeadLetterDocument
@@ -233,7 +233,7 @@ public class WorkflowDagExecutorTests
         _store.Verify(s => s.MarkDeadLetterReplayedAsync("dl-1", "exec-new", It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeType_EnumValues_AreCorrect()
     {
         ((int)WorkflowNodeType.Start).Should().Be(0);
@@ -243,7 +243,7 @@ public class WorkflowDagExecutorTests
         ((int)WorkflowNodeType.End).Should().Be(4);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2ExecutionState_EnumValues_AreCorrect()
     {
         ((int)WorkflowV2ExecutionState.Running).Should().Be(0);
@@ -253,7 +253,7 @@ public class WorkflowDagExecutorTests
         ((int)WorkflowV2ExecutionState.PendingApproval).Should().Be(4);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeState_EnumValues_AreCorrect()
     {
         ((int)WorkflowNodeState.Pending).Should().Be(0);
@@ -265,7 +265,7 @@ public class WorkflowDagExecutorTests
         ((int)WorkflowNodeState.DeadLettered).Should().Be(6);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowEdgeConfig_DefaultPriority_IsZero()
     {
         var edge = new WorkflowEdgeConfig();
@@ -273,7 +273,7 @@ public class WorkflowDagExecutorTests
         edge.Priority.Should().Be(0);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeConfig_DefaultMappings_AreEmpty()
     {
         var node = new WorkflowNodeConfig();
@@ -282,7 +282,7 @@ public class WorkflowDagExecutorTests
         node.OutputMappings.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void WorkflowV2TriggerConfig_DefaultType_IsManual()
     {
         var trigger = new WorkflowV2TriggerConfig();
@@ -290,7 +290,7 @@ public class WorkflowDagExecutorTests
         trigger.Type.Should().Be("Manual");
     }
 
-    [Fact]
+    [Test]
     public void AgentDocument_DefaultTimeouts_Has600Seconds()
     {
         var agent = new AgentDocument();
@@ -298,7 +298,7 @@ public class WorkflowDagExecutorTests
         agent.Timeouts.ExecutionSeconds.Should().Be(600);
     }
 
-    [Fact]
+    [Test]
     public void WorkflowNodeResult_OutputContext_IsEmpty()
     {
         var result = new WorkflowNodeResult();
@@ -306,7 +306,7 @@ public class WorkflowDagExecutorTests
         result.OutputContext.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public void DeadLetterDocument_InputContextSnapshot_IsEmpty()
     {
         var dl = new WorkflowDeadLetterDocument();

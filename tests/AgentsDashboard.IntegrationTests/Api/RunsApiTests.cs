@@ -2,12 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using FluentAssertions;
 
 namespace AgentsDashboard.IntegrationTests.Api;
 
-[Collection("Api")]
-public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture>
+[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]
+public class RunsApiTests(ApiTestFixture fixture)
 {
     private readonly HttpClient _client = fixture.Client;
 
@@ -27,7 +26,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         return (project, repo, task);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateRun_ReturnsCreatedRun()
     {
         var (_, _, task) = await SetupAsync();
@@ -44,7 +43,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         run.Attempt.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateRun_ReturnsNotFound_WhenTaskDoesNotExist()
     {
         var request = new CreateRunRequest("nonexistent");
@@ -53,7 +52,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task GetRun_ReturnsRun_WhenRunExists()
     {
         var (_, _, task) = await SetupAsync();
@@ -68,14 +67,14 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         run!.Id.Should().Be(created.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task GetRun_ReturnsNotFound_WhenRunDoesNotExist()
     {
         var response = await _client.GetAsync("/api/runs/nonexistent");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task ListRuns_ReturnsAllRuns()
     {
         var (_, _, task) = await SetupAsync();
@@ -93,7 +92,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         runs.Should().Contain(r => r.Id == run2!.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task ListRepositoryRuns_ReturnsRunsForRepository()
     {
         var (_, repo, task) = await SetupAsync();
@@ -108,7 +107,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         runs.Should().Contain(r => r.Id == run!.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task CancelRun_ReturnsCancelledRun()
     {
         var (_, _, task) = await SetupAsync();
@@ -123,14 +122,14 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         run!.State.Should().Be(RunState.Cancelled);
     }
 
-    [Fact]
+    [Test]
     public async Task CancelRun_ReturnsNotFound_WhenRunDoesNotExist()
     {
         var response = await _client.PostAsync("/api/runs/nonexistent/cancel", null);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task RetryRun_ReturnsNewRunWithIncrementedAttempt()
     {
         var (_, _, task) = await SetupAsync();
@@ -146,14 +145,14 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         retryRun.TaskId.Should().Be(task.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task RetryRun_ReturnsNotFound_WhenRunDoesNotExist()
     {
         var response = await _client.PostAsync("/api/runs/nonexistent/retry", null);
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task GetRunLogs_ReturnsEmptyList_WhenNoLogs()
     {
         var (_, _, task) = await SetupAsync();
@@ -165,7 +164,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    [Fact]
+    [Test]
     public async Task BulkCancelRuns_ReturnsOk_WithValidRunIds()
     {
         var (_, _, task) = await SetupAsync();
@@ -183,7 +182,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task BulkCancelRuns_ReturnsPartialSuccess_WithMixedRunIds()
     {
         var (_, _, task) = await SetupAsync();
@@ -198,7 +197,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         result!.AffectedCount.Should().Be(1);
     }
 
-    [Fact]
+    [Test]
     public async Task BulkCancelRuns_ReturnsBadRequest_WhenNoRunIdsProvided()
     {
         var request = new BulkCancelRunsRequest([]);
@@ -207,7 +206,7 @@ public class RunsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixture
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    [Fact]
+    [Test]
     public async Task BulkCancelRuns_ReturnsOk_WithOnlyInvalidRunIds()
     {
         var request = new BulkCancelRunsRequest(["nonexistent1", "nonexistent2"]);
