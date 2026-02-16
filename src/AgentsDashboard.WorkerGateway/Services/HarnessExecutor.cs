@@ -26,7 +26,7 @@ public sealed class HarnessExecutor(
     {
         var request = job.Request;
 
-        if (string.IsNullOrWhiteSpace(request.Command))
+        if (string.IsNullOrWhiteSpace(request.CustomArgs))
         {
             return new HarnessResultEnvelope
             {
@@ -77,7 +77,7 @@ public sealed class HarnessExecutor(
         Func<string, CancellationToken, Task>? onLogChunk,
         CancellationToken cancellationToken)
     {
-        var adapter = adapterFactory.Create(request.Harness);
+        var adapter = adapterFactory.Create(request.HarnessType);
 
         var context = adapter.PrepareContext(request);
 
@@ -97,7 +97,7 @@ public sealed class HarnessExecutor(
         string? workspaceHostPath = null;
         bool cleanupWorkspace = false;
 
-        if (!string.IsNullOrWhiteSpace(request.GitUrl))
+        if (!string.IsNullOrWhiteSpace(request.CloneUrl))
         {
             var workspaceResult = await PrepareWorkspaceAsync(request, cancellationToken);
             workspaceHostPath = workspaceResult.Path;
@@ -144,7 +144,7 @@ public sealed class HarnessExecutor(
                                 async (chunk, ct) =>
                                 {
                                     logBuilder.Append(chunk);
-                                    var redactedChunk = secretRedactor.Redact(chunk, request.Env);
+                                    var redactedChunk = secretRedactor.Redact(chunk, request.EnvironmentVars);
                                     await onLogChunk(redactedChunk, ct);
                                 },
                                 logStreamingCts.Token);
@@ -176,7 +176,7 @@ public sealed class HarnessExecutor(
                     ? logBuilder.ToString()
                     : await dockerService.GetLogsAsync(containerId, CancellationToken.None);
 
-                var redactedLogs = secretRedactor.Redact(finalLogs, request.Env);
+                var redactedLogs = secretRedactor.Redact(finalLogs, request.EnvironmentVars);
                 var envelope = CreateEnvelope((int)exitCode, redactedLogs, string.Empty);
                 envelope.RunId = request.RunId;
                 envelope.TaskId = request.TaskId;
@@ -269,9 +269,9 @@ public sealed class HarnessExecutor(
 
     private async Task<(string Path, bool ShouldCleanup)> PrepareWorkspaceAsync(DispatchJobRequest request, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(request.WorkspacePath) && Directory.Exists(request.WorkspacePath))
+        if (!string.IsNullOrWhiteSpace(request.WorkingDirectory) && Directory.Exists(request.WorkingDirectory))
         {
-            return (request.WorkspacePath, false);
+            return (request.WorkingDirectory, false);
         }
 
         var tempPath = Path.Combine(Path.GetTempPath(), $"workspace-{request.RunId}");
@@ -280,13 +280,13 @@ public sealed class HarnessExecutor(
         try
         {
             var result = await Cli.Wrap("git")
-                .WithArguments(["clone", "--depth", "1", request.GitUrl, tempPath])
+                .WithArguments(["clone", "--depth", "1", request.CloneUrl, tempPath])
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync(cancellationToken);
 
             if (result.ExitCode != 0)
             {
-                logger.LogWarning("Git clone failed for {GitUrl}: {Error}", request.GitUrl, result.StandardError);
+                logger.LogWarning("Git clone failed for {CloneUrl}: {Error}", request.CloneUrl, result.StandardError);
                 try
                 { Directory.Delete(tempPath, recursive: true); }
                 catch { }
@@ -294,7 +294,7 @@ public sealed class HarnessExecutor(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Git clone threw for {GitUrl}", request.GitUrl);
+            logger.LogWarning(ex, "Git clone threw for {CloneUrl}", request.CloneUrl);
         }
 
         return (tempPath, true);
@@ -335,12 +335,12 @@ public sealed class HarnessExecutor(
         if (!string.Equals(envelope.Status, "succeeded", StringComparison.OrdinalIgnoreCase))
             return;
 
-        if (!request.Env.TryGetValue("AUTO_CREATE_PR", out var autoPr) ||
+        if (!request.EnvironmentVars.TryGetValue("AUTO_CREATE_PR", out var autoPr) ||
             !string.Equals(autoPr, "true", StringComparison.OrdinalIgnoreCase))
             return;
 
-        if (!request.Env.TryGetValue("GH_REPO", out var repository) || string.IsNullOrWhiteSpace(repository) ||
-            !request.Env.TryGetValue("PR_BRANCH", out var branch) || string.IsNullOrWhiteSpace(branch))
+        if (!request.EnvironmentVars.TryGetValue("GH_REPO", out var repository) || string.IsNullOrWhiteSpace(repository) ||
+            !request.EnvironmentVars.TryGetValue("PR_BRANCH", out var branch) || string.IsNullOrWhiteSpace(branch))
         {
             envelope.Status = "failed";
             envelope.Summary = "GitHub PR automation failed";
@@ -358,11 +358,11 @@ public sealed class HarnessExecutor(
             return;
         }
 
-        var title = request.Env.TryGetValue("PR_TITLE", out var prTitle) && !string.IsNullOrWhiteSpace(prTitle)
+        var title = request.EnvironmentVars.TryGetValue("PR_TITLE", out var prTitle) && !string.IsNullOrWhiteSpace(prTitle)
             ? prTitle
             : $"Agent: {request.TaskId[..Math.Min(8, request.TaskId.Length)]} - {request.RunId[..Math.Min(8, request.RunId.Length)]}";
         var body = BuildPrBody(request, envelope);
-        var baseBranch = request.Env.TryGetValue("DEFAULT_BRANCH", out var defaultBranch) && !string.IsNullOrWhiteSpace(defaultBranch)
+        var baseBranch = request.EnvironmentVars.TryGetValue("DEFAULT_BRANCH", out var defaultBranch) && !string.IsNullOrWhiteSpace(defaultBranch)
             ? defaultBranch
             : "main";
 

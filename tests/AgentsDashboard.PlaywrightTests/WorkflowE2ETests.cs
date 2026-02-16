@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class WorkflowE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task WorkflowListPage_LoadsAfterLogin()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
         await Expect(Page.Locator("text=Workflows")).ToBeVisibleAsync();
     }
@@ -19,7 +19,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_HasNewWorkflowButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
         await Expect(Page.Locator("button:has-text('New Workflow')")).ToBeVisibleAsync();
     }
@@ -27,7 +27,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_HasSearchField()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
         await Expect(Page.Locator("input[placeholder*='Search']")).ToBeVisibleAsync();
     }
@@ -35,7 +35,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_TableHeaders()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         await Expect(Page.Locator("th:has-text('Name')")).ToBeVisibleAsync();
@@ -49,7 +49,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_NewWorkflowButtonNavigatesToEditor()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         await Page.ClickAsync("button:has-text('New Workflow')");
@@ -59,7 +59,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditorPage_Loads()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
         await Expect(Page.Locator("text=Workflow")).ToBeVisibleAsync();
     }
@@ -67,7 +67,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task CreateWorkflow_WithBasicInfo()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var nameInput = Page.Locator("input[label='Name'], input[placeholder*='Name']").First;
@@ -77,7 +77,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task CreateWorkflow_WithStages()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Workflow Test {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
@@ -95,7 +95,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task EditWorkflow_Stages()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowLink = Page.Locator("a[href^='/workflows/']:not([href='/workflows/new'])").First;
@@ -115,7 +115,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task ExecuteWorkflow()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowRow = Page.Locator("tbody tr").First;
@@ -133,7 +133,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task ViewWorkflow_Execution()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowLink = Page.Locator("a[href^='/workflows/']:not([href='/workflows/new'])").First;
@@ -153,7 +153,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_WorkflowLinkNavigatesToEditor()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowLink = Page.Locator("a[href^='/workflows/']:not([href='/workflows/new'])").First;
@@ -168,7 +168,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_EditButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -182,7 +182,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_DeleteButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -196,7 +196,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_DeleteWorkflow()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -219,7 +219,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_EnabledStatusChip()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -233,7 +233,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task Workflow_ToggleEnabled()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -251,7 +251,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowListPage_Pagination()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var pager = Page.Locator(".mud-table-pagination");
@@ -264,7 +264,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_RepositorySelector()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var repoSelect = Page.Locator(".mud-select:has(label:text('Repository'))");
@@ -277,7 +277,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_StageConfiguration()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var stagesSection = Page.Locator("text=Stages, text=Stage").First;
@@ -290,7 +290,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_SaveButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var saveButton = Page.Locator("button:has-text('Save'), button:has-text('Create')");
@@ -300,7 +300,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task WorkflowEditor_BackButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows/new");
 
         var backButton = Page.Locator("button:has(.mud-icon-root) >> nth=0");
@@ -314,7 +314,7 @@ public class WorkflowE2ETests : PageTest
     [Test]
     public async Task Workflow_StageOrder()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflows");
 
         var workflowLink = Page.Locator("a[href^='/workflows/']:not([href='/workflows/new'])").First;
@@ -332,14 +332,6 @@ public class WorkflowE2ETests : PageTest
         }
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 
     private async Task<(string ProjectId, string RepoId)> CreateProjectWithRepositoryAsync(string projectName)
     {

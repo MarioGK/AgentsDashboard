@@ -52,41 +52,19 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
     }
 
     [Fact]
-    public async Task TriggerWebhook_ReturnsUnauthorized_WhenTokenInvalid()
-    {
-        var (_, repo, _) = await SetupAsync();
-        await GenerateTokenAsync(repo.Id);
-
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/invalid-token", null);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task TriggerWebhook_ReturnsNotFound_WhenTokenNotConfigured()
-    {
-        var (_, repo, _) = await SetupAsync();
-
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/some-token", null);
-
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
     public async Task TriggerWebhook_ReturnsNotFound_WhenRepositoryDoesNotExist()
     {
-        var response = await _client.PostAsync("/api/webhooks/nonexistent/token", null);
+        var response = await _client.PostAsync("/api/webhooks/nonexistent", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task TriggerWebhook_ReturnsOk_WhenValidToken()
+    public async Task TriggerWebhook_ReturnsOk_WhenRepositoryExists()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
 
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", null);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -96,9 +74,8 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
     {
         var (_, repo, task) = await SetupAsync();
         await _client.PostAsJsonAsync("/api/webhooks", new CreateWebhookRequest(repo.Id, task.Id, "push", "secret"));
-        var token = await GenerateTokenAsync(repo.Id);
 
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", null);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -116,9 +93,7 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         var repoResponse = await _client.PostAsJsonAsync("/api/repositories", repoRequest);
         var repo = (await repoResponse.Content.ReadFromJsonAsync<RepositoryDocument>())!;
 
-        var token = await GenerateTokenAsync(repo.Id);
-
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", null);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -126,13 +101,5 @@ public class WebhooksApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFix
         result!.Dispatched.Should().Be(0);
     }
 
-    private async Task<string> GenerateTokenAsync(string repoId)
-    {
-        var response = await _client.PostAsync($"/api/repositories/{repoId}/webhooks/token", null);
-        var result = await response.Content.ReadFromJsonAsync<TokenResponse>();
-        return result!.Token;
-    }
-
-    private sealed record TokenResponse(string Token);
     private sealed record WebhookTriggerResult(int Dispatched);
 }

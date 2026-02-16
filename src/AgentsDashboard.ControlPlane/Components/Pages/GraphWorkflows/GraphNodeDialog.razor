@@ -30,12 +30,7 @@
 
                 @if (_type == WorkflowNodeType.Approval)
                 {
-                    <MudSelect T="string" @bind-Value="_approverRole" Label="Approver Role" Required
-                               RequiredError="Approver role is required for Approval nodes">
-                        <MudSelectItem T="string" Value="@("viewer")">Viewer</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("operator")">Operator</MudSelectItem>
-                        <MudSelectItem T="string" Value="@("admin")">Admin</MudSelectItem>
-                    </MudSelect>
+                    <MudNumericField @bind-Value="_timeoutMinutes" Label="Approval Timeout (minutes)" Min="1" Max="1440" />
                 }
 
                 <MudNumericField @bind-Value="_timeoutMinutes" Label="Timeout (minutes)" Min="1" Max="1440" />
@@ -67,7 +62,6 @@
     private WorkflowNodeType _type = WorkflowNodeType.Agent;
     private string? _agentId;
     private int? _delaySeconds = 60;
-    private string? _approverRole;
     private int? _timeoutMinutes = 30;
 
     protected override void OnInitialized()
@@ -78,7 +72,6 @@
             _type = Node.Type;
             _agentId = Node.AgentId;
             _delaySeconds = Node.DelaySeconds ?? 60;
-            _approverRole = Node.ApproverRole;
             _timeoutMinutes = Node.TimeoutMinutes ?? 30;
         }
     }
@@ -94,7 +87,6 @@
             Type = _type,
             AgentId = _type == WorkflowNodeType.Agent ? _agentId : null,
             DelaySeconds = _type == WorkflowNodeType.Delay ? _delaySeconds : null,
-            ApproverRole = _type == WorkflowNodeType.Approval ? _approverRole : null,
             TimeoutMinutes = _timeoutMinutes,
             RetryPolicy = Node?.RetryPolicy,
             InputMappings = Node?.InputMappings ?? [],

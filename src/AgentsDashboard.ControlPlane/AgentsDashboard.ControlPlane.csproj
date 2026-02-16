@@ -22,6 +22,8 @@
     <PackageReference Include="SharpZipLib" />
     <PackageReference Include="Swashbuckle.AspNetCore" />
     <PackageReference Include="Yarp.ReverseProxy" />
+    <PackageReference Include="MagicOnion.Client" />
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class ContainerReaper(
-    WorkerGateway.WorkerGatewayClient workerClient,
+    IMagicOnionClientFactory clientFactory,
     ILogger<ContainerReaper> logger) : IContainerReaper
 {
     public async Task<ContainerKillResult> KillContainerAsync(string runId, string reason, bool force, CancellationToken cancellationToken)
@@ -13,29 +13,29 @@ public sealed class ContainerReaper(
 
         try
         {
+            var client = clientFactory.CreateWorkerGatewayService();
+
             var request = new KillContainerRequest
             {
-                RunId = runId,
-                Reason = reason,
-                Force = force
+                ContainerId = runId
             };
 
-            var response = await workerClient.KillContainerAsync(request, cancellationToken: cancellationToken);
+            var response = await client.KillContainerAsync(request);
 
-            if (response.Killed)
+            if (response.Success)
             {
-                logger.LogInformation("Successfully killed container {ContainerId} for run {RunId}", response.ContainerId, runId);
+                logger.LogInformation("Successfully killed container for run {RunId}. WasRunning: {WasRunning}", runId, response.WasRunning);
             }
             else
             {
-                logger.LogWarning("Failed to kill container for run {RunId}: {Error}", runId, response.Error);
+                logger.LogWarning("Failed to kill container for run {RunId}: {Error}", runId, response.ErrorMessage);
             }
 
             return new ContainerKillResult
             {
-                Killed = response.Killed,
-                ContainerId = response.ContainerId,
-                Error = response.Error
+                Killed = response.Success,
+                ContainerId = runId,
+                Error = response.ErrorMessage ?? string.Empty
             };
         }
         catch (Exception ex)
@@ -55,22 +55,32 @@ public sealed class ContainerReaper(
 
         try
         {
-            var request = new ReconcileOrphanedContainersRequest();
-            request.ActiveRunIds.AddRange(activeRunIds);
+            var client = clientFactory.CreateWorkerGatewayService();
 
-            var response = await workerClient.ReconcileOrphanedContainersAsync(request, cancellationToken: cancellationToken);
-
-            if (response.OrphanedCount > 0)
+            var request = new ReconcileOrphanedContainersRequest
             {
-                logger.LogWarning("Removed {Count} orphaned containers", response.OrphanedCount);
-                foreach (var container in response.RemovedContainers)
+                WorkerId = "control-plane"
+            };
+
+            var response = await client.ReconcileOrphanedContainersAsync(request);
+
+            if (response.Success && response.ReconciledCount > 0)
+            {
+                logger.LogWarning("Removed {Count} orphaned containers", response.ReconciledCount);
+                if (response.ContainerIds != null)
                 {
-                    logger.LogInformation("Removed orphaned container {ContainerId} for run {RunId}",
-                        container.ContainerId, container.RunId);
+                    foreach (var containerId in response.ContainerIds)
+                    {
+                        logger.LogInformation("Removed orphaned container {ContainerId}", containerId);
+                    }
                 }
             }
+            else if (!response.Success)
+            {
+                logger.LogWarning("Reconciliation failed: {Error}", response.ErrorMessage);
+            }
 
-            return response.OrphanedCount;
+            return response.ReconciledCount;
         }
         catch (Exception ex)
         {

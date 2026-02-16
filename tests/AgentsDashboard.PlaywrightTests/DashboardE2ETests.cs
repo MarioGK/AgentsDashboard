@@ -6,53 +6,18 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class DashboardE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
-    public async Task LoginPage_Loads()
+    public async Task Dashboard_Loads()
     {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Expect(Page.Locator("text=Sign In").Or(Page.Locator("input[name='username']"))).ToBeVisibleAsync();
-    }
-
-    [Test]
-    public async Task Login_WithValidCredentials_RedirectsToDashboard()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-        await Expect(Page.Locator("text=Agents Dashboard")).ToBeVisibleAsync();
-    }
-
-    [Test]
-    public async Task Login_WithInvalidCredentials_ShowsError()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-
-        await Page.FillAsync("input[name='username']", "invalid");
-        await Page.FillAsync("input[name='password']", "wrong");
-        await Page.ClickAsync("button[type='submit']");
-
-        await Page.WaitForTimeoutAsync(1000);
-        await Expect(Page).ToHaveURLAsync($"{BaseUrl}/login**");
-    }
-
-    [Test]
-    public async Task Dashboard_LoadsAfterLogin()
-    {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/");
         await Expect(Page.Locator("text=Overview")).ToBeVisibleAsync();
     }
 
     [Test]
-    public async Task ProjectsPage_LoadsAfterLogin()
+    public async Task ProjectsPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/projects");
         await Expect(Page.Locator("text=Projects")).ToBeVisibleAsync();
     }
@@ -60,7 +25,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task CreateProject_Flow()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/projects");
 
         await Page.FillAsync("input[placeholder*='Project']", "E2E Test Project");
@@ -72,7 +36,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task RunsPage_LoadsKanbanBoard()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/runs");
         await Expect(Page.Locator("text=Runs")).ToBeVisibleAsync();
     }
@@ -80,7 +43,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task FindingsPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/findings");
         await Expect(Page.Locator("text=Findings")).ToBeVisibleAsync();
     }
@@ -88,7 +50,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task FindingsPage_HasSeverityFilter()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/findings");
         await Expect(Page.Locator("text=Findings")).ToBeVisibleAsync();
         await Expect(Page.Locator("text=Severity")).ToBeVisibleAsync();
@@ -97,7 +58,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task SchedulesPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/schedules");
         await Expect(Page.Locator("text=Schedules")).ToBeVisibleAsync();
     }
@@ -105,7 +65,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task WorkersPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/workers");
         await Expect(Page.Locator("text=Workers")).ToBeVisibleAsync();
     }
@@ -113,7 +72,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=Provider Settings")).ToBeVisibleAsync();
     }
@@ -121,7 +79,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task ProvidersPage_HasSystemSettings()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/providers");
         await Expect(Page.Locator("text=System Settings")).ToBeVisibleAsync();
     }
@@ -129,7 +86,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task WorkflowsPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/workflows");
         await Expect(Page.Locator("text=Workflows")).ToBeVisibleAsync();
     }
@@ -137,7 +93,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("text=Container Image Builder")).ToBeVisibleAsync();
     }
@@ -145,7 +100,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task ImageBuilderPage_HasDockerfileEditor()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/image-builder");
         await Expect(Page.Locator("text=Dockerfile")).ToBeVisibleAsync();
     }
@@ -153,7 +107,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task AlertsPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/alerts");
         await Expect(Page.Locator("text=Alerts")).ToBeVisibleAsync();
     }
@@ -161,7 +114,6 @@ public class DashboardE2ETests : PageTest
     [Test]
     public async Task Navigation_AllPagesAccessible()
     {
-        await LoginAsync();
         var routes = new[] { "/", "/projects", "/runs", "/findings", "/schedules", "/workers", "/workflows", "/image-builder", "/providers", "/alerts" };
 
         foreach (var route in routes)
@@ -172,18 +124,9 @@ public class DashboardE2ETests : PageTest
     }
 
     [Test]
-    public async Task UnauthenticatedAccess_RedirectsToLogin()
+    public async Task Access_AllowsAnonymousAccess()
     {
         await Page.GotoAsync($"{BaseUrl}/projects");
-        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(".*login.*"));
-    }
-
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
+        await Expect(Page).ToHaveURLAsync($"{BaseUrl}/projects");
     }
 }

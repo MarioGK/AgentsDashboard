@@ -27,10 +27,12 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
     }
 
     [Fact]
-    public async Task WebhookEndpoint_HasSeparateRateLimit()
+    public async Task WebhookEndpoint_WithinRateLimit_ReturnsExpectedStatus()
     {
         var response = await _client.PostAsJsonAsync("/api/webhooks/test-repo/test-token", new { });
 
+        // Without auth, webhook returns 404 for non-existent repositories or 200 for valid routing
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NotFound);
         response.StatusCode.Should().NotBe(HttpStatusCode.TooManyRequests);
     }
 
@@ -55,7 +57,7 @@ public class RateLimitingApiTests(ApiTestFixture fixture) : IClassFixture<ApiTes
     }
 
     [Fact(Skip = "Rate limit metadata not exposed by standard ASP.NET Core sliding window limiters")]
-    public async Task AuthenticatedRequest_HasAuthPolicy()
+    public async Task ApiRequest_HasRateLimitPolicy()
     {
         var response = await _client.GetAsync("/api/projects");
 

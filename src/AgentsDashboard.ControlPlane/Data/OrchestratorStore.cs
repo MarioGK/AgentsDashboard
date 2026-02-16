@@ -1572,4 +1572,105 @@ public sealed class OrchestratorStore(IDbContextFactory<OrchestratorDbContext> d
         await db.SaveChangesAsync(cancellationToken);
         return dl;
     }
+
+    // ── Terminal Sessions ─────────────────────────────────────────────────────
+
+    public async Task<TerminalSessionDocument> CreateTerminalSessionAsync(TerminalSessionDocument session, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        db.TerminalSessions.Add(session);
+        await db.SaveChangesAsync(cancellationToken);
+        return session;
+    }
+
+    public async Task<TerminalSessionDocument?> GetTerminalSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.TerminalSessions.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == sessionId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TerminalSessionDocument>> ListActiveTerminalSessionsByWorkerAsync(string workerId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.TerminalSessions.AsNoTracking()
+            .Where(x => x.WorkerId == workerId && (x.State == TerminalSessionState.Active || x.State == TerminalSessionState.Pending))
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TerminalSessionDocument>> ListTerminalSessionsByRunAsync(string runId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.TerminalSessions.AsNoTracking()
+            .Where(x => x.RunId == runId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task UpdateTerminalSessionAsync(TerminalSessionDocument session, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.TerminalSessions.FirstOrDefaultAsync(x => x.Id == session.Id, cancellationToken);
+        if (existing is null)
+            return;
+
+        existing.WorkerId = session.WorkerId;
+        existing.RunId = session.RunId;
+        existing.State = session.State;
+        existing.Cols = session.Cols;
+        existing.Rows = session.Rows;
+        existing.LastSeenAtUtc = session.LastSeenAtUtc;
+        existing.ClosedAtUtc = session.ClosedAtUtc;
+        existing.CloseReason = session.CloseReason;
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task CloseTerminalSessionAsync(string sessionId, string reason, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var session = await db.TerminalSessions.FirstOrDefaultAsync(x => x.Id == sessionId, cancellationToken);
+        if (session is null)
+            return;
+
+        session.State = TerminalSessionState.Closed;
+        session.ClosedAtUtc = DateTime.UtcNow;
+        session.CloseReason = reason;
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    // ── Terminal Audit Events ────────────────────────────────────────────────
+
+    public async Task AppendTerminalAuditEventAsync(TerminalAuditEventDocument auditEvent, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var maxSequence = await db.TerminalAuditEvents
+            .Where(x => x.SessionId == auditEvent.SessionId)
+            .MaxAsync(x => (long?)x.Sequence, cancellationToken) ?? 0;
+
+        auditEvent.Sequence = maxSequence + 1;
+
+        db.TerminalAuditEvents.Add(auditEvent);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TerminalAuditEventDocument>> GetTerminalAuditEventsAsync(string sessionId, long? afterSequence = null, int limit = 2000, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var query = db.TerminalAuditEvents.AsNoTracking()
+            .Where(x => x.SessionId == sessionId);
+
+        if (afterSequence.HasValue)
+        {
+            query = query.Where(x => x.Sequence > afterSequence.Value);
+        }
+
+        return await query
+            .OrderBy(x => x.Sequence)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
 }

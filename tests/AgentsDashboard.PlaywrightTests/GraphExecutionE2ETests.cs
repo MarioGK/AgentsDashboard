@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class GraphExecutionE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task ExecutionView_PageLoads_WithValidId()
     {
-        await LoginAsync();
+        
         var fakeId = Guid.NewGuid().ToString("N");
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/executions/{fakeId}");
 
@@ -33,7 +33,7 @@ public class GraphExecutionE2ETests : PageTest
     [Test]
     public async Task ExecutionView_ShowsStateChip()
     {
-        await LoginAsync();
+        
         var fakeId = Guid.NewGuid().ToString("N");
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/executions/{fakeId}");
         await Page.WaitForTimeoutAsync(500);
@@ -52,7 +52,7 @@ public class GraphExecutionE2ETests : PageTest
     [Test]
     public async Task ExecutionView_ShowsNodeResultsTable()
     {
-        await LoginAsync();
+        
         var fakeId = Guid.NewGuid().ToString("N");
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/executions/{fakeId}");
         await Page.WaitForTimeoutAsync(500);
@@ -73,7 +73,7 @@ public class GraphExecutionE2ETests : PageTest
     [Test]
     public async Task ExecutionView_BackButton_Exists()
     {
-        await LoginAsync();
+        
         var fakeId = Guid.NewGuid().ToString("N");
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/executions/{fakeId}");
         await Page.WaitForTimeoutAsync(500);
@@ -92,7 +92,7 @@ public class GraphExecutionE2ETests : PageTest
     [Test]
     public async Task ExecutionView_Title_ShowsExecution()
     {
-        await LoginAsync();
+        
         var fakeId = Guid.NewGuid().ToString("N");
         await Page.GotoAsync($"{BaseUrl}/workflows-v2/executions/{fakeId}");
         await Page.WaitForTimeoutAsync(500);
@@ -108,12 +108,4 @@ public class GraphExecutionE2ETests : PageTest
             "Page should show execution title when loaded or progress bar when loading");
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 }

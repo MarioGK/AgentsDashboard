@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class ScheduleE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task SchedulesPage_Loads()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/schedules");
         await Expect(Page.Locator("text=Schedules")).ToBeVisibleAsync();
     }
@@ -19,7 +19,7 @@ public class ScheduleE2ETests : PageTest
     [Test]
     public async Task SchedulesPage_HasRefreshButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/schedules");
         await Expect(Page.Locator("button:has-text('Refresh')")).ToBeVisibleAsync();
     }
@@ -27,7 +27,7 @@ public class ScheduleE2ETests : PageTest
     [Test]
     public async Task SchedulesPage_ShowsTableHeaders()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/schedules");
         await Expect(Page.Locator("text=Name")).ToBeVisibleAsync();
         await Expect(Page.Locator("text=Repository")).ToBeVisibleAsync();
@@ -40,7 +40,7 @@ public class ScheduleE2ETests : PageTest
     [Test]
     public async Task SchedulesPage_ClickRefresh_ReloadsData()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/schedules");
         await Page.ClickAsync("button:has-text('Refresh')");
         await Page.WaitForTimeoutAsync(500);
@@ -50,7 +50,7 @@ public class ScheduleE2ETests : PageTest
     [Test]
     public async Task SchedulesPage_ShowsEmptyState_WhenNoSchedules()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/schedules");
         var emptyAlert = Page.Locator("text=No cron-scheduled tasks found");
         var table = Page.Locator(".mud-table");
@@ -64,18 +64,10 @@ public class ScheduleE2ETests : PageTest
     [Test]
     public async Task SchedulesPage_NavigationFromMenu()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
         await Page.ClickAsync("a[href='/schedules']");
         await Expect(Page).ToHaveURLAsync($"{BaseUrl}/schedules");
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 }

@@ -37,7 +37,6 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     public async Task TriggerWebhook_WithValidSignature_Succeeds()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
         var secret = "webhook-secret-123";
 
         var payload = "{\"ref\":\"refs/heads/main\",\"commits\":[]}";
@@ -46,7 +45,7 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-Hub-Signature-256", $"sha256={signature}");
 
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -55,14 +54,13 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     public async Task TriggerWebhook_WithGithubPayload_ParsesCorrectly()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
 
         var payload = "{\"ref\":\"refs/heads/main\",\"before\":\"abc123\",\"after\":\"def456\",\"commits\":[],\"repository\":{\"full_name\":\"test/repo\"}}";
 
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-GitHub-Event", "push");
 
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -71,14 +69,13 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     public async Task TriggerWebhook_WithPushEvent_ExtractsBranch()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
 
         var payload = "{\"ref\":\"refs/heads/feature/test-branch\"}";
 
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-GitHub-Event", "push");
 
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -87,14 +84,13 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     public async Task TriggerWebhook_WithPullRequestEvent_ProcessesEvent()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
 
         var payload = "{\"action\":\"opened\",\"pull_request\":{\"number\":42,\"title\":\"Test PR\"}}";
 
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-GitHub-Event", "pull_request");
 
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -103,9 +99,8 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     public async Task TriggerWebhook_WithEmptyPayload_Succeeds()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
 
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", null);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", null);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -114,11 +109,10 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     public async Task TriggerWebhook_WithJsonContentType_AcceptsPayload()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
 
         var payload = new { @ref = "refs/heads/main", commits = Array.Empty<object>() };
 
-        var response = await _client.PostAsJsonAsync($"/api/webhooks/{repo.Id}/{token}", payload);
+        var response = await _client.PostAsJsonAsync($"/api/webhooks/{repo.Id}", payload);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -127,10 +121,9 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     public async Task TriggerWebhook_ConcurrentRequests_HandleGracefully()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
 
         var tasks = Enumerable.Range(0, 5)
-            .Select(_ => _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", null))
+            .Select(_ => _client.PostAsync($"/api/webhooks/{repo.Id}", null))
             .ToArray();
 
         var responses = await Task.WhenAll(tasks);
@@ -143,23 +136,15 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
     public async Task TriggerWebhook_WithCustomEventHeader_ProcessedCorrectly()
     {
         var (_, repo, _) = await SetupAsync();
-        var token = await GenerateTokenAsync(repo.Id);
 
         var payload = "{\"test\":\"data\"}";
 
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
         content.Headers.Add("X-Event-Type", "custom-event");
 
-        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}/{token}", content);
+        var response = await _client.PostAsync($"/api/webhooks/{repo.Id}", content);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    private async Task<string> GenerateTokenAsync(string repoId)
-    {
-        var response = await _client.PostAsync($"/api/repositories/{repoId}/webhooks/token", null);
-        var result = await response.Content.ReadFromJsonAsync<TokenResponse>();
-        return result!.Token;
     }
 
     private static string ComputeHmacSha256(string secret, string payload)
@@ -170,6 +155,4 @@ public class WebhookSignatureApiTests(ApiTestFixture fixture) : IClassFixture<Ap
         var hash = hmac.ComputeHash(data);
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
-
-    private sealed record TokenResponse(string Token);
 }

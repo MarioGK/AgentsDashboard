@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class TaskE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task CreateTask_OneShot_UsingForm()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Task Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -29,7 +29,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task CreateTask_Cron_UsingForm()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Cron Task Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -47,7 +47,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task CreateTask_Cron_WithValidCronExpression()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Valid Cron {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -67,7 +67,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task CreateTask_EventDriven_UsingForm()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Event Task Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -84,7 +84,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task ApplyTaskTemplate()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Template Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -102,7 +102,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task TriggerTask_CreatesRun()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Trigger Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -122,7 +122,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task TaskTable_DisplaysColumns()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Task Columns Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -140,7 +140,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task EditTask_UpdateName()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Edit Task {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -166,7 +166,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task DeleteTask_RemovesFromList()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Delete Task {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -192,7 +192,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task ToggleTask_EnableDisable()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Toggle Task {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -212,7 +212,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_AppearsInList_AfterCreation()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Task List {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -227,7 +227,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_HarnessSelection_AvailableOptions()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Harness Test {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -244,7 +244,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_KindSelection_AvailableOptions()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Kind Test {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -260,7 +260,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_RunButton_CreatesRun()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Run Button {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -279,7 +279,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_ShellCommand_Input()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Shell Cmd {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -294,7 +294,7 @@ public class TaskE2ETests : PageTest
     [Test]
     public async Task Task_InstructionFile_Editor()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync($"E2E Instruction {Guid.NewGuid():N}");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -307,14 +307,6 @@ public class TaskE2ETests : PageTest
         }
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 
     private async Task<(string ProjectId, string RepoId)> CreateProjectWithRepositoryAsync(string projectName)
     {

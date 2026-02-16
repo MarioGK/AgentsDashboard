@@ -1,5 +1,4 @@
 @page "/repositories/{RepositoryId}"
-@attribute [Authorize]
 @rendermode InteractiveServer
 @inject Data.OrchestratorStore Store
 @inject Services.RunDispatcher Dispatcher
@@ -223,17 +222,6 @@ else
                     </MudGrid>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSecretsAsync" Class="mt-3">Save Secrets</MudButton>
 
-                    <MudDivider Class="my-4" />
-
-                    <MudText Typo="Typo.h6" Class="mb-2">Webhook Token</MudText>
-                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="GenerateWebhookTokenAsync">Generate Token</MudButton>
-                        @if (!string.IsNullOrWhiteSpace(_webhookToken))
-                        {
-                            <MudChip T="string" Color="Color.Info">@_webhookToken</MudChip>
-                        }
-                    </MudStack>
-
                     @if (!string.IsNullOrWhiteSpace(_saveMessage))
                     {
                         <MudAlert Severity="Severity.Success" Class="mt-3">@_saveMessage</MudAlert>
@@ -280,7 +268,6 @@ else
     private string _opencodeToken = string.Empty;
     private string _claudeToken = string.Empty;
     private string _zaiToken = string.Empty;
-    private string _webhookToken = string.Empty;
     private string _saveMessage = string.Empty;
     private readonly List<InstructionFileEdit> _repoInstructionFiles = [];
     private readonly Dictionary<int, StandaloneCodeEditor> _instructionEditors = [];
@@ -510,9 +497,6 @@ else
 
         _findings.Clear();
         _findings.AddRange(await Store.ListFindingsAsync(_repository.Id, CancellationToken.None));
-
-        var secrets = await Store.ListProviderSecretsAsync(_repository.Id, CancellationToken.None);
-        _webhookToken = secrets.Any(x => x.Provider == "webhook-token") ? "configured" : string.Empty;
     }
 
     private async Task SaveSecretsAsync()
@@ -540,19 +524,6 @@ else
         }
 
         await Store.UpsertProviderSecretAsync(_repository.Id, provider, Crypto.Encrypt(value.Trim()), CancellationToken.None);
-    }
-
-    private async Task GenerateWebhookTokenAsync()
-    {
-        if (_repository is null)
-        {
-            return;
-        }
-
-        var token = Convert.ToHexString(Guid.NewGuid().ToByteArray()).ToLowerInvariant();
-        await Store.UpsertProviderSecretAsync(_repository.Id, "webhook-token", Crypto.Encrypt(token), CancellationToken.None);
-        _webhookToken = token;
-        _saveMessage = "New webhook token generated.";
     }
 
     private async Task LoadInstructionFilesAsync()

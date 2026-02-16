@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class ProjectE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task ProjectsPage_LoadsAfterLogin()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/projects");
         await Expect(Page.Locator("text=Projects")).ToBeVisibleAsync();
     }
@@ -19,7 +19,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task ProjectsPage_HasCreateForm()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/projects");
         await Expect(Page.Locator("input[placeholder*='Project']")).ToBeVisibleAsync();
         await Expect(Page.Locator("button:has-text('Create')")).ToBeVisibleAsync();
@@ -28,7 +28,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task CreateProject_WithNameOnly()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/projects");
 
         var projectName = $"E2E Project {Guid.NewGuid():N}";
@@ -41,7 +41,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task CreateProject_WithDescription()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/projects");
 
         var projectName = $"E2E Project with Desc {Guid.NewGuid():N}";
@@ -62,7 +62,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task Project_AppearsInList()
     {
-        await LoginAsync();
+        
         var projectName = $"E2E List Test {Guid.NewGuid():N}";
         await CreateProjectAsync(projectName);
 
@@ -73,7 +73,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task ProjectDetailPage_Loads()
     {
-        await LoginAsync();
+        
         var projectName = $"E2E Detail Test {Guid.NewGuid():N}";
         var projectId = await CreateProjectAsync(projectName);
 
@@ -84,7 +84,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task ProjectDetailPage_ShowsRepositoriesSection()
     {
-        await LoginAsync();
+        
         var projectName = $"E2E Repo Section Test {Guid.NewGuid():N}";
         var projectId = await CreateProjectAsync(projectName);
 
@@ -95,7 +95,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task EditProject_UpdateName()
     {
-        await LoginAsync();
+        
         var projectName = $"E2E Edit Test {Guid.NewGuid():N}";
         var projectId = await CreateProjectAsync(projectName);
 
@@ -118,7 +118,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task DeleteProject_RemovesFromList()
     {
-        await LoginAsync();
+        
         var projectName = $"E2E Delete Test {Guid.NewGuid():N}";
         var projectId = await CreateProjectAsync(projectName);
 
@@ -143,7 +143,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task ProjectCard_ShowsRepositoryCount()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/projects");
 
         var projectCard = Page.Locator(".mud-card, .mud-paper").First;
@@ -160,7 +160,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task ProjectList_HasSearchFilter()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/projects");
 
         var searchInput = Page.Locator("input[placeholder*='Search'], input[placeholder*='Filter']").First;
@@ -173,7 +173,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task ProjectNavigation_FromDashboard()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
 
         var projectsLink = Page.Locator("a:has-text('Projects'), a[href='/projects']").First;
@@ -187,7 +187,7 @@ public class ProjectE2ETests : PageTest
     [Test]
     public async Task ProjectDetail_BackNavigation()
     {
-        await LoginAsync();
+        
         var projectName = $"E2E Back Nav Test {Guid.NewGuid():N}";
         var projectId = await CreateProjectAsync(projectName);
 
@@ -201,14 +201,6 @@ public class ProjectE2ETests : PageTest
         }
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 
     private async Task<string> CreateProjectAsync(string name)
     {

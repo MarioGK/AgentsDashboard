@@ -5,10 +5,14 @@
     <PackageReference Include="Grpc.Net.Client" />
     <PackageReference Include="Grpc.Core.Api" />
     <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+    <PackageReference Include="MagicOnion.Abstractions" />
+    <PackageReference Include="MessagePack" />
+    <PackageReference Include="MessagePack.Annotations" />
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="Worker/worker.proto" GrpcServices="Both" />
+    <!-- Disable MessagePack source generator analyzers -->
+    <CompilerVisibleProperty Remove="MessagePackGenerator" />
   </ItemGroup>
 
 </Project>

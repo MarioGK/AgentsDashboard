@@ -71,8 +71,6 @@
             }
         }
         
-        <MudText Typo="Typo.subtitle2" Class="mr-3">@_currentUser</MudText>
-        <MudButton Variant="Variant.Outlined" Color="Color.Inherit" Href="/auth/logout">Logout</MudButton>
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Color="Color.Inherit" OnClick="() => _isDarkMode = !_isDarkMode" />
     </MudAppBar>
 
@@ -106,11 +104,8 @@
 </MudLayout>
 
 @code {
-    [CascadingParameter] public Task<AuthenticationState>? AuthenticationStateTask { get; set; }
-
     private bool _drawerOpen = true;
     private bool _isDarkMode;
-    private string _currentUser = "anonymous";
     private bool _healthLoaded;
     private int _onlineWorkers;
     private int _totalWorkers;
@@ -138,15 +133,7 @@
     protected override async Task OnInitializedAsync()
     {
         _cts = new CancellationTokenSource();
-        
-        if (AuthenticationStateTask is null)
-        {
-            return;
-        }
 
-        var authState = await AuthenticationStateTask;
-        _currentUser = authState.User.Identity?.Name ?? "anonymous";
-        
         _selectionSubscription = SelectionService.Subscribe(_ => InvokeAsync(StateHasChanged));
         
         _ = Task.Run(async () =>

@@ -1,6 +1,5 @@
 @page "/workflows-v2/new"
 @page "/workflows-v2/{Id}"
-@attribute [Authorize]
 @rendermode InteractiveServer
 @inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
 @inject NavigationManager Nav
@@ -205,12 +204,6 @@
                         break;
 
                     case WorkflowNodeType.Approval:
-                        <MudSelect @bind-Value="_selectedNode.ApproverRole" Label="Approver Role"
-                                   Variant="Variant.Outlined" Clearable Class="mb-4">
-                            <MudSelectItem Value="@("viewer")">Viewer</MudSelectItem>
-                            <MudSelectItem Value="@("operator")">Operator</MudSelectItem>
-                            <MudSelectItem Value="@("admin")">Admin</MudSelectItem>
-                        </MudSelect>
                         break;
                 }
 
@@ -554,9 +547,6 @@
 
             if (node.Type == WorkflowNodeType.Delay && (!node.DelaySeconds.HasValue || node.DelaySeconds < 1))
                 _validationErrors.Add($"Delay node '{node.Name}' must have a delay duration >= 1 second.");
-
-            if (node.Type == WorkflowNodeType.Approval && string.IsNullOrEmpty(node.ApproverRole))
-                _validationErrors.Add($"Approval node '{node.Name}' must have an approver role.");
         }
 
         foreach (var edge in _edges)
@@ -603,7 +593,7 @@
         {
             var client = HttpClientFactory.CreateClient("Api");
             var nodeRequests = _nodes.Select(n => new WorkflowNodeConfigRequest(
-                n.Id, n.Name, n.Type, n.AgentId, n.DelaySeconds, n.ApproverRole,
+                n.Id, n.Name, n.Type, n.AgentId, n.DelaySeconds,
                 n.TimeoutMinutes, n.RetryPolicy, n.InputMappings, n.OutputMappings,
                 n.PositionX, n.PositionY)).ToList();
 

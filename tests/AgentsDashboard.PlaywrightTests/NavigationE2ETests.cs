@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class NavigationE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task Sidebar_HasAgentsLink()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
 
         var agentsLink = Page.Locator("a[href='/agents']");
@@ -21,7 +21,7 @@ public class NavigationE2ETests : PageTest
     [Test]
     public async Task Sidebar_HasWorkflowsGroup()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -31,7 +31,7 @@ public class NavigationE2ETests : PageTest
     [Test]
     public async Task Sidebar_WorkflowsGroup_HasStagesLink()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -48,7 +48,7 @@ public class NavigationE2ETests : PageTest
     [Test]
     public async Task Sidebar_WorkflowsGroup_HasGraphLink()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -65,7 +65,7 @@ public class NavigationE2ETests : PageTest
     [Test]
     public async Task Sidebar_WorkflowsGroup_HasDeadLettersLink()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -79,12 +79,4 @@ public class NavigationE2ETests : PageTest
         Assert.That(deadLettersText, Does.Contain("Dead Letters"), "Dead Letters link should have correct text");
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 }

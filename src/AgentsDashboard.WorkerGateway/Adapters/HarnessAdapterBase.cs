@@ -17,19 +17,19 @@ public abstract class HarnessAdapterBase(
 
     public virtual HarnessExecutionContext PrepareContext(DispatchJobRequest request)
     {
-        var image = ResolveImage(request.Harness);
+        var image = ResolveImage(request.HarnessType);
 
         return new HarnessExecutionContext
         {
             RunId = request.RunId,
-            Harness = request.Harness,
-            Prompt = request.Prompt,
-            Command = request.Command,
+            Harness = request.HarnessType,
+            Prompt = request.Instruction,
+            Command = request.CustomArgs,
             Image = image,
-            WorkspacePath = request.WorkspacePath,
-            GitUrl = request.GitUrl,
+            WorkspacePath = request.WorkingDirectory,
+            GitUrl = request.CloneUrl,
             ArtifactsHostPath = System.IO.Path.Combine(options.Value.ArtifactStoragePath, request.RunId),
-            Env = request.Env,
+            Env = request.EnvironmentVars,
             ContainerLabels = request.ContainerLabels,
             TimeoutSeconds = request.TimeoutSeconds > 0 ? request.TimeoutSeconds : options.Value.DefaultTimeoutSeconds,
             Attempt = request.Attempt,

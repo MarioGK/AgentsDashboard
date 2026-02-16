@@ -5,6 +5,9 @@
     <PackageReference Include="Docker.DotNet" />
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="MagicOnion.Server" />
+    <PackageReference Include="Multicaster" />
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 
   <ItemGroup>

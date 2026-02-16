@@ -1,8 +1,5 @@
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using System.Threading.RateLimiting;
 using AgentsDashboard.Contracts.Worker;
-using AgentsDashboard.ControlPlane.Auth;
 using AgentsDashboard.ControlPlane.Components;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
@@ -11,13 +8,10 @@ using AgentsDashboard.ControlPlane.Hubs;
 using AgentsDashboard.ControlPlane.Middleware;
 using AgentsDashboard.ControlPlane.Proxy;
 using AgentsDashboard.ControlPlane.Services;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MudBlazor.Services;
-using Swashbuckle.AspNetCore.SwaggerUI;
 using Yarp.ReverseProxy.Configuration;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
@@ -28,26 +22,10 @@ builder.AddServiceDefaults();
 builder.Services.AddOptions<OrchestratorOptions>()
     .Bind(builder.Configuration.GetSection(OrchestratorOptions.SectionName))
     .ValidateOnStart();
-builder.Services.Configure<DashboardAuthOptions>(builder.Configuration.GetSection(DashboardAuthOptions.SectionName));
 
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    options.AddPolicy("AuthPolicy", httpContext =>
-    {
-        var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
-        return RateLimitPartition.GetSlidingWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
-            factory: _ => new SlidingWindowRateLimiterOptions
-            {
-                PermitLimit = config.AuthPermitLimit,
-                Window = TimeSpan.FromSeconds(config.AuthWindowSeconds),
-                SegmentsPerWindow = 4,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 0
-            });
-    });
 
     options.AddPolicy("WebhookPolicy", httpContext =>
     {
@@ -67,14 +45,8 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("GlobalPolicy", httpContext =>
     {
         var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
-        var user = httpContext.User;
-        var isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
-        var partitionKey = isAuthenticated
-            ? user!.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user!.Identity?.Name ?? "authenticated"
-            : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
-
         return RateLimitPartition.GetSlidingWindowLimiter(
-            partitionKey: partitionKey,
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
             factory: _ => new SlidingWindowRateLimiterOptions
             {
                 PermitLimit = config.GlobalPermitLimit,
@@ -88,14 +60,8 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("BurstPolicy", httpContext =>
     {
         var config = httpContext.RequestServices.GetRequiredService<IOptions<OrchestratorOptions>>().Value.RateLimit;
-        var user = httpContext.User;
-        var isAuthenticated = user?.Identity?.IsAuthenticated ?? false;
-        var partitionKey = isAuthenticated
-            ? user!.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user!.Identity?.Name ?? "authenticated"
-            : httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
-
         return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: partitionKey,
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = config.BurstPermitLimit,
@@ -125,66 +91,6 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.AddTransient<RateLimitHeadersMiddleware>();
-
-if (builder.Environment.IsEnvironment("Testing"))
-{
-    builder.Services.AddAuthentication(options =>
-        {
-            options.DefaultScheme = "Dynamic";
-            options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        })
-        .AddPolicyScheme("Dynamic", "Dynamic", options =>
-        {
-            options.ForwardDefaultSelector = context =>
-            {
-                if (context.Request.Headers.ContainsKey("X-Test-Auth"))
-                    return "Test";
-                return CookieAuthenticationDefaults.AuthenticationScheme;
-            };
-        })
-        .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { })
-        .AddCookie(options =>
-        {
-            options.LoginPath = "/login";
-            options.Events = new CookieAuthenticationEvents
-            {
-                OnRedirectToLogin = context =>
-                {
-                    if (context.Request.Path.StartsWithSegments("/hubs") ||
-                        context.Request.Path.StartsWithSegments("/api"))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        return Task.CompletedTask;
-                    }
-
-                    context.Response.Redirect(context.RedirectUri);
-                    return Task.CompletedTask;
-                }
-            };
-        });
-
-    builder.Services.AddAuthorization(options =>
-    {
-        options.AddPolicy("viewer", policy => policy.RequireRole("viewer", "operator", "admin"));
-        options.AddPolicy("operator", policy => policy.RequireRole("operator", "admin"));
-    });
-}
-else
-{
-    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-        .AddCookie(options =>
-        {
-            options.LoginPath = "/login";
-            options.AccessDeniedPath = "/login";
-            options.SlidingExpiration = true;
-        });
-
-    builder.Services.AddAuthorization(options =>
-    {
-        options.AddPolicy("viewer", policy => policy.RequireRole("viewer", "operator", "admin"));
-        options.AddPolicy("operator", policy => policy.RequireRole("operator", "admin"));
-    });
-}
 
 builder.Services.AddDbContextFactory<OrchestratorDbContext>((sp, options) =>
 {
@@ -223,18 +129,14 @@ builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 builder.Services.AddScoped<ProjectContext>();
 builder.Services.AddScoped<IGlobalSelectionService, GlobalSelectionService>();
 
-builder.Services.AddGrpcClient<WorkerGateway.WorkerGatewayClient>((sp, options) =>
-    {
-        var orchestratorOptions = sp.GetRequiredService<IOptions<OrchestratorOptions>>().Value;
-        options.Address = new Uri(orchestratorOptions.WorkerGrpcAddress);
-    })
-    .ConfigureChannel(options =>
-    {
-        options.HttpHandler = new SocketsHttpHandler
-        {
-            EnableMultipleHttp2Connections = true,
-        };
-    });
+// MagicOnion client factory for WorkerGateway communication (must be registered before IWorkerRegistryService)
+builder.Services.AddSingleton<IMagicOnionClientFactory, MagicOnionClientFactory>();
+
+// Worker registry service (depends on IMagicOnionClientFactory)
+builder.Services.AddSingleton<IWorkerRegistryService, WorkerRegistryService>();
+
+// Terminal bridge service (implementation to be provided in another task)
+// builder.Services.AddSingleton<ITerminalBridgeService, TerminalBridgeService>();
 
 builder.Services.AddSingleton<InMemoryYarpConfigProvider>();
 builder.Services.AddSingleton<IProxyConfigProvider>(sp => sp.GetRequiredService<InMemoryYarpConfigProvider>());
@@ -242,7 +144,6 @@ builder.Services.AddReverseProxy();
 
 builder.Services.AddMudServices();
 builder.Services.AddSignalR();
-builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -259,29 +160,6 @@ if (!builder.Environment.IsEnvironment("Testing"))
             {
                 Name = "AI Orchestrator",
                 Email = "support@example.com"
-            }
-        });
-
-        options.AddSecurityDefinition("cookie", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-        {
-            Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-            In = Microsoft.OpenApi.Models.ParameterLocation.Cookie,
-            Name = ".AspNetCore.Cookies",
-            Description = "Cookie-based authentication"
-        });
-
-        options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-        {
-            {
-                new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-                {
-                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                    {
-                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                        Id = "cookie"
-                    }
-                },
-                Array.Empty<string>()
             }
         });
     });
@@ -311,18 +189,13 @@ if (!app.Environment.IsEnvironment("Testing"))
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
-app.UseAuthentication();
-app.UseAuthorization();
 app.UseRateLimiter();
 app.UseMiddleware<RateLimitHeadersMiddleware>();
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    app.UseAntiforgery();
-}
+app.UseAntiforgery();
 
 app.MapStaticAssets();
-app.MapHub<RunEventsHub>("/hubs/runs").RequireAuthorization("viewer");
-app.MapAuthEndpoints();
+app.MapHub<RunEventsHub>("/hubs/runs");
+app.MapHub<TerminalHub>("/hubs/terminal");
 app.MapOrchestratorApi();
 app.MapDagWorkflowApi();
 app.UseMiddleware<ProxyAuditMiddleware>();

@@ -1,7 +1,9 @@
 using AgentsDashboard.WorkerGateway.Adapters;
 using AgentsDashboard.WorkerGateway.Configuration;
-using AgentsDashboard.WorkerGateway.Grpc;
 using AgentsDashboard.WorkerGateway.Services;
+using MagicOnion.Server;
+using MessagePack;
+using MessagePack.Resolvers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +19,17 @@ builder.WebHost.ConfigureKestrel(options =>
     });
 });
 
-builder.Services.AddGrpc();
+StaticCompositeResolver.Instance.Register(
+    MessagePack.Resolvers.GeneratedResolver.Instance,
+    MessagePack.Resolvers.StandardResolver.Instance
+);
+
+builder.Services.AddMagicOnion(options =>
+{
+    options.MessagePackSerializerOptions = MessagePackSerializerOptions.Standard
+        .WithResolver(StaticCompositeResolver.Instance);
+});
+
 builder.Services.AddSingleton<WorkerQueue>(sp =>
 {
     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkerOptions>>().Value;
@@ -41,7 +53,7 @@ builder.Services.AddHealthChecks().AddCheck<DockerHealthCheckService>("docker", 
 
 var app = builder.Build();
 
-app.MapGrpcService<WorkerGatewayGrpcService>();
+app.MapMagicOnionService();
 app.MapGet("/", () => "WorkerGateway gRPC endpoint is running.");
 app.MapDefaultEndpoints();
 

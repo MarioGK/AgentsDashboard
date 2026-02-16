@@ -398,8 +398,8 @@ public sealed class WorkflowDagExecutor(
         WorkflowNodeResult nodeResult,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Node '{NodeName}' requires approval by role {ApproverRole}",
-            node.Name, node.ApproverRole ?? "any");
+        logger.LogInformation("Node '{NodeName}' requires approval",
+            node.Name);
 
         await store.MarkExecutionV2PendingApprovalAsync(execution.Id, node.Id, cancellationToken);
         execution.State = WorkflowV2ExecutionState.PendingApproval;

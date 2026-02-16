@@ -98,7 +98,6 @@ public sealed class ApiTestFixture : IAsyncLifetime
         {
             AllowAutoRedirect = false
         });
-        Client.DefaultRequestHeaders.Add("X-Test-Auth", "true");
     }
 
     public async Task DisposeAsync()

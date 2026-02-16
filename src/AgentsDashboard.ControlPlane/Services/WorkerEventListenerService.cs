@@ -1,80 +1,112 @@
 using System.Text.Json;
+using System.Threading.Tasks;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Proxy;
-using Grpc.Core;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class WorkerEventListenerService(
-    WorkerGateway.WorkerGatewayClient workerClient,
+    IMagicOnionClientFactory clientFactory,
     IOrchestratorStore store,
     IRunEventPublisher publisher,
     InMemoryYarpConfigProvider yarpProvider,
     RunDispatcher dispatcher,
-    ILogger<WorkerEventListenerService> logger) : BackgroundService
+    ILogger<WorkerEventListenerService> logger) : BackgroundService, IWorkerEventReceiver
 {
+    private IWorkerEventHub? _eventHub;
+    private readonly object _hubLock = new();
+    private int _reconnectDelayMs = 1000;
+    private const int MaxReconnectDelayMs = 30000;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await ListenOnceAsync(stoppingToken);
+                await ConnectAndListenAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 break;
             }
-            catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Worker event stream failed. Reconnecting in 2 seconds.");
-                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                logger.LogError(ex, "Worker event hub connection failed. Reconnecting in {Delay}ms.", _reconnectDelayMs);
+                await Task.Delay(_reconnectDelayMs, stoppingToken);
+
+                _reconnectDelayMs = Math.Min(_reconnectDelayMs * 2, MaxReconnectDelayMs);
             }
         }
     }
 
-    private async Task ListenOnceAsync(CancellationToken cancellationToken)
+    private async Task ConnectAndListenAsync(CancellationToken cancellationToken)
     {
-        using var call = workerClient.SubscribeEvents(new SubscribeEventsRequest(), cancellationToken: cancellationToken);
+        logger.LogInformation("Connecting to WorkerEventHub...");
 
-        while (await call.ResponseStream.MoveNext(cancellationToken))
+        var hub = await clientFactory.ConnectEventHubAsync(this, cancellationToken);
+
+        lock (_hubLock)
         {
-            var message = call.ResponseStream.Current;
+            _eventHub = hub;
+        }
 
-            if (string.Equals(message.Kind, "log_chunk", StringComparison.OrdinalIgnoreCase))
+        _reconnectDelayMs = 1000;
+        logger.LogInformation("Connected to WorkerEventHub. Subscribing to all events...");
+
+        await hub.SubscribeAsync(runIds: null);
+
+        await hub.WaitForDisconnect();
+        logger.LogWarning("WorkerEventHub disconnected.");
+    }
+
+    void IWorkerEventReceiver.OnJobEvent(JobEventMessage eventMessage)
+    {
+        _ = HandleJobEventAsync(eventMessage);
+    }
+
+    void IWorkerEventReceiver.OnWorkerStatusChanged(WorkerStatusMessage statusMessage)
+    {
+        _ = HandleWorkerStatusAsync(statusMessage);
+    }
+
+    private async Task HandleJobEventAsync(JobEventMessage message)
+    {
+        try
+        {
+            var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(message.Timestamp).UtcDateTime;
+
+            if (string.Equals(message.EventType, "log_chunk", StringComparison.OrdinalIgnoreCase))
             {
                 var logChunkEvent = new RunLogEvent
                 {
                     RunId = message.RunId,
                     Level = "chunk",
-                    Message = message.Message,
-                    TimestampUtc = DateTimeOffset.FromUnixTimeMilliseconds(message.TimestampUnixMs).UtcDateTime,
+                    Message = message.Summary ?? string.Empty,
+                    TimestampUtc = timestamp,
                 };
-                await publisher.PublishLogAsync(logChunkEvent, cancellationToken);
-                continue;
+                await publisher.PublishLogAsync(logChunkEvent, CancellationToken.None);
+                return;
             }
 
             var logEvent = new RunLogEvent
             {
                 RunId = message.RunId,
-                Level = message.Kind,
-                Message = message.Message,
-                TimestampUtc = DateTimeOffset.FromUnixTimeMilliseconds(message.TimestampUnixMs).UtcDateTime,
+                Level = message.EventType,
+                Message = message.Summary ?? message.Error ?? string.Empty,
+                TimestampUtc = timestamp,
             };
 
-            await store.AddRunLogAsync(logEvent, cancellationToken);
-            await publisher.PublishLogAsync(logEvent, cancellationToken);
+            await store.AddRunLogAsync(logEvent, CancellationToken.None);
+            await publisher.PublishLogAsync(logEvent, CancellationToken.None);
 
-            if (!string.Equals(message.Kind, "completed", StringComparison.OrdinalIgnoreCase))
-                continue;
+            if (!string.Equals(message.EventType, "completed", StringComparison.OrdinalIgnoreCase))
+                return;
 
-            var envelope = ParseEnvelope(message.PayloadJson);
+            var payloadJson = message.Metadata?.GetValueOrDefault("payload");
+            var envelope = ParseEnvelope(payloadJson);
             var succeeded = string.Equals(envelope.Status, "succeeded", StringComparison.OrdinalIgnoreCase);
 
             string? prUrl = envelope.Metadata.TryGetValue("prUrl", out var url) ? url : null;
@@ -93,30 +125,55 @@ public sealed class WorkerEventListenerService(
                 message.RunId,
                 succeeded,
                 envelope.Summary,
-                message.PayloadJson,
-                cancellationToken,
+                payloadJson ?? string.Empty,
+                CancellationToken.None,
                 failureClass: failureClass,
                 prUrl: prUrl);
 
             if (completedRun is null)
-                continue;
+                return;
 
-            // Cleanup YARP routes for this run
             yarpProvider.RemoveRoute($"run-{message.RunId}");
 
-            await publisher.PublishStatusAsync(completedRun, cancellationToken);
+            await publisher.PublishStatusAsync(completedRun, CancellationToken.None);
 
             if (!succeeded)
             {
-                await store.CreateFindingFromFailureAsync(completedRun, envelope.Error, cancellationToken);
-                await TryRetryAsync(completedRun, cancellationToken);
+                await store.CreateFindingFromFailureAsync(completedRun, envelope.Error, CancellationToken.None);
+                await TryRetryAsync(completedRun);
             }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to handle job event for run {RunId}", message.RunId);
         }
     }
 
-    private async Task TryRetryAsync(RunDocument failedRun, CancellationToken cancellationToken)
+    private async Task HandleWorkerStatusAsync(WorkerStatusMessage statusMessage)
     {
-        var task = await store.GetTaskAsync(failedRun.TaskId, cancellationToken);
+        try
+        {
+            var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(statusMessage.Timestamp).UtcDateTime;
+
+            logger.LogDebug("Worker {WorkerId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
+                statusMessage.WorkerId, statusMessage.Status, statusMessage.ActiveSlots, statusMessage.MaxSlots);
+
+            await publisher.PublishWorkerHeartbeatAsync(
+                statusMessage.WorkerId,
+                statusMessage.WorkerId,
+                statusMessage.ActiveSlots,
+                statusMessage.MaxSlots,
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to handle worker status for worker {WorkerId}", statusMessage.WorkerId);
+        }
+    }
+
+    private async Task TryRetryAsync(RunDocument failedRun)
+    {
+        var task = await store.GetTaskAsync(failedRun.TaskId, CancellationToken.None);
         if (task is null)
             return;
 
@@ -124,11 +181,11 @@ public sealed class WorkerEventListenerService(
         if (maxAttempts <= 1 || failedRun.Attempt >= maxAttempts)
             return;
 
-        var repo = await store.GetRepositoryAsync(task.RepositoryId, cancellationToken);
+        var repo = await store.GetRepositoryAsync(task.RepositoryId, CancellationToken.None);
         if (repo is null)
             return;
 
-        var project = await store.GetProjectAsync(repo.ProjectId, cancellationToken);
+        var project = await store.GetProjectAsync(repo.ProjectId, CancellationToken.None);
         if (project is null)
             return;
 
@@ -138,13 +195,13 @@ public sealed class WorkerEventListenerService(
         logger.LogInformation("Scheduling retry {Attempt}/{Max} for run {RunId} in {Delay}s",
             nextAttempt, maxAttempts, failedRun.Id, delaySeconds);
 
-        await Task.Delay(TimeSpan.FromSeconds(Math.Min(delaySeconds, 300)), cancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(Math.Min(delaySeconds, 300)));
 
-        var retryRun = await store.CreateRunAsync(task, project.Id, cancellationToken, nextAttempt);
-        await dispatcher.DispatchAsync(project, repo, task, retryRun, cancellationToken);
+        var retryRun = await store.CreateRunAsync(task, project.Id, CancellationToken.None, nextAttempt);
+        await dispatcher.DispatchAsync(project, repo, task, retryRun, CancellationToken.None);
     }
 
-    private static HarnessResultEnvelope ParseEnvelope(string payloadJson)
+    private static HarnessResultEnvelope ParseEnvelope(string? payloadJson)
     {
         if (string.IsNullOrWhiteSpace(payloadJson))
         {
@@ -162,5 +219,51 @@ public sealed class WorkerEventListenerService(
             Summary = "Invalid payload",
             Error = "JSON parse failed",
         };
+    }
+
+    public override void Dispose()
+    {
+        IWorkerEventHub? hubToDispose = null;
+        lock (_hubLock)
+        {
+            hubToDispose = _eventHub;
+            _eventHub = null;
+        }
+
+        if (hubToDispose is not null)
+        {
+            try
+            {
+                hubToDispose.DisposeAsync().Wait(TimeSpan.FromSeconds(5));
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+        base.Dispose();
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        IWorkerEventHub? hubToDispose = null;
+        lock (_hubLock)
+        {
+            hubToDispose = _eventHub;
+            _eventHub = null;
+        }
+
+        if (hubToDispose is not null)
+        {
+            try
+            {
+                await hubToDispose.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // Ignore disposal errors during shutdown
+            }
+        }
+        await base.StopAsync(cancellationToken);
     }
 }

@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class AgentE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task AgentList_PageLoads()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
         await Expect(Page.Locator("text=Agents")).ToBeVisibleAsync();
     }
@@ -19,7 +19,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_ShowsCreateButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
         await Expect(Page.Locator("button:has-text('Create Agent')")).ToBeVisibleAsync();
     }
@@ -27,7 +27,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_CreateAgent_OpensDialog()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Page.ClickAsync("button:has-text('Create Agent')");
@@ -38,7 +38,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentDialog_RequiresName()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Page.ClickAsync("button:has-text('Create Agent')");
@@ -61,7 +61,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentDialog_CanSelectHarness()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Page.ClickAsync("button:has-text('Create Agent')");
@@ -87,7 +87,7 @@ public class AgentE2ETests : PageTest
     [Ignore("Requires API setup and pre-existing repository data")]
     public async Task AgentList_AfterCreate_ShowsAgent()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Page.ClickAsync("button:has-text('Create Agent')");
@@ -109,7 +109,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_DeleteButton_ShowsConfirmation()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -127,7 +127,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_RepositoryFilter_Works()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         var repoFilter = Page.Locator(".mud-select:has(label:text('Filter by Repository'))").First;
@@ -149,7 +149,7 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_Title_IsCorrect()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/agents");
 
         await Expect(Page.Locator("h4:has-text('Agents'), .mud-typography-h4:has-text('Agents')")).ToBeVisibleAsync();
@@ -158,18 +158,10 @@ public class AgentE2ETests : PageTest
     [Test]
     public async Task AgentList_Navigation_FromSidebar()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
         await Page.ClickAsync("a[href='/agents']");
         await Expect(Page).ToHaveURLAsync($"{BaseUrl}/agents");
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 }

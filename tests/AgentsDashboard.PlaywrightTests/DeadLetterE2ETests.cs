@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class DeadLetterE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task DeadLetterList_PageLoads()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflow-deadletters");
         await Expect(Page.Locator("text=Dead Letters")).ToBeVisibleAsync();
     }
@@ -19,7 +19,7 @@ public class DeadLetterE2ETests : PageTest
     [Test]
     public async Task DeadLetterList_Title_IsCorrect()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflow-deadletters");
 
         await Expect(Page.Locator("h4:has-text('Dead Letters'), .mud-typography-h4:has-text('Dead Letters')")).ToBeVisibleAsync();
@@ -28,7 +28,7 @@ public class DeadLetterE2ETests : PageTest
     [Test]
     public async Task DeadLetterList_ShowsTable()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflow-deadletters");
         await Page.WaitForTimeoutAsync(500);
 
@@ -48,7 +48,7 @@ public class DeadLetterE2ETests : PageTest
     [Test]
     public async Task DeadLetterList_EmptyState_NoErrors()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/workflow-deadletters");
         await Page.WaitForTimeoutAsync(500);
 
@@ -62,7 +62,7 @@ public class DeadLetterE2ETests : PageTest
     [Test]
     public async Task DeadLetterList_Navigation_FromSidebar()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/");
 
         var workflowsGroup = Page.Locator(".mud-nav-group:has-text('Workflows')").First;
@@ -76,12 +76,4 @@ public class DeadLetterE2ETests : PageTest
         await Expect(Page).ToHaveURLAsync($"{BaseUrl}/workflow-deadletters");
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 }

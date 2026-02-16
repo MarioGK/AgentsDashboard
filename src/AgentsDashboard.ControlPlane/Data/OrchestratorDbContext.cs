@@ -29,6 +29,8 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<WorkflowV2Document> WorkflowsV2 => Set<WorkflowV2Document>();
     public DbSet<WorkflowExecutionV2Document> WorkflowExecutionsV2 => Set<WorkflowExecutionV2Document>();
     public DbSet<WorkflowDeadLetterDocument> WorkflowDeadLetters => Set<WorkflowDeadLetterDocument>();
+    public DbSet<TerminalSessionDocument> TerminalSessions => Set<TerminalSessionDocument>();
+    public DbSet<TerminalAuditEventDocument> TerminalAuditEvents => Set<TerminalAuditEventDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +58,8 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<WorkflowV2Document>().HasKey(x => x.Id);
         modelBuilder.Entity<WorkflowExecutionV2Document>().HasKey(x => x.Id);
         modelBuilder.Entity<WorkflowDeadLetterDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<TerminalSessionDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<TerminalAuditEventDocument>().HasKey(x => x.Id);
 
         modelBuilder.Entity<RepositoryDocument>()
             .Property(x => x.InstructionFiles)
@@ -226,6 +230,19 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
             .HasIndex(x => x.ExecutionId);
         modelBuilder.Entity<WorkflowDeadLetterDocument>()
             .HasIndex(x => x.Replayed);
+
+        modelBuilder.Entity<TerminalSessionDocument>()
+            .HasIndex(x => x.WorkerId);
+        modelBuilder.Entity<TerminalSessionDocument>()
+            .HasIndex(x => x.RunId);
+        modelBuilder.Entity<TerminalSessionDocument>()
+            .HasIndex(x => x.State);
+        modelBuilder.Entity<TerminalSessionDocument>()
+            .HasIndex(x => x.LastSeenAtUtc);
+        modelBuilder.Entity<TerminalAuditEventDocument>()
+            .HasIndex(x => new { x.SessionId, x.Sequence });
+        modelBuilder.Entity<TerminalAuditEventDocument>()
+            .HasIndex(x => x.TimestampUtc);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

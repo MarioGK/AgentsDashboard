@@ -8,7 +8,7 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class InstructionFilesE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
     private string _testProjectId = string.Empty;
     private string _testRepoId = string.Empty;
 
@@ -260,18 +260,10 @@ public class InstructionFilesE2ETests : PageTest
         await Expect(Page.Locator("text=Repository not found")).ToBeVisibleAsync();
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 
     private async Task<(string projectId, string repoId)> CreateTestProjectAndRepoAsync()
     {
-        await LoginAsync();
+        
 
         await Page.GotoAsync($"{BaseUrl}/projects");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);

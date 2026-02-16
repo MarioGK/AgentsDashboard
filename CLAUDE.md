@@ -363,7 +363,7 @@ dotnet format
 | Dead Letters | 3 | List + get + replay |
 | Graph Webhook | 1 | Anonymous trigger with token |
 | Alerts | 9 | Rules + Events + bulk-resolve |
-| Webhooks | 7 | CRUD + token + event receiver |
+| Webhooks | 6 | CRUD + event receiver |
 | Templates | 5 | CRUD |
 | Images | 3 | List/build/delete |
 | Other | 29 | Workers, Secrets, Instructions, Settings, Health, Proxy, Auth, Artifacts, Schedules, Providers |

@@ -109,13 +109,13 @@ public class JobProcessorService(
         }
     }
 
-    private static JobEventReply CreateEvent(string runId, string kind, string message, string payloadJson)
+    private static JobEventMessage CreateEvent(string runId, string eventType, string summary, string payloadJson)
         => new()
         {
             RunId = runId,
-            Kind = kind,
-            Message = message,
-            PayloadJson = payloadJson,
-            TimestampUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            EventType = eventType,
+            Summary = summary,
+            Metadata = string.IsNullOrEmpty(payloadJson) ? null : new Dictionary<string, string> { ["payload"] = payloadJson },
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         };
 }

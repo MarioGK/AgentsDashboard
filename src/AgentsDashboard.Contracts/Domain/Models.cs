@@ -84,7 +84,7 @@ public sealed record RetryPolicyConfig(int MaxAttempts = 1, int BackoffBaseSecon
 
 public sealed record TimeoutConfig(int ExecutionSeconds = 600, int OverallSeconds = 1800);
 
-public sealed record ApprovalProfileConfig(bool RequireApproval = false, string ApproverRole = "operator");
+public sealed record ApprovalProfileConfig(bool RequireApproval = false);
 
 public sealed record SandboxProfileConfig(
     double CpuLimit = 1.5,
@@ -284,7 +284,6 @@ public sealed class WorkflowStageConfig
     public string? TaskId { get; set; }
     public int? DelaySeconds { get; set; }
     public List<string>? ParallelStageIds { get; set; }
-    public string? ApproverRole { get; set; }
     public int? TimeoutMinutes { get; set; }
     public int Order { get; set; }
 }
@@ -469,7 +468,6 @@ public sealed class WorkflowNodeConfig
     public WorkflowNodeType Type { get; set; }
     public string? AgentId { get; set; }
     public int? DelaySeconds { get; set; }
-    public string? ApproverRole { get; set; }
     public int? TimeoutMinutes { get; set; }
     public RetryPolicyConfig? RetryPolicy { get; set; }
     public Dictionary<string, string> InputMappings { get; set; } = [];

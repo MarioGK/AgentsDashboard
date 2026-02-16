@@ -84,8 +84,6 @@ public sealed class StageTimeoutConfig
 
 public sealed class RateLimitConfig
 {
-    public int AuthPermitLimit { get; set; } = 10;
-    public int AuthWindowSeconds { get; set; } = 60;
     public int WebhookPermitLimit { get; set; } = 30;
     public int WebhookWindowSeconds { get; set; } = 60;
     public int GlobalPermitLimit { get; set; } = 100;

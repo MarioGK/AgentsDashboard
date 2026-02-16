@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class ProxyAuditsE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task ProxyAuditsPage_LoadsAfterLogin()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
         await Expect(Page.Locator("text=Proxy Audits")).ToBeVisibleAsync();
     }
@@ -19,7 +19,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_HasFilterFields()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         await Expect(Page.Locator("input[placeholder*='Project']")).ToBeVisibleAsync();
@@ -31,7 +31,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_HasFilterButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
         await Expect(Page.Locator("button:has-text('Filter')")).ToBeVisibleAsync();
     }
@@ -39,7 +39,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_HasRefreshButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
         await Expect(Page.Locator("button:has-text('Refresh')")).ToBeVisibleAsync();
     }
@@ -47,7 +47,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_TableHeaders()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var tablePresent = await Page.Locator(".mud-table").IsVisibleAsync();
@@ -65,7 +65,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_EmptyState()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var tableVisible = await Page.Locator(".mud-table tbody tr").First.IsVisibleAsync();
@@ -78,7 +78,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_FilterByProjectId()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var projectInput = Page.Locator("input[placeholder*='Project']").First;
@@ -90,7 +90,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_FilterByRepoId()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var repoInput = Page.Locator("input[placeholder*='Repo']").First;
@@ -102,7 +102,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_FilterByTaskId()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var taskInput = Page.Locator("input[placeholder*='Task']").First;
@@ -114,7 +114,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_FilterByRunId()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var runInput = Page.Locator("input[placeholder*='Run']").First;
@@ -126,7 +126,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_ClearProjectFilter()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var projectInput = Page.Locator("input[placeholder*='Project']").First;
@@ -141,7 +141,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_RefreshButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         await Page.ClickAsync("button:has-text('Refresh')");
@@ -151,7 +151,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_StatusChips()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -168,7 +168,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_RunLink()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var runLink = Page.Locator("tbody tr .mud-link").First;
@@ -181,7 +181,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_PathTooltip()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var tableRow = Page.Locator("tbody tr").First;
@@ -198,7 +198,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_PaginationOptions()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var pager = Page.Locator(".mud-table-pager");
@@ -211,7 +211,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_LoadingIndicator()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         var loadingIndicator = Page.Locator(".mud-progress-linear");
@@ -221,7 +221,7 @@ public class ProxyAuditsE2ETests : PageTest
     [Test]
     public async Task ProxyAuditsPage_MultipleFilters()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/proxy-audits");
 
         await Page.Locator("input[placeholder*='Project']").First.FillAsync("project-1");
@@ -230,12 +230,4 @@ public class ProxyAuditsE2ETests : PageTest
         await Page.WaitForTimeoutAsync(500);
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 }

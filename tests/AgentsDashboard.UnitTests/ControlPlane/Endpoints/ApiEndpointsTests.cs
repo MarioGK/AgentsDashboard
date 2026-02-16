@@ -730,7 +730,7 @@ public class ApiEndpointsTests
     }
 
     [Fact]
-    public async Task HandleWebhook_WithValidToken_DispatchesTasks()
+    public async Task HandleWebhook_DispatchesTasks()
     {
         var repo = new RepositoryDocument { Id = "repo-1", ProjectId = "proj-1" };
         var project = new ProjectDocument { Id = "proj-1" };
@@ -739,16 +739,15 @@ public class ApiEndpointsTests
             new() { Id = "task-1", RepositoryId = "repo-1", Kind = TaskKind.EventDriven, Enabled = true }
         };
 
-        var secretDoc = new ProviderSecretDocument { EncryptedValue = "encrypted-token" };
-
-        _mockStore.Setup(s => s.GetProviderSecretAsync("repo-1", "webhook-token", _ct)).ReturnsAsync(secretDoc);
         _mockStore.Setup(s => s.GetRepositoryAsync("repo-1", _ct)).ReturnsAsync(repo);
         _mockStore.Setup(s => s.GetProjectAsync("proj-1", _ct)).ReturnsAsync(project);
         _mockStore.Setup(s => s.ListEventDrivenTasksAsync("repo-1", _ct)).ReturnsAsync(tasks);
 
-        var secretResult = await _mockStore.Object.GetProviderSecretAsync("repo-1", "webhook-token", _ct);
-        secretResult.Should().NotBeNull();
-        SecretCryptoService.FixedTimeEquals("valid-token", "valid-token").Should().BeTrue();
+        var repoResult = await _mockStore.Object.GetRepositoryAsync("repo-1", _ct);
+        repoResult.Should().NotBeNull();
+
+        var tasksResult = await _mockStore.Object.ListEventDrivenTasksAsync("repo-1", _ct);
+        tasksResult.Should().HaveCount(1);
     }
 
     #endregion
@@ -934,16 +933,16 @@ public class ApiEndpointsTests
             Id = "exec-1",
             WorkflowId = "wf-1",
             State = WorkflowExecutionState.Running,
-            ApprovedBy = "user@example.com"
+            ApprovedBy = "approved"
         };
 
         _mockStore.Setup(s => s.GetWorkflowExecutionAsync("exec-1", _ct)).ReturnsAsync(execution);
-        _mockWorkflowExecutor.Setup(e => e.ApproveWorkflowStageAsync("exec-1", "user@example.com", _ct)).ReturnsAsync(approvedExecution);
+        _mockWorkflowExecutor.Setup(e => e.ApproveWorkflowStageAsync("exec-1", It.IsAny<string>(), _ct)).ReturnsAsync(approvedExecution);
 
         var execResult = await _mockStore.Object.GetWorkflowExecutionAsync("exec-1", _ct);
         execResult!.State.Should().Be(WorkflowExecutionState.PendingApproval);
 
-        var result = await _mockWorkflowExecutor.Object.ApproveWorkflowStageAsync("exec-1", "user@example.com", _ct);
+        var result = await _mockWorkflowExecutor.Object.ApproveWorkflowStageAsync("exec-1", It.IsAny<string>(), _ct);
         result!.State.Should().Be(WorkflowExecutionState.Running);
     }
 
@@ -1186,48 +1185,6 @@ public class ApiEndpointsTests
         result.Should().HaveCount(2);
         result["codex"].Status.Should().Be(HarnessStatus.Available);
         result["claudecode"].Status.Should().Be(HarnessStatus.Unavailable);
-    }
-
-    #endregion
-
-    #region Authorization Tests
-
-    [Fact]
-    public void ReadEndpoints_RequireViewerPolicy()
-    {
-        var policy = "viewer";
-        policy.Should().BeOneOf("viewer", "operator", "admin");
-    }
-
-    [Fact]
-    public void WriteEndpoints_RequireOperatorPolicy()
-    {
-        var policy = "operator";
-        policy.Should().BeOneOf("viewer", "operator", "admin");
-    }
-
-    [Fact]
-    public void WorkerHeartbeat_IsAllowAnonymous()
-    {
-        var endpoint = "/api/workers/heartbeat";
-        endpoint.Should().Contain("heartbeat");
-    }
-
-    [Fact]
-    public void WebhookEndpoint_IsAllowAnonymous()
-    {
-        var endpoint = "/api/webhooks/{repositoryId}/{token}";
-        endpoint.Should().Contain("webhooks");
-    }
-
-    [Theory]
-    [InlineData("viewer", false)]
-    [InlineData("operator", true)]
-    [InlineData("admin", true)]
-    public void WriteOperations_RequireOperatorOrAdminRole(string role, bool canWrite)
-    {
-        var canPerformWrite = role is "operator" or "admin";
-        canPerformWrite.Should().Be(canWrite);
     }
 
     #endregion

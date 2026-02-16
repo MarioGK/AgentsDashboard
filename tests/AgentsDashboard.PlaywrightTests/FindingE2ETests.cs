@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class FindingE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task FindingsListPage_LoadsAfterLogin()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
         await Expect(Page.Locator("text=Findings")).ToBeVisibleAsync();
     }
@@ -19,7 +19,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingsListPage_HasSeverityFilter()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
         await Expect(Page.Locator("text=Severity")).ToBeVisibleAsync();
 
@@ -30,7 +30,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FilterFindings_BySeverity()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var severitySelect = Page.Locator(".mud-select:has(label:text('Severity'))");
@@ -45,7 +45,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FilterFindings_SelectCritical()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var severitySelect = Page.Locator(".mud-select:has(label:text('Severity'))");
@@ -62,7 +62,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingsListPage_HasStateFilter()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
         await Expect(Page.Locator("text=State")).ToBeVisibleAsync();
 
@@ -73,7 +73,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FilterFindings_ByState()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var stateSelect = Page.Locator(".mud-select:has(label:text('State'))");
@@ -87,7 +87,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingsListPage_HasRefreshButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
         await Expect(Page.Locator("button:has-text('Refresh')")).ToBeVisibleAsync();
     }
@@ -95,7 +95,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingsListPage_TableHeaders()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         await Expect(Page.Locator("th:has-text('ID')")).ToBeVisibleAsync();
@@ -107,7 +107,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_NavigationFromList()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -122,7 +122,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_ShowsBackButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -139,7 +139,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_ShowsActionButtons()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -156,7 +156,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_AcknowledgeFinding()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var newFinding = Page.Locator("tr:has(.mud-chip:has-text('New')) >> a[href^='/findings/']").First;
@@ -177,7 +177,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_AssignField()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -194,7 +194,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_AssignFinding()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -212,7 +212,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_AcknowledgeButton_ForNewFindings()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var newFinding = Page.Locator("tr:has(.mud-chip:has-text('New')) >> a[href^='/findings/']").First;
@@ -229,7 +229,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_ResolveButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -249,7 +249,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_RetryRunButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -269,7 +269,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_CreateTaskFromFinding()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -290,7 +290,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_CreateFollowupTaskButton()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -310,7 +310,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task FindingDetailPage_DisplaysMetadata()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -329,7 +329,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task Finding_SeverityChip_Colors()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var severityChip = Page.Locator(".mud-chip").First;
@@ -342,7 +342,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task Finding_BackNavigation()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var findingLink = Page.Locator("a[href^='/findings/']").First;
@@ -361,7 +361,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task Finding_RefreshList()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var refreshButton = Page.Locator("button:has-text('Refresh')");
@@ -372,7 +372,7 @@ public class FindingE2ETests : PageTest
     [Test]
     public async Task Finding_TablePagination()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/findings");
 
         var pager = Page.Locator(".mud-table-pagination");
@@ -382,12 +382,4 @@ public class FindingE2ETests : PageTest
         }
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 }

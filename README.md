@@ -9,7 +9,6 @@ Production-oriented AI orchestration control plane built with .NET 10.
 - SQLite persistence via EF Core
 - YARP embedded in control plane
 - Aspire app host + OpenTelemetry-ready services
-- Cookie auth + RBAC (`viewer`, `operator`, `admin`)
 - Encrypted provider secret vault (Data Protection + SQLite)
 
 ## Solution
@@ -61,20 +60,12 @@ Control plane: `http://localhost:8080`
 - Scheduler loop for due one-shot/cron tasks
 - Per-repo runs and findings inbox
 - Findings retry API (`POST /api/findings/{findingId}/retry`)
-- Event-driven webhook trigger API (`POST /api/webhooks/{repositoryId}/{token}`)
+- Event-driven webhook trigger API (`POST /api/webhooks/{repositoryId}/{eventType?}`)
 - Repository secret management API (`/api/repositories/{repositoryId}/secrets/*`)
 - Real-time run status/log events via SignalR
 - gRPC worker dispatch and completion stream
 
-## Authentication
-- Default users are configured in `src/AgentsDashboard.ControlPlane/appsettings.json`.
-- Change the default passwords before production use.
-- Roles:
-  - `viewer`: read-only APIs and dashboard
-  - `operator`: can create/update/run/retry tasks
-  - `admin`: includes operator privileges
-
 ## Notes
 - v1 security model assumes a trusted self-hosted single-operator environment.
 - Docker socket is mounted for privileged container operations.
-- API auth, RBAC, and encrypted secret vault are planned hardening steps.
+- Encrypted secret vault protects provider credentials.

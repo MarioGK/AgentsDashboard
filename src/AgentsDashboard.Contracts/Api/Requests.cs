@@ -67,7 +67,6 @@ public sealed record WorkflowStageConfigRequest(
     string? TaskId = null,
     int? DelaySeconds = null,
     List<string>? ParallelStageIds = null,
-    string? ApproverRole = null,
     int? TimeoutMinutes = null,
     int Order = 0);
 public sealed record BuildImageRequest(string DockerfileContent, string Tag);
@@ -195,7 +194,6 @@ public sealed record WorkflowNodeConfigRequest(
     WorkflowNodeType Type,
     string? AgentId = null,
     int? DelaySeconds = null,
-    string? ApproverRole = null,
     int? TimeoutMinutes = null,
     RetryPolicyConfig? RetryPolicy = null,
     Dictionary<string, string>? InputMappings = null,

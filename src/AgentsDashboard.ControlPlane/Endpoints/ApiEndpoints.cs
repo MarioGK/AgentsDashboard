@@ -1,5 +1,6 @@
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -11,8 +12,8 @@ public static class ApiEndpoints
 {
     public static IEndpointRouteBuilder MapOrchestratorApi(this IEndpointRouteBuilder app)
     {
-        var readApi = app.MapGroup("/api").RequireAuthorization("viewer").RequireRateLimiting("GlobalPolicy");
-        var writeApi = app.MapGroup("/api").RequireAuthorization("operator").RequireRateLimiting("GlobalPolicy");
+        var readApi = app.MapGroup("/api").RequireRateLimiting("GlobalPolicy").DisableAntiforgery();
+        var writeApi = app.MapGroup("/api").RequireRateLimiting("GlobalPolicy").DisableAntiforgery();
 
         // --- Projects ---
 
@@ -358,6 +359,45 @@ public static class ApiEndpoints
         readApi.MapGet("/workers", async (OrchestratorStore store, CancellationToken ct) =>
             Results.Ok(await store.ListWorkersAsync(ct)));
 
+        readApi.MapGet("/workers/registered", (IWorkerRegistryService workerRegistry) =>
+        {
+            var workers = workerRegistry.GetRegisteredWorkers();
+            var result = workers.Select(w => new
+            {
+                w.WorkerId,
+                w.HostName,
+                w.ActiveSlots,
+                w.MaxSlots,
+                w.LastHeartbeat
+            });
+            return Results.Ok(result);
+        });
+
+        readApi.MapGet("/workers/count", (IWorkerRegistryService workerRegistry) =>
+        {
+            var count = workerRegistry.GetRegisteredWorkerCount();
+            return Results.Ok(new { count });
+        });
+
+        writeApi.MapPost("/workers/status-request", async (IWorkerRegistryService workerRegistry) =>
+        {
+            var request = new StatusRequestMessage
+            {
+                RequestId = Guid.NewGuid().ToString("N"),
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+
+            await workerRegistry.BroadcastStatusRequestAsync(request);
+
+            var workerCount = workerRegistry.GetRegisteredWorkerCount();
+            return Results.Ok(new
+            {
+                requestId = request.RequestId,
+                timestamp = request.Timestamp,
+                workerCount
+            });
+        });
+
         app.MapPost("/api/workers/heartbeat", async (
             WorkerHeartbeatRequest request,
             OrchestratorStore store,
@@ -513,35 +553,14 @@ public static class ApiEndpoints
             return deleted ? Results.Ok(new { message = "Webhook deleted" }) : Results.NotFound(new { message = "Webhook not found" });
         });
 
-        writeApi.MapPost("/repositories/{repositoryId}/webhooks/token", async (
+        app.MapPost("/api/webhooks/{repositoryId}/{eventType?}", async (
             string repositoryId,
-            OrchestratorStore store,
-            SecretCryptoService crypto,
-            CancellationToken ct) =>
-        {
-            var token = Convert.ToHexString(Guid.NewGuid().ToByteArray()).ToLowerInvariant();
-            await store.UpsertProviderSecretAsync(repositoryId, "webhook-token", crypto.Encrypt(token), ct);
-            return Results.Ok(new { token });
-        });
-
-        app.MapPost("/api/webhooks/{repositoryId}/{token}/{eventType?}", async (
-            string repositoryId,
-            string token,
             string? eventType,
             HttpContext httpContext,
             IOrchestratorStore store,
             RunDispatcher dispatcher,
-            SecretCryptoService crypto,
             CancellationToken ct) =>
         {
-            var tokenSecret = await store.GetProviderSecretAsync(repositoryId, "webhook-token", ct);
-            if (tokenSecret is null)
-                return Results.NotFound(new { message = "Webhook token is not configured" });
-
-            var expectedToken = crypto.Decrypt(tokenSecret.EncryptedValue);
-            if (!SecretCryptoService.FixedTimeEquals(expectedToken, token))
-                return Results.Unauthorized();
-
             var repository = await store.GetRepositoryAsync(repositoryId, ct);
             if (repository is null)
                 return Results.NotFound(new { message = "Repository not found" });
@@ -682,7 +701,6 @@ public static class ApiEndpoints
                     TaskId = s.TaskId,
                     DelaySeconds = s.DelaySeconds,
                     ParallelStageIds = s.ParallelStageIds,
-                    ApproverRole = s.ApproverRole,
                     TimeoutMinutes = s.TimeoutMinutes,
                     Order = s.Order
                 }).ToList(),
@@ -713,7 +731,6 @@ public static class ApiEndpoints
                 TaskId = s.TaskId,
                 DelaySeconds = s.DelaySeconds,
                 ParallelStageIds = s.ParallelStageIds,
-                ApproverRole = s.ApproverRole,
                 TimeoutMinutes = s.TimeoutMinutes,
                 Order = s.Order
             }).ToList();

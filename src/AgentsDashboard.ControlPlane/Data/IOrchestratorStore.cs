@@ -161,4 +161,18 @@ public interface IOrchestratorStore
     Task<List<WorkflowDeadLetterDocument>> ListUnreplayedDeadLettersAsync(CancellationToken cancellationToken);
     Task<WorkflowDeadLetterDocument?> GetDeadLetterAsync(string deadLetterId, CancellationToken cancellationToken);
     Task<WorkflowDeadLetterDocument?> MarkDeadLetterReplayedAsync(string deadLetterId, string replayedExecutionId, CancellationToken cancellationToken);
+
+    // ── Terminal Sessions ─────────────────────────────────────────────────────
+
+    Task<TerminalSessionDocument> CreateTerminalSessionAsync(TerminalSessionDocument session, CancellationToken cancellationToken = default);
+    Task<TerminalSessionDocument?> GetTerminalSessionAsync(string sessionId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TerminalSessionDocument>> ListActiveTerminalSessionsByWorkerAsync(string workerId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TerminalSessionDocument>> ListTerminalSessionsByRunAsync(string runId, CancellationToken cancellationToken = default);
+    Task UpdateTerminalSessionAsync(TerminalSessionDocument session, CancellationToken cancellationToken = default);
+    Task CloseTerminalSessionAsync(string sessionId, string reason, CancellationToken cancellationToken = default);
+
+    // ── Terminal Audit Events ────────────────────────────────────────────────
+
+    Task AppendTerminalAuditEventAsync(TerminalAuditEventDocument auditEvent, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TerminalAuditEventDocument>> GetTerminalAuditEventsAsync(string sessionId, long? afterSequence = null, int limit = 2000, CancellationToken cancellationToken = default);
 }

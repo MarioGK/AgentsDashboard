@@ -9,9 +9,9 @@ public static class DagWorkflowEndpoints
 {
     public static IEndpointRouteBuilder MapDagWorkflowApi(this IEndpointRouteBuilder app)
     {
-        var readApi = app.MapGroup("/api").RequireAuthorization("viewer").RequireRateLimiting("GlobalPolicy");
-        var writeApi = app.MapGroup("/api").RequireAuthorization("operator").RequireRateLimiting("GlobalPolicy");
-        var webhookApi = app.MapGroup("/api").RequireRateLimiting("WebhookPolicy");
+        var readApi = app.MapGroup("/api").RequireRateLimiting("GlobalPolicy").DisableAntiforgery();
+        var writeApi = app.MapGroup("/api").RequireRateLimiting("GlobalPolicy").DisableAntiforgery();
+        var webhookApi = app.MapGroup("/api").RequireRateLimiting("WebhookPolicy").DisableAntiforgery();
 
         // --- Agents ---
 
@@ -123,7 +123,6 @@ public static class DagWorkflowEndpoints
                     Type = nr.Type,
                     AgentId = nr.AgentId,
                     DelaySeconds = nr.DelaySeconds,
-                    ApproverRole = nr.ApproverRole,
                     TimeoutMinutes = nr.TimeoutMinutes,
                     RetryPolicy = nr.RetryPolicy,
                     InputMappings = nr.InputMappings ?? [],
@@ -194,7 +193,6 @@ public static class DagWorkflowEndpoints
                     Type = nr.Type,
                     AgentId = nr.AgentId,
                     DelaySeconds = nr.DelaySeconds,
-                    ApproverRole = nr.ApproverRole,
                     TimeoutMinutes = nr.TimeoutMinutes,
                     RetryPolicy = nr.RetryPolicy,
                     InputMappings = nr.InputMappings ?? [],

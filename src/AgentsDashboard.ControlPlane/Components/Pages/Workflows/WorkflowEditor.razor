@@ -1,5 +1,4 @@
 @page "/workflows/new"
-@attribute [Authorize]
 @page "/workflows/{Id}"
 @rendermode InteractiveServer
 @inject AgentsDashboard.ControlPlane.Data.OrchestratorStore Store
@@ -134,7 +133,7 @@
                                                 break;
                                             case WorkflowStageType.Approval:
                                                 <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                    Approver: @(stage.ApproverRole ?? "Not set")
+                                                    Approval required
                                                 </MudText>
                                                 break;
                                             case WorkflowStageType.Parallel:
@@ -209,12 +208,6 @@
                         break;
 
                     case WorkflowStageType.Approval:
-                        <MudSelect @bind-Value="selectedStage.ApproverRole" Label="Approver Role"
-                                   Variant="Variant.Outlined" Clearable Class="mb-4">
-                            <MudSelectItem Value="@("viewer")">Viewer</MudSelectItem>
-                            <MudSelectItem Value="@("operator")">Operator</MudSelectItem>
-                            <MudSelectItem Value="@("admin")">Admin</MudSelectItem>
-                        </MudSelect>
                         <MudNumericField @bind-Value="selectedStage.TimeoutSeconds" Label="Timeout (seconds)"
                                          Variant="Variant.Outlined" Min="60" Max="86400" Class="mb-4" />
                         break;
@@ -363,7 +356,6 @@
         public int? TimeoutSeconds { get; set; } = 600;
         public int? RetryAttempts { get; set; } = 1;
         public List<string>? ParallelStageIds { get; set; } = [];
-        public string? ApproverRole { get; set; }
         public int Order { get; set; }
     }
 
@@ -599,10 +591,6 @@
                     _validationMessage = $"Stage '{stage.Name}': Task must be selected.";
                     _validationSeverity = Severity.Error;
                     return;
-                case WorkflowStageType.Approval when string.IsNullOrEmpty(stage.ApproverRole):
-                    _validationMessage = $"Stage '{stage.Name}': Approver role must be selected.";
-                    _validationSeverity = Severity.Error;
-                    return;
                 case WorkflowStageType.Delay when (!stage.DelaySeconds.HasValue || stage.DelaySeconds < 1):
                     _validationMessage = $"Stage '{stage.Name}': Delay duration must be at least 1 second.";
                     _validationSeverity = Severity.Error;
@@ -669,7 +657,6 @@
                     TaskId = s.TaskId,
                     DelaySeconds = s.DelaySeconds,
                     ParallelStageIds = s.ParallelStageIds?.ToList(),
-                    ApproverRole = s.ApproverRole,
                     Order = s.Order,
                 }));
             }
@@ -693,7 +680,6 @@
             TaskId = s.TaskId,
             DelaySeconds = s.DelaySeconds,
             ParallelStageIds = s.ParallelStageIds,
-            ApproverRole = s.ApproverRole,
             Order = s.Order,
         }).ToList();
 

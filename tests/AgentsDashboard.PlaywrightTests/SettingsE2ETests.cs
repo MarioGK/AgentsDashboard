@@ -6,12 +6,11 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class SettingsE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
-    public async Task SettingsPage_LoadsAfterLogin()
+    public async Task SettingsPage_Loads()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/settings");
         await Expect(Page.Locator("text=System Settings")).ToBeVisibleAsync();
     }
@@ -19,7 +18,6 @@ public class SettingsE2ETests : PageTest
     [Test]
     public async Task SettingsPage_HasDockerPolicySection()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/settings");
         await Expect(Page.Locator("text=Docker Policy")).ToBeVisibleAsync();
         await Expect(Page.Locator("text=Allowed images")).ToBeVisibleAsync();
@@ -28,7 +26,6 @@ public class SettingsE2ETests : PageTest
     [Test]
     public async Task SettingsPage_HasRetentionSection()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/settings");
         await Expect(Page.Locator("text=Retention")).ToBeVisibleAsync();
         await Expect(Page.Locator("text=Log retention")).ToBeVisibleAsync();
@@ -38,7 +35,6 @@ public class SettingsE2ETests : PageTest
     [Test]
     public async Task SettingsPage_HasObservabilitySection()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/settings");
         await Expect(Page.Locator("text=Observability")).ToBeVisibleAsync();
         await Expect(Page.Locator("text=VictoriaMetrics Endpoint")).ToBeVisibleAsync();
@@ -48,7 +44,6 @@ public class SettingsE2ETests : PageTest
     [Test]
     public async Task SettingsPage_HasSaveButton()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/settings");
         await Expect(Page.Locator("button:has-text('Save Settings')")).ToBeVisibleAsync();
     }
@@ -56,7 +51,6 @@ public class SettingsE2ETests : PageTest
     [Test]
     public async Task SettingsPage_DockerPolicyField_Editable()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/settings");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -68,7 +62,6 @@ public class SettingsE2ETests : PageTest
     [Test]
     public async Task SettingsPage_RetentionFields_Editable()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/settings");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -79,7 +72,6 @@ public class SettingsE2ETests : PageTest
     [Test]
     public async Task SettingsPage_SaveButton_TriggersSnackbar()
     {
-        await LoginAsync();
         await Page.GotoAsync($"{BaseUrl}/settings");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
@@ -90,18 +82,9 @@ public class SettingsE2ETests : PageTest
     }
 
     [Test]
-    public async Task SettingsPage_UnauthenticatedAccess_RedirectsToLogin()
+    public async Task SettingsPage_AllowsAnonymousAccess()
     {
         await Page.GotoAsync($"{BaseUrl}/settings");
-        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(".*login.*"));
-    }
-
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
+        await Expect(Page).ToHaveURLAsync($"{BaseUrl}/settings");
     }
 }

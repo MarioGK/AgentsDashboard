@@ -341,8 +341,8 @@ public class WorkflowExecutor(
         WorkflowExecutionDocument execution,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Stage {StageName} requires approval by role {ApproverRole}",
-            stage.Name, stage.ApproverRole ?? "any");
+        logger.LogInformation("Stage {StageName} requires approval",
+            stage.Name);
 
         await store.MarkWorkflowExecutionPendingApprovalAsync(execution.Id, stage.Id, cancellationToken);
 

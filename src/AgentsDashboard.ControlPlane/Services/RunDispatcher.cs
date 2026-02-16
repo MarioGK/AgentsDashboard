@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class RunDispatcher(
-    WorkerGateway.WorkerGatewayClient workerClient,
+    IMagicOnionClientFactory clientFactory,
     IOrchestratorStore store,
     IWorkerLifecycleManager workerLifecycleManager,
     ISecretCryptoService secretCrypto,
@@ -77,49 +77,29 @@ public sealed class RunDispatcher(
 
         var layeredPrompt = await BuildLayeredPromptAsync(repository, task, cancellationToken);
 
-        var request = new DispatchJobRequest
+        var envVars = new Dictionary<string, string>
         {
-            RunId = run.Id,
-            ProjectId = project.Id,
-            RepositoryId = repository.Id,
-            TaskId = task.Id,
-            Harness = task.Harness,
-            Command = task.Command,
-            Prompt = layeredPrompt,
-            TimeoutSeconds = task.Timeouts.ExecutionSeconds,
-            Attempt = run.Attempt,
-            SandboxProfileCpuLimit = task.SandboxProfile.CpuLimit,
-            SandboxProfileMemoryLimit = task.SandboxProfile.MemoryLimit,
-            SandboxProfileNetworkDisabled = task.SandboxProfile.NetworkDisabled,
-            SandboxProfileReadOnlyRootFs = task.SandboxProfile.ReadOnlyRootFs,
-            GitUrl = repository.GitUrl,
-            ArtifactPolicyMaxArtifacts = task.ArtifactPolicy.MaxArtifacts,
-            ArtifactPolicyMaxTotalSizeBytes = task.ArtifactPolicy.MaxTotalSizeBytes,
-            ArtifactsPath = $"/data/artifacts/{run.Id}",
+            ["GIT_URL"] = repository.GitUrl,
+            ["DEFAULT_BRANCH"] = repository.DefaultBranch,
+            ["AUTO_CREATE_PR"] = task.AutoCreatePullRequest ? "true" : "false",
+            ["HARNESS_NAME"] = task.Harness,
+            ["GH_REPO"] = ParseGitHubRepoSlug(repository.GitUrl),
         };
 
-        request.ContainerLabels.Add("orchestrator.run-id", run.Id);
-        request.ContainerLabels.Add("orchestrator.task-id", task.Id);
-        request.ContainerLabels.Add("orchestrator.repo-id", repository.Id);
-        request.ContainerLabels.Add("orchestrator.project-id", project.Id);
-
-        request.Env.Add("GIT_URL", repository.GitUrl);
-        request.Env.Add("DEFAULT_BRANCH", repository.DefaultBranch);
-        request.Env.Add("AUTO_CREATE_PR", task.AutoCreatePullRequest ? "true" : "false");
-        request.Env.Add("HARNESS_NAME", task.Harness);
-        request.Env.Add("GH_REPO", ParseGitHubRepoSlug(repository.GitUrl));
         var runIdShort = string.IsNullOrEmpty(run.Id) ? "unknown" : run.Id.Length >= 8 ? run.Id[..8] : run.Id;
-        request.Env.Add("PR_BRANCH", $"agent/{repository.Name}/{task.Name}/{runIdShort}".ToLowerInvariant().Replace(' ', '-'));
-        request.Env.Add("PR_TITLE", $"[{task.Harness}] {task.Name} automated update");
-        request.Env.Add("PR_BODY", $"Automated change from run {run.Id} for task {task.Name}.");
+        envVars["PR_BRANCH"] = $"agent/{repository.Name}/{task.Name}/{runIdShort}".ToLowerInvariant().Replace(' ', '-');
+        envVars["PR_TITLE"] = $"[{task.Harness}] {task.Name} automated update";
+        envVars["PR_BODY"] = $"Automated change from run {run.Id} for task {task.Name}.";
 
         var secrets = await store.ListProviderSecretsAsync(repository.Id, cancellationToken);
+        var secretsDict = new Dictionary<string, string>();
+
         foreach (var secret in secrets)
         {
             try
             {
                 var value = secretCrypto.Decrypt(secret.EncryptedValue);
-                AddMappedProviderEnvironmentVariables(request, secret.Provider, value);
+                AddMappedProviderEnvironmentVariables(envVars, secretsDict, secret.Provider, value);
             }
             catch (Exception ex)
             {
@@ -130,19 +110,51 @@ public sealed class RunDispatcher(
         var harnessSettings = await store.GetHarnessProviderSettingsAsync(repository.Id, task.Harness, cancellationToken);
         if (harnessSettings is not null)
         {
-            AddHarnessSettingsEnvironmentVariables(request, task.Harness, harnessSettings);
+            AddHarnessSettingsEnvironmentVariables(envVars, task.Harness, harnessSettings);
         }
 
-        var response = await workerClient.DispatchJobAsync(request, cancellationToken: cancellationToken);
+        var artifactPatterns = task.ArtifactPatterns.Count > 0
+            ? task.ArtifactPatterns.ToList()
+            : null;
 
-        if (!response.Accepted)
+        var linkedFailureRuns = task.LinkedFailureRuns.Count > 0
+            ? task.LinkedFailureRuns.ToList()
+            : null;
+
+        var request = new DispatchJobRequest
         {
-            logger.LogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.Reason);
-            var failed = await store.MarkRunCompletedAsync(run.Id, false, $"Dispatch failed: {response.Reason}", "{}", cancellationToken);
+            RunId = run.Id,
+            ProjectId = project.Id,
+            RepositoryId = repository.Id,
+            TaskId = task.Id,
+            HarnessType = task.Harness,
+            ImageTag = $"harness-{task.Harness.ToLowerInvariant()}:latest",
+            CloneUrl = repository.GitUrl,
+            Branch = repository.DefaultBranch,
+            WorkingDirectory = null,
+            Instruction = layeredPrompt,
+            EnvironmentVars = envVars,
+            Secrets = secretsDict.Count > 0 ? secretsDict : null,
+            ConcurrencyKey = null,
+            TimeoutSeconds = task.Timeouts.ExecutionSeconds,
+            RetryCount = run.Attempt - 1,
+            ArtifactPatterns = artifactPatterns,
+            LinkedFailureRuns = linkedFailureRuns,
+            CustomArgs = task.Command,
+            DispatchedAt = DateTimeOffset.UtcNow,
+        };
+
+        var workerClient = clientFactory.CreateWorkerGatewayService();
+        var response = await workerClient.DispatchJobAsync(request);
+
+        if (!response.Success)
+        {
+            logger.LogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.ErrorMessage);
+            var failed = await store.MarkRunCompletedAsync(run.Id, false, $"Dispatch failed: {response.ErrorMessage}", "{}", cancellationToken);
             if (failed is not null)
             {
                 await publisher.PublishStatusAsync(failed, cancellationToken);
-                await store.CreateFindingFromFailureAsync(failed, response.Reason, cancellationToken);
+                await store.CreateFindingFromFailureAsync(failed, response.ErrorMessage ?? "Unknown error", cancellationToken);
             }
             return false;
         }
@@ -175,7 +187,8 @@ public sealed class RunDispatcher(
     {
         try
         {
-            await workerClient.CancelJobAsync(new CancelJobRequest { RunId = runId }, cancellationToken: cancellationToken);
+            var workerClient = clientFactory.CreateWorkerGatewayService();
+            await workerClient.CancelJobAsync(new CancelJobRequest { RunId = runId });
         }
         catch (Exception ex)
         {
@@ -230,76 +243,83 @@ public sealed class RunDispatcher(
         return sb.ToString();
     }
 
-    private static void AddMappedProviderEnvironmentVariables(DispatchJobRequest request, string provider, string value)
+    private static void AddMappedProviderEnvironmentVariables(
+        Dictionary<string, string> envVars,
+        Dictionary<string, string> secrets,
+        string provider,
+        string value)
     {
         var normalized = provider.Trim().ToLowerInvariant();
 
         switch (normalized)
         {
             case "github":
-                request.Env["GH_TOKEN"] = value;
-                request.Env["GITHUB_TOKEN"] = value;
+                secrets["GH_TOKEN"] = value;
+                secrets["GITHUB_TOKEN"] = value;
                 break;
             case "codex":
-                request.Env["CODEX_API_KEY"] = value;
+                secrets["CODEX_API_KEY"] = value;
                 break;
             case "opencode":
-                request.Env["OPENCODE_API_KEY"] = value;
+                secrets["OPENCODE_API_KEY"] = value;
                 break;
             case "claude-code":
             case "claude code":
-                request.Env["ANTHROPIC_API_KEY"] = value;
+                secrets["ANTHROPIC_API_KEY"] = value;
                 break;
             case "zai":
-                request.Env["Z_AI_API_KEY"] = value;
+                secrets["Z_AI_API_KEY"] = value;
                 break;
             default:
-                request.Env[$"SECRET_{normalized.ToUpperInvariant().Replace('-', '_')}"] = value;
+                secrets[$"SECRET_{normalized.ToUpperInvariant().Replace('-', '_')}"] = value;
                 break;
         }
     }
 
-    private static void AddHarnessSettingsEnvironmentVariables(DispatchJobRequest request, string harness, HarnessProviderSettingsDocument settings)
+    private static void AddHarnessSettingsEnvironmentVariables(
+        Dictionary<string, string> envVars,
+        string harness,
+        HarnessProviderSettingsDocument settings)
     {
         var normalized = harness.Trim().ToLowerInvariant();
 
         if (!string.IsNullOrWhiteSpace(settings.Model))
         {
-            request.Env["HARNESS_MODEL"] = settings.Model;
+            envVars["HARNESS_MODEL"] = settings.Model;
         }
 
-        request.Env["HARNESS_TEMPERATURE"] = settings.Temperature.ToString("F2");
-        request.Env["HARNESS_MAX_TOKENS"] = settings.MaxTokens.ToString();
+        envVars["HARNESS_TEMPERATURE"] = settings.Temperature.ToString("F2");
+        envVars["HARNESS_MAX_TOKENS"] = settings.MaxTokens.ToString();
 
         switch (normalized)
         {
             case "codex":
                 if (!string.IsNullOrWhiteSpace(settings.Model))
-                    request.Env["CODEX_MODEL"] = settings.Model;
-                request.Env["CODEX_MAX_TOKENS"] = settings.MaxTokens.ToString();
+                    envVars["CODEX_MODEL"] = settings.Model;
+                envVars["CODEX_MAX_TOKENS"] = settings.MaxTokens.ToString();
                 break;
             case "opencode":
                 if (!string.IsNullOrWhiteSpace(settings.Model))
-                    request.Env["OPENCODE_MODEL"] = settings.Model;
-                request.Env["OPENCODE_TEMPERATURE"] = settings.Temperature.ToString("F2");
+                    envVars["OPENCODE_MODEL"] = settings.Model;
+                envVars["OPENCODE_TEMPERATURE"] = settings.Temperature.ToString("F2");
                 break;
             case "claude-code":
                 if (!string.IsNullOrWhiteSpace(settings.Model))
                 {
-                    request.Env["CLAUDE_MODEL"] = settings.Model;
-                    request.Env["ANTHROPIC_MODEL"] = settings.Model;
+                    envVars["CLAUDE_MODEL"] = settings.Model;
+                    envVars["ANTHROPIC_MODEL"] = settings.Model;
                 }
                 break;
             case "zai":
                 if (!string.IsNullOrWhiteSpace(settings.Model))
-                    request.Env["ZAI_MODEL"] = settings.Model;
+                    envVars["ZAI_MODEL"] = settings.Model;
                 break;
         }
 
         foreach (var (key, value) in settings.AdditionalSettings)
         {
             var envKey = $"HARNESS_{key.ToUpperInvariant().Replace(' ', '_').Replace('-', '_')}";
-            request.Env[envKey] = value;
+            envVars[envKey] = value;
         }
     }
 

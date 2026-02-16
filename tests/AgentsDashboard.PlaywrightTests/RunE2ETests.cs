@@ -6,12 +6,12 @@ namespace AgentsDashboard.PlaywrightTests;
 [TestFixture]
 public class RunE2ETests : PageTest
 {
-    private const string BaseUrl = "http://localhost:8080";
+    private const string BaseUrl = "http://localhost:5266";
 
     [Test]
     public async Task RunKanbanPage_LoadsAfterLogin()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/runs");
         await Expect(Page.Locator("text=Runs")).ToBeVisibleAsync();
     }
@@ -19,7 +19,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunKanbanPage_ShowsColumns()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/runs");
         await Expect(Page.Locator("text=Queued")).ToBeVisibleAsync();
         await Expect(Page.Locator("text=Running")).ToBeVisibleAsync();
@@ -30,7 +30,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task Run_AppearsInKanbanBoard()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs");
@@ -40,7 +40,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunKanban_DragAndDrop()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/runs");
 
         var runCard = Page.Locator(".mud-card, .kanban-card").First;
@@ -58,7 +58,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_LoadsWithRunData()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -69,7 +69,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_ShowsOverviewTab()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -81,7 +81,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_ShowsLogsTab()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -94,7 +94,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_ViewLogs()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -106,7 +106,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_ShowsArtifactsTab()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -119,7 +119,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_ViewArtifacts()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -131,7 +131,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_ShowsProxyLinksTab()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -146,7 +146,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_BackButtonNavigatesToRuns()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -160,7 +160,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_CancelButton_VisibleForActiveRuns()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -175,7 +175,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_CancelRun()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -191,7 +191,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_RetryRun()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -207,7 +207,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_WorkflowTab()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -223,7 +223,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task Run_StatusChip_Colors()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -235,7 +235,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task Run_Duration_Displayed()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -250,7 +250,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task Run_CreatedTime_Displayed()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -261,7 +261,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RepositoryRunsTab_DisplaysRuns()
     {
-        await LoginAsync();
+        
         var (projectId, repoId) = await CreateProjectWithRepositoryAsync("E2E Repo Runs Test");
 
         await Page.GotoAsync($"{BaseUrl}/repositories/{repoId}");
@@ -274,7 +274,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunKanban_FilterByStatus()
     {
-        await LoginAsync();
+        
         await Page.GotoAsync($"{BaseUrl}/runs");
 
         var filterSelect = Page.Locator(".mud-select").First;
@@ -287,7 +287,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_TaskLink()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -302,7 +302,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task RunDetailPage_RepositoryLink()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs/{runId}");
@@ -313,7 +313,7 @@ public class RunE2ETests : PageTest
     [Test]
     public async Task Run_KanbanCard_ClickNavigatesToDetail()
     {
-        await LoginAsync();
+        
         var runId = await CreateRunWithTaskAsync();
 
         await Page.GotoAsync($"{BaseUrl}/runs");
@@ -326,14 +326,6 @@ public class RunE2ETests : PageTest
         }
     }
 
-    private async Task LoginAsync()
-    {
-        await Page.GotoAsync($"{BaseUrl}/login");
-        await Page.FillAsync("input[name='username']", "admin");
-        await Page.FillAsync("input[name='password']", "change-me");
-        await Page.ClickAsync("button[type='submit']");
-        await Page.WaitForURLAsync($"{BaseUrl}/**");
-    }
 
     private async Task<string> CreateRunWithTaskAsync()
     {

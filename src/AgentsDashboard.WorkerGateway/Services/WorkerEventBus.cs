@@ -5,11 +5,11 @@ namespace AgentsDashboard.WorkerGateway.Services;
 
 public sealed class WorkerEventBus
 {
-    private readonly Channel<JobEventReply> _channel = Channel.CreateUnbounded<JobEventReply>();
+    private readonly Channel<JobEventMessage> _channel = Channel.CreateUnbounded<JobEventMessage>();
 
-    public ValueTask PublishAsync(JobEventReply message, CancellationToken cancellationToken)
+    public ValueTask PublishAsync(JobEventMessage message, CancellationToken cancellationToken)
         => _channel.Writer.WriteAsync(message, cancellationToken);
 
-    public IAsyncEnumerable<JobEventReply> ReadAllAsync(CancellationToken cancellationToken)
+    public IAsyncEnumerable<JobEventMessage> ReadAllAsync(CancellationToken cancellationToken)
         => _channel.Reader.ReadAllAsync(cancellationToken);
 }

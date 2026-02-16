@@ -74,19 +74,6 @@ public class SecretsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
     }
 
     [Fact]
-    public async Task GenerateWebhookToken_ReturnsToken()
-    {
-        var (_, repo) = await SetupAsync();
-
-        var response = await _client.PostAsync($"/api/repositories/{repo.Id}/webhooks/token", null);
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var result = await response.Content.ReadFromJsonAsync<TokenResponse>();
-        result!.Token.Should().NotBeNullOrEmpty();
-    }
-
-    [Fact]
     public async Task TestSecret_ReturnsNotFound_WhenSecretDoesNotExist()
     {
         var (_, repo) = await SetupAsync();
@@ -95,6 +82,4 @@ public class SecretsApiTests(ApiTestFixture fixture) : IClassFixture<ApiTestFixt
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
-
-    private sealed record TokenResponse(string Token);
 }
