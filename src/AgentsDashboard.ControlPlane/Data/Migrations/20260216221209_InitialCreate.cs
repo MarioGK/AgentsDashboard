@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace AgentsDashboard.ControlPlane.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class Initial : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -85,17 +85,35 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Projects",
+                name: "Leases",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    LeaseName = table.Column<string>(type: "TEXT", nullable: false),
+                    OwnerId = table.Column<string>(type: "TEXT", nullable: false),
+                    ExpiresAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Projects", x => x.Id);
+                    table.PrimaryKey("PK_Leases", x => x.LeaseName);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PromptSkills",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    RepositoryId = table.Column<string>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Trigger = table.Column<string>(type: "TEXT", nullable: false),
+                    Content = table.Column<string>(type: "TEXT", nullable: false),
+                    Description = table.Column<string>(type: "TEXT", nullable: false),
+                    Enabled = table.Column<bool>(type: "INTEGER", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PromptSkills", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -118,7 +136,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", nullable: false),
                     RepoId = table.Column<string>(type: "TEXT", nullable: false),
                     TaskId = table.Column<string>(type: "TEXT", nullable: false),
                     RunId = table.Column<string>(type: "TEXT", nullable: false),
@@ -138,10 +155,22 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     GitUrl = table.Column<string>(type: "TEXT", nullable: false),
+                    LocalPath = table.Column<string>(type: "TEXT", nullable: false),
                     DefaultBranch = table.Column<string>(type: "TEXT", nullable: false),
+                    CurrentBranch = table.Column<string>(type: "TEXT", nullable: false),
+                    CurrentCommit = table.Column<string>(type: "TEXT", nullable: false),
+                    AheadCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    BehindCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    ModifiedCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    StagedCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    UntrackedCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    LastScannedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    LastFetchedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    LastCloneAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    LastViewedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    LastSyncError = table.Column<string>(type: "TEXT", nullable: false),
                     InstructionFiles = table.Column<string>(type: "TEXT", nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
@@ -169,6 +198,26 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "RunAiSummaries",
+                columns: table => new
+                {
+                    RunId = table.Column<string>(type: "TEXT", nullable: false),
+                    RepositoryId = table.Column<string>(type: "TEXT", nullable: false),
+                    TaskId = table.Column<string>(type: "TEXT", nullable: false),
+                    Title = table.Column<string>(type: "TEXT", nullable: false),
+                    Summary = table.Column<string>(type: "TEXT", nullable: false),
+                    Model = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceFingerprint = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceUpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    GeneratedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    ExpiresAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RunAiSummaries", x => x.RunId);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RunEvents",
                 columns: table => new
                 {
@@ -188,7 +237,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", nullable: false),
                     RepositoryId = table.Column<string>(type: "TEXT", nullable: false),
                     TaskId = table.Column<string>(type: "TEXT", nullable: false),
                     WorkerId = table.Column<string>(type: "TEXT", nullable: false),
@@ -199,6 +247,9 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     ResultEnvelopeRef = table.Column<string>(type: "TEXT", nullable: false),
                     FailureClass = table.Column<string>(type: "TEXT", nullable: false),
                     PrUrl = table.Column<string>(type: "TEXT", nullable: false),
+                    WorkerImageRef = table.Column<string>(type: "TEXT", nullable: false),
+                    WorkerImageDigest = table.Column<string>(type: "TEXT", nullable: false),
+                    WorkerImageSource = table.Column<string>(type: "TEXT", nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
                     StartedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
                     EndedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
@@ -206,6 +257,32 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Runs", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SemanticChunks",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    RepositoryId = table.Column<string>(type: "TEXT", nullable: false),
+                    TaskId = table.Column<string>(type: "TEXT", nullable: false),
+                    RunId = table.Column<string>(type: "TEXT", nullable: false),
+                    ChunkKey = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceType = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceRef = table.Column<string>(type: "TEXT", nullable: false),
+                    ChunkIndex = table.Column<int>(type: "INTEGER", nullable: false),
+                    Content = table.Column<string>(type: "TEXT", nullable: false),
+                    ContentHash = table.Column<string>(type: "TEXT", nullable: false),
+                    TokenCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    EmbeddingModel = table.Column<string>(type: "TEXT", nullable: false),
+                    EmbeddingDimensions = table.Column<int>(type: "INTEGER", nullable: false),
+                    EmbeddingPayload = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SemanticChunks", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -218,6 +295,7 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     RetentionDaysRuns = table.Column<int>(type: "INTEGER", nullable: false),
                     VictoriaMetricsEndpoint = table.Column<string>(type: "TEXT", nullable: false),
                     VmUiEndpoint = table.Column<string>(type: "TEXT", nullable: false),
+                    Orchestrator = table.Column<string>(type: "TEXT", nullable: false),
                     UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
@@ -240,6 +318,10 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     CronExpression = table.Column<string>(type: "TEXT", nullable: false),
                     Enabled = table.Column<bool>(type: "INTEGER", nullable: false),
                     NextRunAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    WorktreePath = table.Column<string>(type: "TEXT", nullable: false),
+                    WorktreeBranch = table.Column<string>(type: "TEXT", nullable: false),
+                    LastGitSyncAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    LastGitSyncError = table.Column<string>(type: "TEXT", nullable: false),
                     RetryPolicy = table.Column<string>(type: "TEXT", nullable: false),
                     Timeouts = table.Column<string>(type: "TEXT", nullable: false),
                     ApprovalProfile = table.Column<string>(type: "TEXT", nullable: false),
@@ -287,43 +369,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "TerminalAuditEvents",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    SessionId = table.Column<string>(type: "TEXT", nullable: false),
-                    Sequence = table.Column<long>(type: "INTEGER", nullable: false),
-                    TimestampUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Direction = table.Column<int>(type: "INTEGER", nullable: false),
-                    PayloadBase64 = table.Column<string>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TerminalAuditEvents", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "TerminalSessions",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    WorkerId = table.Column<string>(type: "TEXT", nullable: false),
-                    RunId = table.Column<string>(type: "TEXT", nullable: true),
-                    State = table.Column<int>(type: "INTEGER", nullable: false),
-                    Cols = table.Column<int>(type: "INTEGER", nullable: false),
-                    Rows = table.Column<int>(type: "INTEGER", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    LastSeenAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ClosedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CloseReason = table.Column<string>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TerminalSessions", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Webhooks",
                 columns: table => new
                 {
@@ -365,7 +410,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     WorkflowId = table.Column<string>(type: "TEXT", nullable: false),
                     RepositoryId = table.Column<string>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", nullable: false),
                     State = table.Column<int>(type: "INTEGER", nullable: false),
                     CurrentStageIndex = table.Column<int>(type: "INTEGER", nullable: false),
                     StageResults = table.Column<string>(type: "TEXT", nullable: false),
@@ -396,6 +440,23 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Workflows", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "WorkspacePromptEntries",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    RepositoryId = table.Column<string>(type: "TEXT", nullable: false),
+                    TaskId = table.Column<string>(type: "TEXT", nullable: false),
+                    RunId = table.Column<string>(type: "TEXT", nullable: false),
+                    Role = table.Column<string>(type: "TEXT", nullable: false),
+                    Content = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_WorkspacePromptEntries", x => x.Id);
                 });
 
             migrationBuilder.CreateIndex(
@@ -430,9 +491,20 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Projects_Name",
-                table: "Projects",
-                column: "Name");
+                name: "IX_Leases_ExpiresAtUtc",
+                table: "Leases",
+                column: "ExpiresAtUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PromptSkills_RepositoryId_Trigger",
+                table: "PromptSkills",
+                columns: new[] { "RepositoryId", "Trigger" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PromptSkills_RepositoryId_UpdatedAtUtc",
+                table: "PromptSkills",
+                columns: new[] { "RepositoryId", "UpdatedAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_ProviderSecrets_RepositoryId_Provider",
@@ -446,9 +518,14 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 columns: new[] { "RunId", "TimestampUtc" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Repositories_ProjectId",
+                name: "IX_Repositories_LastViewedAtUtc",
                 table: "Repositories",
-                column: "ProjectId");
+                column: "LastViewedAtUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Repositories_Name",
+                table: "Repositories",
+                column: "Name");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RepositoryInstructions_RepositoryId",
@@ -461,14 +538,24 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 columns: new[] { "RepositoryId", "Priority" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_RunAiSummaries_ExpiresAtUtc",
+                table: "RunAiSummaries",
+                column: "ExpiresAtUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RunAiSummaries_GeneratedAtUtc",
+                table: "RunAiSummaries",
+                column: "GeneratedAtUtc");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RunAiSummaries_RepositoryId_TaskId",
+                table: "RunAiSummaries",
+                columns: new[] { "RepositoryId", "TaskId" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RunEvents_RunId_TimestampUtc",
                 table: "RunEvents",
                 columns: new[] { "RunId", "TimestampUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Runs_ProjectId_State",
-                table: "Runs",
-                columns: new[] { "ProjectId", "State" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Runs_RepositoryId_CreatedAtUtc",
@@ -481,9 +568,35 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 column: "State");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Runs_TaskId_CreatedAtUtc",
+                table: "Runs",
+                columns: new[] { "TaskId", "CreatedAtUtc" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Runs_TaskId_State",
                 table: "Runs",
                 columns: new[] { "TaskId", "State" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SemanticChunks_RepositoryId_RunId",
+                table: "SemanticChunks",
+                columns: new[] { "RepositoryId", "RunId" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SemanticChunks_TaskId_ChunkKey",
+                table: "SemanticChunks",
+                columns: new[] { "TaskId", "ChunkKey" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SemanticChunks_TaskId_UpdatedAtUtc",
+                table: "SemanticChunks",
+                columns: new[] { "TaskId", "UpdatedAtUtc" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tasks_LastGitSyncAtUtc",
+                table: "Tasks",
+                column: "LastGitSyncAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Tasks_NextRunAtUtc",
@@ -496,34 +609,14 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 column: "RepositoryId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TerminalAuditEvents_SessionId_Sequence",
-                table: "TerminalAuditEvents",
-                columns: new[] { "SessionId", "Sequence" });
+                name: "IX_Tasks_RepositoryId_WorktreeBranch",
+                table: "Tasks",
+                columns: new[] { "RepositoryId", "WorktreeBranch" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_TerminalAuditEvents_TimestampUtc",
-                table: "TerminalAuditEvents",
-                column: "TimestampUtc");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TerminalSessions_LastSeenAtUtc",
-                table: "TerminalSessions",
-                column: "LastSeenAtUtc");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TerminalSessions_RunId",
-                table: "TerminalSessions",
-                column: "RunId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TerminalSessions_State",
-                table: "TerminalSessions",
-                column: "State");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TerminalSessions_WorkerId",
-                table: "TerminalSessions",
-                column: "WorkerId");
+                name: "IX_Tasks_RepositoryId_WorktreePath",
+                table: "Tasks",
+                columns: new[] { "RepositoryId", "WorktreePath" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Webhooks_RepositoryId",
@@ -550,6 +643,16 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 name: "IX_Workflows_RepositoryId",
                 table: "Workflows",
                 column: "RepositoryId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkspacePromptEntries_RunId_CreatedAtUtc",
+                table: "WorkspacePromptEntries",
+                columns: new[] { "RunId", "CreatedAtUtc" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkspacePromptEntries_TaskId_CreatedAtUtc",
+                table: "WorkspacePromptEntries",
+                columns: new[] { "TaskId", "CreatedAtUtc" });
         }
 
         /// <inheritdoc />
@@ -568,7 +671,10 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 name: "HarnessProviderSettings");
 
             migrationBuilder.DropTable(
-                name: "Projects");
+                name: "Leases");
+
+            migrationBuilder.DropTable(
+                name: "PromptSkills");
 
             migrationBuilder.DropTable(
                 name: "ProviderSecrets");
@@ -583,10 +689,16 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 name: "RepositoryInstructions");
 
             migrationBuilder.DropTable(
+                name: "RunAiSummaries");
+
+            migrationBuilder.DropTable(
                 name: "RunEvents");
 
             migrationBuilder.DropTable(
                 name: "Runs");
+
+            migrationBuilder.DropTable(
+                name: "SemanticChunks");
 
             migrationBuilder.DropTable(
                 name: "Settings");
@@ -596,12 +708,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "TaskTemplates");
-
-            migrationBuilder.DropTable(
-                name: "TerminalAuditEvents");
-
-            migrationBuilder.DropTable(
-                name: "TerminalSessions");
 
             migrationBuilder.DropTable(
                 name: "Webhooks");
@@ -614,6 +720,9 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "Workflows");
+
+            migrationBuilder.DropTable(
+                name: "WorkspacePromptEntries");
         }
     }
 }

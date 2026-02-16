@@ -118,7 +118,7 @@ public sealed class HarnessExecutor(
                 gitLockAcquired = true;
 
                 workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
-                workspaceHostPath = workspaceContext.WorktreePath;
+                workspaceHostPath = workspaceContext.WorkspacePath;
             }
             catch (Exception ex)
             {
@@ -294,132 +294,70 @@ public sealed class HarnessExecutor(
 
     private async Task<WorkspaceContext> PrepareWorkspaceAsync(DispatchJobRequest request, CancellationToken cancellationToken)
     {
-        var repositoryPath = Path.Combine(WorkspacesRootPath, ToPathSegment(request.RepositoryId));
-        var mirrorPath = Path.Combine(repositoryPath, "mirror.git");
-        var tasksPath = Path.Combine(repositoryPath, "tasks");
-        var worktreePath = Path.Combine(tasksPath, ToPathSegment(request.TaskId));
-        var taskBranch = BuildStableTaskBranchName(request);
-
-        Directory.CreateDirectory(repositoryPath);
-        Directory.CreateDirectory(tasksPath);
-
-        await EnsureMirrorReadyAsync(request.CloneUrl, mirrorPath, cancellationToken);
-        await EnsureWorktreeReadyAsync(mirrorPath, worktreePath, taskBranch, cancellationToken);
-        await SyncTaskBranchAsync(worktreePath, taskBranch, cancellationToken);
-
-        var headBeforeRun = await GetHeadCommitAsync(worktreePath, cancellationToken);
-        return new WorkspaceContext(worktreePath, taskBranch, MainBranch, headBeforeRun);
-    }
-
-    private async Task EnsureMirrorReadyAsync(string cloneUrl, string mirrorPath, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(cloneUrl))
+        if (string.IsNullOrWhiteSpace(request.CloneUrl))
         {
             throw new InvalidOperationException("Clone URL is required for workspace preparation.");
         }
 
-        if (!Directory.Exists(mirrorPath))
-        {
-            var cloneResult = await ExecuteGitAsync(["clone", "--mirror", cloneUrl, mirrorPath], cancellationToken);
-            if (cloneResult.ExitCode != 0 && !Directory.Exists(mirrorPath))
-            {
-                throw new InvalidOperationException(BuildGitFailureMessage("clone repository mirror", cloneResult));
-            }
-        }
+        var repositoryPath = Path.Combine(WorkspacesRootPath, ToPathSegment(request.RepositoryId));
+        var tasksPath = Path.Combine(repositoryPath, "tasks");
+        var workspacePath = Path.Combine(tasksPath, ToPathSegment(request.TaskId));
+        var mainBranch = ResolveMainBranch(request);
 
-        var bareCheckResult = await ExecuteGitAsync(["--git-dir", mirrorPath, "rev-parse", "--is-bare-repository"], cancellationToken);
-        if (bareCheckResult.ExitCode != 0 ||
-            !bareCheckResult.StandardOutput.Contains("true", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(BuildGitFailureMessage("validate repository mirror", bareCheckResult));
-        }
+        Directory.CreateDirectory(repositoryPath);
+        Directory.CreateDirectory(tasksPath);
 
-        await ExecuteGitOrThrowAsync(
-            ["--git-dir", mirrorPath, "remote", "set-url", "origin", cloneUrl],
-            "set mirror origin URL",
-            cancellationToken);
+        await EnsureWorkspaceReadyAsync(request.CloneUrl, workspacePath, mainBranch, cancellationToken);
 
-        await ExecuteGitOrThrowAsync(
-            ["--git-dir", mirrorPath, "fetch", "--prune", "origin"],
-            "fetch mirror origin",
-            cancellationToken);
+        var headBeforeRun = await GetHeadCommitAsync(workspacePath, cancellationToken);
+        return new WorkspaceContext(workspacePath, mainBranch, headBeforeRun);
     }
 
-    private async Task EnsureWorktreeReadyAsync(
-        string mirrorPath,
-        string worktreePath,
-        string taskBranch,
+    private async Task EnsureWorkspaceReadyAsync(
+        string cloneUrl,
+        string workspacePath,
+        string mainBranch,
         CancellationToken cancellationToken)
     {
-        await ExecuteGitAsync(["--git-dir", mirrorPath, "worktree", "prune"], cancellationToken);
-
-        if (!Directory.Exists(worktreePath))
+        var gitDirectory = Path.Combine(workspacePath, ".git");
+        if (!Directory.Exists(gitDirectory))
         {
-            var addResult = await ExecuteGitAsync(
-                ["--git-dir", mirrorPath, "worktree", "add", "-B", taskBranch, worktreePath, $"origin/{MainBranch}"],
-                cancellationToken);
-
-            if (addResult.ExitCode != 0)
+            if (Directory.Exists(workspacePath))
             {
-                throw new InvalidOperationException(BuildGitFailureMessage("create task worktree", addResult));
+                Directory.Delete(workspacePath, true);
+            }
+
+            var cloneResult = await ExecuteGitAsync(["clone", cloneUrl, workspacePath], cancellationToken);
+            if (cloneResult.ExitCode != 0)
+            {
+                throw new InvalidOperationException(BuildGitFailureMessage("clone task workspace", cloneResult));
             }
         }
 
-        var revParseResult = await ExecuteGitInPathAsync(worktreePath, ["rev-parse", "--is-inside-work-tree"], cancellationToken);
-        if (revParseResult.ExitCode != 0)
-        {
-            throw new InvalidOperationException(BuildGitFailureMessage("validate task worktree", revParseResult));
-        }
-
-        await EnsureTaskBranchCheckedOutAsync(worktreePath, taskBranch, cancellationToken);
-    }
-
-    private async Task SyncTaskBranchAsync(string worktreePath, string taskBranch, CancellationToken cancellationToken)
-    {
-        await EnsureTaskBranchCheckedOutAsync(worktreePath, taskBranch, cancellationToken);
-
         await ExecuteGitOrThrowInPathAsync(
-            worktreePath,
-            ["fetch", "origin", MainBranch],
-            "fetch origin/main for task branch sync",
+            workspacePath,
+            ["remote", "set-url", "origin", cloneUrl],
+            "set workspace origin URL",
             cancellationToken);
 
-        var rebaseResult = await ExecuteGitInPathAsync(worktreePath, ["rebase", $"origin/{MainBranch}"], cancellationToken);
-        if (rebaseResult.ExitCode == 0)
-        {
-            return;
-        }
-
-        if (!IsRebaseConflict(rebaseResult))
-        {
-            throw new InvalidOperationException(BuildGitFailureMessage("rebase task branch onto origin/main", rebaseResult));
-        }
-
-        await ExecuteGitInPathAsync(worktreePath, ["rebase", "--abort"], cancellationToken);
-
-        var mergeResult = await ExecuteGitInPathAsync(
-            worktreePath,
-            ["merge", "--no-edit", $"origin/{MainBranch}"],
+        await ExecuteGitOrThrowInPathAsync(
+            workspacePath,
+            ["fetch", "--prune", "origin"],
+            "fetch workspace origin",
             cancellationToken);
 
-        if (mergeResult.ExitCode != 0)
-        {
-            throw new InvalidOperationException(BuildGitFailureMessage("merge origin/main after rebase conflict", mergeResult));
-        }
-    }
-
-    private async Task EnsureTaskBranchCheckedOutAsync(string worktreePath, string taskBranch, CancellationToken cancellationToken)
-    {
-        var checkoutResult = await ExecuteGitInPathAsync(worktreePath, ["checkout", taskBranch], cancellationToken);
-        if (checkoutResult.ExitCode == 0)
-        {
-            return;
-        }
+        await EnsureMainBranchCheckedOutAsync(workspacePath, mainBranch, cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
-            worktreePath,
-            ["checkout", "-B", taskBranch, $"origin/{MainBranch}"],
-            "checkout or create task branch",
+            workspacePath,
+            ["reset", "--hard", $"origin/{mainBranch}"],
+            "reset workspace to origin main branch",
+            cancellationToken);
+
+        await ExecuteGitOrThrowInPathAsync(
+            workspacePath,
+            ["clean", "-fd"],
+            "clean workspace",
             cancellationToken);
     }
 
@@ -436,165 +374,82 @@ public sealed class HarnessExecutor(
             return;
         }
 
-        await EnsureTaskBranchCheckedOutAsync(workspaceContext.WorktreePath, workspaceContext.TaskBranch, cancellationToken);
-
-        var hasWorktreeChanges = await HasWorktreeChangesAsync(workspaceContext.WorktreePath, cancellationToken);
-        if (hasWorktreeChanges)
-        {
-            await StageAndCommitTaskBranchChangesAsync(request, workspaceContext, cancellationToken);
-        }
-
-        var headAfterRun = await GetHeadCommitAsync(workspaceContext.WorktreePath, cancellationToken);
-        if (string.Equals(workspaceContext.HeadBeforeRun, headAfterRun, StringComparison.Ordinal))
-        {
-            MarkRunAsObsolete(envelope, "no-diff");
-            return;
-        }
-
         try
         {
-            var pushedToMain = await SquashMergeTaskBranchToMainAsync(request, workspaceContext, cancellationToken);
-            if (!pushedToMain)
+            await EnsureMainBranchCheckedOutAsync(workspaceContext.WorkspacePath, workspaceContext.MainBranch, cancellationToken);
+
+            var hasWorkspaceChanges = await HasWorkspaceChangesAsync(workspaceContext.WorkspacePath, cancellationToken);
+            if (!hasWorkspaceChanges)
             {
-                MarkRunAsObsolete(envelope, "already-merged");
+                MarkRunAsObsolete(envelope, "no-diff");
                 return;
             }
 
-            envelope.Metadata["gitWorkflow"] = "merged";
-            envelope.Metadata["gitTaskBranch"] = workspaceContext.TaskBranch;
+            await StageAndCommitWorkspaceChangesAsync(request, workspaceContext, cancellationToken);
+
+            var headAfterRun = await GetHeadCommitAsync(workspaceContext.WorkspacePath, cancellationToken);
+            if (string.Equals(workspaceContext.HeadBeforeRun, headAfterRun, StringComparison.Ordinal))
+            {
+                MarkRunAsObsolete(envelope, "no-diff");
+                return;
+            }
+
+            await ExecuteGitOrThrowInPathAsync(
+                workspaceContext.WorkspacePath,
+                ["push", "origin", workspaceContext.MainBranch],
+                "push main branch to origin",
+                cancellationToken);
+
+            envelope.Metadata["gitWorkflow"] = "main-pushed";
             envelope.Metadata["gitMainBranch"] = workspaceContext.MainBranch;
         }
         catch (Exception ex)
         {
             envelope.Status = "failed";
-            envelope.Summary = "Git merge/push failed";
+            envelope.Summary = "Git commit/push failed";
             envelope.Error = ex.Message;
             envelope.Metadata["gitWorkflow"] = "failed";
             envelope.Metadata["gitFailure"] = ex.Message;
         }
     }
 
-    private async Task StageAndCommitTaskBranchChangesAsync(
+    private async Task StageAndCommitWorkspaceChangesAsync(
         DispatchJobRequest request,
         WorkspaceContext workspaceContext,
         CancellationToken cancellationToken)
     {
         await ExecuteGitOrThrowInPathAsync(
-            workspaceContext.WorktreePath,
+            workspaceContext.WorkspacePath,
             ["add", "-A"],
-            "stage task branch changes",
+            "stage workspace changes",
             cancellationToken);
 
-        await EnsureCommitIdentityAsync(request, workspaceContext.WorktreePath, cancellationToken);
+        await EnsureCommitIdentityAsync(request, workspaceContext.WorkspacePath, cancellationToken);
 
         var commitResult = await ExecuteGitInPathAsync(
-            workspaceContext.WorktreePath,
-            ["commit", "-m", BuildTaskBranchCommitMessage(request)],
+            workspaceContext.WorkspacePath,
+            ["commit", "-m", BuildMainBranchCommitMessage(request)],
             cancellationToken);
 
         if (commitResult.ExitCode != 0 && !IsNothingToCommit(commitResult))
         {
-            throw new InvalidOperationException(BuildGitFailureMessage("commit task branch changes", commitResult));
+            throw new InvalidOperationException(BuildGitFailureMessage("commit workspace changes", commitResult));
         }
     }
 
-    private async Task<bool> SquashMergeTaskBranchToMainAsync(
-        DispatchJobRequest request,
-        WorkspaceContext workspaceContext,
-        CancellationToken cancellationToken)
+    private async Task EnsureMainBranchCheckedOutAsync(string workspacePath, string mainBranch, CancellationToken cancellationToken)
     {
-        var switchedToMain = false;
-
-        try
-        {
-            await EnsureMainBranchCheckedOutAsync(workspaceContext.WorktreePath, cancellationToken);
-            switchedToMain = true;
-
-            await ExecuteGitOrThrowInPathAsync(
-                workspaceContext.WorktreePath,
-                ["fetch", "origin", workspaceContext.MainBranch],
-                "fetch main before squash merge",
-                cancellationToken);
-
-            await ExecuteGitOrThrowInPathAsync(
-                workspaceContext.WorktreePath,
-                ["reset", "--hard", $"origin/{workspaceContext.MainBranch}"],
-                "reset local main to origin/main",
-                cancellationToken);
-
-            var squashResult = await ExecuteGitInPathAsync(
-                workspaceContext.WorktreePath,
-                ["merge", "--squash", workspaceContext.TaskBranch],
-                cancellationToken);
-
-            if (squashResult.ExitCode != 0)
-            {
-                throw new InvalidOperationException(BuildGitFailureMessage("squash merge task branch into main", squashResult));
-            }
-
-            var hasStagedChanges = await HasStagedChangesAsync(workspaceContext.WorktreePath, cancellationToken);
-            if (!hasStagedChanges)
-            {
-                return false;
-            }
-
-            await EnsureCommitIdentityAsync(request, workspaceContext.WorktreePath, cancellationToken);
-
-            await ExecuteGitOrThrowInPathAsync(
-                workspaceContext.WorktreePath,
-                ["commit", "-m", BuildMainBranchCommitMessage(request, workspaceContext.TaskBranch)],
-                "commit squash merge on main",
-                cancellationToken);
-
-            var pushResult = await ExecuteGitInPathAsync(
-                workspaceContext.WorktreePath,
-                ["push", "origin", workspaceContext.MainBranch],
-                cancellationToken);
-
-            if (pushResult.ExitCode != 0)
-            {
-                throw new InvalidOperationException(BuildGitFailureMessage("push main to origin", pushResult));
-            }
-
-            return true;
-        }
-        finally
-        {
-            if (switchedToMain)
-            {
-                await TryCheckoutBranchAsync(workspaceContext.WorktreePath, workspaceContext.TaskBranch, cancellationToken);
-            }
-        }
-    }
-
-    private async Task EnsureMainBranchCheckedOutAsync(string worktreePath, CancellationToken cancellationToken)
-    {
-        var checkoutResult = await ExecuteGitInPathAsync(worktreePath, ["checkout", MainBranch], cancellationToken);
+        var checkoutResult = await ExecuteGitInPathAsync(workspacePath, ["checkout", mainBranch], cancellationToken);
         if (checkoutResult.ExitCode == 0)
         {
             return;
         }
 
         await ExecuteGitOrThrowInPathAsync(
-            worktreePath,
-            ["checkout", "-B", MainBranch, $"origin/{MainBranch}"],
+            workspacePath,
+            ["checkout", "-B", mainBranch, $"origin/{mainBranch}"],
             "checkout or create main branch",
             cancellationToken);
-    }
-
-    private async Task TryCheckoutBranchAsync(string worktreePath, string branch, CancellationToken cancellationToken)
-    {
-        var checkoutResult = await ExecuteGitInPathAsync(worktreePath, ["checkout", branch], cancellationToken);
-        if (checkoutResult.ExitCode == 0)
-        {
-            return;
-        }
-
-        logger.LogWarning(
-            "Failed to return worktree {WorktreePath} to branch {Branch}: {Error}",
-            worktreePath,
-            branch,
-            BuildGitFailureMessage("checkout task branch", checkoutResult));
     }
 
     private async Task EnsureCommitIdentityAsync(
@@ -635,9 +490,9 @@ public sealed class HarnessExecutor(
             : null;
     }
 
-    private async Task<string> GetHeadCommitAsync(string worktreePath, CancellationToken cancellationToken)
+    private async Task<string> GetHeadCommitAsync(string workspacePath, CancellationToken cancellationToken)
     {
-        var result = await ExecuteGitInPathAsync(worktreePath, ["rev-parse", "HEAD"], cancellationToken);
+        var result = await ExecuteGitInPathAsync(workspacePath, ["rev-parse", "HEAD"], cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(BuildGitFailureMessage("resolve HEAD commit", result));
@@ -646,48 +501,24 @@ public sealed class HarnessExecutor(
         return result.StandardOutput.Trim();
     }
 
-    private async Task<bool> HasWorktreeChangesAsync(string worktreePath, CancellationToken cancellationToken)
+    private async Task<bool> HasWorkspaceChangesAsync(string workspacePath, CancellationToken cancellationToken)
     {
-        var result = await ExecuteGitInPathAsync(worktreePath, ["status", "--porcelain"], cancellationToken);
+        var result = await ExecuteGitInPathAsync(workspacePath, ["status", "--porcelain"], cancellationToken);
         if (result.ExitCode != 0)
         {
-            throw new InvalidOperationException(BuildGitFailureMessage("check worktree changes", result));
+            throw new InvalidOperationException(BuildGitFailureMessage("check workspace changes", result));
         }
 
         return !string.IsNullOrWhiteSpace(result.StandardOutput);
     }
 
-    private async Task<bool> HasStagedChangesAsync(string worktreePath, CancellationToken cancellationToken)
-    {
-        var result = await ExecuteGitInPathAsync(worktreePath, ["diff", "--cached", "--quiet"], cancellationToken);
-
-        return result.ExitCode switch
-        {
-            0 => false,
-            1 => true,
-            _ => throw new InvalidOperationException(BuildGitFailureMessage("check staged changes", result)),
-        };
-    }
-
     private async Task ExecuteGitOrThrowInPathAsync(
-        string worktreePath,
+        string workspacePath,
         IReadOnlyList<string> arguments,
         string operation,
         CancellationToken cancellationToken)
     {
-        var result = await ExecuteGitInPathAsync(worktreePath, arguments, cancellationToken);
-        if (result.ExitCode != 0)
-        {
-            throw new InvalidOperationException(BuildGitFailureMessage(operation, result));
-        }
-    }
-
-    private async Task ExecuteGitOrThrowAsync(
-        IReadOnlyList<string> arguments,
-        string operation,
-        CancellationToken cancellationToken)
-    {
-        var result = await ExecuteGitAsync(arguments, cancellationToken);
+        var result = await ExecuteGitInPathAsync(workspacePath, arguments, cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(BuildGitFailureMessage(operation, result));
@@ -695,14 +526,14 @@ public sealed class HarnessExecutor(
     }
 
     private async Task<BufferedCommandResult> ExecuteGitInPathAsync(
-        string worktreePath,
+        string workspacePath,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
         var fullArguments = new List<string>(arguments.Count + 2)
         {
             "-C",
-            worktreePath,
+            workspacePath,
         };
 
         fullArguments.AddRange(arguments);
@@ -734,13 +565,6 @@ public sealed class HarnessExecutor(
         return $"{operation} failed (exit code {result.ExitCode}): {details}";
     }
 
-    private static bool IsRebaseConflict(BufferedCommandResult result)
-    {
-        var combined = $"{result.StandardOutput}\n{result.StandardError}";
-        return combined.Contains("conflict", StringComparison.OrdinalIgnoreCase) ||
-               combined.Contains("could not apply", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool IsNothingToCommit(BufferedCommandResult result)
     {
         var combined = $"{result.StandardOutput}\n{result.StandardError}";
@@ -751,7 +575,7 @@ public sealed class HarnessExecutor(
     private static void MarkRunAsObsolete(HarnessResultEnvelope envelope, string reason)
     {
         envelope.Status = "succeeded";
-        envelope.Summary = "Obsolete";
+        envelope.Summary = "No changes produced";
         envelope.Error = string.Empty;
         envelope.Metadata["runDisposition"] = "obsolete";
         envelope.Metadata["obsoleteReason"] = reason;
@@ -761,129 +585,6 @@ public sealed class HarnessExecutor(
     {
         var lockKey = $"{repositoryId}:{taskId}";
         return s_taskGitLocks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
-    }
-
-    internal static string BuildStableTaskBranchName(DispatchJobRequest request)
-    {
-        var repoSlug = ParseRepositorySlugFromCloneUrl(request.CloneUrl);
-        var taskSlug = ToBranchSegment(request.TaskId, "task");
-
-        if (request.EnvironmentVars is not null)
-        {
-            if (request.EnvironmentVars.TryGetValue("TASK_BRANCH", out var providedTaskBranch) &&
-                TryParseAgentBranch(providedTaskBranch, out var parsedRepoSlug, out var parsedTaskSlug))
-            {
-                repoSlug = parsedRepoSlug;
-                taskSlug = parsedTaskSlug;
-            }
-            else if (request.EnvironmentVars.TryGetValue("TASK_BRANCH_PREFIX", out var providedPrefix) &&
-                     TryParseAgentBranchPrefix(providedPrefix, out parsedRepoSlug, out parsedTaskSlug))
-            {
-                repoSlug = parsedRepoSlug;
-                taskSlug = parsedTaskSlug;
-            }
-        }
-
-        return $"agent/{repoSlug}/{taskSlug}/{ToBranchSegment(request.TaskId, "task")}";
-    }
-
-    private static bool TryParseAgentBranch(
-        string? branch,
-        out string repoSlug,
-        out string taskSlug)
-    {
-        repoSlug = string.Empty;
-        taskSlug = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(branch))
-        {
-            return false;
-        }
-
-        var parts = branch.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length < 4 || !string.Equals(parts[0], "agent", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        repoSlug = ToBranchSegment(parts[1], "repo");
-        taskSlug = ToBranchSegment(parts[2], "task");
-        return true;
-    }
-
-    private static bool TryParseAgentBranchPrefix(
-        string? branchPrefix,
-        out string repoSlug,
-        out string taskSlug)
-    {
-        repoSlug = string.Empty;
-        taskSlug = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(branchPrefix))
-        {
-            return false;
-        }
-
-        var parts = branchPrefix.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length < 3 || !string.Equals(parts[0], "agent", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        repoSlug = ToBranchSegment(parts[1], "repo");
-        taskSlug = ToBranchSegment(parts[2], "task");
-        return true;
-    }
-
-    private static string ParseRepositorySlugFromCloneUrl(string cloneUrl)
-    {
-        if (string.IsNullOrWhiteSpace(cloneUrl))
-        {
-            return "repo";
-        }
-
-        var candidatePath = cloneUrl.Trim();
-
-        if (Uri.TryCreate(candidatePath, UriKind.Absolute, out var uri))
-        {
-            candidatePath = uri.AbsolutePath;
-        }
-        else
-        {
-            var separatorIndex = candidatePath.LastIndexOf(':');
-            if (separatorIndex >= 0)
-            {
-                candidatePath = candidatePath[(separatorIndex + 1)..];
-            }
-        }
-
-        candidatePath = candidatePath.Trim('/');
-        var parts = candidatePath.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var repoPart = parts.Length > 0 ? parts[^1] : candidatePath;
-
-        if (repoPart.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
-        {
-            repoPart = repoPart[..^4];
-        }
-
-        return ToBranchSegment(repoPart, "repo");
-    }
-
-    private static string ToBranchSegment(string value, string fallback)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return fallback;
-        }
-
-        var sanitized = new string(value
-            .Trim()
-            .ToLowerInvariant()
-            .Select(ch => char.IsLetterOrDigit(ch) || ch is '.' or '-' or '_' ? ch : '-')
-            .ToArray());
-
-        var trimmed = sanitized.Trim('-');
-        return string.IsNullOrWhiteSpace(trimmed) ? fallback : trimmed;
     }
 
     private static string ToPathSegment(string value)
@@ -896,14 +597,26 @@ public sealed class HarnessExecutor(
         return value.Trim().Replace('/', '-').Replace('\\', '-');
     }
 
-    private static string BuildTaskBranchCommitMessage(DispatchJobRequest request)
+    private static string ResolveMainBranch(DispatchJobRequest request)
     {
-        return $"agent task {request.TaskId}: run {request.RunId}";
+        if (request.EnvironmentVars is not null &&
+            request.EnvironmentVars.TryGetValue("DEFAULT_BRANCH", out var envDefaultBranch) &&
+            !string.IsNullOrWhiteSpace(envDefaultBranch))
+        {
+            return envDefaultBranch.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Branch))
+        {
+            return request.Branch.Trim();
+        }
+
+        return MainBranch;
     }
 
-    private static string BuildMainBranchCommitMessage(DispatchJobRequest request, string taskBranch)
+    private static string BuildMainBranchCommitMessage(DispatchJobRequest request)
     {
-        return $"agent merge {taskBranch} for task {request.TaskId} (run {request.RunId})";
+        return $"agent task {request.TaskId}: run {request.RunId}";
     }
 
     private bool IsImageAllowed(string image)
@@ -1028,8 +741,7 @@ public sealed class HarnessExecutor(
     }
 
     private sealed record WorkspaceContext(
-        string WorktreePath,
-        string TaskBranch,
+        string WorkspacePath,
         string MainBranch,
         string HeadBeforeRun);
 }

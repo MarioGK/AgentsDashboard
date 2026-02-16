@@ -8,9 +8,30 @@
 
 <PageTitle>Runs - AgentsDashboard</PageTitle>
 
-<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+<MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
     <MudText Typo="Typo.h4">Runs</MudText>
     <MudSpacer />
+    <MudTextField T="string"
+                  @bind-Value="_query"
+                  Placeholder="Filter by run id, task id, or summary"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Immediate="true"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Style="min-width: 320px;" />
+    <MudSelect T="RunState?"
+               @bind-Value="_stateFilter"
+               Label="State"
+               Variant="Variant.Outlined"
+               Margin="Margin.Dense"
+               Style="min-width: 180px;">
+        <MudSelectItem T="RunState?" Value="@((RunState?)null)">All states</MudSelectItem>
+        @foreach (var state in _stateOrder)
+        {
+            <MudSelectItem T="RunState?" Value="@state">@GetRunStateLabel(state)</MudSelectItem>
+        }
+    </MudSelect>
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">
         Refresh
     </MudButton>
@@ -22,56 +43,57 @@
 }
 else
 {
-    <MudStack Row Spacing="3" Style="overflow-x: auto; min-height: 500px;">
-        @foreach (var column in _columns)
-        {
-            <MudPaper Class="pa-3" Elevation="2" Style="min-width: 240px; width: 240px; flex-shrink: 0;">
-                <MudStack Spacing="2">
-                    <MudStack Row AlignItems="AlignItems.Center">
-                        <MudIcon Icon="@column.Icon" Size="Size.Small" Color="@column.Color" />
-                        <MudText Typo="Typo.subtitle1"><b>@column.Title</b></MudText>
-                        <MudSpacer />
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
-                            @column.Runs.Count
-                        </MudChip>
-                    </MudStack>
-
-                    <MudDivider />
-
-                    @foreach (var run in column.Runs)
-                    {
-                        <MudPaper Class="pa-3" Outlined>
-                            <MudLink Href="@($"/settings/runs/{run.Id}")" Typo="Typo.body2">
-                                <b>@run.Id[..8]</b>
-                            </MudLink>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">Task: @run.TaskId[..8]</MudText>
-                            <MudStack Row AlignItems="AlignItems.Center" Class="mt-1">
-                                <MudIcon Icon="@Icons.Material.Filled.Timer" Size="Size.Small" />
-                                <MudText Typo="Typo.caption">@FormatDuration(run)</MudText>
-                            </MudStack>
-                            @if (run.Attempt > 1)
-                            {
-                                <MudText Typo="Typo.caption" Color="Color.Warning">Attempt @run.Attempt</MudText>
-                            }
-                        </MudPaper>
-                    }
-
-                    @if (column.Runs.Count == 0)
-                    {
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">Empty</MudText>
-                    }
-                </MudStack>
-            </MudPaper>
-        }
-    </MudStack>
+    <MudTable Items="FilteredRuns" Dense Hover Striped>
+        <HeaderContent>
+            <MudTh>Run</MudTh>
+            <MudTh>Task</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Attempt</MudTh>
+            <MudTh>Created</MudTh>
+            <MudTh>Duration</MudTh>
+            <MudTh>Summary</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <MudLink Href="@($"/settings/runs/{context.Id}")" Typo="Typo.body2" Title="@context.Id">
+                    @context.Id[..Math.Min(8, context.Id.Length)]
+                </MudLink>
+            </MudTd>
+            <MudTd Title="@context.TaskId">@context.TaskId[..Math.Min(8, context.TaskId.Length)]</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@GetRunStateColor(context.State)">
+                    @GetRunStateLabel(context.State)
+                </MudChip>
+            </MudTd>
+            <MudTd>@context.Attempt</MudTd>
+            <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+            <MudTd>@FormatDuration(context)</MudTd>
+            <MudTd>@(string.IsNullOrWhiteSpace(context.Summary) ? "—" : context.Summary)</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">No runs match the current filters.</MudText>
+        </NoRecordsContent>
+    </MudTable>
 }
 
 @code {
-    private record KanbanColumn(string Title, string Icon, Color Color, List<RunDocument> Runs);
+    private readonly RunState[] _stateOrder =
+    [
+        RunState.PendingApproval,
+        RunState.Queued,
+        RunState.Running,
+        RunState.Succeeded,
+        RunState.Failed,
+        RunState.Cancelled,
+        RunState.Obsolete
+    ];
 
-    private List<KanbanColumn> _columns = [];
+    private string _query = string.Empty;
+    private RunState? _stateFilter;
+    private List<RunDocument> _runs = [];
     private bool _loading = true;
     private IDisposable? _runStatusSubscription;
+    private IEnumerable<RunDocument> FilteredRuns => _runs.Where(MatchesFilters);
 
     protected override async Task OnInitializedAsync()
     {
@@ -91,27 +113,35 @@ else
     private async Task LoadAsync()
     {
         _loading = true;
-        var runs = await Store.ListRecentRunsAsync(CancellationToken.None);
-
-        var grouped = runs.GroupBy(r => r.State).ToDictionary(g => g.Key, g => g.ToList());
-
-        _columns =
-        [
-            new("Pending Approval", Icons.Material.Filled.Approval, GetRunStateColor(RunState.PendingApproval),
-                grouped.GetValueOrDefault(RunState.PendingApproval, [])),
-            new("Queued", Icons.Material.Filled.HourglassEmpty, GetRunStateColor(RunState.Queued),
-                grouped.GetValueOrDefault(RunState.Queued, [])),
-            new("Running", Icons.Material.Filled.PlayCircle, GetRunStateColor(RunState.Running),
-                grouped.GetValueOrDefault(RunState.Running, [])),
-            new("Succeeded", Icons.Material.Filled.CheckCircle, GetRunStateColor(RunState.Succeeded),
-                grouped.GetValueOrDefault(RunState.Succeeded, [])),
-            new("Failed", Icons.Material.Filled.Cancel, GetRunStateColor(RunState.Failed),
-                grouped.GetValueOrDefault(RunState.Failed, [])),
-            new("Cancelled", Icons.Material.Filled.Block, GetRunStateColor(RunState.Cancelled),
-                grouped.GetValueOrDefault(RunState.Cancelled, [])),
-        ];
-
+        _runs = await Store.ListRecentRunsAsync(CancellationToken.None);
         _loading = false;
+    }
+
+    private bool MatchesFilters(RunDocument run)
+    {
+        if (_stateFilter.HasValue && run.State != _stateFilter.Value)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            return true;
+        }
+
+        var query = _query.Trim();
+        if (run.Id.Contains(query, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (run.TaskId.Contains(query, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(run.Summary)
+            && run.Summary.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FormatDuration(RunDocument run)
@@ -119,11 +149,15 @@ else
         if (run.StartedAtUtc is null) return "—";
         var end = run.EndedAtUtc ?? DateTime.UtcNow;
         var duration = end - run.StartedAtUtc.Value;
+        if (duration.TotalHours >= 1) return $"{(int)duration.TotalHours}h {duration.Minutes}m";
         return duration.TotalMinutes >= 1 ? $"{duration.TotalMinutes:F0}m {duration.Seconds}s" : $"{duration.TotalSeconds:F0}s";
     }
 
     private static Color GetRunStateColor(RunState state)
         => TaskRunStatusPresentation.FromRunState(state).Color;
+
+    private static string GetRunStateLabel(RunState state)
+        => TaskRunStatusPresentation.FromRunState(state).Label;
 
     public void Dispose()
     {

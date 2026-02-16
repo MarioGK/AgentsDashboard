@@ -39,7 +39,7 @@ else
             <RowTemplate>
                 <MudTd DataLabel="Name"><b>@context.Name</b></MudTd>
                 <MudTd DataLabel="Status">
-                    <TaskStatusChip Task="context" LatestRun="@GetLatestRunForTask(context.Id)" />
+                    <TaskStatusChip Task="context" LatestRun="@GetLatestRunForTask(context.Id)" IsLoading="_latestRunsLoading" />
                 </MudTd>
                 <MudTd DataLabel="Repository">@context.RepositoryId[..8]</MudTd>
                 <MudTd DataLabel="Harness">
@@ -68,6 +68,7 @@ else
     private List<TaskDocument> _tasks = [];
     private readonly Dictionary<string, RunDocument?> _latestRunsByTaskId = new(StringComparer.Ordinal);
     private bool _loading = true;
+    private bool _latestRunsLoading;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -84,39 +85,28 @@ else
 
     private async Task RefreshLatestRunsByTaskAsync()
     {
-        _latestRunsByTaskId.Clear();
-
-        if (_tasks.Count == 0)
+        _latestRunsLoading = true;
+        try
         {
-            return;
-        }
+            _latestRunsByTaskId.Clear();
 
-        var taskIds = _tasks.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
-        var repositoryIds = _tasks.Select(t => t.RepositoryId).Distinct(StringComparer.Ordinal);
-
-        foreach (var repositoryId in repositoryIds)
-        {
-            var repositoryRuns = await Store.ListRunsByRepositoryAsync(repositoryId, CancellationToken.None);
-            foreach (var run in repositoryRuns)
+            if (_tasks.Count == 0)
             {
-                if (!taskIds.Contains(run.TaskId) || _latestRunsByTaskId.ContainsKey(run.TaskId))
-                {
-                    continue;
-                }
-
-                _latestRunsByTaskId[run.TaskId] = run;
-            }
-        }
-
-        foreach (var task in _tasks)
-        {
-            if (_latestRunsByTaskId.ContainsKey(task.Id))
-            {
-                continue;
+                return;
             }
 
-            var latestRuns = await Store.ListRunsByTaskAsync(task.Id, 1, CancellationToken.None);
-            _latestRunsByTaskId[task.Id] = latestRuns.FirstOrDefault();
+            var latestRunsByTaskId = await Store.GetLatestRunsByTaskIdsAsync(
+                _tasks.Select(task => task.Id).ToList(),
+                CancellationToken.None);
+
+            foreach (var task in _tasks)
+            {
+                _latestRunsByTaskId[task.Id] = latestRunsByTaskId.GetValueOrDefault(task.Id);
+            }
+        }
+        finally
+        {
+            _latestRunsLoading = false;
         }
     }
 }

@@ -38,7 +38,7 @@ docs/
 
 - `src/AgentsDashboard.slnx`: 3 production projects (`AgentsDashboard.ControlPlane`, `AgentsDashboard.WorkerGateway`, `AgentsDashboard.Contracts`).
 - Active harness adapters: `CodexAdapter`, `OpenCodeAdapter`, `ClaudeCodeAdapter`, `ZaiAdapter`.
-- Blazor components: 38 `.razor` files under `src/AgentsDashboard.ControlPlane/Components`.
+- Blazor components: 39 `.razor` files under `src/AgentsDashboard.ControlPlane/Components`.
 
 ## Architecture Rules
 
@@ -48,6 +48,7 @@ docs/
 - Enforce layered dependencies: `Domain -> Application -> Infrastructure -> UI` (inward only).
 - Use command/query handlers + domain services/events for orchestration.
 - Keep transport DTOs only at integration boundaries.
+- Backward compatibility is not required. Implement and maintain only the current intended behavior and new code paths.
 
 ## Product Model
 
@@ -79,7 +80,7 @@ docs/
 - Use transactions for multi-step state transitions.
 - Pass cancellation tokens through data-access calls.
 - Startup should auto-apply migrations and idempotent seed data.
-- Create migrations with `dotnet ef` tooling; do not hand-edit migration files or snapshots.
+- Create migrations only with the `dotnet ef` CLI (`dotnet ef migrations add ...`, `dotnet ef database update`, `dotnet ef migrations remove`, etc.); do not hand-edit migration files or snapshots.
 
 ### Authentication
 
@@ -122,6 +123,8 @@ dotnet build src/AgentsDashboard.slnx -m --tl
 dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error
 ```
 
+- GitHub Actions workflows are temporarily disabled in this repository and will be fixed/re-enabled later.
+
 MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `dotnet test <folder>` is not supported in this repo setup.
 
 ## Harnesses
@@ -144,13 +147,16 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 - ControlPlane is the parent orchestrator and spawns worker-gateway containers on demand via Docker socket.
 - Worker gateways launch ephemeral harness Docker containers.
 - Worker pool is elastic (1..N) using `Orchestrator:Workers:*` settings for capacity, startup timeout, idle scale-down, and connectivity mode; runtime enforces single-slot workers (`MaxSlots=1`).
-- Worker allocation is single-occupancy: each dispatch or terminal session gets a dedicated worker container instead of reusing an idle worker.
-- Worker teardown is destructive: worker containers are removed after recycle/stop, and per-worker storage volumes (`worker-artifacts-*`, `worker-workspaces-*`) are removed with the worker.
-- Terminal bridge is worker-aware: ControlPlane opens/reuses MagicOnion terminal hubs per worker and replays session output from terminal audit events on client reattach.
-- Terminal mode is standalone-only in single-occupancy mode: terminal sessions launch their own dedicated worker and standalone harness container (run-attached terminal sessions are disabled).
+- Worker allocation is single-occupancy: each dispatch gets a dedicated worker container instead of reusing an idle worker.
+- Worker teardown is destructive for compute and artifacts: worker containers are removed after recycle/stop and per-worker artifact volumes (`worker-artifacts-*`) are removed; `/workspaces` is mounted from a shared persistent volume (`agentsdashboard-workspaces` by default, override via `WORKER_SHARED_WORKSPACES_BIND`).
+- Task git execution uses persistent task-scoped checkouts under `/workspaces/repos/{repositoryId}/tasks/{taskId}`. Container sandboxing is the isolation boundary; git worktrees are not used.
+- Task dispatch enforces singleton queue semantics per task: at most one active/pending run per task; additional triggers remain queued and the next queued run is dispatched when the current run reaches a terminal state.
+- Successful changed runs auto-commit and push the default branch; successful no-diff runs are terminal `Obsolete`.
+- Task list surfaces (repository, schedules, workflow task lists) show status chips based on latest run state with spinner for working states (`Queued`, `Running`, `PendingApproval`).
 - Worker image bootstrap runs on ControlPlane startup: if `Orchestrator:Workers:ContainerImage` is missing locally, ControlPlane attempts local build first and then pull fallback, and ControlPlane startup fails fast if the image is still unavailable.
 - Runtime orchestrator behavior is policy-driven from persisted system settings (`SystemSettingsDocument.Orchestrator`) with short-lived cache and hot-reload invalidation on save.
 - New dedicated settings page `/settings/orchestrator` controls worker pool sizing, admission thresholds, image policy/order, pull/build concurrency, start-failure budgets, cooldowns, draining/recycle behavior, and worker resource guardrails.
+- ControlPlane runs background task-retention cleanup with distributed lease coordination (`maintenance-task-cleanup`): age-based deletion (last-activity policy) and DB-size pressure cleanup (`DbSizeSoftLimitGb` -> `DbSizeTargetGb`) with full task-cascade deletion (runs/logs/findings/prompt history/AI summaries/semantic chunks/artifact directories) and optional post-pressure `VACUUM`.
 - ControlPlane now supports DB-backed distributed leases (`Leases`) for multi-instance coordination of scale-out, image resolution, and reconciliation operations.
 - Harness image bootstrap runs on WorkerGateway startup: missing configured images attempt local build from known harness Dockerfiles before pull fallback.
 - Worker tool diagnostics are worker-scoped: ControlPlane queries each WorkerGateway via MagicOnion (`GetHarnessToolsAsync`) and renders tool/version status in `/settings/workers/{workerId}`.
@@ -161,9 +167,9 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 - If repository Codex secrets are missing, ControlPlane attempts host credential discovery from `OPENAI_API_KEY`/`CODEX_API_KEY` environment variables, then `CODEX_HOME/auth.json` or `~/.codex/auth.json`.
 - Standard JSON result envelope with normalized fallback parsing.
 - Redact secrets from output.
-- Standalone terminal sessions inherit provider API key environment variables from the worker process (`CODEX_API_KEY` is mirrored to `OPENAI_API_KEY` when needed).
 - Dashboard AI generation features (image Dockerfile generation and repository task prompt generation) now call `LlmTornadoGatewayService` with `ChatModel.Zai.Glm.Glm5`.
 - Prompt skills support global + repository scopes via `PromptSkills`, with management in `/settings/skills` (global) and repository tasks, and slash-trigger autocomplete (`/`) in the task prompt Monaco editor.
+- Dedicated global search page `/search` provides cross-repository search over tasks/runs/findings/run logs with filterable scope (repository/task/kind/time/state), combining keyword scoring with semantic chunk ranking via embeddings + sqlite-vec when available, with text/heuristic fallback when vector support is unavailable.
 - Artifact storage path is configurable via `Orchestrator:ArtifactsRootPath` (default `/data/artifacts`; development override `data/artifacts`).
 - Health endpoints use split probes: `/alive` (liveness), `/ready` (dependency readiness), and `/health` (readiness alias with detailed JSON payload).
 

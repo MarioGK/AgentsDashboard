@@ -32,10 +32,11 @@ public static class TaskRunStatusPresentation
     {
         RunState.Queued => FromTaskStatus(TaskRunStatus.Queued),
         RunState.Running => FromTaskStatus(TaskRunStatus.Running),
+        RunState.PendingApproval => FromTaskStatus(TaskRunStatus.PendingApproval),
         RunState.Succeeded => FromTaskStatus(TaskRunStatus.Succeeded),
         RunState.Failed => FromTaskStatus(TaskRunStatus.Failed),
         RunState.Cancelled => FromTaskStatus(TaskRunStatus.Cancelled),
-        RunState.PendingApproval => FromTaskStatus(TaskRunStatus.PendingApproval),
+        RunState.Obsolete => FromTaskStatus(TaskRunStatus.Obsolete),
         _ => FromTaskStatus(TaskRunStatus.Obsolete)
     };
 
@@ -75,14 +76,29 @@ public static class TaskRunStatusPresentation
 
     private static TaskRunStatus ResolveTaskStatus(TaskDocument task, RunDocument? latestRun)
     {
-        if (latestRun is null)
+        if (!task.Enabled)
         {
-            return task.Enabled ? TaskRunStatus.Idle : TaskRunStatus.Obsolete;
+            if (latestRun is null)
+            {
+                return TaskRunStatus.Obsolete;
+            }
+
+            if (latestRun.State is RunState.Queued or RunState.Running or RunState.PendingApproval)
+            {
+                return latestRun.State switch
+                {
+                    RunState.Queued => TaskRunStatus.Queued,
+                    RunState.Running => TaskRunStatus.Running,
+                    _ => TaskRunStatus.PendingApproval
+                };
+            }
+
+            return TaskRunStatus.Obsolete;
         }
 
-        if (!task.Enabled && latestRun.State is not RunState.Queued and not RunState.Running and not RunState.PendingApproval)
+        if (latestRun is null)
         {
-            return TaskRunStatus.Obsolete;
+            return TaskRunStatus.Idle;
         }
 
         return latestRun.State switch
@@ -93,6 +109,7 @@ public static class TaskRunStatusPresentation
             RunState.Succeeded => TaskRunStatus.Succeeded,
             RunState.Failed => TaskRunStatus.Failed,
             RunState.Cancelled => TaskRunStatus.Cancelled,
+            RunState.Obsolete => TaskRunStatus.Obsolete,
             _ => TaskRunStatus.Obsolete
         };
     }

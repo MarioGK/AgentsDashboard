@@ -101,7 +101,24 @@ public sealed class RunDispatcher(
         var selectedWorker = await workerLifecycleManager.GetWorkerAsync(workerLease.WorkerId, cancellationToken);
 
         var defaultBranch = string.IsNullOrWhiteSpace(repository.DefaultBranch) ? "main" : repository.DefaultBranch;
-        var taskBranch = BuildTaskBranchName(repository, task, run.Id);
+        var taskBranch = BuildTaskBranchName(repository, task);
+        var taskWorktreePath = BuildTaskWorktreePath(repository.Id, task.Id);
+
+        try
+        {
+            await store.UpdateTaskGitMetadataAsync(
+                task.Id,
+                taskWorktreePath,
+                taskBranch,
+                null,
+                string.Empty,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to persist task git metadata for task {TaskId}", task.Id);
+        }
+
         var layeredPrompt = await BuildLayeredPromptAsync(repository, task, taskBranch, defaultBranch, cancellationToken);
 
         var envVars = new Dictionary<string, string>
@@ -547,14 +564,19 @@ public sealed class RunDispatcher(
         return sb.ToString();
     }
 
-    private static string BuildTaskBranchName(RepositoryDocument repository, TaskDocument task, string runId)
+    private static string BuildTaskBranchName(RepositoryDocument repository, TaskDocument task)
     {
         var repoSlug = ParseGitHubRepoSlug(repository.GitUrl);
         var repoSegment = repoSlug.Contains('/', StringComparison.Ordinal)
             ? repoSlug.Split('/')[1]
             : repository.Name;
 
-        return $"agent/{SanitizeBranchSegment(repoSegment)}/{SanitizeBranchSegment(task.Name)}/{runId}";
+        return $"agent/{SanitizeBranchSegment(repoSegment)}/{SanitizeBranchSegment(task.Name)}/{task.Id}";
+    }
+
+    private static string BuildTaskWorktreePath(string repositoryId, string taskId)
+    {
+        return $"/workspaces/repos/{ToPathSegment(repositoryId)}/tasks/{ToPathSegment(taskId)}";
     }
 
     private static string SanitizeBranchSegment(string value)
@@ -572,6 +594,16 @@ public sealed class RunDispatcher(
 
         var trimmed = sanitized.Trim('-');
         return string.IsNullOrWhiteSpace(trimmed) ? "task" : trimmed;
+    }
+
+    private static string ToPathSegment(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "unknown";
+        }
+
+        return value.Trim().Replace('/', '-').Replace('\\', '-');
     }
 
     private static string BuildRequiredTaskPrefix(string taskBranch, string defaultBranch)

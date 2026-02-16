@@ -36,17 +36,32 @@ public interface IOrchestratorStore
     Task<List<TaskDocument>> ListDueTasksAsync(DateTime utcNow, int limit, CancellationToken cancellationToken);
     Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken);
     Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken);
+    Task<TaskDocument?> UpdateTaskGitMetadataAsync(
+        string taskId,
+        string? worktreePath,
+        string? worktreeBranch,
+        DateTime? lastGitSyncAtUtc,
+        string? lastGitSyncError,
+        CancellationToken cancellationToken);
     Task<TaskDocument?> UpdateTaskAsync(string taskId, UpdateTaskRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteTaskAsync(string taskId, CancellationToken cancellationToken);
+    Task<DbStorageSnapshot> GetStorageSnapshotAsync(CancellationToken cancellationToken);
+    Task<List<TaskCleanupCandidate>> ListTaskCleanupCandidatesAsync(TaskCleanupQuery query, CancellationToken cancellationToken);
+    Task<TaskCascadeDeleteResult> DeleteTaskCascadeAsync(string taskId, CancellationToken cancellationToken);
+    Task<CleanupBatchResult> DeleteTasksCascadeAsync(IReadOnlyList<string> taskIds, CancellationToken cancellationToken);
+    Task VacuumAsync(CancellationToken cancellationToken);
 
     Task<RunDocument> CreateRunAsync(TaskDocument task, CancellationToken cancellationToken, int attempt = 1);
     Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken);
     Task<List<RepositoryDocument>> ListRepositoriesWithRecentTasksAsync(int limit, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRunsByTaskAsync(string taskId, int limit, CancellationToken cancellationToken);
+    Task<Dictionary<string, RunDocument>> GetLatestRunsByTaskIdsAsync(List<string> taskIds, CancellationToken cancellationToken);
     Task<Dictionary<string, RunState>> GetLatestRunStatesByTaskIdsAsync(List<string> taskIds, CancellationToken cancellationToken);
     Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptHistoryAsync(string taskId, int limit, CancellationToken cancellationToken);
+    Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptEntriesForEmbeddingAsync(string taskId, CancellationToken cancellationToken);
     Task<WorkspacePromptEntryDocument> AppendWorkspacePromptEntryAsync(WorkspacePromptEntryDocument promptEntry, CancellationToken cancellationToken);
+    Task<List<RunDocument>> ListCompletedRunsByTaskForEmbeddingAsync(string taskId, CancellationToken cancellationToken);
     Task<RunAiSummaryDocument> UpsertRunAiSummaryAsync(RunAiSummaryDocument summary, CancellationToken cancellationToken);
     Task<RunAiSummaryDocument?> GetRunAiSummaryAsync(string runId, CancellationToken cancellationToken);
     Task UpsertSemanticChunksAsync(string taskId, List<SemanticChunkDocument> chunks, CancellationToken cancellationToken);
@@ -148,13 +163,4 @@ public interface IOrchestratorStore
 
     Task<ReliabilityMetrics> GetReliabilityMetricsAsync(CancellationToken cancellationToken);
 
-    Task<TerminalSessionDocument> CreateTerminalSessionAsync(TerminalSessionDocument session, CancellationToken cancellationToken = default);
-    Task<TerminalSessionDocument?> GetTerminalSessionAsync(string sessionId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<TerminalSessionDocument>> ListActiveTerminalSessionsByWorkerAsync(string workerId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<TerminalSessionDocument>> ListTerminalSessionsByRunAsync(string runId, CancellationToken cancellationToken = default);
-    Task UpdateTerminalSessionAsync(TerminalSessionDocument session, CancellationToken cancellationToken = default);
-    Task CloseTerminalSessionAsync(string sessionId, string reason, CancellationToken cancellationToken = default);
-
-    Task AppendTerminalAuditEventAsync(TerminalAuditEventDocument auditEvent, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<TerminalAuditEventDocument>> GetTerminalAuditEventsAsync(string sessionId, long? afterSequence = null, int limit = 2000, CancellationToken cancellationToken = default);
 }

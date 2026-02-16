@@ -266,9 +266,10 @@ public class WorkflowExecutor(
         var dispatched = await dispatcher.DispatchAsync(repository, task, run, cancellationToken);
         if (!dispatched)
         {
-            result.Succeeded = false;
-            result.Summary = "Failed to dispatch run (concurrency limit or worker unavailable)";
-            return;
+            logger.LogInformation(
+                "Run {RunId} for workflow stage {StageName} was queued; waiting for terminal state",
+                run.Id,
+                stage.Name);
         }
 
         var pollingInterval = TimeSpan.FromSeconds(2);
@@ -463,7 +464,10 @@ public class WorkflowExecutor(
         var dispatched = await dispatcher.DispatchAsync(repository, task, run, cancellationToken);
         if (!dispatched)
         {
-            return (false, "Failed to dispatch run", run.Id);
+            logger.LogInformation(
+                "Run {RunId} for parallel workflow task {TaskId} was queued; waiting for terminal state",
+                run.Id,
+                taskId);
         }
 
         var pollingInterval = TimeSpan.FromSeconds(2);

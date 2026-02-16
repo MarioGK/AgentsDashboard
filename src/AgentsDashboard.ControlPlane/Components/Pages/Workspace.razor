@@ -48,6 +48,17 @@
                                   Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search" />
 
+                    <MudStack Row AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Need cross-repository search?</MudText>
+                        <MudSpacer />
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.TravelExplore"
+                                   Href="@BuildGlobalSearchHref()">
+                            Open Global Search
+                        </MudButton>
+                    </MudStack>
+
                     <MudStack Row Spacing="1">
                         <MudSelect T="string"
                                    @bind-Value="_repositoryFilter"
@@ -81,7 +92,7 @@
 
                     @if (!string.IsNullOrWhiteSpace(_searchError))
                     {
-                        <MudAlert Severity="Severity.Warning" Dense="true">@_searchError</MudAlert>
+                        <MudAlert Severity="Severity.Warning">@_searchError</MudAlert>
                     }
 
                     @if (!string.IsNullOrWhiteSpace(_searchText))
@@ -156,7 +167,7 @@
                                         <MudStack Row Spacing="1">
                                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@GetBranchLabel(repository)</MudChip>
                                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">A/B @repository.AheadCount/@repository.BehindCount</MudChip>
-                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Δ @GetWorkingTreeCount(repository)</MudChip>
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Delta @GetWorkingTreeCount(repository)</MudChip>
                                         </MudStack>
 
                                         <MudProgressLinear Value="@GetRepositoryProgress(repository)"
@@ -189,20 +200,12 @@
                             <MudPaper Class="@GetTaskCardClass(task)"
                                       Elevation="0"
                                       @onclick="() => SelectTaskAsync(task.Id)">
-                                <MudStack Spacing="1">
-                                    <MudStack Row AlignItems="AlignItems.Center">
-                                        <MudText Typo="Typo.subtitle2">@task.Name</MudText>
-                                        <MudSpacer />
-                                        @if (latestRun is not null && latestRun.State is RunState.Running or RunState.Queued)
-                                        {
-                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
-                                        }
-                                        <MudChip T="string"
-                                                 Size="Size.Small"
-                                                 Color="@GetTaskStateColor(task)">
-                                            @GetTaskStateLabel(task)
-                                        </MudChip>
-                                    </MudStack>
+                                    <MudStack Spacing="1">
+                                        <MudStack Row AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.subtitle2">@task.Name</MudText>
+                                            <MudSpacer />
+                                            <TaskStatusChip Task="task" LatestRun="@latestRun" IsLoading="_taskStatusLoading" />
+                                        </MudStack>
 
                                     <MudStack Row Spacing="1">
                                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@task.Harness</MudChip>
@@ -433,11 +436,11 @@
                                                         </MudPaper>
                                                     }
 
-                                                    @foreach (var section in _selectedRunParsed.Sections.Where(section => section.Key != "summary" && section.Key != "error" && section.Key != "raw_json"))
+                                                    @foreach (var parsedSection in _selectedRunParsed.Sections.Where(section => section.Key != "summary" && section.Key != "error" && section.Key != "raw_json"))
                                                     {
                                                         <MudPaper Class="workspace-structured-section" Elevation="0">
-                                                            <MudText Typo="Typo.caption">@section.Title</MudText>
-                                                            <MudText Typo="Typo.body2">@section.Content</MudText>
+                                                            <MudText Typo="Typo.caption">@parsedSection.Title</MudText>
+                                                            <MudText Typo="Typo.body2">@parsedSection.Content</MudText>
                                                         </MudPaper>
                                                     }
 
@@ -498,7 +501,7 @@
                                             <MudStack Spacing="1">
                                                 <MudText Typo="Typo.caption">Run ID: @_selectedRun.Id</MudText>
                                                 <MudText Typo="Typo.caption">Created: @_selectedRun.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
-                                                <MudText Typo="Typo.caption">Summary: @(_selectedRun.Summary == string.Empty ? "—" : _selectedRun.Summary)</MudText>
+                                                <MudText Typo="Typo.caption">Summary: @(_selectedRun.Summary == string.Empty ? "-" : _selectedRun.Summary)</MudText>
                                                 <MudDivider />
                                                 <MudText Typo="Typo.caption">Raw OutputJson</MudText>
                                                 <pre class="workspace-raw-output">@GetSelectedRunRawOutput()</pre>
@@ -723,6 +726,7 @@
     private List<TaskDocument> _selectedRepositoryTasks = [];
     private List<RunDocument> _selectedRepositoryRuns = [];
     private Dictionary<string, RunDocument> _latestRunsByTask = new(StringComparer.OrdinalIgnoreCase);
+    private bool _taskStatusLoading;
     private TaskDocument? _selectedTask;
     private RunDocument? _selectedRun;
     private List<RunLogEvent> _selectedRunLogs = [];
@@ -830,8 +834,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _selectionSubscription = SelectionService.Subscribe(args => { _ = InvokeAsync(OnExternalSelectionChangedAsync); });
-        RefreshComposerSuggestion();
+        _selectionSubscription = SelectionService.Subscribe(_args =>
+        {
+            _ = InvokeAsync(OnExternalSelectionChangedAsync);
+        });
+        RefreshComposerSuggestionFallback();
         await LoadWorkspaceAsync();
     }
 
@@ -975,41 +982,52 @@
         }
 
         await LoadSelectedRepositoryDataAsync(repositoryId, preserveTaskSelection: false);
+        if (!string.IsNullOrWhiteSpace(_searchText))
+        {
+            await QueueSearchAsync();
+        }
     }
 
     private async Task LoadSelectedRepositoryDataAsync(string repositoryId, bool preserveTaskSelection)
     {
         var previousTaskId = preserveTaskSelection ? _selectedTask?.Id : null;
         var previousRunId = preserveTaskSelection ? _selectedRun?.Id : null;
-
-        _selectedRepositoryTasks = await Store.ListTasksAsync(repositoryId, CancellationToken.None);
-        _selectedRepositoryRuns = await Store.ListRunsByRepositoryAsync(repositoryId, CancellationToken.None);
-        _selectedRepositoryRuns = _selectedRepositoryRuns.OrderByDescending(run => run.CreatedAtUtc).ToList();
-
-        RebuildLatestRunsIndex();
-
-        if (!string.IsNullOrWhiteSpace(previousTaskId) && _selectedRepositoryTasks.Any(task => task.Id == previousTaskId))
+        _taskStatusLoading = true;
+        try
         {
-            await SelectTaskAsync(previousTaskId, preserveRunSelection: true, preferredRunId: previousRunId);
-            return;
+            _selectedRepositoryTasks = await Store.ListTasksAsync(repositoryId, CancellationToken.None);
+            _selectedRepositoryRuns = await Store.ListRunsByRepositoryAsync(repositoryId, CancellationToken.None);
+            _selectedRepositoryRuns = _selectedRepositoryRuns.OrderByDescending(run => run.CreatedAtUtc).ToList();
+
+            RebuildLatestRunsIndex();
+
+            if (!string.IsNullOrWhiteSpace(previousTaskId) && _selectedRepositoryTasks.Any(task => task.Id == previousTaskId))
+            {
+                await SelectTaskAsync(previousTaskId, preserveRunSelection: true, preferredRunId: previousRunId);
+                return;
+            }
+
+            var defaultTask = _selectedRepositoryTasks
+                .OrderByDescending(task => GetLatestRun(task.Id)?.CreatedAtUtc ?? task.CreatedAtUtc)
+                .FirstOrDefault();
+
+            if (defaultTask is null)
+            {
+                _selectedTask = null;
+                _selectedRun = null;
+                _selectedRunLogs = [];
+                _selectedRunParsed = null;
+                _selectedRunAiSummary = null;
+                _selectedTaskPromptHistory = [];
+                return;
+            }
+
+            await SelectTaskAsync(defaultTask.Id, preserveRunSelection: false, preferredRunId: null);
         }
-
-        var defaultTask = _selectedRepositoryTasks
-            .OrderByDescending(task => GetLatestRun(task.Id)?.CreatedAtUtc ?? task.CreatedAtUtc)
-            .FirstOrDefault();
-
-        if (defaultTask is null)
+        finally
         {
-            _selectedTask = null;
-            _selectedRun = null;
-            _selectedRunLogs = [];
-            _selectedRunParsed = null;
-            _selectedRunAiSummary = null;
-            _selectedTaskPromptHistory = [];
-            return;
+            _taskStatusLoading = false;
         }
-
-        await SelectTaskAsync(defaultTask.Id, preserveRunSelection: false, preferredRunId: null);
     }
 
     private Task SelectTaskAsync(string taskId)
@@ -1080,6 +1098,43 @@
         _selectedRunParsed = HarnessOutputParserService.Parse(_selectedRun.OutputJson, _selectedRunLogs);
         _selectedRunAiSummary = await Store.GetRunAiSummaryAsync(run.Id, CancellationToken.None);
         await RefreshRunSummaryAsync(force: false);
+    }
+
+    private async Task RefreshRunSummaryAsync(bool force)
+    {
+        if (_selectedRepository is null || _selectedRun is null)
+        {
+            return;
+        }
+
+        var result = await WorkspaceService.RefreshRunSummaryAsync(
+            _selectedRepository.Id,
+            _selectedRun.Id,
+            eventType: "run-selected",
+            force,
+            CancellationToken.None);
+
+        if (!result.Success)
+        {
+            return;
+        }
+
+        _selectedRunAiSummary = await Store.GetRunAiSummaryAsync(_selectedRun.Id, CancellationToken.None)
+            ?? _selectedRunAiSummary;
+
+        if (_selectedRunAiSummary is null && !string.IsNullOrWhiteSpace(result.Summary))
+        {
+            _selectedRunAiSummary = new RunAiSummaryDocument
+            {
+                RunId = _selectedRun.Id,
+                RepositoryId = _selectedRun.RepositoryId,
+                TaskId = _selectedRun.TaskId,
+                Title = "Run summary",
+                Summary = result.Summary,
+                Model = result.UsedFallback ? "fallback" : "glm-5",
+                GeneratedAtUtc = DateTime.UtcNow,
+            };
+        }
     }
 
     private async Task RefreshSelectedRepositoryAsync()
@@ -1183,7 +1238,12 @@
         }
     }
 
-    private async Task SubmitComposerAsync()
+    private Task SubmitComposerAsync()
+    {
+        return SubmitComposerAsync(forceNewRun: false);
+    }
+
+    private async Task SubmitComposerAsync(bool forceNewRun)
     {
         if (_selectedRepository is null || _selectedTask is null)
         {
@@ -1208,7 +1268,8 @@
                     TaskId: _selectedTask.Id,
                     Harness: _selectedTask.Harness,
                     Command: _selectedTask.Command,
-                    ForceNewRun: true),
+                    ForceNewRun: forceNewRun,
+                    UserMessage: composerText),
                 CancellationToken.None);
 
             if (!submission.Success)
@@ -1220,19 +1281,6 @@
             if (submission.Task is not null)
             {
                 _selectedTask = submission.Task;
-            }
-
-            if (submission.Run is not null)
-            {
-                await Store.AppendWorkspacePromptEntryAsync(new WorkspacePromptEntryDocument
-                {
-                    RepositoryId = _selectedRepository.Id,
-                    TaskId = _selectedTask.Id,
-                    RunId = submission.Run.Id,
-                    Role = "user",
-                    Content = composerText,
-                    CreatedAtUtc = DateTime.UtcNow,
-                }, CancellationToken.None);
             }
 
             _composerValue = string.Empty;
@@ -1273,7 +1321,7 @@
             return;
         }
 
-        await SubmitComposerAsync();
+        await SubmitComposerAsync(forceNewRun: true);
     }
 
     private async Task OpenPromptDraftDialogAsync(PromptDraftMode mode)
@@ -1296,23 +1344,30 @@
 
         try
         {
-            var apiKey = await ResolveAiApiKeyAsync();
-            if (string.IsNullOrWhiteSpace(apiKey))
+            WorkspaceAiTextResult result;
+            if (mode == PromptDraftMode.Improve)
             {
-                _promptDraftError = "Configure a global LlmTornado or Z.ai key in Provider Settings first.";
+                result = await WorkspaceAiService.ImprovePromptAsync(
+                    _selectedRepository.Id,
+                    _selectedTask.Prompt,
+                    _composerValue,
+                    CancellationToken.None);
+            }
+            else
+            {
+                result = await WorkspaceAiService.GeneratePromptFromContextAsync(
+                    _selectedRepository.Id,
+                    BuildPromptGenerationContext(),
+                    CancellationToken.None);
+            }
+
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Text))
+            {
+                _promptDraftError = result.Message ?? "Prompt generation failed.";
                 return;
             }
 
-            var request = BuildPromptGenerationRequest(mode);
-            var result = await LlmTornadoGateway.GenerateTaskPromptAsync(request, apiKey, CancellationToken.None);
-
-            if (!result.Success)
-            {
-                _promptDraftError = result.Error ?? "Prompt generation failed.";
-                return;
-            }
-
-            _promptDraftValue = result.Prompt;
+            _promptDraftValue = result.Text;
             _pendingPromptDraftEditorSync = true;
         }
         catch (Exception ex)
@@ -1386,44 +1441,19 @@
         };
     }
 
-    private async Task<string?> ResolveAiApiKeyAsync()
+    private string BuildPromptGenerationContext()
     {
-        var llmTornadoSecret = await Store.GetProviderSecretAsync("global", "llmtornado", CancellationToken.None);
-        var zaiSecret = await Store.GetProviderSecretAsync("global", "zai", CancellationToken.None);
+        return $"""
+Task: {_selectedTask?.Name}
+Harness: {_selectedTask?.Harness}
+Kind: {_selectedTask?.Kind}
+Command: {_selectedTask?.Command}
+Existing Prompt:
+{_selectedTask?.Prompt}
 
-        var secret = llmTornadoSecret ?? zaiSecret;
-        if (secret is null || string.IsNullOrWhiteSpace(secret.EncryptedValue))
-        {
-            return null;
-        }
-
-        try
-        {
-            return SecretCrypto.Decrypt(secret.EncryptedValue);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private TaskPromptGenerationRequest BuildPromptGenerationRequest(PromptDraftMode mode)
-    {
-        var task = _selectedTask!;
-
-        var command = mode switch
-        {
-            PromptDraftMode.Improve => $"{task.Command}\n\nCurrent prompt:\n{task.Prompt}\n\nImprove focus:\n{_composerValue}",
-            _ => $"{task.Command}\n\nWorkspace focus:\n{_composerValue}"
-        };
-
-        return new TaskPromptGenerationRequest(
-            _selectedRepository?.Name ?? string.Empty,
-            task.Name,
-            task.Harness,
-            task.Kind.ToString(),
-            command,
-            task.CronExpression);
+Composer Focus:
+{_composerValue}
+""";
     }
 
     private StandaloneEditorConstructionOptions DraftEditorOptions(StandaloneCodeEditor editor) => new()
@@ -1437,10 +1467,199 @@
         Value = _promptDraftValue,
     };
 
-    private void OnComposerInputChanged(ChangeEventArgs args)
+    private async Task OnSearchTextChangedAsync(string value)
+    {
+        _searchText = value ?? string.Empty;
+        await QueueSearchAsync();
+    }
+
+    private async Task QueueSearchAsync()
+    {
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
+
+        if (string.IsNullOrWhiteSpace(_searchText) || _selectedRepository is null)
+        {
+            _searchResult = null;
+            _searchHits.Clear();
+            _searchError = string.Empty;
+            _searchInFlight = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _searchDebounceCts = cts;
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(350), cts.Token);
+
+            _searchInFlight = true;
+            _searchError = string.Empty;
+            await InvokeAsync(StateHasChanged);
+
+            var result = await WorkspaceSearchService.SearchAsync(
+                new WorkspaceSearchRequest(_selectedRepository.Id, _searchText, Limit: 20, IncludeRunLogs: true),
+                cts.Token);
+
+            _searchResult = result;
+            _searchHits = result.Hits.ToList();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _searchError = ex.Message;
+            _searchHits.Clear();
+        }
+        finally
+        {
+            if (ReferenceEquals(_searchDebounceCts, cts))
+            {
+                _searchInFlight = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async Task JumpToSearchHitAsync(WorkspaceSearchHit hit)
+    {
+        if (_selectedRepository is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(hit.TaskId))
+        {
+            await SelectTaskAsync(hit.TaskId, preserveRunSelection: true, preferredRunId: hit.RunId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(hit.RunId))
+        {
+            await SelectRunAsync(hit.RunId);
+        }
+
+        _historyPanelOpen = true;
+    }
+
+    private string BuildGlobalSearchHref()
+    {
+        var repoPart = _selectedRepository is null
+            ? string.Empty
+            : $"repo={Uri.EscapeDataString(_selectedRepository.Id)}";
+        var queryPart = string.IsNullOrWhiteSpace(_searchText)
+            ? string.Empty
+            : $"q={Uri.EscapeDataString(_searchText.Trim())}";
+
+        if (repoPart.Length == 0 && queryPart.Length == 0)
+        {
+            return "/search";
+        }
+
+        if (repoPart.Length == 0)
+        {
+            return $"/search?{queryPart}";
+        }
+
+        if (queryPart.Length == 0)
+        {
+            return $"/search?{repoPart}";
+        }
+
+        return $"/search?{repoPart}&{queryPart}";
+    }
+
+    private string FormatHitKind(string kind)
+    {
+        return kind switch
+        {
+            "task" => "Task",
+            "run-log" => "Run Msg",
+            "run-message" => "Run Msg",
+            "run" => "Run",
+            "finding" => "Finding",
+            _ => "Result"
+        };
+    }
+
+    private async Task OnComposerInputChangedAsync(ChangeEventArgs args)
     {
         _composerValue = args.Value?.ToString() ?? string.Empty;
-        RefreshComposerSuggestion();
+        await QueueComposerSuggestionAsync();
+    }
+
+    private async Task QueueComposerSuggestionAsync()
+    {
+        RefreshComposerSuggestionFallback();
+
+        _composerSuggestionCts?.Cancel();
+        _composerSuggestionCts?.Dispose();
+
+        if (_selectedRepository is null || _selectedTask is null)
+        {
+            return;
+        }
+
+        if (_composerValue.Length < 12)
+        {
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _composerSuggestionCts = cts;
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(600), cts.Token);
+
+            if (_workspaceJsModule is not null)
+            {
+                var selection = await _workspaceJsModule.InvokeAsync<int[]>("getInputSelection", _composerInputId);
+                if (selection.Length >= 2)
+                {
+                    var atEnd = selection[0] == _composerValue.Length && selection[1] == _composerValue.Length;
+                    if (!atEnd)
+                    {
+                        return;
+                    }
+                }
+            }
+
+            var result = await WorkspaceAiService.SuggestPromptContinuationAsync(
+                _selectedRepository.Id,
+                _composerValue,
+                BuildPromptGenerationContext(),
+                cts.Token);
+
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Text))
+            {
+                return;
+            }
+
+            if (ReferenceEquals(_composerSuggestionCts, cts) && result.Text.Length > 0)
+            {
+                if (result.Text.StartsWith(_composerValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    _composerGhostSuggestion = result.Text;
+                    _composerGhostSuffix = result.Text[_composerValue.Length..];
+                }
+                else
+                {
+                    _composerGhostSuggestion = _composerValue + result.Text;
+                    _composerGhostSuffix = result.Text;
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+        }
     }
 
     private async Task OnComposerKeyDown(KeyboardEventArgs args)
@@ -1455,7 +1674,7 @@
             return;
         }
 
-        if (args.Key == "Enter")
+        if (args.Key == "Enter" && !args.ShiftKey)
         {
             await SubmitComposerAsync();
         }
@@ -1474,11 +1693,11 @@
         }
 
         _composerValue = string.Concat(_composerValue, _composerGhostSuffix);
-        RefreshComposerSuggestion();
+        _ = QueueComposerSuggestionAsync();
         return true;
     }
 
-    private void RefreshComposerSuggestion()
+    private void RefreshComposerSuggestionFallback()
     {
         if (string.IsNullOrEmpty(_composerValue))
         {
@@ -1569,7 +1788,7 @@
 
         return _taskFilter switch
         {
-            TaskFilterRunning => latestRun?.State is RunState.Running or RunState.Queued,
+            TaskFilterRunning => latestRun?.State is RunState.Running or RunState.Queued or RunState.PendingApproval,
             TaskFilterFailed => latestRun?.State is RunState.Failed,
             TaskFilterSucceeded => latestRun?.State is RunState.Succeeded,
             TaskFilterEnabled => task.Enabled,
@@ -1803,9 +2022,39 @@
             task.LinkedFailureRuns.Count > 0 ? [.. task.LinkedFailureRuns] : null);
     }
 
+    private static string TruncateForDisplay(string text, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        return text[..maxLength] + "...";
+    }
+
+    private Color GetRunStepColor(RunDocument run, RunStep step)
+    {
+        return step switch
+        {
+            RunStep.Queued when run.State is RunState.Queued or RunState.Running or RunState.PendingApproval or RunState.Succeeded or RunState.Failed or RunState.Cancelled => Color.Success,
+            RunStep.Queued => Color.Default,
+            RunStep.Running when run.State is RunState.Running or RunState.PendingApproval or RunState.Succeeded or RunState.Failed or RunState.Cancelled => Color.Success,
+            RunStep.Running when run.State is RunState.Queued => Color.Warning,
+            RunStep.Running => Color.Default,
+            RunStep.Done when run.State is RunState.Succeeded => Color.Success,
+            RunStep.Done when run.State is RunState.Failed => Color.Error,
+            RunStep.Done when run.State is RunState.Cancelled => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
     public async ValueTask DisposeAsync()
     {
         _selectionSubscription?.Dispose();
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
+        _composerSuggestionCts?.Cancel();
+        _composerSuggestionCts?.Dispose();
 
         if (_workspaceJsModule is not null)
         {
@@ -1849,5 +2098,12 @@
     {
         Generate,
         Improve
+    }
+
+    private enum RunStep
+    {
+        Queued,
+        Running,
+        Done
     }
 }

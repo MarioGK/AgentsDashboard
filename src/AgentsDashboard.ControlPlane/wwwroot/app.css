@@ -105,6 +105,21 @@ body,
     border-color: rgba(143, 209, 255, 0.42);
 }
 
+.codex-appbar-nav .mud-nav-link.codex-appbar-nav-link.codex-parent-search-link {
+    color: #ffd27d;
+}
+
+.codex-appbar-nav .mud-nav-link.codex-appbar-nav-link.codex-parent-search-link:hover {
+    background-color: rgba(255, 210, 125, 0.14);
+    border-color: rgba(255, 210, 125, 0.3);
+}
+
+.codex-appbar-nav .mud-nav-link.codex-appbar-nav-link.codex-parent-search-link.active {
+    color: #ffedc3;
+    background-color: rgba(255, 210, 125, 0.22);
+    border-color: rgba(255, 210, 125, 0.36);
+}
+
 .codex-appbar-nav .mud-nav-link.codex-appbar-nav-link.codex-parent-settings-link {
     color: #78e9d6;
 }
@@ -243,6 +258,78 @@ body,
     align-items: center;
 }
 
+.search-page {
+    width: 100%;
+    max-width: 1320px;
+    margin: 0 auto;
+}
+
+.search-header,
+.search-results-panel {
+    border-radius: 14px;
+    padding: 1rem;
+}
+
+.search-filter-grid .mud-input-control {
+    min-width: 0;
+}
+
+.search-actions {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.search-kind-row {
+    flex-wrap: wrap;
+}
+
+.search-empty-state {
+    min-height: 180px;
+    border: 1px dashed rgba(159, 177, 201, 0.24);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 16, 25, 0.68);
+}
+
+.search-result-list {
+    display: grid;
+    gap: 0.6rem;
+}
+
+.search-hit {
+    border: 1px solid rgba(159, 177, 201, 0.2);
+    border-radius: 12px;
+    padding: 0.65rem 0.7rem;
+    background: rgba(12, 18, 28, 0.88);
+}
+
+.search-hit:hover {
+    border-color: rgba(143, 209, 255, 0.55);
+    background: rgba(17, 25, 38, 0.94);
+}
+
+.search-hit-header {
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.search-hit-snippet {
+    margin-top: 0.45rem;
+    color: #c9d5e8;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.search-hit-score-row {
+    margin-top: 0.5rem;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
 .workspace-page {
     width: 100%;
 }
@@ -267,6 +354,27 @@ body,
 .workspace-filter-select {
     flex: 1 1 0;
     min-width: 0;
+}
+
+.workspace-search-results {
+    border: 1px solid rgba(159, 177, 201, 0.2);
+    border-radius: 12px;
+    padding: 0.62rem;
+    background: rgba(10, 16, 25, 0.84);
+}
+
+.workspace-search-hit {
+    border: 1px solid rgba(159, 177, 201, 0.16);
+    border-radius: 10px;
+    padding: 0.5rem 0.6rem;
+    margin-bottom: 0.4rem;
+    cursor: pointer;
+    background: rgba(13, 19, 29, 0.78);
+}
+
+.workspace-search-hit:hover {
+    border-color: rgba(143, 209, 255, 0.52);
+    background-color: rgba(17, 25, 38, 0.92);
 }
 
 .workspace-section-title {
@@ -355,6 +463,18 @@ body,
     margin: 0 0 0.18rem;
 }
 
+.workspace-structured-section {
+    border: 1px solid rgba(159, 177, 201, 0.16);
+    border-radius: 10px;
+    padding: 0.54rem 0.62rem;
+    background: rgba(14, 20, 30, 0.82);
+}
+
+.workspace-structured-section-error {
+    border-color: rgba(249, 112, 102, 0.44);
+    background: rgba(48, 20, 24, 0.65);
+}
+
 .workspace-raw-output {
     margin: 0;
     white-space: pre-wrap;
@@ -393,21 +513,22 @@ body,
     position: absolute;
     inset: 0;
     display: flex;
-    align-items: center;
-    padding: 0 0.72rem;
+    align-items: flex-start;
+    padding: 0.58rem 0.72rem;
     pointer-events: none;
     font-family: "Cascadia Mono", "Fira Code", "SFMono-Regular", monospace;
     font-size: 0.9rem;
+    line-height: 1.4;
 }
 
 .workspace-composer-ghost-typed {
     color: transparent;
-    white-space: pre;
+    white-space: pre-wrap;
 }
 
 .workspace-composer-ghost-suggestion {
     color: rgba(165, 177, 193, 0.45);
-    white-space: pre;
+    white-space: pre-wrap;
 }
 
 .workspace-composer-input {
@@ -419,6 +540,9 @@ body,
     padding: 0.58rem 0.72rem;
     font-family: "Cascadia Mono", "Fira Code", "SFMono-Regular", monospace;
     font-size: 0.9rem;
+    line-height: 1.4;
+    min-height: 126px;
+    resize: vertical;
 }
 
 .workspace-composer-input::placeholder {
@@ -547,6 +671,10 @@ body ::-webkit-scrollbar-thumb {
     .settings-nav-panel {
         position: static;
         max-height: none;
+    }
+
+    .search-actions {
+        justify-content: flex-start;
     }
 
     .workspace-shell {

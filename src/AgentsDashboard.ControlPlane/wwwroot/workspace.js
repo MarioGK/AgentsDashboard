@@ -8,6 +8,21 @@ export function getViewportHeight() {
     return window.innerHeight || document.documentElement.clientHeight || 0;
 }
 
+export function getInputSelection(elementId) {
+    if (!elementId) {
+        return [0, 0];
+    }
+
+    const element = document.getElementById(elementId);
+    if (!element) {
+        return [0, 0];
+    }
+
+    const start = typeof element.selectionStart === "number" ? element.selectionStart : 0;
+    const end = typeof element.selectionEnd === "number" ? element.selectionEnd : start;
+    return [start, end];
+}
+
 export function registerViewportListener(dotNetRef) {
     if (!dotNetRef) {
         return null;

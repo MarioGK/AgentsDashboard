@@ -30,8 +30,6 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<HarnessProviderSettingsDocument> HarnessProviderSettings => Set<HarnessProviderSettingsDocument>();
     public DbSet<TaskTemplateDocument> TaskTemplates => Set<TaskTemplateDocument>();
     public DbSet<PromptSkillDocument> PromptSkills => Set<PromptSkillDocument>();
-    public DbSet<TerminalSessionDocument> TerminalSessions => Set<TerminalSessionDocument>();
-    public DbSet<TerminalAuditEventDocument> TerminalAuditEvents => Set<TerminalAuditEventDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,8 +57,6 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<HarnessProviderSettingsDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<TaskTemplateDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<PromptSkillDocument>().HasKey(x => x.Id);
-        modelBuilder.Entity<TerminalSessionDocument>().HasKey(x => x.Id);
-        modelBuilder.Entity<TerminalAuditEventDocument>().HasKey(x => x.Id);
 
         var repositoryInstructionFiles = modelBuilder.Entity<RepositoryDocument>()
             .Property(x => x.InstructionFiles)
@@ -227,19 +223,6 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
             .IsUnique();
         modelBuilder.Entity<PromptSkillDocument>()
             .HasIndex(x => new { x.RepositoryId, x.UpdatedAtUtc });
-
-        modelBuilder.Entity<TerminalSessionDocument>()
-            .HasIndex(x => x.WorkerId);
-        modelBuilder.Entity<TerminalSessionDocument>()
-            .HasIndex(x => x.RunId);
-        modelBuilder.Entity<TerminalSessionDocument>()
-            .HasIndex(x => x.State);
-        modelBuilder.Entity<TerminalSessionDocument>()
-            .HasIndex(x => x.LastSeenAtUtc);
-        modelBuilder.Entity<TerminalAuditEventDocument>()
-            .HasIndex(x => new { x.SessionId, x.Sequence });
-        modelBuilder.Entity<TerminalAuditEventDocument>()
-            .HasIndex(x => x.TimestampUtc);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

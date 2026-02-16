@@ -11,6 +11,7 @@ public sealed class WorkerEventListenerService(
     IMagicOnionClientFactory clientFactory,
     IWorkerLifecycleManager lifecycleManager,
     IOrchestratorStore store,
+    ITaskSemanticEmbeddingService taskSemanticEmbeddingService,
     IWorkerRegistryService workerRegistry,
     IRunEventPublisher publisher,
     InMemoryYarpConfigProvider yarpProvider,
@@ -187,6 +188,11 @@ public sealed class WorkerEventListenerService(
             var payloadJson = message.Metadata?.GetValueOrDefault("payload");
             var envelope = ParseEnvelope(payloadJson);
             var succeeded = string.Equals(envelope.Status, "succeeded", StringComparison.OrdinalIgnoreCase);
+            var isObsoleteDisposition =
+                (envelope.Metadata.TryGetValue("runDisposition", out var runDisposition) &&
+                 string.Equals(runDisposition, "obsolete", StringComparison.OrdinalIgnoreCase)) ||
+                (message.Metadata?.TryGetValue("runDisposition", out var messageDisposition) == true &&
+                 string.Equals(messageDisposition, "obsolete", StringComparison.OrdinalIgnoreCase));
 
             string? prUrl = envelope.Metadata.TryGetValue("prUrl", out var url) ? url : null;
 
@@ -211,6 +217,41 @@ public sealed class WorkerEventListenerService(
 
             if (completedRun is null)
                 return;
+
+            if (isObsoleteDisposition)
+            {
+                var obsoleteRun = await store.MarkRunObsoleteAsync(message.RunId, CancellationToken.None);
+                if (obsoleteRun is not null)
+                {
+                    completedRun = obsoleteRun;
+                }
+            }
+
+            var gitSyncError = ResolveGitSyncError(envelope);
+            try
+            {
+                await store.UpdateTaskGitMetadataAsync(
+                    completedRun.TaskId,
+                    null,
+                    null,
+                    timestamp,
+                    gitSyncError,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to update task git metadata for task {TaskId}", completedRun.TaskId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(completedRun.OutputJson) &&
+                !string.Equals(completedRun.OutputJson, "{}", StringComparison.Ordinal))
+            {
+                taskSemanticEmbeddingService.QueueTaskEmbedding(
+                    completedRun.RepositoryId,
+                    completedRun.TaskId,
+                    "run-output",
+                    runId: completedRun.Id);
+            }
 
             yarpProvider.RemoveRoute($"run-{message.RunId}");
 
@@ -358,6 +399,22 @@ public sealed class WorkerEventListenerService(
             Summary = "Invalid payload",
             Error = "JSON parse failed",
         };
+    }
+
+    private static string ResolveGitSyncError(HarnessResultEnvelope envelope)
+    {
+        if (envelope.Metadata.TryGetValue("gitFailure", out var gitFailure))
+        {
+            return gitFailure?.Trim() ?? string.Empty;
+        }
+
+        if (envelope.Metadata.TryGetValue("gitWorkflow", out var gitWorkflow) &&
+            string.Equals(gitWorkflow, "failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return envelope.Error?.Trim() ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

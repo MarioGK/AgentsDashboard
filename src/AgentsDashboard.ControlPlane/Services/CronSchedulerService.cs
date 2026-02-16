@@ -78,5 +78,35 @@ public sealed class CronSchedulerService(
             var nextRun = OrchestratorStore.ComputeNextRun(task, now.AddSeconds(1));
             await store.UpdateTaskNextRunAsync(task.Id, nextRun, cancellationToken);
         }
+
+        await DispatchQueuedTaskHeadsAsync(opts, cancellationToken);
+    }
+
+    private async Task DispatchQueuedTaskHeadsAsync(OrchestratorOptions opts, CancellationToken cancellationToken)
+    {
+        var queuedRuns = await store.ListRunsByStateAsync(RunState.Queued, cancellationToken);
+        if (queuedRuns.Count == 0)
+        {
+            return;
+        }
+
+        var queuedTaskIds = queuedRuns
+            .OrderBy(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id, StringComparer.Ordinal)
+            .Select(x => x.TaskId)
+            .Where(taskId => !string.IsNullOrWhiteSpace(taskId))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var taskId in queuedTaskIds)
+        {
+            var globalActive = await store.CountActiveRunsAsync(cancellationToken);
+            if (globalActive >= opts.MaxGlobalConcurrentRuns)
+            {
+                break;
+            }
+
+            await dispatcher.DispatchNextQueuedRunForTaskAsync(taskId, cancellationToken);
+        }
     }
 }

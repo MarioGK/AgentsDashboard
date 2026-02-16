@@ -19,7 +19,6 @@ builder.Services.AddHealthChecks()
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.SectionName));
 builder.Services.AddOptionsWithValidateOnStart<WorkerOptions>();
 builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkerOptions>>().Value);
-builder.Services.Configure<TerminalOptions>(builder.Configuration.GetSection(TerminalOptions.SectionName));
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -52,7 +51,6 @@ builder.Services.AddSingleton<HarnessAdapterFactory>();
 builder.Services.AddSingleton<WorkerHarnessToolHealthService>();
 builder.Services.AddSingleton<DockerContainerService>();
 builder.Services.AddSingleton<IDockerContainerService>(sp => sp.GetRequiredService<DockerContainerService>());
-builder.Services.AddSingleton<ITerminalSessionManager, TerminalSessionManager>();
 builder.Services.AddSingleton<IArtifactExtractor, ArtifactExtractor>();
 builder.Services.AddSingleton<IHarnessExecutor, HarnessExecutor>();
 builder.Services.AddSingleton<IContainerOrphanReconciler, ContainerOrphanReconciler>();

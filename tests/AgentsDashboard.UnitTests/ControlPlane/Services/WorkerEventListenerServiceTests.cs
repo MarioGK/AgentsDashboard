@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
@@ -19,6 +20,7 @@ public class WorkerEventListenerServiceTests
         var repository = CreateRepository();
         var task = CreateTask(repository.Id);
         var completedRun = CreateRun("run-completed", task.Id, repository.Id, RunState.Running, new DateTime(2026, 2, 16, 11, 0, 0, DateTimeKind.Utc), workerId: "worker-1");
+        completedRun.OutputJson = "{\"status\":\"succeeded\"}";
         var nextQueuedRun = CreateRun("run-queued-1", task.Id, repository.Id, RunState.Queued, new DateTime(2026, 2, 16, 11, 1, 0, DateTimeKind.Utc));
         var queuedBehindRun = CreateRun("run-queued-2", task.Id, repository.Id, RunState.Queued, new DateTime(2026, 2, 16, 11, 2, 0, DateTimeKind.Utc));
         var startedRun = CreateRun(nextQueuedRun.Id, task.Id, repository.Id, RunState.Running, nextQueuedRun.CreatedAtUtc, workerId: "worker-2");
@@ -26,6 +28,14 @@ public class WorkerEventListenerServiceTests
         var store = new Mock<IOrchestratorStore>(MockBehavior.Loose);
         store.Setup(s => s.AddRunLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        store.Setup(s => s.UpdateTaskGitMetadataAsync(
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTime?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TaskDocument?)null);
         store.Setup(s => s.MarkRunCompletedAsync(
                 completedRun.Id,
                 It.IsAny<bool>(),
@@ -89,6 +99,7 @@ public class WorkerEventListenerServiceTests
             .Returns(Task.CompletedTask);
         publisher.Setup(p => p.PublishRouteAvailableAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        var semanticEmbedding = new Mock<ITaskSemanticEmbeddingService>(MockBehavior.Loose);
 
         var dispatcher = new RunDispatcher(
             clientFactory.Object,
@@ -104,6 +115,7 @@ public class WorkerEventListenerServiceTests
             clientFactory.Object,
             lifecycleManager.Object,
             store.Object,
+            semanticEmbedding.Object,
             Mock.Of<IWorkerRegistryService>(),
             publisher.Object,
             new InMemoryYarpConfigProvider(),
@@ -114,6 +126,18 @@ public class WorkerEventListenerServiceTests
 
         workerClient.Verify(c => c.DispatchJobAsync(It.Is<DispatchJobRequest>(request => request.RunId == nextQueuedRun.Id)), Times.Once);
         lifecycleManager.Verify(l => l.RecycleWorkerAsync("worker-1", It.IsAny<CancellationToken>()), Times.Once);
+        store.Verify(
+            s => s.UpdateTaskGitMetadataAsync(
+                task.Id,
+                null,
+                null,
+                It.Is<DateTime?>(value => value.HasValue),
+                string.Empty,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        semanticEmbedding.Verify(
+            x => x.QueueTaskEmbedding(repository.Id, task.Id, "run-output", completedRun.Id, null),
+            Times.Once);
     }
 
     [Test]
@@ -126,6 +150,14 @@ public class WorkerEventListenerServiceTests
         var store = new Mock<IOrchestratorStore>(MockBehavior.Loose);
         store.Setup(s => s.AddRunLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        store.Setup(s => s.UpdateTaskGitMetadataAsync(
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTime?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TaskDocument?)null);
         store.Setup(s => s.MarkRunCompletedAsync(
                 completedRun.Id,
                 It.IsAny<bool>(),
@@ -151,6 +183,7 @@ public class WorkerEventListenerServiceTests
             .Returns(Task.CompletedTask);
         publisher.Setup(p => p.PublishStatusAsync(It.IsAny<RunDocument>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
+        var semanticEmbedding = new Mock<ITaskSemanticEmbeddingService>(MockBehavior.Loose);
 
         var dispatcher = new RunDispatcher(
             Mock.Of<IMagicOnionClientFactory>(),
@@ -166,6 +199,7 @@ public class WorkerEventListenerServiceTests
             Mock.Of<IMagicOnionClientFactory>(),
             lifecycleManager.Object,
             store.Object,
+            semanticEmbedding.Object,
             Mock.Of<IWorkerRegistryService>(),
             publisher.Object,
             new InMemoryYarpConfigProvider(),
@@ -175,6 +209,184 @@ public class WorkerEventListenerServiceTests
         await InvokeHandleJobEventAsync(service, CreateCompletedMessage(completedRun.Id, succeeded: true));
 
         lifecycleManager.Verify(l => l.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task HandleJobEventAsync_WhenRunDispositionIsObsolete_MarksRunObsolete()
+    {
+        var repository = CreateRepository();
+        var task = CreateTask(repository.Id);
+        var runningRun = CreateRun("run-obsolete", task.Id, repository.Id, RunState.Running, new DateTime(2026, 2, 16, 13, 0, 0, DateTimeKind.Utc), workerId: "worker-1");
+        var succeededRun = CreateRun(runningRun.Id, task.Id, repository.Id, RunState.Succeeded, runningRun.CreatedAtUtc, workerId: "worker-1");
+        var obsoleteRun = CreateRun(runningRun.Id, task.Id, repository.Id, RunState.Obsolete, runningRun.CreatedAtUtc, workerId: "worker-1");
+
+        var store = new Mock<IOrchestratorStore>(MockBehavior.Loose);
+        store.Setup(s => s.AddRunLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        store.Setup(s => s.UpdateTaskGitMetadataAsync(
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTime?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TaskDocument?)null);
+        store.Setup(s => s.MarkRunCompletedAsync(
+                runningRun.Id,
+                true,
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(succeededRun);
+        store.Setup(s => s.MarkRunObsoleteAsync(runningRun.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(obsoleteRun);
+        store.Setup(s => s.GetTaskAsync(task.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(task);
+        store.Setup(s => s.ListRunsByTaskAsync(task.Id, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var lifecycleManager = new Mock<IWorkerLifecycleManager>(MockBehavior.Loose);
+        lifecycleManager.Setup(l => l.RecycleWorkerAsync("worker-1", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var publisher = new Mock<IRunEventPublisher>(MockBehavior.Loose);
+        publisher.Setup(p => p.PublishLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        publisher.Setup(p => p.PublishStatusAsync(It.IsAny<RunDocument>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var semanticEmbedding = new Mock<ITaskSemanticEmbeddingService>(MockBehavior.Loose);
+
+        var dispatcher = new RunDispatcher(
+            Mock.Of<IMagicOnionClientFactory>(),
+            store.Object,
+            lifecycleManager.Object,
+            Mock.Of<ISecretCryptoService>(),
+            publisher.Object,
+            new InMemoryYarpConfigProvider(),
+            Options.Create(new OrchestratorOptions()),
+            NullLogger<RunDispatcher>.Instance);
+
+        var service = new WorkerEventListenerService(
+            Mock.Of<IMagicOnionClientFactory>(),
+            lifecycleManager.Object,
+            store.Object,
+            semanticEmbedding.Object,
+            Mock.Of<IWorkerRegistryService>(),
+            publisher.Object,
+            new InMemoryYarpConfigProvider(),
+            dispatcher,
+            NullLogger<WorkerEventListenerService>.Instance);
+
+        await InvokeHandleJobEventAsync(
+            service,
+            CreateCompletedMessage(runningRun.Id, succeeded: true, metadata: new Dictionary<string, string>
+            {
+                ["runDisposition"] = "obsolete",
+                ["obsoleteReason"] = "no-diff"
+            }));
+
+        store.Verify(s => s.MarkRunObsoleteAsync(runningRun.Id, It.IsAny<CancellationToken>()), Times.Once);
+        publisher.Verify(
+            p => p.PublishStatusAsync(It.Is<RunDocument>(run => run.State == RunState.Obsolete), It.IsAny<CancellationToken>()),
+            Times.Once);
+        store.Verify(
+            s => s.UpdateTaskGitMetadataAsync(
+                task.Id,
+                null,
+                null,
+                It.Is<DateTime?>(value => value.HasValue),
+                string.Empty,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        store.Verify(
+            s => s.CreateFindingFromFailureAsync(It.IsAny<RunDocument>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task HandleJobEventAsync_WhenGitWorkflowFails_PersistsGitSyncError()
+    {
+        var repository = CreateRepository();
+        var task = CreateTask(repository.Id);
+        var runningRun = CreateRun("run-git-failed", task.Id, repository.Id, RunState.Running, new DateTime(2026, 2, 16, 14, 0, 0, DateTimeKind.Utc), workerId: "worker-1");
+        var failedRun = CreateRun(runningRun.Id, task.Id, repository.Id, RunState.Failed, runningRun.CreatedAtUtc, workerId: "worker-1");
+
+        var store = new Mock<IOrchestratorStore>(MockBehavior.Loose);
+        store.Setup(s => s.AddRunLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        store.Setup(s => s.UpdateTaskGitMetadataAsync(
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTime?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TaskDocument?)null);
+        store.Setup(s => s.MarkRunCompletedAsync(
+                runningRun.Id,
+                false,
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(failedRun);
+        store.Setup(s => s.GetTaskAsync(task.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(task);
+        store.Setup(s => s.ListRunsByTaskAsync(task.Id, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var lifecycleManager = new Mock<IWorkerLifecycleManager>(MockBehavior.Loose);
+        lifecycleManager.Setup(l => l.RecycleWorkerAsync("worker-1", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var publisher = new Mock<IRunEventPublisher>(MockBehavior.Loose);
+        publisher.Setup(p => p.PublishLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        publisher.Setup(p => p.PublishStatusAsync(It.IsAny<RunDocument>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var semanticEmbedding = new Mock<ITaskSemanticEmbeddingService>(MockBehavior.Loose);
+
+        var dispatcher = new RunDispatcher(
+            Mock.Of<IMagicOnionClientFactory>(),
+            store.Object,
+            lifecycleManager.Object,
+            Mock.Of<ISecretCryptoService>(),
+            publisher.Object,
+            new InMemoryYarpConfigProvider(),
+            Options.Create(new OrchestratorOptions()),
+            NullLogger<RunDispatcher>.Instance);
+
+        var service = new WorkerEventListenerService(
+            Mock.Of<IMagicOnionClientFactory>(),
+            lifecycleManager.Object,
+            store.Object,
+            semanticEmbedding.Object,
+            Mock.Of<IWorkerRegistryService>(),
+            publisher.Object,
+            new InMemoryYarpConfigProvider(),
+            dispatcher,
+            NullLogger<WorkerEventListenerService>.Instance);
+
+        await InvokeHandleJobEventAsync(
+            service,
+            CreateCompletedMessage(runningRun.Id, succeeded: false, metadata: new Dictionary<string, string>
+            {
+                ["gitWorkflow"] = "failed",
+                ["gitFailure"] = "push failed"
+            }));
+
+        store.Verify(
+            s => s.UpdateTaskGitMetadataAsync(
+                task.Id,
+                null,
+                null,
+                It.Is<DateTime?>(value => value.HasValue),
+                "push failed",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     private static RepositoryDocument CreateRepository() => new()
@@ -199,20 +411,34 @@ public class WorkerEventListenerServiceTests
         string repositoryId,
         RunState state,
         DateTime createdAtUtc,
-        string workerId = "") => new()
+        string workerId = "")
     {
-        Id = id,
-        TaskId = taskId,
-        RepositoryId = repositoryId,
-        State = state,
-        WorkerId = workerId,
-        CreatedAtUtc = createdAtUtc
-    };
+        return new RunDocument
+        {
+            Id = id,
+            TaskId = taskId,
+            RepositoryId = repositoryId,
+            State = state,
+            WorkerId = workerId,
+            CreatedAtUtc = createdAtUtc
+        };
+    }
 
-    private static JobEventMessage CreateCompletedMessage(string runId, bool succeeded)
+    private static JobEventMessage CreateCompletedMessage(string runId, bool succeeded, Dictionary<string, string>? metadata = null)
     {
         var status = succeeded ? "succeeded" : "failed";
-        var payload = $"{{\"Status\":\"{status}\",\"Summary\":\"done\",\"Error\":\"\",\"Metadata\":{{}}}}";
+        var payloadMetadata = metadata is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(metadata, StringComparer.Ordinal);
+        var payload = JsonSerializer.Serialize(new HarnessResultEnvelope
+        {
+            Status = status,
+            Summary = "done",
+            Error = string.Empty,
+            Metadata = payloadMetadata
+        });
+        var mergedMetadata = new Dictionary<string, string>(StringComparer.Ordinal);
+        mergedMetadata["payload"] = payload;
 
         return new JobEventMessage
         {
@@ -220,10 +446,7 @@ public class WorkerEventListenerServiceTests
             EventType = "completed",
             Summary = "done",
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-            Metadata = new Dictionary<string, string>
-            {
-                ["payload"] = payload
-            }
+            Metadata = mergedMetadata
         };
     }
 

@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AgentsDashboard.ControlPlane.Data.Migrations
 {
     [DbContext(typeof(OrchestratorDbContext))]
-    [Migration("20260216210456_20260216_PromptSkills")]
-    partial class _20260216_PromptSkills
+    [Migration("20260216221209_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -867,84 +867,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("TaskTemplates");
-                });
-
-            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.TerminalAuditEventDocument", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Direction")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("PayloadBase64")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Sequence")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SessionId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("TimestampUtc")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TimestampUtc");
-
-                    b.HasIndex("SessionId", "Sequence");
-
-                    b.ToTable("TerminalAuditEvents");
-                });
-
-            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.TerminalSessionDocument", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CloseReason")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("ClosedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Cols")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("LastSeenAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Rows")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("RunId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("State")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("WorkerId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LastSeenAtUtc");
-
-                    b.HasIndex("RunId");
-
-                    b.HasIndex("State");
-
-                    b.HasIndex("WorkerId");
-
-                    b.ToTable("TerminalSessions");
                 });
 
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.WebhookRegistration", b =>

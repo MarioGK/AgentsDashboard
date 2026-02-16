@@ -25,6 +25,7 @@ public sealed class DockerWorkerLifecycleManager(
     private const string WorkerRoleLabel = "orchestrator.role";
     private const string WorkerRoleValue = "worker-gateway";
     private const string WorkerIdLabel = "orchestrator.worker-id";
+    private const string SharedWorkspacesVolumeName = "agentsdashboard-workspaces";
     private const int WorkerGrpcPort = 5201;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ScaleOutAttemptWindow = TimeSpan.FromMinutes(10);
@@ -739,7 +740,6 @@ public sealed class DockerWorkerLifecycleManager(
     {
         var workerToken = NormalizeWorkerToken(workerId);
         yield return $"worker-artifacts-{workerToken}";
-        yield return $"worker-workspaces-{workerToken}";
     }
 
     private static string NormalizeWorkerToken(string workerId)
@@ -1548,19 +1548,30 @@ public sealed class DockerWorkerLifecycleManager(
     {
         var workerToken = NormalizeWorkerToken(workerId);
         var artifactsDefault = $"worker-artifacts-{workerToken}:/artifacts";
-        var workspacesDefault = $"worker-workspaces-{workerToken}:/workspaces";
+        var workspacesBind = ResolveWorkspacesBind();
 
         var binds = new List<string>
         {
             Environment.GetEnvironmentVariable("WORKER_DOCKER_SOCKET_BIND") ?? "/var/run/docker.sock:/var/run/docker.sock",
             artifactsDefault,
-            workspacesDefault,
+            workspacesBind,
         };
 
         return binds
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static string ResolveWorkspacesBind()
+    {
+        var configuredBind = Environment.GetEnvironmentVariable("WORKER_SHARED_WORKSPACES_BIND");
+        if (!string.IsNullOrWhiteSpace(configuredBind))
+        {
+            return configuredBind;
+        }
+
+        return $"{SharedWorkspacesVolumeName}:/workspaces";
     }
 
     private string ResolveControlPlaneUrl()

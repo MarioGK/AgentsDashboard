@@ -1,8 +1,8 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Domain;
 using CliWrap;
 using CliWrap.Buffered;
-using System.Text.RegularExpressions;
 
 namespace AgentsDashboard.ControlPlane.Services;
 

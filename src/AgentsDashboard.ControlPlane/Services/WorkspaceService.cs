@@ -52,7 +52,8 @@ public sealed record WorkspacePromptSubmissionRequest(
     string? TaskId = null,
     string? Harness = null,
     string? Command = null,
-    bool ForceNewRun = false);
+    bool ForceNewRun = false,
+    string? UserMessage = null);
 
 public sealed record WorkspacePromptSubmissionResult(
     bool Success,
@@ -77,6 +78,7 @@ public sealed class WorkspaceService(
     RunDispatcher dispatcher,
     IHarnessOutputParserService parserService,
     IWorkspaceAiService workspaceAiService,
+    ITaskSemanticEmbeddingService taskSemanticEmbeddingService,
     ILogger<WorkspaceService> logger) : IWorkspaceService
 {
     private static readonly HashSet<RunState> s_activeStates =
@@ -86,7 +88,7 @@ public sealed class WorkspaceService(
         RunState.PendingApproval,
     ];
 
-    private static readonly HashSet<RunState> s_terminalStates =
+    private static readonly HashSet<RunState> s_completedStates =
     [
         RunState.Succeeded,
         RunState.Failed,
@@ -194,6 +196,22 @@ public sealed class WorkspaceService(
 
         if (activeRun is not null && !request.ForceNewRun)
         {
+            if (!string.IsNullOrWhiteSpace(request.UserMessage))
+            {
+                var promptEntry = await AppendUserPromptEntryAsync(
+                    repositoryId,
+                    task.Id,
+                    activeRun.Id,
+                    request.UserMessage,
+                    cancellationToken);
+                taskSemanticEmbeddingService.QueueTaskEmbedding(
+                    repositoryId,
+                    task.Id,
+                    "user-message",
+                    runId: activeRun.Id,
+                    promptEntryId: promptEntry?.Id);
+            }
+
             return new WorkspacePromptSubmissionResult(
                 Success: true,
                 CreatedRun: false,
@@ -245,6 +263,23 @@ public sealed class WorkspaceService(
         var dispatchAccepted = await dispatcher.DispatchAsync(repository, dispatchTask, run, cancellationToken);
 
         NotifyRunEvent(run.Id, "created", DateTime.UtcNow);
+
+        if (!string.IsNullOrWhiteSpace(request.UserMessage))
+        {
+            var promptEntry = await AppendUserPromptEntryAsync(
+                repositoryId,
+                task.Id,
+                run.Id,
+                request.UserMessage,
+                cancellationToken);
+            taskSemanticEmbeddingService.QueueTaskEmbedding(
+                repositoryId,
+                task.Id,
+                "user-message",
+                runId: run.Id,
+                promptEntryId: promptEntry?.Id);
+        }
+
         logger.LogDebug(
             "Workspace prompt submission created run {RunId} for task {TaskId} (dispatch accepted: {DispatchAccepted})",
             run.Id,
@@ -316,6 +351,8 @@ public sealed class WorkspaceService(
         var decision = EvaluateSummaryRefresh(runId, run.State, signature, force);
         if (!decision.ShouldRefresh)
         {
+            var hasCachedSummary = !string.IsNullOrWhiteSpace(cachedSummary?.Summary);
+            var cachedUsedFallback = string.Equals(cachedSummary?.Model, "fallback", StringComparison.OrdinalIgnoreCase);
             var summary = !string.IsNullOrWhiteSpace(cachedSummary?.Summary)
                 ? cachedSummary.Summary
                 : ResolveExistingSummary(run, runId, parsedOutput);
@@ -323,8 +360,8 @@ public sealed class WorkspaceService(
                 Success: true,
                 Refreshed: false,
                 Summary: summary,
-                UsedFallback: true,
-                KeyConfigured: cachedSummary is not null,
+                UsedFallback: !hasCachedSummary || cachedUsedFallback,
+                KeyConfigured: hasCachedSummary && !cachedUsedFallback,
                 Message: decision.Reason,
                 LastRefreshAtUtc: decision.LastRefreshAtUtc,
                 NextAllowedRefreshAtUtc: decision.NextAllowedRefreshAtUtc);
@@ -464,7 +501,7 @@ public sealed class WorkspaceService(
 
             var hasNewEvents = hasSignatureDelta || hasEventAfterRefresh;
 
-            if (!force && !s_terminalStates.Contains(runState))
+            if (!force && !s_completedStates.Contains(runState))
             {
                 return new WorkspaceSummaryRefreshStateView(
                     ShouldRefresh: false,
@@ -568,7 +605,7 @@ public sealed class WorkspaceService(
     private static RunDocument? SelectLatestCompletedRun(IReadOnlyList<RunDocument> runs)
     {
         return runs
-            .Where(x => s_terminalStates.Contains(x.State))
+            .Where(x => s_completedStates.Contains(x.State))
             .OrderByDescending(x => x.EndedAtUtc ?? x.CreatedAtUtc)
             .FirstOrDefault();
     }
@@ -653,6 +690,32 @@ public sealed class WorkspaceService(
             InstructionFiles = [.. source.InstructionFiles],
             CreatedAtUtc = source.CreatedAtUtc,
         };
+    }
+
+    private async Task<WorkspacePromptEntryDocument?> AppendUserPromptEntryAsync(
+        string repositoryId,
+        string taskId,
+        string runId,
+        string userMessage,
+        CancellationToken cancellationToken)
+    {
+        var normalizedMessage = userMessage.Trim();
+        if (normalizedMessage.Length == 0)
+        {
+            return null;
+        }
+
+        return await store.AppendWorkspacePromptEntryAsync(
+            new WorkspacePromptEntryDocument
+            {
+                RepositoryId = repositoryId,
+                TaskId = taskId,
+                RunId = runId,
+                Role = "user",
+                Content = normalizedMessage,
+                CreatedAtUtc = DateTime.UtcNow,
+            },
+            cancellationToken);
     }
 
     private sealed class SummaryRefreshState

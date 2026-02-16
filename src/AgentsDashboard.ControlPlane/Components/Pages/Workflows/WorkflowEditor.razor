@@ -131,7 +131,7 @@
                                                 {
                                                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                                                         <MudText Typo="Typo.caption" Color="Color.Secondary">Task: @task.Name</MudText>
-                                                        <TaskStatusChip Task="task" LatestRun="@GetLatestRunForTask(task.Id)" Variant="Variant.Outlined" />
+                                                        <TaskStatusChip Task="task" LatestRun="@GetLatestRunForTask(task.Id)" IsLoading="_latestRunsLoading" Variant="Variant.Outlined" />
                                                     </MudStack>
                                                 }
                                                 break;
@@ -210,7 +210,7 @@
                                 <MudSelectItem Value="@t.Id">
                                     <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Style="width: 100%;">
                                         <MudText Typo="Typo.body2">@t.Name</MudText>
-                                        <TaskStatusChip Task="t" LatestRun="@GetLatestRunForTask(t.Id)" Variant="Variant.Outlined" />
+                                        <TaskStatusChip Task="t" LatestRun="@GetLatestRunForTask(t.Id)" IsLoading="_latestRunsLoading" Variant="Variant.Outlined" />
                                     </MudStack>
                                 </MudSelectItem>
                             }
@@ -348,6 +348,7 @@
     private List<AgentsDashboard.Contracts.Domain.RepositoryDocument> _repositories = [];
     private List<AgentsDashboard.Contracts.Domain.TaskDocument> _tasks = [];
     private readonly Dictionary<string, RunDocument?> _latestRunsByTaskId = new(StringComparer.Ordinal);
+    private bool _latestRunsLoading;
 
     private List<StageItem> _stages = [];
 
@@ -682,31 +683,28 @@
 
     private async Task RefreshLatestRunsByTaskAsync()
     {
-        _latestRunsByTaskId.Clear();
-
-        if (string.IsNullOrWhiteSpace(_repositoryId) || _tasks.Count == 0)
+        _latestRunsLoading = true;
+        try
         {
-            return;
-        }
+            _latestRunsByTaskId.Clear();
 
-        var repositoryRuns = await Store.ListRunsByRepositoryAsync(_repositoryId, CancellationToken.None);
-        foreach (var run in repositoryRuns)
-        {
-            if (!_latestRunsByTaskId.ContainsKey(run.TaskId))
+            if (_tasks.Count == 0)
             {
-                _latestRunsByTaskId[run.TaskId] = run;
-            }
-        }
-
-        foreach (var task in _tasks)
-        {
-            if (_latestRunsByTaskId.ContainsKey(task.Id))
-            {
-                continue;
+                return;
             }
 
-            var latestRuns = await Store.ListRunsByTaskAsync(task.Id, 1, CancellationToken.None);
-            _latestRunsByTaskId[task.Id] = latestRuns.FirstOrDefault();
+            var latestRunsByTaskId = await Store.GetLatestRunsByTaskIdsAsync(
+                _tasks.Select(task => task.Id).ToList(),
+                CancellationToken.None);
+
+            foreach (var task in _tasks)
+            {
+                _latestRunsByTaskId[task.Id] = latestRunsByTaskId.GetValueOrDefault(task.Id);
+            }
+        }
+        finally
+        {
+            _latestRunsLoading = false;
         }
     }
 

@@ -61,7 +61,7 @@ else
         <MudItem xs="12" md="6" lg="4">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
                 <MudText Typo="Typo.h6" Class="mb-3">Play State</MudText>
-                <MudText Typo="Typo.body2" Class="mb-2">Pick which terminal states should trigger audio.</MudText>
+                <MudText Typo="Typo.body2" Class="mb-2">Pick which run completion states should trigger audio.</MudText>
                 <MudStack Spacing="1">
                     <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.PlaySucceeded">Succeeded</MudSwitch>
                     <MudSwitch T="bool" Color="Color.Error" @bind-Value="_settings.PlayFailed">Failed</MudSwitch>

@@ -390,6 +390,15 @@ public sealed class OrchestratorSettings
     public int WorkerFileDescriptorLimit { get; set; } = 0;
     public int RunHardTimeoutSeconds { get; set; } = 3600;
     public int MaxRunLogMb { get; set; } = 50;
+    public bool EnableTaskAutoCleanup { get; set; } = true;
+    public int CleanupIntervalMinutes { get; set; } = 10;
+    public int TaskRetentionDays { get; set; } = 180;
+    public int CleanupProtectedDays { get; set; } = 14;
+    public int DbSizeSoftLimitGb { get; set; } = 100;
+    public int DbSizeTargetGb { get; set; } = 90;
+    public int MaxTasksDeletedPerTick { get; set; } = 50;
+    public bool EnableVacuumAfterPressureCleanup { get; set; } = false;
+    public int VacuumMinDeletedRows { get; set; } = 10000;
 }
 
 public sealed class OrchestratorLeaseDocument

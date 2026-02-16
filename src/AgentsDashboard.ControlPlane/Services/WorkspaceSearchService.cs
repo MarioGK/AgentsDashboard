@@ -45,6 +45,9 @@ public sealed class WorkspaceSearchService(
     ILogger<WorkspaceSearchService> logger) : IWorkspaceSearchService
 {
     private static readonly Regex s_tokenRegex = new("[a-z0-9_]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private const int MaxTaskCandidates = 200;
+    private const int MaxRunCandidates = 200;
+    private const int MaxFindingCandidates = 120;
 
     private static readonly IReadOnlyDictionary<string, string[]> s_semanticAliases =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
@@ -91,13 +94,21 @@ public sealed class WorkspaceSearchService(
         var findingsTask = store.ListFindingsAsync(request.RepositoryId, cancellationToken);
         await Task.WhenAll(tasksTask, runsTask, findingsTask);
 
-        var tasks = tasksTask.Result;
-        var runs = runsTask.Result;
-        var findings = findingsTask.Result;
+        var tasks = tasksTask.Result
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(MaxTaskCandidates)
+            .ToList();
+        var runs = runsTask.Result
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(MaxRunCandidates)
+            .ToList();
+        var findings = findingsTask.Result
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(MaxFindingCandidates)
+            .ToList();
 
         var logsByRun = await LoadRunLogsAsync(runs, request.IncludeRunLogs, cancellationToken);
         var queryEmbedding = await workspaceAiService.CreateEmbeddingAsync(request.RepositoryId, request.Query, cancellationToken);
-        await IndexSemanticChunksAsync(request.RepositoryId, tasks, runs, logsByRun, cancellationToken);
 
         var semanticHits = await SearchSemanticHitsAsync(
             request,

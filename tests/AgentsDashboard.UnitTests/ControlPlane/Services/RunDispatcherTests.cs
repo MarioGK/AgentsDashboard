@@ -128,6 +128,30 @@ public class RunDispatcherTests
     }
 
     [Test]
+    public async Task DispatchAsync_PersistsDeterministicTaskGitMetadata()
+    {
+        var service = new SutBuilder().WithActiveWorker().Build();
+        var run = CreateRun();
+        var task = CreateTask();
+        var repo = CreateRepository();
+
+        service.WorkerClientMock
+            .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+
+        var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
+
+        result.Should().BeTrue();
+        service.Store.Verify(s => s.UpdateTaskGitMetadataAsync(
+            task.Id,
+            "/workspaces/repos/repo-1/tasks/task-1",
+            "agent/repo/task/task-1",
+            null,
+            string.Empty,
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
     public async Task DispatchAsync_WhenWorkerRejectsRun_MarksRunAsFailed()
     {
         var service = new SutBuilder().WithActiveWorker().Build();
@@ -182,14 +206,17 @@ public class RunDispatcherTests
     private static RunDocument CreateRun(
         string id = "run-1",
         RunState state = RunState.Queued,
-        DateTime? createdAtUtc = null) => new()
+        DateTime? createdAtUtc = null)
     {
-        Id = id,
-        RepositoryId = "repo-1",
-        TaskId = "task-1",
-        State = state,
-        CreatedAtUtc = createdAtUtc ?? DateTime.UtcNow
-    };
+        return new RunDocument
+        {
+            Id = id,
+            RepositoryId = "repo-1",
+            TaskId = "task-1",
+            State = state,
+            CreatedAtUtc = createdAtUtc ?? DateTime.UtcNow
+        };
+    }
 
     private static RunDocument PendingRun(RunDocument run) =>
         new()
@@ -230,6 +257,14 @@ public class RunDispatcherTests
             Store.Setup(s => s.GetHarnessProviderSettingsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((HarnessProviderSettingsDocument?)null);
             Store.Setup(s => s.GetInstructionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+            Store.Setup(s => s.UpdateTaskGitMetadataAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<DateTime?>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync((TaskDocument?)null);
             Store.Setup(s => s.GetSettingsAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new SystemSettingsDocument { Orchestrator = new OrchestratorSettings() });
             Store.Setup(s => s.MarkRunCompletedAsync(It.IsAny<string>(), false, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))

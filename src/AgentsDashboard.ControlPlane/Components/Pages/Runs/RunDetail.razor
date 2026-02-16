@@ -43,14 +43,6 @@ else
                 Reject
             </MudButton>
         }
-        @if (_run.State is RunState.Running)
-        {
-            <MudTooltip Text="Open in Terminal">
-                <MudIconButton Icon="@Icons.Material.Filled.Terminal"
-                               Color="Color.Info"
-                               OnClick="@(() => Navigation.NavigateTo($"/settings/terminals?runId={Id}", forceLoad: true))" />
-            </MudTooltip>
-        }
         @if (_run.State is RunState.Queued or RunState.Running or RunState.PendingApproval)
         {
             <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop"
@@ -176,9 +168,6 @@ else
                 <MudList T="string" Dense>
                     <MudListItem Icon="@Icons.Material.Filled.OpenInNew">
                         <MudLink Href="@($"/proxy/run-{Id}/vscode")" Target="_blank">VS Code Server</MudLink>
-                    </MudListItem>
-                    <MudListItem Icon="@Icons.Material.Filled.OpenInNew">
-                        <MudLink Href="@($"/proxy/run-{Id}/terminal")" Target="_blank">Terminal</MudLink>
                     </MudListItem>
                     <MudListItem Icon="@Icons.Material.Filled.OpenInNew">
                         <MudLink Href="@($"/proxy/run-{Id}/app")" Target="_blank">Application Preview</MudLink>
@@ -333,9 +322,16 @@ else
     private async Task CancelRunAsync()
     {
         if (_run is null) return;
+        var priorState = _run.State;
+        var taskId = _run.TaskId;
         await Dispatcher.CancelAsync(_run.Id, CancellationToken.None);
         var cancelled = await Store.MarkRunCancelledAsync(_run.Id, CancellationToken.None);
         if (cancelled is not null) _run = cancelled;
+
+        if (priorState is RunState.Queued or RunState.PendingApproval)
+        {
+            await Dispatcher.DispatchNextQueuedRunForTaskAsync(taskId, CancellationToken.None);
+        }
     }
 
     private async Task RetryRunAsync()
@@ -378,11 +374,13 @@ else
     {
         if (_run is null) return;
         if (_run.State != RunState.PendingApproval) return;
+        var taskId = _run.TaskId;
 
         var rejected = await Store.RejectRunAsync(_run.Id, CancellationToken.None);
         if (rejected is not null)
         {
             _run = rejected;
+            await Dispatcher.DispatchNextQueuedRunForTaskAsync(taskId, CancellationToken.None);
         }
     }
 

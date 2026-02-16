@@ -129,6 +129,7 @@ builder.Services.AddSingleton<IRunEventPublisher, BlazorRunEventPublisher>();
 builder.Services.AddSingleton<IOrchestratorMetrics, OrchestratorMetrics>();
 builder.Services.AddHostedService<RecoveryService>();
 builder.Services.AddHostedService<CronSchedulerService>();
+builder.Services.AddHostedService<TaskRetentionCleanupService>();
 builder.Services.AddHostedService<WorkerEventListenerService>();
 builder.Services.AddHostedService<WorkerIdleShutdownService>();
 builder.Services.AddHostedService<WorkerPoolReconciliationService>();
@@ -140,6 +141,9 @@ builder.Services.AddSingleton<LlmTornadoGatewayService>();
 builder.Services.AddSingleton<IHarnessOutputParserService, HarnessOutputParserService>();
 builder.Services.AddSingleton<IWorkspaceAiService, WorkspaceAiService>();
 builder.Services.AddSingleton<IWorkspaceSearchService, WorkspaceSearchService>();
+builder.Services.AddSingleton<IGlobalSearchService, GlobalSearchService>();
+builder.Services.AddSingleton<ITaskSemanticEmbeddingService, TaskSemanticEmbeddingService>();
+builder.Services.AddHostedService(sp => (TaskSemanticEmbeddingService)sp.GetRequiredService<ITaskSemanticEmbeddingService>());
 builder.Services.AddSingleton<IWorkspaceService, WorkspaceService>();
 builder.Services.AddSingleton<ISqliteVecBootstrapService, SqliteVecBootstrapService>();
 builder.Services.AddHostedService(sp => (SqliteVecBootstrapService)sp.GetRequiredService<ISqliteVecBootstrapService>());
@@ -161,11 +165,6 @@ builder.Services.AddSingleton<IMagicOnionClientFactory, MagicOnionClientFactory>
 
 // Worker registry service (depends on IMagicOnionClientFactory)
 builder.Services.AddSingleton<IWorkerRegistryService, WorkerRegistryService>();
-
-// Terminal bridge service
-builder.Services.AddOptions<TerminalOptions>()
-    .Bind(builder.Configuration.GetSection(TerminalOptions.SectionName));
-builder.Services.AddSingleton<ITerminalBridgeService, TerminalBridgeService>();
 
 builder.Services.AddSingleton<InMemoryYarpConfigProvider>();
 builder.Services.AddSingleton<IProxyConfigProvider>(sp => sp.GetRequiredService<InMemoryYarpConfigProvider>());

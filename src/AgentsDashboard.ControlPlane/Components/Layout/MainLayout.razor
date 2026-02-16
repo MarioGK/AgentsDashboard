@@ -16,6 +16,7 @@
 
         <div class="codex-appbar-nav" role="navigation" aria-label="Primary">
             <MudNavLink Href="/workspace" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard" Class="codex-appbar-nav-link codex-parent-workspace-link">Workspace</MudNavLink>
+            <MudNavLink Href="/search" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.TravelExplore" Class="codex-appbar-nav-link codex-parent-search-link">Search</MudNavLink>
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Chat" Class="codex-appbar-nav-link">Overview</MudNavLink>
             <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune" Class="codex-appbar-nav-link codex-parent-settings-link">Settings</MudNavLink>
         </div>
@@ -74,8 +75,8 @@
     private int _onlineWorkers;
     private int _totalWorkers;
     private int _activeRuns;
-    private readonly Dictionary<string, string> _terminalRunStates = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object _terminalRunStateLock = new();
+    private readonly Dictionary<string, string> _runCompletionStates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _runCompletionStateLock = new();
     private CancellationTokenSource? _cts;
     private IDisposable? _runStatusSubscription;
     private IDisposable? _selectionSubscription;
@@ -119,27 +120,27 @@
         _selectionSubscription = SelectionService.Subscribe(_ => InvokeAsync(StateHasChanged));
         _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(async runStatus =>
         {
-            var terminalState = GetTerminalRunState(runStatus.State);
-            if (terminalState is null)
+            var runCompletionState = GetRunCompletionState(runStatus.State);
+            if (runCompletionState is null)
             {
                 return;
             }
 
-            lock (_terminalRunStateLock)
+            lock (_runCompletionStateLock)
             {
-                if (_terminalRunStates.ContainsKey(runStatus.RunId))
+                if (_runCompletionStates.ContainsKey(runStatus.RunId))
                 {
                     return;
                 }
 
-                _terminalRunStates[runStatus.RunId] = terminalState;
+                _runCompletionStates[runStatus.RunId] = runCompletionState;
             }
 
             await InvokeAsync(async () =>
             {
                 try
                 {
-                    await JS.InvokeVoidAsync("agentsDashboard.playRunCompletedSound", terminalState);
+                    await JS.InvokeVoidAsync("agentsDashboard.playRunCompletedSound", runCompletionState);
                 }
                 catch
                 {
@@ -212,7 +213,7 @@
         return Color.Info;
     }
 
-    private static string? GetTerminalRunState(string? state)
+    private static string? GetRunCompletionState(string? state)
     {
         return state switch
         {
