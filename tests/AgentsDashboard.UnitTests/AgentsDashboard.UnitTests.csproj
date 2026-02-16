@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="bunit" />
     <PackageReference Include="TUnit" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Moq" />

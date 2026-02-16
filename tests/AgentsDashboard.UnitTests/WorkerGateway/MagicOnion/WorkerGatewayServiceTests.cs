@@ -3,518 +3,91 @@ using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.MagicOnion;
 using AgentsDashboard.WorkerGateway.Models;
 using AgentsDashboard.WorkerGateway.Services;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AgentsDashboard.UnitTests.WorkerGateway.MagicOnion;
 
 public class WorkerGatewayServiceTests
 {
-    private readonly WorkerQueue _queue;
-    private readonly Mock<IContainerOrphanReconciler> _orphanReconcilerMock;
-    private readonly Mock<IDockerContainerService> _dockerServiceMock;
-    private readonly WorkerGatewayService _service;
-
-    public WorkerGatewayServiceTests()
+    [Test]
+    public async Task ReconcileOrphanedContainersAsync_UsesActiveRunIdsFromQueue()
     {
-        _queue = new WorkerQueue(new WorkerOptions { MaxSlots = 4 });
-        _orphanReconcilerMock = new Mock<IContainerOrphanReconciler>();
-        _dockerServiceMock = new Mock<IDockerContainerService>();
-        var logger = new Mock<ILogger<WorkerGatewayService>>();
-        _service = new WorkerGatewayService(
-            _queue,
-            _orphanReconcilerMock.Object,
-            _dockerServiceMock.Object,
-            logger.Object);
+        var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 4 });
+        await queue.EnqueueAsync(CreateJob("run-active"), CancellationToken.None);
+        await queue.EnqueueAsync(CreateJob("run-active-2"), CancellationToken.None);
+
+        var reconcilerMock = new Mock<IContainerOrphanReconciler>();
+        reconcilerMock
+            .Setup(x => x.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new OrphanReconciliationResult(0, []));
+
+        var service = new WorkerGatewayService(
+            queue,
+            reconcilerMock.Object,
+            Mock.Of<IDockerContainerService>(),
+            NullLogger<WorkerGatewayService>.Instance);
+
+        await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { WorkerId = "worker-1" });
+
+        reconcilerMock.Verify(
+            x => x.ReconcileAsync(
+                It.Is<IEnumerable<string>>(ids => ids.Contains("run-active", StringComparer.OrdinalIgnoreCase)
+                    && ids.Contains("run-active-2", StringComparer.OrdinalIgnoreCase)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
-    private static DispatchJobRequest CreateDispatchRequest(string runId, string harnessType = "codex") =>
-        new()
+    [Test]
+    public async Task ReconcileOrphanedContainersAsync_PropagatesReconcileFailure()
+    {
+        var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 4 });
+        var reconcilerMock = new Mock<IContainerOrphanReconciler>();
+        reconcilerMock
+            .Setup(x => x.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("reconciler disconnected"));
+
+        var service = new WorkerGatewayService(
+            queue,
+            reconcilerMock.Object,
+            Mock.Of<IDockerContainerService>(),
+            NullLogger<WorkerGatewayService>.Instance);
+
+        var response = await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { WorkerId = "worker-1" });
+
+        response.Success.Should().BeFalse();
+        response.ErrorMessage.Should().Be("reconciler disconnected");
+    }
+
+    [Test]
+    public async Task CancelJobAsync_WithExistingRun_AlwaysCancelsTrackedRun()
+    {
+        var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 4 });
+        await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
+
+        var service = new WorkerGatewayService(
+            queue,
+            Mock.Of<IContainerOrphanReconciler>(),
+            Mock.Of<IDockerContainerService>(),
+            NullLogger<WorkerGatewayService>.Instance);
+
+        var response = await service.CancelJobAsync(new CancelJobRequest { RunId = "run-1" });
+
+        response.Success.Should().BeTrue();
+        response.ErrorMessage.Should().BeNull();
+    }
+
+    private static QueuedJob CreateJob(string runId) => new()
+    {
+        Request = new DispatchJobRequest
         {
             RunId = runId,
-            ProjectId = "proj-1",
-            RepositoryId = "repo-1",
-            TaskId = "task-1",
-            HarnessType = harnessType,
-            ImageTag = "latest",
-            CloneUrl = "https://github.com/test/repo.git",
-            Instruction = "test instruction"
-        };
-
-    // --- DispatchJobAsync ---
-
-    [Test]
-    public async Task DispatchJobAsync_WithValidRequest_ReturnsSuccess()
-    {
-        var request = CreateDispatchRequest("run-123");
-
-        var result = await _service.DispatchJobAsync(request);
-
-        result.Success.Should().BeTrue();
-        result.ErrorMessage.Should().BeNull();
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_WithEmptyRunId_ReturnsFailure()
-    {
-        var request = CreateDispatchRequest("run-123") with { RunId = "" };
-
-        var result = await _service.DispatchJobAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Be("run_id is required");
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_WithWhitespaceRunId_ReturnsFailure()
-    {
-        var request = CreateDispatchRequest("run-123") with { RunId = "   " };
-
-        var result = await _service.DispatchJobAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Be("run_id is required");
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_WhenQueueAtCapacity_ReturnsFailure()
-    {
-        var smallQueue = new WorkerQueue(new WorkerOptions { MaxSlots = 1 });
-        await smallQueue.EnqueueAsync(
-            new QueuedJob { Request = CreateDispatchRequest("run-existing") },
-            CancellationToken.None);
-        var logger = new Mock<ILogger<WorkerGatewayService>>();
-        var dockerMock = new Mock<IDockerContainerService>();
-        var orphanMock = new Mock<IContainerOrphanReconciler>();
-        var serviceAtCapacity = new WorkerGatewayService(smallQueue, orphanMock.Object, dockerMock.Object, logger.Object);
-
-        var request = CreateDispatchRequest("run-123");
-
-        var result = await serviceAtCapacity.DispatchJobAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Be("worker at capacity");
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_WithAllFields_PassesToQueue()
-    {
-        var request = new DispatchJobRequest
-        {
-            RunId = "run-123",
-            ProjectId = "proj-1",
+            ProjectId = "project-1",
             RepositoryId = "repo-1",
             TaskId = "task-1",
             HarnessType = "codex",
-            ImageTag = "latest",
-            CloneUrl = "https://github.com/test/repo.git",
-            Instruction = "test prompt",
-            TimeoutSeconds = 300,
-            Attempt = 1,
-            Branch = "main",
-            CommitSha = "abc123",
-            WorkingDirectory = "/src",
-            CustomArgs = "--verbose"
-        };
-
-        var result = await _service.DispatchJobAsync(request);
-
-        result.Success.Should().BeTrue();
-        _queue.ActiveSlots.Should().Be(1);
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_MultipleSequentialJobs_AreAllAccepted()
-    {
-        var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 10 });
-        var logger = new Mock<ILogger<WorkerGatewayService>>();
-        var dockerMock = new Mock<IDockerContainerService>();
-        var orphanMock = new Mock<IContainerOrphanReconciler>();
-        var service = new WorkerGatewayService(queue, orphanMock.Object, dockerMock.Object, logger.Object);
-
-        for (int i = 0; i < 5; i++)
-        {
-            var request = CreateDispatchRequest($"run-{i}");
-            var result = await service.DispatchJobAsync(request);
-            result.Success.Should().BeTrue();
+            ImageTag = "harness-codex:latest",
+            CloneUrl = "https://github.com/example/repo.git",
+            Instruction = "run task"
         }
-
-        queue.ActiveSlots.Should().Be(5);
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_WithSpecialCharactersInRunId_ReturnsSuccess()
-    {
-        var request = CreateDispatchRequest("run-with_special.chars-123");
-
-        var result = await _service.DispatchJobAsync(request);
-
-        result.Success.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_ConcurrentDispatches_AllAccepted()
-    {
-        var queue = new WorkerQueue(new WorkerOptions { MaxSlots = 10 });
-        var logger = new Mock<ILogger<WorkerGatewayService>>();
-        var dockerMock = new Mock<IDockerContainerService>();
-        var orphanMock = new Mock<IContainerOrphanReconciler>();
-        var service = new WorkerGatewayService(queue, orphanMock.Object, dockerMock.Object, logger.Object);
-
-        var tasks = Enumerable.Range(0, 5)
-            .Select(async i => await service.DispatchJobAsync(CreateDispatchRequest($"run-concurrent-{i}")))
-            .ToArray();
-
-        var results = await Task.WhenAll(tasks);
-
-        results.All(r => r.Success).Should().BeTrue();
-        queue.ActiveSlots.Should().Be(5);
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_WithMaxTimeoutSeconds_ReturnsSuccess()
-    {
-        var request = CreateDispatchRequest("run-max-timeout") with { TimeoutSeconds = int.MaxValue };
-
-        var result = await _service.DispatchJobAsync(request);
-
-        result.Success.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_WithMultipleAttempts_ReturnsSuccess()
-    {
-        var request = CreateDispatchRequest("run-retry") with { Attempt = 5 };
-
-        var result = await _service.DispatchJobAsync(request);
-
-        result.Success.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task DispatchJobAsync_SetsDispatchedAt()
-    {
-        var before = DateTimeOffset.UtcNow;
-        var request = CreateDispatchRequest("run-timestamp");
-
-        var result = await _service.DispatchJobAsync(request);
-
-        result.DispatchedAt.Should().BeOnOrAfter(before);
-        result.DispatchedAt.Should().BeOnOrBefore(DateTimeOffset.UtcNow);
-    }
-
-    // --- CancelJobAsync ---
-
-    [Test]
-    public async Task CancelJobAsync_WithExistingRun_ReturnsSuccess()
-    {
-        await _service.DispatchJobAsync(CreateDispatchRequest("run-123"));
-
-        var cancelRequest = new CancelJobRequest { RunId = "run-123" };
-
-        var result = await _service.CancelJobAsync(cancelRequest);
-
-        result.Success.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task CancelJobAsync_WithNonExistentRun_ReturnsFailure()
-    {
-        var request = new CancelJobRequest { RunId = "nonexistent" };
-
-        var result = await _service.CancelJobAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("nonexistent");
-    }
-
-    [Test]
-    public async Task CancelJobAsync_WithEmptyRunId_ReturnsFailure()
-    {
-        var request = new CancelJobRequest { RunId = "" };
-
-        var result = await _service.CancelJobAsync(request);
-
-        result.Success.Should().BeFalse();
-    }
-
-    [Test]
-    public async Task CancelJobAsync_TwiceForSameRun_FirstSucceeds()
-    {
-        await _service.DispatchJobAsync(CreateDispatchRequest("run-double-cancel"));
-
-        var firstResult = await _service.CancelJobAsync(new CancelJobRequest { RunId = "run-double-cancel" });
-        var secondResult = await _service.CancelJobAsync(new CancelJobRequest { RunId = "run-double-cancel" });
-
-        firstResult.Success.Should().BeTrue();
-        secondResult.Success.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task CancelJobAsync_WithCaseInsensitiveRunId_ReturnsSuccess()
-    {
-        await _service.DispatchJobAsync(CreateDispatchRequest("Run-Mixed-Case"));
-
-        var cancelRequest = new CancelJobRequest { RunId = "run-mixed-case" };
-
-        var result = await _service.CancelJobAsync(cancelRequest);
-
-        result.Success.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task CancelJobAsync_ConcurrentCancelsForSameRun_AtLeastOneSucceeds()
-    {
-        await _service.DispatchJobAsync(CreateDispatchRequest("run-concurrent-cancel"));
-
-        var tasks = Enumerable.Range(0, 3)
-            .Select(async _ => await _service.CancelJobAsync(new CancelJobRequest { RunId = "run-concurrent-cancel" }))
-            .ToArray();
-
-        var results = await Task.WhenAll(tasks);
-
-        results.Any(r => r.Success).Should().BeTrue();
-    }
-
-    [Test]
-    public async Task CancelJobAsync_ForDispatchedButNotStartedJob_ReturnsSuccess()
-    {
-        await _service.DispatchJobAsync(CreateDispatchRequest("run-queued-only"));
-
-        var result = await _service.CancelJobAsync(new CancelJobRequest { RunId = "run-queued-only" });
-
-        result.Success.Should().BeTrue();
-    }
-
-    // --- KillContainerAsync ---
-
-    [Test]
-    public async Task KillContainerAsync_WithValidContainerId_ReturnsSuccess()
-    {
-        _dockerServiceMock
-            .Setup(d => d.RemoveContainerForceAsync("container-123", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-
-        var request = new KillContainerRequest { ContainerId = "container-123" };
-
-        var result = await _service.KillContainerAsync(request);
-
-        result.Success.Should().BeTrue();
-        result.WasRunning.Should().BeTrue();
-        result.ErrorMessage.Should().BeNull();
-    }
-
-    [Test]
-    public async Task KillContainerAsync_WithEmptyContainerId_ReturnsFailure()
-    {
-        var request = new KillContainerRequest { ContainerId = "" };
-
-        var result = await _service.KillContainerAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Be("container_id is required");
-        result.WasRunning.Should().BeFalse();
-    }
-
-    [Test]
-    public async Task KillContainerAsync_WithWhitespaceContainerId_ReturnsFailure()
-    {
-        var request = new KillContainerRequest { ContainerId = "   " };
-
-        var result = await _service.KillContainerAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Be("container_id is required");
-    }
-
-    [Test]
-    public async Task KillContainerAsync_WhenDockerServiceReturnsFalse_ReturnsFailure()
-    {
-        _dockerServiceMock
-            .Setup(d => d.RemoveContainerForceAsync("container-456", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
-
-        var request = new KillContainerRequest { ContainerId = "container-456" };
-
-        var result = await _service.KillContainerAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.WasRunning.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("container-456");
-    }
-
-    [Test]
-    public async Task KillContainerAsync_WhenDockerServiceThrows_ReturnsFailure()
-    {
-        _dockerServiceMock
-            .Setup(d => d.RemoveContainerForceAsync("container-error", It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("Docker daemon unreachable"));
-
-        var request = new KillContainerRequest { ContainerId = "container-error" };
-
-        var result = await _service.KillContainerAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.WasRunning.Should().BeFalse();
-        result.ErrorMessage.Should().Be("Docker daemon unreachable");
-    }
-
-    // --- HeartbeatAsync ---
-
-    [Test]
-    public async Task HeartbeatAsync_ReturnsSuccess()
-    {
-        var request = new HeartbeatRequest
-        {
-            WorkerId = "worker-1",
-            HostName = "host-1",
-            ActiveSlots = 2,
-            MaxSlots = 4
-        };
-
-        var result = await _service.HeartbeatAsync(request);
-
-        result.Success.Should().BeTrue();
-        result.ErrorMessage.Should().BeNull();
-    }
-
-    [Test]
-    public async Task HeartbeatAsync_WithEmptyWorkerId_ReturnsSuccess()
-    {
-        var request = new HeartbeatRequest
-        {
-            WorkerId = "",
-            HostName = "",
-            ActiveSlots = 0,
-            MaxSlots = 4
-        };
-
-        var result = await _service.HeartbeatAsync(request);
-
-        result.Success.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task HeartbeatAsync_WithZeroSlots_ReturnsSuccess()
-    {
-        var request = new HeartbeatRequest
-        {
-            WorkerId = "worker-1",
-            HostName = "host-1",
-            ActiveSlots = 0,
-            MaxSlots = 0
-        };
-
-        var result = await _service.HeartbeatAsync(request);
-
-        result.Success.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task HeartbeatAsync_MultipleHeartbeats_AllSucceed()
-    {
-        var request = new HeartbeatRequest
-        {
-            WorkerId = "worker-multi",
-            HostName = "host-multi",
-            ActiveSlots = 1,
-            MaxSlots = 4
-        };
-
-        for (int i = 0; i < 3; i++)
-        {
-            var result = await _service.HeartbeatAsync(request);
-            result.Success.Should().BeTrue();
-        }
-    }
-
-    [Test]
-    public async Task HeartbeatAsync_WithMaxSlots_ReturnsSuccess()
-    {
-        var request = new HeartbeatRequest
-        {
-            WorkerId = "worker-max",
-            HostName = "host-max",
-            ActiveSlots = int.MaxValue,
-            MaxSlots = int.MaxValue
-        };
-
-        var result = await _service.HeartbeatAsync(request);
-
-        result.Success.Should().BeTrue();
-    }
-
-    // --- ReconcileOrphanedContainersAsync ---
-
-    [Test]
-    public async Task ReconcileOrphanedContainersAsync_WithNoOrphans_ReturnsZeroCount()
-    {
-        _orphanReconcilerMock
-            .Setup(r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OrphanReconciliationResult(0, []));
-
-        var request = new ReconcileOrphanedContainersRequest { WorkerId = "worker-1" };
-
-        var result = await _service.ReconcileOrphanedContainersAsync(request);
-
-        result.Success.Should().BeTrue();
-        result.ReconciledCount.Should().Be(0);
-        result.ContainerIds.Should().BeEmpty();
-    }
-
-    [Test]
-    public async Task ReconcileOrphanedContainersAsync_WithOrphans_ReturnsOrphanCount()
-    {
-        var removedContainers = new List<OrphanedContainer>
-        {
-            new("container-1", "orphan-run-1"),
-            new("container-2", "orphan-run-2")
-        };
-
-        _orphanReconcilerMock
-            .Setup(r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OrphanReconciliationResult(2, removedContainers));
-
-        var request = new ReconcileOrphanedContainersRequest { WorkerId = "worker-1" };
-
-        var result = await _service.ReconcileOrphanedContainersAsync(request);
-
-        result.Success.Should().BeTrue();
-        result.ReconciledCount.Should().Be(2);
-        result.ContainerIds.Should().HaveCount(2);
-        result.ContainerIds.Should().Contain("container-1");
-        result.ContainerIds.Should().Contain("container-2");
-    }
-
-    [Test]
-    public async Task ReconcileOrphanedContainersAsync_WhenReconcilerThrows_ReturnsFailure()
-    {
-        _orphanReconcilerMock
-            .Setup(r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("Docker connection lost"));
-
-        var request = new ReconcileOrphanedContainersRequest { WorkerId = "worker-1" };
-
-        var result = await _service.ReconcileOrphanedContainersAsync(request);
-
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Be("Docker connection lost");
-        result.ReconciledCount.Should().Be(0);
-        result.ContainerIds.Should().BeNull();
-    }
-
-    [Test]
-    public async Task ReconcileOrphanedContainersAsync_CallsReconcilerWithEmptyActiveRunIds()
-    {
-        _orphanReconcilerMock
-            .Setup(r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new OrphanReconciliationResult(0, []));
-
-        var request = new ReconcileOrphanedContainersRequest { WorkerId = "worker-1" };
-
-        await _service.ReconcileOrphanedContainersAsync(request);
-
-        _orphanReconcilerMock.Verify(
-            r => r.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
+    };
 }

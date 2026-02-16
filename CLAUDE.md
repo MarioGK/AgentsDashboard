@@ -1,458 +1,152 @@
 # AI Orchestrator - Development Context
 
-## Project Overview
+Production-focused, self-hosted AI orchestration platform on .NET 10. Blazor Server is the control plane; execution is via CLI harnesses (`codex`, `opencode`, `claude-code`, `zai`).
 
-Production-focused, self-hosted AI orchestration platform on .NET 10 where Blazor Server is the control plane and execution is done through CLI harnesses: codex, opencode, claude code, and zai.
+## AGENTS Maintenance (Mandatory)
 
-## Solution Structure
+- `AGENTS.md` in this repo is a symlink to `CLAUDE.md`; edit `CLAUDE.md` only.
+- `AGENTS.md` must always be kept up to date.
+- After every significant change, update this file before finishing work.
+- Significant change includes architecture, domain model, workflow behavior, auth/policies, build/test commands, harness support, deployment, or project structure changes.
+- For each major update, refresh the `Last Verified` date in this file.
 
-```
+## Token Efficiency Rules (Mandatory)
+
+- Keep this document concise and operational.
+- Prefer stable rules and summaries over long inventories.
+- Use counts and representative examples instead of exhaustive lists.
+- Remove stale details instead of appending more history.
+- Keep command sections minimal and CI-relevant.
+
+## Solution Layout
+
+```text
 src/
-├── AgentsDashboard.ControlPlane/   # Blazor Server UI, REST API, Scheduler, SignalR, YARP
-├── AgentsDashboard.WorkerGateway/  # gRPC worker, job queue, harness execution
-├── AgentsDashboard.Contracts/      # Shared domain models, API DTOs, gRPC proto
-├── AgentsDashboard.ServiceDefaults/# OpenTelemetry, service discovery, health checks
-└── AgentsDashboard.AppHost/        # Aspire composition for local dev
-
-tests/
-├── AgentsDashboard.UnitTests/      # Unit tests for core services
-├── AgentsDashboard.IntegrationTests/   # Testcontainers-based integration tests
-├── AgentsDashboard.PlaywrightTests/    # E2E UI tests
-└── AgentsDashboard.Benchmarks/     # Performance benchmarks
+  AgentsDashboard.ControlPlane    # Blazor Server UI, scheduler, SignalR, YARP
+  AgentsDashboard.WorkerGateway   # gRPC worker, queue, harness execution
+  AgentsDashboard.Contracts       # Shared domain + gRPC contracts
 
 deploy/
-├── harness-image/Dockerfile        # All-in-one harness execution image
-└── harness-images/                 # Individual harness Dockerfiles
-    ├── Dockerfile.harness-base     # Base image with common dependencies
-    ├── Dockerfile.harness-codex    # Codex/GPT harness
-    ├── Dockerfile.harness-opencode # OpenCode harness
-    ├── Dockerfile.harness-claudecode # Claude Code harness
-    ├── Dockerfile.harness-zai      # Zai/GLM-5 harness
-    └── build-harness-images.sh     # Build script for all images
+  harness-image/                  # all-in-one harness image
+  harness-images/                 # base + per-harness Dockerfiles
 ```
 
-## Tech Stack
+## Snapshot
 
-- **.NET 10** with ASP.NET Core
-- **Blazor Server** with MudBlazor 8.x UI and BlazorMonaco 3.x editors
-- **SQLite + EF Core** as system of record
-- **gRPC** for control-plane <-> worker communication
-- **YARP 2.3.x** for reverse proxy (dynamic routes for runs)
-- **SignalR** for real-time run status/log updates
-- **Aspire** for local orchestration and OpenTelemetry
-- **Docker** for isolated harness execution
-- **Docker.DotNet** for image builder service
-- **CliWrap 3.8.2** for CLI process execution in harness adapters
-- **Swashbuckle.AspNetCore** for OpenAPI/Swagger documentation
+- `src/AgentsDashboard.slnx`: 3 production projects (`AgentsDashboard.ControlPlane`, `AgentsDashboard.WorkerGateway`, `AgentsDashboard.Contracts`).
+- Active harness adapters: `CodexAdapter`, `OpenCodeAdapter`, `ClaudeCodeAdapter`, `ZaiAdapter`.
+- Blazor components: 40 `.razor` files under `src/AgentsDashboard.ControlPlane/Components`.
 
-## Build Configuration
+## Architecture Rules
 
-Centralized build configuration using:
-- **Directory.Build.props** - Common MSBuild properties (target framework, nullable, analysis level)
-- **Directory.Packages.props** - Central Package Management (CPM) for consistent versions
-- **global.json** - SDK version pinning (net10.0, rollForward: latestMinor)
-- **.editorconfig** - Coding style and formatting conventions
+- Service boundary is MagicOnion service boundaries and application services; route-based HTTP APIs are not part of the target architecture.
+- All communication between `ControlPlane` and `WorkerGateway` MUST use MagicOnion; do not use direct REST/gRPC or raw transport calls between these services.
+- Enforce layered dependencies: `Domain -> Application -> Infrastructure -> UI` (inward only).
+- Use command/query handlers + domain services/events for orchestration.
+- Keep transport DTOs only at integration boundaries.
 
 ## Product Model
 
-1. **Project** - Umbrella workspace containing repositories
-2. **Repository** - Operational unit for tasks, schedules, credentials, findings
-3. **Task** - Runnable object (OneShot, Cron, EventDriven)
-4. **Run** - Execution instance with logs, artifacts, status
-5. **Finding** - Triage item from failed runs, QA issues, approvals
-6. **Agent** - Reusable agent definition scoped to a repository (harness, prompt, retry policy)
-7. **WorkflowV2** - Graph-based (DAG) workflow with nodes, edges, and triggers
-8. **WorkflowExecutionV2** - Execution instance of a graph workflow with node results and context
-9. **WorkflowDeadLetter** - Preserved failure for replay from dead-lettered nodes
+1. Project
+2. Repository
+3. Task
+4. Run
+5. Finding
+6. Agent
+7. WorkflowV2 (DAG)
+8. WorkflowExecutionV2
+9. WorkflowDeadLetter
 
-## Key Conventions
+## Engineering Conventions
 
 ### Code Style
-- File-scoped namespaces
-- Primary constructors where appropriate
-- Required properties for DTOs
-- No comments unless explicitly requested
-- Async suffix on async methods
 
-### EF Core Rules (Mandatory)
-- Database access must be async-only (`*Async` APIs). Do not use synchronous EF Core query/save APIs.
-- All request-handling paths must remain safe under concurrent access:
-  - one scoped `DbContext` per request/operation
-  - never share `DbContext` across threads
-  - use optimistic concurrency tokens for mutable hot-path entities
-  - use transactions for multi-step state transitions
-- Cancellation tokens must be threaded through data-access calls.
+- File-scoped namespaces.
+- Primary constructors where appropriate.
+- Required properties for DTOs.
+- Async methods use `Async` suffix.
+- No comments unless explicitly requested.
+
+### EF Core (Mandatory)
+
+- Async-only EF APIs (`*Async`) for queries and saves.
+- One scoped `DbContext` per request/operation.
+- Never share `DbContext` across threads.
+- Use optimistic concurrency tokens for mutable hot-path entities.
+- Use transactions for multi-step state transitions.
+- Pass cancellation tokens through data-access calls.
 - Startup should auto-apply migrations and idempotent seed data.
 
 ### Authentication
-- Cookie-based auth with roles: viewer, operator, admin
-- Policies enforced on API endpoints and Blazor pages
 
-### Agent Workflow Rules
-- **ALWAYS use the main branch** — do not create feature branches. Commit directly to main.
-- Always use `dotnet build -m --tl` (never bare `dotnet build`)
-- TUnit runs tests in parallel by default — no extra flags needed
-- Use `--filter` for focused testing when changing a single service
-- Run `dotnet build-server shutdown` when builds behave unexpectedly
-- Run `dotnet format --verify-no-changes --severity error` before committing
+- Cookie auth with roles: `viewer`, `operator`, `admin`.
+- Enforce policies at service boundaries and Blazor pages.
 
-## API Design
-- REST endpoints under `/api/`
-- No versioning prefix (v1)
-- Use domain documents directly (DTOs planned)
-- CreateTaskRequest/UpdateTaskRequest include: ApprovalProfile, ConcurrencyLimit, InstructionFiles, ArtifactPatterns, LinkedFailureRuns
-- CreateTaskFromFindingRequest includes: LinkedFailureRuns (defaults to source finding run)
+## Agent Workflow Rules
 
-### Database
-- SQLite via EF Core (`OrchestratorDbContext` + migrations)
-- Auto-migrations applied on startup
-- Encrypted secrets via Data Protection API
+- Always use `main`; do not create feature branches.
+- Build with `dotnet build src/AgentsDashboard.slnx -m --tl`.
+- Use TUnit/MTP filtering for focused runs (`-- --treenode-filter ...` / `-- --filter-uid ...`).
+- Use `dotnet build-server shutdown` if builds behave unexpectedly.
+- Run `dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error` before commit.
 
-### Execution Model
-- Harness-only (no direct provider APIs)
-- Worker launches ephemeral Docker containers
-- Standardized JSON envelope for results
-- Secret redaction on all output
-- Artifact extraction from container workspaces
+## Local Run
 
-## Running Locally
-
-1. Start infrastructure:
 ```bash
 docker compose up -d
-```
 
-2. Run via Aspire:
-```bash
-dotnet run --project src/AgentsDashboard.AppHost
-```
-
-Or individually:
-```bash
 dotnet run --project src/AgentsDashboard.WorkerGateway
 dotnet run --project src/AgentsDashboard.ControlPlane
 ```
 
-3. Access:
-- Dashboard: http://localhost:5266
-- Swagger: http://localhost:5266/api/docs
+- Dashboard: `http://localhost:5266`
+- Health: `curl http://localhost:5266/health`, `curl http://localhost:5266/ready`, and `curl http://localhost:5266/alive`
+- LAN accessibility is mandatory: when started, services must bind to `0.0.0.0` (or equivalent all-interfaces binding), not localhost-only.
 
-4. Health endpoints:
-- Readiness: `curl http://localhost:5266/health`
-- Liveness: `curl http://localhost:5266/alive`
+## Build & Test Quick Commands
 
-5. Useful curl commands:
 ```bash
-curl -s http://localhost:5266/api/projects | jq          # list projects
-curl -s http://localhost:5266/api/docs/v1/swagger.json   # swagger JSON
+# Build
+dotnet build src/AgentsDashboard.slnx -m --tl
+
+# CI format gate
+dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error
 ```
 
-6. Aspire Dashboard: traces, metrics, and logs — URL shown in terminal on `dotnet run --project src/AgentsDashboard.AppHost`
+MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `dotnet test <folder>` is not supported in this repo setup.
 
-## Harness Setup
+## Harnesses
 
-### Zai Harness (GLM-5)
-The Zai harness uses cc-mirror to configure GLM-5 as the backend:
-```bash
-npx cc-mirror quick --provider zai --api-key "$Z_AI_API_KEY"
-```
-
-### Supported Harnesses
-| Harness | CLI Tool | Provider |
-|---------|----------|----------|
+| Harness | CLI | Provider |
+|---|---|---|
 | Codex | `codex` | OpenAI GPT |
 | OpenCode | `opencode` | OpenCode |
 | Claude Code | `claude-code` | Anthropic Claude |
 | Zai | `zai` | Zhipu GLM-5 |
 
-## Building Harness Images
+## Execution Model
 
-```bash
-# Build all harness images
-./deploy/harness-images/build-harness-images.sh [registry] [tag]
+- Harness-only execution (no direct provider APIs).
+- ControlPlane is the parent orchestrator and spawns worker-gateway containers on demand via Docker socket.
+- Worker gateways launch ephemeral harness Docker containers.
+- Worker pool is elastic (0..N) using `Orchestrator:Workers:*` settings for capacity, startup timeout, idle scale-down, and connectivity mode.
+- Terminal bridge is worker-aware: ControlPlane opens/reuses MagicOnion terminal hubs per worker and replays session output from terminal audit events on client reattach.
+- Provider secrets are injected into run environment variables and the secrets map; Codex credentials map to both `CODEX_API_KEY` and `OPENAI_API_KEY`.
+- If repository Codex secrets are missing, ControlPlane attempts host credential discovery from `OPENAI_API_KEY`/`CODEX_API_KEY` environment variables, then `CODEX_HOME/auth.json` or `~/.codex/auth.json`.
+- Standard JSON result envelope with normalized fallback parsing.
+- Redact secrets from output.
+- Standalone terminal sessions inherit provider API key environment variables from the worker process (`CODEX_API_KEY` is mirrored to `OPENAI_API_KEY` when needed).
+- Artifact storage path is configurable via `Orchestrator:ArtifactsRootPath` (default `/data/artifacts`; development override `data/artifacts`).
+- Health endpoints use split probes: `/alive` (liveness), `/ready` (dependency readiness), and `/health` (readiness alias with detailed JSON payload).
 
-# Or build individually
-docker build -f deploy/harness-images/Dockerfile.harness-base -t ai-harness-base:latest .
-docker build -f deploy/harness-images/Dockerfile.harness-codex -t harness-codex:latest .
-docker build -f deploy/harness-images/Dockerfile.harness-opencode -t harness-opencode:latest .
-docker build -f deploy/harness-images/Dockerfile.harness-claudecode -t harness-claudecode:latest .
-docker build -f deploy/harness-images/Dockerfile.harness-zai -t harness-zai:latest .
-```
+## Container Notes
 
-## Testing
+- Service Dockerfiles (`ControlPlane`, `WorkerGateway`) must copy root build metadata files (`global.json`, `Directory.Build.props`, `Directory.Packages.props`) before `dotnet restore`.
+- `ControlPlane` runtime image includes `curl` for compose health checks and pre-creates `/data`, `/artifacts`, `/workspaces`.
 
-| Project | Framework | Parallelism |
-|---------|-----------|-------------|
-| UnitTests | TUnit 1.15.0 | Parallel by default |
-| IntegrationTests | TUnit 1.15.0 | `ClassDataSource<ApiTestFixture>(Shared=Keyed)` for fixture sharing |
-| PlaywrightTests | TUnit.Playwright 1.15.0 | Parallel by default, browser-bound |
-| Benchmarks | BenchmarkDotNet 0.14.0 | Sequential |
+## Last Verified
 
-See **Build & Test Commands** section below for optimized commands.
-
-## Implementation Status: 100% COMPLETE
-
-| Feature | Status |
-|---------|--------|
-| Project/Repository/Task hierarchy | Complete |
-| Run lifecycle with concurrency | Complete |
-| Findings inbox | Complete |
-| Scheduler (cron) | Complete |
-| Webhooks (event-driven) | Complete |
-| SignalR real-time updates | Complete |
-| YARP dynamic proxy | Complete |
-| Secret encryption (DPAPI) | Complete |
-| Harness adapters (4) | Complete |
-| Docker execution | Complete |
-| Workflows with visual editor | Complete |
-| Graph Agent Workflows (DAG) | Complete |
-| - Reusable Agent definitions | Complete |
-| - DAG execution engine | Complete |
-| - Edge condition routing | Complete |
-| - Context mapping (input/output) | Complete |
-| - Retry/timeout/dead-letter | Complete |
-| - DAG validation (cycle detection) | Complete |
-| - Graph workflow visual editor | Complete |
-| - Dead letter replay | Complete |
-| - Webhook triggers for graph workflows | Complete |
-| Alerting (5 rule types) | Complete |
-| Built-in templates (4) | Complete |
-| - QA Browser Sweep | Complete |
-| - Unit Test Guard | Complete |
-| - Dependency Health Check | Complete |
-| - Regression Replay | Complete |
-| AI-assisted Dockerfile generation | Complete |
-| OpenAPI/Swagger | Complete |
-| CI/CD (GitHub Actions) | Complete |
-| Rate limiting (4 policies) | Complete |
-| SQLite persistence + migration | Complete |
-| Task artifact patterns | Complete |
-| Linked failure runs for regression replay | Complete |
-| Webhook event type enum | Complete |
-| Template to task field mapping | Complete |
-
-## Test Coverage Summary
-
-| Test Project | Files | Tests | Pass Rate |
-|--------------|-------|-------|-----------|
-| UnitTests | 54 | 1,260 | 100% (36 skipped, all pass) |
-| IntegrationTests | 45 | 270 | Requires external test infrastructure |
-| PlaywrightTests | 26 | 317 | Requires Running App |
-| Benchmarks | 7 | 4 | Performance |
-
-**Total: 132 test files, 1,851+ tests**
-
-### Test Coverage by Area
-
-| Area | Unit | Integration | E2E |
-|------|------|-------------|-----|
-| ControlPlane Services | 312 | - | - |
-| Graph Workflow Services | 121 | - | - |
-| WorkerGateway Services | 200 | - | - |
-| Harness Adapters (4) | 90 | - | - |
-| API Endpoints | 92 | 210 | - |
-| Graph Workflow APIs | - | 40 | - |
-| UI Pages (25) | - | - | 274 |
-| Graph Workflow UI (8) | - | - | 40 |
-| Proxy/YARP | 68 | - | - |
-| SignalR Hub | 40 | 10 | - |
-| Rate Limiting | - | 22 | - |
-| Contracts | 40 | - | - |
-
-## Architecture Summary
-
-### ControlPlane
-- **116 API endpoints** with authentication/authorization
-- **33 Blazor pages/dialogs** with MudBlazor UI
-- **26 services** for business logic
-- **SignalR hub** with 7 event types
-- **YARP proxy** with dynamic routes and audit
-
-### SignalR Event DTOs (7)
-- `RunStatusChangedEvent`: runId, state, summary, startedAt, endedAt
-- `RunLogChunkEvent`: runId, level, message, timestamp
-- `FindingUpdatedEvent`: findingId, repositoryId, state, severity, title
-- `WorkerHeartbeatEvent`: workerId, hostName, activeSlots, maxSlots, timestamp
-- `RouteAvailableEvent`: runId, routePath, timestamp
-- `WorkflowV2ExecutionStateChangedEvent`: executionId, workflowId, state, currentNodeId, failureReason, timestamp
-- `WorkflowV2NodeStateChangedEvent`: executionId, nodeId, nodeName, nodeState, runId, summary, timestamp
-
-### WorkerGateway
-- **6 gRPC RPCs**: DispatchJob, CancelJob, SubscribeEvents, Heartbeat, KillContainer, ReconcileOrphanedContainers
-- **4 harness adapters**: Codex, OpenCode, ClaudeCode, Zai
-- **7 interface methods** per adapter: PrepareContext, BuildCommand, Execute, ParseEnvelope, MapArtifacts, ClassifyFailure, HarnessName
-- **CliWrap 3.8.2** for git clone, GitHub PR, harness execution
-
-### EF Core Entities (22)
-projects, repositories, tasks, runs, run_events, findings, workers, webhooks, proxy_audits, settings, workflows, workflow_executions, alert_rules, alert_events, repository_instructions, harness_provider_settings, task_templates, provider_secrets, agents, workflows_v2, workflow_executions_v2, workflow_dead_letters
-
-**Note:** Artifacts are stored on filesystem (`/data/artifacts/{runId}/`), not in SQLite.
-
-### Docker Images (6)
-- ai-harness-base: Ubuntu 24.04 + .NET 10 + Node.js 20 + Python 3.12 + Go 1.23 + Playwright
-- harness-codex, harness-opencode, harness-claudecode, harness-zai
-- ai-harness (all-in-one)
-
-## UI Pages (33)
-
-| Page | Route |
-|------|-------|
-| Dashboard | `/` |
-| Login | `/login` |
-| Projects | `/projects` |
-| Project Detail | `/projects/{id}` |
-| Repository Detail | `/repositories/{id}` |
-| Instruction Files | `/repositories/{id}/instructions` |
-| Run Kanban | `/runs` |
-| Run Detail | `/runs/{id}` |
-| Findings List | `/findings` |
-| Finding Detail | `/findings/{id}` |
-| Schedules | `/schedules` |
-| Schedule Dialog | dialog component |
-| Workers | `/workers` |
-| Workflows (Stages) | `/workflows` |
-| Workflow Editor | `/workflows/{id}` |
-| Agents | `/agents` |
-| Agent Dialog | dialog component |
-| Graph Workflows | `/workflows-v2` |
-| Graph Workflow Editor | `/workflows-v2/{id}` |
-| Graph Node Dialog | dialog component |
-| Graph Edge Dialog | dialog component |
-| Graph Execution View | `/workflows-v2/executions/{id}` |
-| Dead Letters | `/workflow-deadletters` |
-| Templates | `/templates` |
-| Create Template Dialog | dialog component |
-| Image Builder | `/image-builder` |
-| Provider Settings | `/providers` |
-| Alert Settings | `/alerts` |
-| Alert Rule Dialog | dialog component |
-| Proxy Audits | `/proxy-audits` |
-| System Settings | `/settings` |
-| Error | `/Error` |
-| Not Found | `/not-found` |
-
-## Build & Test Commands (56-Core Optimized)
-
-### Environment Variables (fish shell)
-```fish
-set -gx DOTNET_CLI_TELEMETRY_OPTOUT 1
-set -gx DOTNET_NOLOGO 1
-set -gx DOTNET_SKIP_FIRST_TIME_EXPERIENCE 1
-```
-
-### Build
-```bash
-dotnet build src/AgentsDashboard.slnx -m --tl                          # all cores
-dotnet build src/AgentsDashboard.slnx -m --tl -c Release               # release
-dotnet build-server shutdown && dotnet build src/AgentsDashboard.slnx -m --tl  # clean
-dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error    # lint (CI match)
-dotnet format src/AgentsDashboard.slnx --severity error                        # autofix
-```
-
-### Test (TUnit — parallel by default)
-```bash
-# Unit tests (1,260 tests — TUnit parallelizes automatically)
-dotnet test tests/AgentsDashboard.UnitTests --tl
-
-# Integration tests (270 tests — fixtures shared via ClassDataSource keyed sharing)
-dotnet test tests/AgentsDashboard.IntegrationTests --tl
-
-# Playwright E2E tests (317 tests — requires app on localhost:5266)
-dotnet test tests/AgentsDashboard.PlaywrightTests --tl
-
-# All tests
-dotnet test src/AgentsDashboard.slnx --tl
-
-# Filter by class/name
-dotnet test tests/AgentsDashboard.UnitTests --filter "ClassName~RunDispatcherTests"
-
-# Detect hung tests
-dotnet test tests/AgentsDashboard.UnitTests --blame-hang-timeout 60s
-
-# With coverage
-dotnet test tests/AgentsDashboard.UnitTests --collect:"XPlat Code Coverage" \
-  --results-directory TestResults/unit --logger "trx;LogFileName=unit.trx"
-
-# With centralized settings
-dotnet test --settings test.runsettings
-```
-
-### Benchmarks & Watch
-```bash
-dotnet run --project tests/AgentsDashboard.Benchmarks -c Release
-dotnet watch --project src/AgentsDashboard.ControlPlane         # hot reload
-dotnet watch test --project tests/AgentsDashboard.UnitTests     # re-run on save
-```
-
-## Performance Tips
-
-- **MSBuild `-m` flag**: uses all 56 cores for parallel project compilation. Leave node reuse ON for dev (faster repeat builds), `dotnet build-server shutdown` for clean builds.
-- **TUnit parallelism**: all tests run in parallel by default. Use `[NotInParallel]` attribute to opt specific tests out. Use `[ParallelLimiter<T>]` to cap concurrency for resource-heavy tests.
-- **TUnit fixture sharing**: integration tests use `[ClassDataSource<ApiTestFixture>(Shared = SharedType.Keyed, Key = "Api")]` — tests sharing a fixture key get the same instance, serialized within that group.
-- **SQLite concurrency**: integration tests use per-fixture temp files (`/tmp/agentsdashboard-api-{guid}.db`), no lock contention.
-- **Docker parallel builds**: build 4 harness images concurrently with `&` + `wait`.
-- **Vulnerability audit**: `dotnet list src/AgentsDashboard.slnx package --vulnerable --include-transitive`
-
-## Known Issues
-
-- No Blazor component tests (bunit compatibility with .NET 10 pending)
-- Docker-dependent tests skipped (36 tests) due to Docker.DotNet version mismatch and BackgroundService testability
-- Integration tests require running external test infrastructure
-- Unit test pass rate: 1,224/1,260 (100% of non-skipped tests pass)
-
-## Deployment Options
-
-| Option | Command |
-|--------|---------|
-| Docker Compose | `docker compose up -d` |
-
-## CI/CD Pipeline
-
-### CI Workflow (`.github/workflows/ci.yml`)
-- **lint**: Code format verification with `dotnet format --verify-no-changes`
-- **security-scan**: CodeQL analysis and vulnerable package check
-- **build**: Compile solution with .NET 10
-- **test-unit**: Unit tests with code coverage
-- **test-integration**: Integration tests with external service containers
-- **test-e2e**: Playwright E2E tests with running application
-
-## API Endpoints (116 total)
-
-| Category | Count | Key Endpoints |
-|----------|-------|---------------|
-| Projects | 6 | CRUD + repositories |
-| Repositories | 4 | CRUD |
-| Tasks | 5 | CRUD |
-| Runs | 10 | CRUD + cancel/retry/approve/reject + bulk + artifacts |
-| Findings | 8 | CRUD + retry/assign/create-task |
-| Workflows (Stages) | 10 | CRUD + execute + approvals |
-| Agents | 5 | CRUD by repository |
-| Graph Workflows | 6 | CRUD + DAG validation |
-| Graph Executions | 5 | Execute + cancel + approve + list + get |
-| Dead Letters | 3 | List + get + replay |
-| Graph Webhook | 1 | Anonymous trigger with token |
-| Alerts | 9 | Rules + Events + bulk-resolve |
-| Webhooks | 6 | CRUD + event receiver |
-| Templates | 5 | CRUD |
-| Images | 3 | List/build/delete |
-| Other | 29 | Workers, Secrets, Instructions, Settings, Health, Proxy, Auth, Artifacts, Schedules, Providers |
-
-## Verification Status
-
-**Last Verified:** 2026-02-14
-
-| Component | Status | Details |
-|-----------|--------|---------|
-| Build | Passed | 0 Errors, 0 Warnings |
-| Unit Tests | Passed | 1,224/1,260 passed (36 skipped, 0 failed) |
-| API Endpoints | Complete | 116 endpoints across 27 categories |
-| Harness Adapters | Complete | Codex, OpenCode, ClaudeCode, Zai |
-| Blazor Pages | Complete | 33 pages/dialogs with full functionality |
-| Docker Images | Complete | 6 images (base + 4 harness + all-in-one) |
-| Deployment | Complete | Docker Compose |
-| gRPC Services | Complete | 6 RPCs implemented |
-| Built-in Templates | Complete | 4 templates (QA, UnitTest, Deps, Regression) |
-| Rate Limiting | Complete | 4 policies (Global, Auth, Webhook, Burst) |
-| CI/CD | Complete | GitHub Actions (ci.yml) |
-| Graph Agent Workflows | Complete | DAG engine, agents, dead letters, visual editor |
-| DTO Completeness | Fixed | Added ArtifactPatterns, LinkedFailureRuns to template DTOs; TimeoutMinutes to WorkflowStageConfigRequest |
+- Date: 2026-02-16
+- Stabilized local runtime by binding `IOrchestratorStore` back to in-process `OrchestratorStore` for ControlPlane consumers.
+- Deferred `RecoveryService` startup recovery pass until `ApplicationStarted` to avoid pre-listen startup races.
+- Added MessagePack annotations to `ControlPlane` store-gateway invocation contracts for future MagicOnion serialization compatibility.

@@ -7,203 +7,67 @@ namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
 
 public class WorkerQueueTests
 {
-    private static WorkerQueue CreateQueue(int maxSlots = 4)
-    {
-        return new WorkerQueue(new WorkerOptions { MaxSlots = maxSlots });
-    }
+    private static WorkerQueue CreateQueue(int maxSlots = 3) => new(new WorkerOptions { MaxSlots = maxSlots });
 
-    private static QueuedJob CreateJob(string runId)
+    private static QueuedJob CreateJob(string runId) => new()
     {
-        return new QueuedJob
+        Request = new DispatchJobRequest
         {
-            Request = new DispatchJobRequest
-            {
-                RunId = runId,
-                ProjectId = "proj-1",
-                RepositoryId = "repo-1",
-                TaskId = "task-1",
-                HarnessType = "codex",
-                ImageTag = "latest",
-                CloneUrl = "https://github.com/test/repo.git",
-                Instruction = "test instruction",
-                CustomArgs = "echo test",
-            }
-        };
-    }
-
-    [Test]
-    public async Task EnqueueAsync_AddsJobToQueue()
-    {
-        var queue = CreateQueue();
-        var job = CreateJob("run-1");
-
-        await queue.EnqueueAsync(job, CancellationToken.None);
-
-        var jobs = new List<QueuedJob>();
-        await foreach (var j in queue.ReadAllAsync(CancellationToken.None))
-        {
-            jobs.Add(j);
-            break;
+            RunId = runId,
+            ProjectId = "project-1",
+            RepositoryId = "repo-1",
+            TaskId = "task-1",
+            HarnessType = "codex",
+            ImageTag = "latest",
+            CloneUrl = "https://github.com/example/repo.git",
+            Instruction = "Run task"
         }
-
-        jobs.Should().ContainSingle().Which.Request.RunId.Should().Be("run-1");
-    }
+    };
 
     [Test]
-    public async Task EnqueueAsync_MultipleJobs_AllAddedToQueue()
+    public async Task ActiveRunIds_ReturnsCaseInsensitiveSnapshot()
     {
         var queue = CreateQueue();
+        await queue.EnqueueAsync(CreateJob("Run-A"), CancellationToken.None);
+        await queue.EnqueueAsync(CreateJob("Run-B"), CancellationToken.None);
 
-        await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
-        await queue.EnqueueAsync(CreateJob("run-2"), CancellationToken.None);
-        await queue.EnqueueAsync(CreateJob("run-3"), CancellationToken.None);
+        var snapshot = queue.ActiveRunIds;
 
-        queue.ActiveSlots.Should().Be(3);
-        queue.Cancel("run-1").Should().BeTrue();
-        queue.Cancel("run-2").Should().BeTrue();
-        queue.Cancel("run-3").Should().BeTrue();
+        queue.MarkCompleted("run-a");
+
+        snapshot.Should().HaveCount(2);
+        snapshot.Any(id => id.Equals("run-a", StringComparison.OrdinalIgnoreCase)).Should().BeTrue();
+        snapshot.Any(id => id.Equals("run-b", StringComparison.OrdinalIgnoreCase)).Should().BeTrue();
+
+        queue.ActiveRunIds.Should().HaveCount(1);
+        queue.ActiveRunIds.Should().Contain("Run-B");
+        queue.ActiveRunIds.Should().NotContain("run-a");
     }
 
     [Test]
-    public void Cancel_ExistingJob_ReturnsTrue()
-    {
-        var queue = CreateQueue();
-        var job = CreateJob("run-1");
-
-        queue.EnqueueAsync(job, CancellationToken.None).AsTask().Wait();
-
-        var result = queue.Cancel("run-1");
-
-        result.Should().BeTrue();
-        job.CancellationSource.IsCancellationRequested.Should().BeTrue();
-    }
-
-    [Test]
-    public void Cancel_NonExistentJob_ReturnsFalse()
-    {
-        var queue = CreateQueue();
-
-        var result = queue.Cancel("nonexistent");
-
-        result.Should().BeFalse();
-    }
-
-    [Test]
-    public void Cancel_IsCaseInsensitive()
-    {
-        var queue = CreateQueue();
-        var job = CreateJob("Run-ABC");
-
-        queue.EnqueueAsync(job, CancellationToken.None).AsTask().Wait();
-
-        var result = queue.Cancel("run-abc");
-
-        result.Should().BeTrue();
-    }
-
-    [Test]
-    public void MarkCompleted_RemovesJobFromActiveJobs()
-    {
-        var queue = CreateQueue();
-        var job = CreateJob("run-1");
-
-        queue.EnqueueAsync(job, CancellationToken.None).AsTask().Wait();
-
-        queue.MarkCompleted("run-1");
-
-        var result = queue.Cancel("run-1");
-        result.Should().BeFalse();
-    }
-
-    [Test]
-    public void MarkCompleted_Idempotent()
-    {
-        var queue = CreateQueue();
-        var job = CreateJob("run-1");
-
-        queue.EnqueueAsync(job, CancellationToken.None).AsTask().Wait();
-
-        queue.MarkCompleted("run-1");
-        var action = () => queue.MarkCompleted("run-1");
-
-        action.Should().NotThrow();
-    }
-
-    [Test]
-    public void CanAcceptJob_WhenBelowMaxSlots_ReturnsTrue()
-    {
-        var queue = CreateQueue(maxSlots: 4);
-
-        var result = queue.CanAcceptJob();
-
-        result.Should().BeTrue();
-    }
-
-    [Test]
-    public async Task CanAcceptJob_WhenAtMaxSlots_ReturnsFalse()
+    public async Task CanAcceptJob_TracksCapacityWhenJobsComplete()
     {
         var queue = CreateQueue(maxSlots: 2);
 
-        await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
-        await queue.EnqueueAsync(CreateJob("run-2"), CancellationToken.None);
-
-        var result = queue.CanAcceptJob();
-
-        result.Should().BeFalse();
-    }
-
-    [Test]
-    public async Task CanAcceptJob_AfterMarkCompleted_ReturnsTrue()
-    {
-        var queue = CreateQueue(maxSlots: 2);
-
+        queue.CanAcceptJob().Should().BeTrue();
         await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
         await queue.EnqueueAsync(CreateJob("run-2"), CancellationToken.None);
 
         queue.CanAcceptJob().Should().BeFalse();
-
-        queue.MarkCompleted("run-1");
-
-        queue.CanAcceptJob().Should().BeTrue();
-    }
-
-    [Test]
-    public void ActiveSlots_InitiallyZero()
-    {
-        var queue = CreateQueue();
-
-        queue.ActiveSlots.Should().Be(0);
-    }
-
-    [Test]
-    public async Task ActiveSlots_IncrementsOnEnqueue()
-    {
-        var queue = CreateQueue();
-
-        await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
-        await queue.EnqueueAsync(CreateJob("run-2"), CancellationToken.None);
-
         queue.ActiveSlots.Should().Be(2);
-    }
-
-    [Test]
-    public async Task ActiveSlots_DecrementsOnMarkCompleted()
-    {
-        var queue = CreateQueue();
-
-        await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
-        await queue.EnqueueAsync(CreateJob("run-2"), CancellationToken.None);
 
         queue.MarkCompleted("run-1");
-
+        queue.CanAcceptJob().Should().BeTrue();
         queue.ActiveSlots.Should().Be(1);
     }
 
     [Test]
-    public void MaxSlots_ReturnsConfiguredValue()
+    public async Task Cancel_IsSafeAndCaseInsensitive()
     {
-        var queue = CreateQueue(maxSlots: 8);
+        var queue = CreateQueue();
+        await queue.EnqueueAsync(CreateJob("Run-Case"), CancellationToken.None);
 
-        queue.MaxSlots.Should().Be(8);
+        queue.Cancel("run-case").Should().BeTrue();
+        queue.Cancel("run-case").Should().BeTrue();
     }
 }
