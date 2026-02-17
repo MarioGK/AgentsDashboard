@@ -143,7 +143,7 @@ public sealed class GitWorkspaceService(ILogger<GitWorkspaceService> logger) : I
         var commit = await RunGitAsync(["-C", localPath, "rev-parse", "HEAD"], githubToken, cancellationToken, Directory.GetCurrentDirectory());
 
         var (aheadCount, behindCount) = await ReadAheadBehindAsync(localPath, githubToken, cancellationToken);
-        var (stagedCount, modifiedCount, untrackedCount) = await ReadWorktreeCountsAsync(localPath, githubToken, cancellationToken);
+        var (stagedCount, modifiedCount, untrackedCount) = await ReadWorkingTreeCountsAsync(localPath, githubToken, cancellationToken);
 
         return new RepositoryGitStatus(
             branch,
@@ -179,7 +179,7 @@ public sealed class GitWorkspaceService(ILogger<GitWorkspaceService> logger) : I
         }
     }
 
-    private async Task<(int StagedCount, int ModifiedCount, int UntrackedCount)> ReadWorktreeCountsAsync(string localPath, string? githubToken, CancellationToken cancellationToken)
+    private async Task<(int StagedCount, int ModifiedCount, int UntrackedCount)> ReadWorkingTreeCountsAsync(string localPath, string? githubToken, CancellationToken cancellationToken)
     {
         var status = await RunGitAsync(["-C", localPath, "status", "--porcelain"], githubToken, cancellationToken, Directory.GetCurrentDirectory());
 
@@ -202,14 +202,14 @@ public sealed class GitWorkspaceService(ILogger<GitWorkspaceService> logger) : I
             }
 
             var indexStatus = line[0];
-            var worktreeStatus = line[1];
+            var workingTreeStatus = line[1];
 
             if (indexStatus != ' ' && indexStatus != '?')
             {
                 staged++;
             }
 
-            if (worktreeStatus != ' ' && worktreeStatus != '?')
+            if (workingTreeStatus != ' ' && workingTreeStatus != '?')
             {
                 modified++;
             }
@@ -252,7 +252,7 @@ public sealed class GitWorkspaceService(ILogger<GitWorkspaceService> logger) : I
                 : result.StandardError;
             var safeArgs = finalArgs.Select(SanitizeForLog).ToArray();
             var safeError = SanitizeForLog(error);
-            logger.LogWarning("Git command failed: git {Args}; exit={ExitCode}; error={Error}", string.Join(' ', safeArgs), result.ExitCode, safeError);
+            logger.ZLogWarning("Git command failed: git {Args}; exit={ExitCode}; error={Error}", string.Join(' ', safeArgs), result.ExitCode, safeError);
             throw new InvalidOperationException(safeError.Trim());
         }
 

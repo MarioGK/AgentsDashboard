@@ -6,7 +6,12 @@ public sealed record TaskCleanupQuery(
     int Limit,
     bool OnlyWithNoActiveRuns = true,
     string? RepositoryId = null,
-    int ScanLimit = 0);
+    int ScanLimit = 0,
+    bool IncludeRetentionEligibility = true,
+    bool IncludeDisabledInactiveEligibility = false,
+    DateTime DisabledInactiveOlderThanUtc = default,
+    bool ExcludeWorkflowReferencedTasks = false,
+    bool ExcludeTasksWithOpenFindings = false);
 
 public sealed record TaskCleanupCandidate(
     string TaskId,
@@ -15,7 +20,11 @@ public sealed record TaskCleanupCandidate(
     DateTime LastActivityUtc,
     bool HasActiveRuns,
     int RunCount,
-    DateTime? OldestRunUtc);
+    DateTime? OldestRunUtc,
+    bool IsRetentionEligible = false,
+    bool IsDisabledInactiveEligible = false,
+    bool IsWorkflowReferenced = false,
+    bool HasOpenFindings = false);
 
 public sealed record DbStorageSnapshot(
     string DatabasePath,
@@ -54,3 +63,9 @@ public sealed record CleanupBatchResult(
     int ArtifactDeleteErrors,
     int DeletedTaskWorkspaceDirectories,
     int TaskWorkspaceDeleteErrors);
+
+public sealed record StructuredRunDataPruneResult(
+    int RunsScanned,
+    int DeletedStructuredEvents,
+    int DeletedDiffSnapshots,
+    int DeletedToolProjections);

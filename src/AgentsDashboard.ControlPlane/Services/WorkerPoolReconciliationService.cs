@@ -15,7 +15,7 @@ public sealed class WorkerPoolReconciliationService(
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "Worker pool reconciliation tick failed");
+                logger.ZLogDebug(ex, "Worker pool reconciliation tick failed");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);

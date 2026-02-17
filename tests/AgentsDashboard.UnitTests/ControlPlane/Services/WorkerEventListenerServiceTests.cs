@@ -15,6 +15,169 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 public class WorkerEventListenerServiceTests
 {
     [Test]
+    public async Task HandleJobEventAsync_WhenStructuredDiffEvent_PersistsDiffSnapshotAndPublishesStructuredEvents()
+    {
+        const string runId = "run-structured-1";
+        var timestamp = new DateTime(2026, 2, 17, 10, 30, 0, DateTimeKind.Utc);
+
+        var store = new Mock<IOrchestratorStore>(MockBehavior.Loose);
+        store.Setup(s => s.AddRunLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        store.Setup(s => s.AppendRunStructuredEventAsync(It.IsAny<RunStructuredEventDocument>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((RunStructuredEventDocument document, CancellationToken _) =>
+            {
+                document.RepositoryId = "repo-structured";
+                document.TaskId = "task-structured";
+                document.TimestampUtc = timestamp;
+                document.CreatedAtUtc = timestamp;
+                return document;
+            });
+        store.Setup(s => s.UpsertRunDiffSnapshotAsync(It.IsAny<RunDiffSnapshotDocument>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((RunDiffSnapshotDocument snapshot, CancellationToken _) => snapshot);
+
+        var publisher = new Mock<IRunEventPublisher>(MockBehavior.Loose);
+        publisher.Setup(p => p.PublishLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        publisher.Setup(p => p.PublishStructuredEventChangedAsync(
+                It.IsAny<string>(),
+                It.IsAny<long>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        publisher.Setup(p => p.PublishDiffUpdatedAsync(
+                It.IsAny<string>(),
+                It.IsAny<long>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var diff = new RunStructuredDiffSnapshot(
+            Sequence: 42,
+            Category: "diff.updated",
+            Summary: "diff updated",
+            DiffStat: "1 file changed, 1 insertion(+)",
+            DiffPatch: "diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+new",
+            Payload: "{\"diffPatch\":\"diff --git a/file.txt b/file.txt\"}",
+            Schema: "harness-structured-event-v2",
+            TimestampUtc: timestamp);
+        var structuredViewService = new Mock<IRunStructuredViewService>(MockBehavior.Strict);
+        structuredViewService.Setup(s => s.ApplyStructuredEventAsync(It.IsAny<RunStructuredEventDocument>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RunStructuredProjectionDelta(
+                new RunStructuredViewSnapshot(runId, 42, [], [], [], diff, timestamp),
+                diff,
+                null));
+        structuredViewService.Setup(s => s.GetViewAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new RunStructuredViewSnapshot(runId, 42, [], [], [], diff, timestamp));
+
+        var dispatcher = new RunDispatcher(
+            Mock.Of<IMagicOnionClientFactory>(),
+            store.Object,
+            Mock.Of<IWorkerLifecycleManager>(),
+            Mock.Of<ISecretCryptoService>(),
+            publisher.Object,
+            new InMemoryYarpConfigProvider(),
+            Options.Create(new OrchestratorOptions()),
+            NullLogger<RunDispatcher>.Instance);
+
+        var service = new WorkerEventListenerService(
+            Mock.Of<IMagicOnionClientFactory>(),
+            Mock.Of<IWorkerLifecycleManager>(),
+            store.Object,
+            Mock.Of<ITaskSemanticEmbeddingService>(),
+            Mock.Of<IWorkerRegistryService>(),
+            publisher.Object,
+            new InMemoryYarpConfigProvider(),
+            dispatcher,
+            NullLogger<WorkerEventListenerService>.Instance,
+            structuredViewService.Object);
+
+        await InvokeHandleJobEventAsync(service, CreateStructuredMessage(runId, timestamp));
+
+        store.Verify(s => s.AppendRunStructuredEventAsync(
+                It.Is<RunStructuredEventDocument>(document =>
+                    document.RunId == runId &&
+                    document.Sequence == 42 &&
+                    document.Category == "diff.updated"),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        store.Verify(s => s.UpsertRunDiffSnapshotAsync(
+                It.Is<RunDiffSnapshotDocument>(snapshot =>
+                    snapshot.RunId == runId &&
+                    snapshot.Sequence == 42 &&
+                    snapshot.DiffStat == "1 file changed, 1 insertion(+)" &&
+                    snapshot.DiffPatch.Contains("diff --git a/file.txt b/file.txt", StringComparison.Ordinal)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        publisher.Verify(p => p.PublishStructuredEventChangedAsync(
+                runId,
+                It.IsAny<long>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        publisher.Verify(p => p.PublishDiffUpdatedAsync(
+                runId,
+                42,
+                "diff.updated",
+                It.IsAny<string>(),
+                "harness-structured-event-v2",
+                timestamp,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task HandleJobEventAsync_WhenMessageHasNoStructuredFields_DoesNotPersistStructuredState()
+    {
+        const string runId = "run-log-only";
+
+        var store = new Mock<IOrchestratorStore>(MockBehavior.Loose);
+        var publisher = new Mock<IRunEventPublisher>(MockBehavior.Loose);
+        publisher.Setup(p => p.PublishLogAsync(It.IsAny<RunLogEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var dispatcher = new RunDispatcher(
+            Mock.Of<IMagicOnionClientFactory>(),
+            store.Object,
+            Mock.Of<IWorkerLifecycleManager>(),
+            Mock.Of<ISecretCryptoService>(),
+            publisher.Object,
+            new InMemoryYarpConfigProvider(),
+            Options.Create(new OrchestratorOptions()),
+            NullLogger<RunDispatcher>.Instance);
+
+        var service = new WorkerEventListenerService(
+            Mock.Of<IMagicOnionClientFactory>(),
+            Mock.Of<IWorkerLifecycleManager>(),
+            store.Object,
+            Mock.Of<ITaskSemanticEmbeddingService>(),
+            Mock.Of<IWorkerRegistryService>(),
+            publisher.Object,
+            new InMemoryYarpConfigProvider(),
+            dispatcher,
+            NullLogger<WorkerEventListenerService>.Instance);
+
+        await InvokeHandleJobEventAsync(service, new JobEventMessage
+        {
+            RunId = runId,
+            EventType = "log_chunk",
+            Summary = "chunk line",
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        });
+
+        store.Verify(s => s.AppendRunStructuredEventAsync(It.IsAny<RunStructuredEventDocument>(), It.IsAny<CancellationToken>()), Times.Never);
+        store.Verify(s => s.UpsertRunDiffSnapshotAsync(It.IsAny<RunDiffSnapshotDocument>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
     public async Task HandleJobEventAsync_WhenRunCompletes_DispatchesNextQueuedRunForTask()
     {
         var repository = CreateRepository();
@@ -30,8 +193,6 @@ public class WorkerEventListenerServiceTests
             .Returns(Task.CompletedTask);
         store.Setup(s => s.UpdateTaskGitMetadataAsync(
                 It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
                 It.IsAny<DateTime?>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
@@ -129,8 +290,6 @@ public class WorkerEventListenerServiceTests
         store.Verify(
             s => s.UpdateTaskGitMetadataAsync(
                 task.Id,
-                null,
-                null,
                 It.Is<DateTime?>(value => value.HasValue),
                 string.Empty,
                 It.IsAny<CancellationToken>()),
@@ -152,8 +311,6 @@ public class WorkerEventListenerServiceTests
             .Returns(Task.CompletedTask);
         store.Setup(s => s.UpdateTaskGitMetadataAsync(
                 It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
                 It.IsAny<DateTime?>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
@@ -225,8 +382,6 @@ public class WorkerEventListenerServiceTests
             .Returns(Task.CompletedTask);
         store.Setup(s => s.UpdateTaskGitMetadataAsync(
                 It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
                 It.IsAny<DateTime?>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
@@ -294,8 +449,6 @@ public class WorkerEventListenerServiceTests
         store.Verify(
             s => s.UpdateTaskGitMetadataAsync(
                 task.Id,
-                null,
-                null,
                 It.Is<DateTime?>(value => value.HasValue),
                 string.Empty,
                 It.IsAny<CancellationToken>()),
@@ -318,8 +471,6 @@ public class WorkerEventListenerServiceTests
             .Returns(Task.CompletedTask);
         store.Setup(s => s.UpdateTaskGitMetadataAsync(
                 It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
                 It.IsAny<DateTime?>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
@@ -381,8 +532,6 @@ public class WorkerEventListenerServiceTests
         store.Verify(
             s => s.UpdateTaskGitMetadataAsync(
                 task.Id,
-                null,
-                null,
                 It.Is<DateTime?>(value => value.HasValue),
                 "push failed",
                 It.IsAny<CancellationToken>()),
@@ -447,6 +596,21 @@ public class WorkerEventListenerServiceTests
             Summary = "done",
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             Metadata = mergedMetadata
+        };
+    }
+
+    private static JobEventMessage CreateStructuredMessage(string runId, DateTime timestampUtc)
+    {
+        return new JobEventMessage
+        {
+            RunId = runId,
+            EventType = "assistant.delta",
+            Summary = "delta",
+            Sequence = 42,
+            Category = "diff.updated",
+            PayloadJson = "{\"diffPatch\":\"diff --git a/file.txt b/file.txt\",\"diffStat\":\"1 file changed, 1 insertion(+)\",\"summary\":\"diff updated\"}",
+            SchemaVersion = "harness-structured-event-v2",
+            Timestamp = new DateTimeOffset(timestampUtc).ToUnixTimeMilliseconds(),
         };
     }
 

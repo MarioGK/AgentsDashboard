@@ -1,0 +1,21 @@
+namespace AgentsDashboard.WorkerGateway.Services.HarnessRuntimes;
+
+public sealed record HarnessRunRequest
+{
+    public required string RunId { get; init; }
+    public required string TaskId { get; init; }
+    public required string Harness { get; init; }
+    public required string Mode { get; init; }
+    public required string Prompt { get; init; }
+    public required string WorkspacePath { get; init; }
+    public required Dictionary<string, string> Environment { get; init; }
+    public required TimeSpan Timeout { get; init; }
+    public string Command { get; init; } = string.Empty;
+    public bool UseDocker { get; init; } = true;
+    public string ArtifactsHostPath { get; init; } = string.Empty;
+    public Dictionary<string, string> ContainerLabels { get; init; } = [];
+    public double CpuLimit { get; init; } = 1.5;
+    public string MemoryLimit { get; init; } = "2g";
+    public bool NetworkDisabled { get; init; }
+    public bool ReadOnlyRootFs { get; init; }
+}

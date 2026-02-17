@@ -310,7 +310,7 @@ public abstract class HarnessAdapterBase(
             process.StartInfo.Environment[key] = value;
         }
 
-        logger.LogInformation("Executing harness {Harness} for run {RunId}", HarnessName, process.StartInfo.Environment.TryGetValue("RUN_ID", out var runId) ? runId ?? "unknown" : "unknown");
+        logger.ZLogInformation("Executing harness {Harness} for run {RunId}", HarnessName, process.StartInfo.Environment.TryGetValue("RUN_ID", out var runId) ? runId ?? "unknown" : "unknown");
 
         process.Start();
 

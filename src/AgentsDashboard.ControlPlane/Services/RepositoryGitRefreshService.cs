@@ -27,7 +27,7 @@ public sealed class RepositoryGitRefreshService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Background repository git refresh failed");
+                logger.ZLogWarning(ex, "Background repository git refresh failed");
             }
 
             await Task.Delay(RefreshInterval, stoppingToken);
@@ -52,7 +52,7 @@ public sealed class RepositoryGitRefreshService(
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "Skipping repository git refresh for {RepositoryId}", repository.Id);
+                logger.ZLogDebug(ex, "Skipping repository git refresh for {RepositoryId}", repository.Id);
                 var status = new RepositoryGitStatus(
                     repository.CurrentBranch,
                     repository.CurrentCommit,

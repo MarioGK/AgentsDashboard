@@ -2,6 +2,7 @@ using System.Text.Json;
 using AgentsDashboard.WorkerGateway.Adapters;
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Services;
+using AgentsDashboard.WorkerGateway.Services.HarnessRuntimes;
 using Cysharp.Runtime.Multicast;
 using Cysharp.Runtime.Multicast.InMemory;
 using MagicOnion.Serialization.MessagePack;
@@ -10,8 +11,12 @@ using MessagePack;
 using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using ZLogger;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging
+    .ClearProviders()
+    .AddZLoggerConsole(options => options.UsePlainTextFormatter());
 
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
@@ -48,6 +53,14 @@ builder.Services.AddSingleton<WorkerEventBus>();
 builder.Services.AddHostedService<WorkerEventBroadcastService>();
 builder.Services.AddSingleton<SecretRedactor>();
 builder.Services.AddSingleton<HarnessAdapterFactory>();
+builder.Services.AddSingleton<CommandHarnessRuntime>();
+builder.Services.AddSingleton<CodexAppServerRuntime>();
+builder.Services.AddSingleton<OpenCodeSseRuntime>();
+builder.Services.AddSingleton<ClaudeStreamRuntime>(sp => new ClaudeStreamRuntime(
+    sp.GetRequiredService<SecretRedactor>(),
+    sp.GetRequiredService<ILoggerFactory>().CreateLogger<ClaudeStreamRuntime>()));
+builder.Services.AddSingleton<ZaiClaudeCompatibleRuntime>();
+builder.Services.AddSingleton<IHarnessRuntimeFactory, DefaultHarnessRuntimeFactory>();
 builder.Services.AddSingleton<WorkerHarnessToolHealthService>();
 builder.Services.AddSingleton<DockerContainerService>();
 builder.Services.AddSingleton<IDockerContainerService>(sp => sp.GetRequiredService<DockerContainerService>());

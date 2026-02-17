@@ -1,3 +1,4 @@
+using System.Text;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
@@ -31,7 +32,7 @@ public class WorkflowExecutor(
 
         execution = await store.CreateWorkflowExecutionAsync(execution, cancellationToken);
 
-        logger.LogInformation("Starting workflow execution {ExecutionId} for workflow {WorkflowId} with {StageCount} stages",
+        logger.ZLogInformation("Starting workflow execution {ExecutionId} for workflow {WorkflowId} with {StageCount} stages",
             execution.Id, workflow.Id, workflow.Stages.Count);
 
         _ = Task.Run(async () =>
@@ -42,7 +43,7 @@ public class WorkflowExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Unhandled exception in workflow execution {ExecutionId}", execution.Id);
+                logger.ZLogError(ex, "Unhandled exception in workflow execution {ExecutionId}", execution.Id);
                 await store.MarkWorkflowExecutionCompletedAsync(
                     execution.Id,
                     WorkflowExecutionState.Failed,
@@ -66,7 +67,7 @@ public class WorkflowExecutor(
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                logger.LogInformation("Workflow execution {ExecutionId} cancelled at stage {StageIndex}", execution.Id, i);
+                logger.ZLogInformation("Workflow execution {ExecutionId} cancelled at stage {StageIndex}", execution.Id, i);
                 await store.MarkWorkflowExecutionCompletedAsync(
                     execution.Id,
                     WorkflowExecutionState.Cancelled,
@@ -78,7 +79,7 @@ public class WorkflowExecutor(
             var stage = orderedStages[i];
             execution.CurrentStageIndex = i;
 
-            logger.LogInformation("Executing stage {StageIndex}/{TotalStages}: {StageName} (Type: {StageType})",
+            logger.ZLogInformation("Executing stage {StageIndex}/{TotalStages}: {StageName} (Type: {StageType})",
                 i + 1, orderedStages.Count, stage.Name, stage.Type);
 
             var stageResult = new WorkflowStageResult
@@ -105,7 +106,7 @@ public class WorkflowExecutor(
 
                 if (!stageResult.Succeeded)
                 {
-                    logger.LogWarning("Stage {StageName} failed: {Summary}", stage.Name, stageResult.Summary);
+                    logger.ZLogWarning("Stage {StageName} failed: {Summary}", stage.Name, stageResult.Summary);
                     await store.MarkWorkflowExecutionCompletedAsync(
                         execution.Id,
                         WorkflowExecutionState.Failed,
@@ -119,11 +120,11 @@ public class WorkflowExecutor(
                     return;
                 }
 
-                logger.LogInformation("Stage {StageName} completed successfully: {Summary}", stage.Name, stageResult.Summary);
+                logger.ZLogInformation("Stage {StageName} completed successfully: {Summary}", stage.Name, stageResult.Summary);
             }
             catch (OperationCanceledException) when (stageCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
-                logger.LogWarning("Stage {StageName} timed out after {Timeout}", stage.Name, stageTimeout);
+                logger.ZLogWarning("Stage {StageName} timed out after {Timeout}", stage.Name, stageTimeout);
                 stageResult.Succeeded = false;
                 stageResult.Summary = $"Stage timed out after {stageTimeout.TotalMinutes:F0} minutes";
                 stageResult.EndedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
@@ -141,7 +142,7 @@ public class WorkflowExecutor(
             }
             catch (OperationCanceledException)
             {
-                logger.LogInformation("Workflow execution {ExecutionId} cancelled during stage {StageName}", execution.Id, stage.Name);
+                logger.ZLogInformation("Workflow execution {ExecutionId} cancelled during stage {StageName}", execution.Id, stage.Name);
                 await store.MarkWorkflowExecutionCompletedAsync(
                     execution.Id,
                     WorkflowExecutionState.Cancelled,
@@ -151,7 +152,7 @@ public class WorkflowExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Exception during stage {StageName} execution", stage.Name);
+                logger.ZLogError(ex, "Exception during stage {StageName} execution", stage.Name);
                 stageResult.Succeeded = false;
                 stageResult.Summary = $"Exception: {ex.Message}";
                 stageResult.EndedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
@@ -166,7 +167,7 @@ public class WorkflowExecutor(
             }
         }
 
-        logger.LogInformation("Workflow execution {ExecutionId} completed successfully", execution.Id);
+        logger.ZLogInformation("Workflow execution {ExecutionId} completed successfully", execution.Id);
         await store.MarkWorkflowExecutionCompletedAsync(
             execution.Id,
             WorkflowExecutionState.Succeeded,
@@ -224,7 +225,7 @@ public class WorkflowExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to kill container for run {RunId}", runId);
+                logger.ZLogWarning(ex, "Failed to kill container for run {RunId}", runId);
             }
         }
     }
@@ -260,13 +261,13 @@ public class WorkflowExecutor(
         var run = await store.CreateRunAsync(task, cancellationToken);
         result.RunIds.Add(run.Id);
 
-        logger.LogInformation("Created run {RunId} for task stage {StageName} (task {TaskId})",
+        logger.ZLogInformation("Created run {RunId} for task stage {StageName} (task {TaskId})",
             run.Id, stage.Name, task.Id);
 
         var dispatched = await dispatcher.DispatchAsync(repository, task, run, cancellationToken);
         if (!dispatched)
         {
-            logger.LogInformation(
+            logger.ZLogInformation(
                 "Run {RunId} for workflow stage {StageName} was queued; waiting for terminal state",
                 run.Id,
                 stage.Name);
@@ -327,7 +328,7 @@ public class WorkflowExecutor(
         WorkflowExecutionDocument execution,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Stage {StageName} requires approval", stage.Name);
+        logger.ZLogInformation("Stage {StageName} requires approval", stage.Name);
 
         await store.MarkWorkflowExecutionPendingApprovalAsync(execution.Id, stage.Id, cancellationToken);
 
@@ -390,7 +391,7 @@ public class WorkflowExecutor(
             return;
         }
 
-        logger.LogInformation("Stage {StageName} delaying for {DelaySeconds} seconds", stage.Name, delaySeconds);
+        logger.ZLogInformation("Stage {StageName} delaying for {DelaySeconds} seconds", stage.Name, delaySeconds);
 
         try
         {
@@ -411,6 +412,15 @@ public class WorkflowExecutor(
         WorkflowStageResult result,
         CancellationToken cancellationToken)
     {
+        var agentTeamMembers = stage.AgentTeamMembers?
+            .Where(member => !string.IsNullOrWhiteSpace(member.Harness))
+            .ToList() ?? [];
+        if (agentTeamMembers.Count > 0)
+        {
+            await ExecuteAgentTeamParallelStageAsync(stage, result, agentTeamMembers, cancellationToken);
+            return;
+        }
+
         var parallelTaskIds = stage.ParallelStageIds ?? [];
         if (parallelTaskIds.Count == 0)
         {
@@ -419,9 +429,9 @@ public class WorkflowExecutor(
             return;
         }
 
-        logger.LogInformation("Stage {StageName} executing {TaskCount} tasks in parallel", stage.Name, parallelTaskIds.Count);
+        logger.ZLogInformation("Stage {StageName} executing {TaskCount} tasks in parallel", stage.Name, parallelTaskIds.Count);
 
-        var tasks = new List<Task<(bool Success, string Summary, string RunId)>>();
+        var tasks = new List<Task<ParallelRunResult>>();
 
         foreach (var taskId in parallelTaskIds)
         {
@@ -441,7 +451,111 @@ public class WorkflowExecutor(
             : $"Some parallel tasks failed: {string.Join("; ", summaries)}";
     }
 
-    private async Task<(bool Success, string Summary, string RunId)> ExecuteParallelTaskAsync(
+    private async Task ExecuteAgentTeamParallelStageAsync(
+        WorkflowStageConfig stage,
+        WorkflowStageResult result,
+        IReadOnlyList<WorkflowAgentTeamMemberConfig> members,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(stage.TaskId))
+        {
+            result.Succeeded = false;
+            result.Summary = "Agent Team stage requires TaskId for baseline task.";
+            return;
+        }
+
+        var baselineTask = await store.GetTaskAsync(stage.TaskId, cancellationToken);
+        if (baselineTask is null)
+        {
+            result.Succeeded = false;
+            result.Summary = $"Baseline task {stage.TaskId} not found.";
+            return;
+        }
+
+        var repository = await store.GetRepositoryAsync(baselineTask.RepositoryId, cancellationToken);
+        if (repository is null)
+        {
+            result.Succeeded = false;
+            result.Summary = $"Repository {baselineTask.RepositoryId} not found.";
+            return;
+        }
+
+        logger.ZLogInformation("Stage {StageName} executing Agent Team with {MemberCount} members", stage.Name, members.Count);
+
+        var memberTasks = members
+            .Select((member, index) => ExecuteAgentTeamMemberAsync(
+                stage,
+                baselineTask,
+                repository,
+                member,
+                index,
+                cancellationToken))
+            .ToList();
+
+        var memberResults = await Task.WhenAll(memberTasks);
+        var allMembersSucceeded = memberResults.All(x => x.Success);
+        var agentTeamDiff = await BuildAgentTeamDiffResultAsync(memberResults, cancellationToken);
+
+        result.RunIds.AddRange(memberResults.Select(x => x.RunId).Where(id => !string.IsNullOrWhiteSpace(id)));
+        result.AgentTeamDiff = agentTeamDiff;
+        result.Succeeded = allMembersSucceeded;
+        result.Summary = allMembersSucceeded
+            ? $"All {members.Count} agent lanes succeeded."
+            : $"Agent lane failure: {string.Join("; ", memberResults.Where(x => !x.Success).Select(x => x.Summary))}";
+
+        if (agentTeamDiff.ConflictCount > 0)
+        {
+            result.Summary = $"{result.Summary} Merge conflicts: {agentTeamDiff.ConflictCount}.";
+        }
+        else if (agentTeamDiff.MergedFiles > 0)
+        {
+            result.Summary = $"{result.Summary} Merged files: {agentTeamDiff.MergedFiles}.";
+        }
+
+        var synthesis = stage.Synthesis;
+        if (agentTeamDiff.ConflictCount > 0 && (synthesis is null || !synthesis.Enabled))
+        {
+            synthesis = new WorkflowSynthesisStageConfig
+            {
+                Enabled = true,
+                Harness = baselineTask.Harness,
+                Mode = HarnessExecutionMode.Review,
+                Prompt = "Resolve the conflicting lane edits. Produce a final patch recommendation that reconciles conflicts and preserves valid non-conflicting changes.",
+                ModelOverride = string.Empty,
+                TimeoutSeconds = null,
+            };
+        }
+
+        if (!allMembersSucceeded || synthesis is null || !synthesis.Enabled)
+        {
+            return;
+        }
+
+        var synthesisResult = await ExecuteAgentTeamSynthesisAsync(
+            stage,
+            baselineTask,
+            repository,
+            synthesis,
+            memberResults,
+            agentTeamDiff,
+            cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(synthesisResult.RunId))
+        {
+            result.RunIds.Add(synthesisResult.RunId);
+        }
+
+        if (synthesisResult.Success)
+        {
+            result.Summary = $"{result.Summary} Synthesis completed.";
+            return;
+        }
+
+        result.Succeeded = false;
+        result.Summary = $"{result.Summary} Synthesis failed: {synthesisResult.Summary}";
+    }
+
+    private async Task<ParallelRunResult> ExecuteParallelTaskAsync(
         string taskId,
         WorkflowStageConfig stage,
         CancellationToken cancellationToken)
@@ -449,25 +563,124 @@ public class WorkflowExecutor(
         var task = await store.GetTaskAsync(taskId, cancellationToken);
         if (task is null)
         {
-            return (false, $"Task {taskId} not found", string.Empty);
+            return new ParallelRunResult(false, $"Task {taskId} not found", string.Empty, taskId, string.Empty);
         }
 
         var repository = await store.GetRepositoryAsync(task.RepositoryId, cancellationToken);
         if (repository is null)
         {
-            return (false, $"Repository {task.RepositoryId} not found", string.Empty);
+            return new ParallelRunResult(false, $"Repository {task.RepositoryId} not found", string.Empty, taskId, task.Harness);
         }
 
-        var run = await store.CreateRunAsync(task, cancellationToken);
-        logger.LogInformation("Created run {RunId} for parallel task {TaskId}", run.Id, taskId);
+        return await DispatchAndAwaitRunAsync(
+            repository,
+            task,
+            stage,
+            cancellationToken,
+            laneLabel: taskId,
+            executionModeOverride: null);
+    }
 
-        var dispatched = await dispatcher.DispatchAsync(repository, task, run, cancellationToken);
+    private async Task<ParallelRunResult> ExecuteAgentTeamMemberAsync(
+        WorkflowStageConfig stage,
+        TaskDocument baselineTask,
+        RepositoryDocument repository,
+        WorkflowAgentTeamMemberConfig member,
+        int index,
+        CancellationToken cancellationToken)
+    {
+        var laneTask = CloneTaskForLane(baselineTask, $"team-{index + 1}");
+        laneTask.Harness = NormalizeHarness(member.Harness, baselineTask.Harness);
+        laneTask.ExecutionModeDefault = member.Mode;
+        laneTask.Prompt = BuildAgentLanePrompt(stage, baselineTask, member);
+
+        if (!string.IsNullOrWhiteSpace(stage.CommandOverride))
+        {
+            laneTask.Command = stage.CommandOverride.Trim();
+        }
+
+        if (member.TimeoutSeconds is > 0)
+        {
+            laneTask.Timeouts = new TimeoutConfig(
+                ExecutionSeconds: member.TimeoutSeconds.Value,
+                OverallSeconds: Math.Max(member.TimeoutSeconds.Value, baselineTask.Timeouts.OverallSeconds));
+        }
+
+        if (!string.IsNullOrWhiteSpace(member.ModelOverride))
+        {
+            UpsertInstructionFile(laneTask, "model-override", member.ModelOverride.Trim());
+        }
+
+        return await DispatchAndAwaitRunAsync(
+            repository,
+            laneTask,
+            stage,
+            cancellationToken,
+            laneLabel: string.IsNullOrWhiteSpace(member.Name) ? $"agent-{index + 1}" : member.Name,
+            executionModeOverride: member.Mode);
+    }
+
+    private async Task<ParallelRunResult> ExecuteAgentTeamSynthesisAsync(
+        WorkflowStageConfig stage,
+        TaskDocument baselineTask,
+        RepositoryDocument repository,
+        WorkflowSynthesisStageConfig synthesis,
+        IReadOnlyList<ParallelRunResult> laneResults,
+        WorkflowAgentTeamDiffResult? diffResult,
+        CancellationToken cancellationToken)
+    {
+        var synthesisTask = CloneTaskForLane(baselineTask, "synthesis");
+        synthesisTask.Harness = NormalizeHarness(synthesis.Harness, baselineTask.Harness);
+        synthesisTask.ExecutionModeDefault = synthesis.Mode;
+        synthesisTask.Prompt = BuildSynthesisPrompt(stage, baselineTask, synthesis, laneResults, diffResult);
+
+        if (!string.IsNullOrWhiteSpace(stage.CommandOverride))
+        {
+            synthesisTask.Command = stage.CommandOverride.Trim();
+        }
+
+        if (synthesis.TimeoutSeconds is > 0)
+        {
+            synthesisTask.Timeouts = new TimeoutConfig(
+                ExecutionSeconds: synthesis.TimeoutSeconds.Value,
+                OverallSeconds: Math.Max(synthesis.TimeoutSeconds.Value, baselineTask.Timeouts.OverallSeconds));
+        }
+
+        if (!string.IsNullOrWhiteSpace(synthesis.ModelOverride))
+        {
+            UpsertInstructionFile(synthesisTask, "model-override", synthesis.ModelOverride.Trim());
+        }
+
+        return await DispatchAndAwaitRunAsync(
+            repository,
+            synthesisTask,
+            stage,
+            cancellationToken,
+            laneLabel: "synthesis",
+            executionModeOverride: synthesis.Mode);
+    }
+
+    private async Task<ParallelRunResult> DispatchAndAwaitRunAsync(
+        RepositoryDocument repository,
+        TaskDocument dispatchTask,
+        WorkflowStageConfig stage,
+        CancellationToken cancellationToken,
+        string laneLabel,
+        HarnessExecutionMode? executionModeOverride)
+    {
+        var run = await store.CreateRunAsync(
+            dispatchTask,
+            cancellationToken,
+            executionModeOverride: executionModeOverride);
+        logger.ZLogInformation("Created run {RunId} for workflow lane {LaneLabel}", run.Id, laneLabel);
+
+        var dispatched = await dispatcher.DispatchAsync(repository, dispatchTask, run, cancellationToken);
         if (!dispatched)
         {
-            logger.LogInformation(
-                "Run {RunId} for parallel workflow task {TaskId} was queued; waiting for terminal state",
+            logger.ZLogInformation(
+                "Run {RunId} for workflow lane {LaneLabel} was queued; waiting for terminal state",
                 run.Id,
-                taskId);
+                laneLabel);
         }
 
         var pollingInterval = TimeSpan.FromSeconds(2);
@@ -478,7 +691,7 @@ public class WorkflowExecutor(
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                return (false, "Cancelled", run.Id);
+                return new ParallelRunResult(false, "Cancelled", run.Id, laneLabel, dispatchTask.Harness);
             }
 
             await Task.Delay(pollingInterval, cancellationToken);
@@ -486,27 +699,254 @@ public class WorkflowExecutor(
             var updatedRun = await store.GetRunAsync(run.Id, cancellationToken);
             if (updatedRun is null)
             {
-                return (false, "Run disappeared", run.Id);
+                return new ParallelRunResult(false, "Run disappeared", run.Id, laneLabel, dispatchTask.Harness);
             }
 
             if (updatedRun.State == RunState.Succeeded)
             {
-                return (true, updatedRun.Summary, run.Id);
+                return new ParallelRunResult(true, updatedRun.Summary, run.Id, laneLabel, dispatchTask.Harness);
             }
 
             if (updatedRun.State == RunState.Failed)
             {
-                return (false, $"Run failed: {updatedRun.Summary}", run.Id);
+                return new ParallelRunResult(false, $"Run failed: {updatedRun.Summary}", run.Id, laneLabel, dispatchTask.Harness);
             }
 
             if (updatedRun.State == RunState.Cancelled)
             {
-                return (false, "Run cancelled", run.Id);
+                return new ParallelRunResult(false, "Run cancelled", run.Id, laneLabel, dispatchTask.Harness);
             }
         }
 
-        return (false, "Timeout waiting for run", run.Id);
+        return new ParallelRunResult(false, "Timeout waiting for run", run.Id, laneLabel, dispatchTask.Harness);
     }
+
+    private static TaskDocument CloneTaskForLane(TaskDocument source, string laneSuffix)
+    {
+        return new TaskDocument
+        {
+            Id = $"{source.Id}-{laneSuffix}-{Guid.NewGuid():N}",
+            RepositoryId = source.RepositoryId,
+            Name = source.Name,
+            Kind = source.Kind,
+            Harness = source.Harness,
+            ExecutionModeDefault = source.ExecutionModeDefault,
+            Prompt = source.Prompt,
+            Command = source.Command,
+            AutoCreatePullRequest = source.AutoCreatePullRequest,
+            CronExpression = source.CronExpression,
+            Enabled = source.Enabled,
+            RetryPolicy = source.RetryPolicy,
+            Timeouts = source.Timeouts,
+            ApprovalProfile = source.ApprovalProfile,
+            SandboxProfile = source.SandboxProfile,
+            ArtifactPolicy = source.ArtifactPolicy,
+            ArtifactPatterns = [.. source.ArtifactPatterns],
+            LinkedFailureRuns = [.. source.LinkedFailureRuns],
+            ConcurrencyLimit = source.ConcurrencyLimit,
+            InstructionFiles = [.. source.InstructionFiles],
+            CreatedAtUtc = source.CreatedAtUtc,
+        };
+    }
+
+    private static string BuildAgentLanePrompt(
+        WorkflowStageConfig stage,
+        TaskDocument baselineTask,
+        WorkflowAgentTeamMemberConfig member)
+    {
+        var basePrompt = string.IsNullOrWhiteSpace(stage.PromptOverride)
+            ? baselineTask.Prompt
+            : stage.PromptOverride.Trim();
+        var rolePrompt = member.RolePrompt?.Trim() ?? string.Empty;
+
+        if (rolePrompt.Length == 0)
+        {
+            return basePrompt;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine(basePrompt.Trim());
+        builder.AppendLine();
+        builder.AppendLine("Agent role instructions:");
+        builder.AppendLine(rolePrompt);
+        return builder.ToString();
+    }
+
+    private static string BuildSynthesisPrompt(
+        WorkflowStageConfig stage,
+        TaskDocument baselineTask,
+        WorkflowSynthesisStageConfig synthesis,
+        IReadOnlyList<ParallelRunResult> laneResults,
+        WorkflowAgentTeamDiffResult? diffResult)
+    {
+        var basePrompt = synthesis.Prompt.Trim();
+        if (basePrompt.Length == 0)
+        {
+            basePrompt = "Synthesize all lane outputs into one final response.";
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine(basePrompt);
+        builder.AppendLine();
+        builder.AppendLine("Lane outputs:");
+
+        foreach (var lane in laneResults)
+        {
+            builder.Append("- ");
+            builder.Append(lane.LaneLabel);
+            builder.Append(" [");
+            builder.Append(lane.Success ? "succeeded" : "failed");
+            builder.Append("] Run ");
+            builder.Append(lane.RunId);
+            builder.Append(": ");
+            builder.AppendLine(lane.Summary);
+        }
+
+        if (diffResult is not null)
+        {
+            builder.AppendLine();
+            builder.Append("Merge result: ");
+            builder.Append(diffResult.MergedFiles);
+            builder.Append(" merged file(s), ");
+            builder.Append(diffResult.ConflictCount);
+            builder.AppendLine(" conflict(s).");
+
+            if (diffResult.LaneDiffs.Count > 0)
+            {
+                builder.AppendLine("Lane diff summaries:");
+                foreach (var laneDiff in diffResult.LaneDiffs)
+                {
+                    builder.Append("- ");
+                    builder.Append(laneDiff.LaneLabel);
+                    builder.Append(" Run ");
+                    builder.Append(laneDiff.RunId);
+                    builder.Append(": ");
+                    builder.Append(laneDiff.FilesChanged);
+                    builder.Append(" file(s), +");
+                    builder.Append(laneDiff.Additions);
+                    builder.Append(" / -");
+                    builder.Append(laneDiff.Deletions);
+                    if (!string.IsNullOrWhiteSpace(laneDiff.DiffStat))
+                    {
+                        builder.Append(" (");
+                        builder.Append(laneDiff.DiffStat);
+                        builder.Append(')');
+                    }
+                    builder.AppendLine();
+                }
+            }
+
+            if (diffResult.Conflicts.Count > 0)
+            {
+                builder.AppendLine("Conflicts:");
+                foreach (var conflict in diffResult.Conflicts)
+                {
+                    builder.Append("- File ");
+                    builder.Append(conflict.FilePath);
+                    builder.Append(": ");
+                    builder.Append(conflict.Reason);
+                    if (conflict.LaneLabels.Count > 0)
+                    {
+                        builder.Append(" [");
+                        builder.Append(string.Join(", ", conflict.LaneLabels));
+                        builder.Append(']');
+                    }
+                    if (conflict.HunkHeaders.Count > 0)
+                    {
+                        builder.Append(" hunks: ");
+                        builder.Append(string.Join(" | ", conflict.HunkHeaders));
+                    }
+                    builder.AppendLine();
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(diffResult.MergedPatch))
+            {
+                builder.AppendLine();
+                builder.AppendLine("Merged non-conflicting patch:");
+                builder.AppendLine(diffResult.MergedPatch.Trim());
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(stage.PromptOverride))
+        {
+            builder.AppendLine();
+            builder.AppendLine("Original task prompt:");
+            builder.AppendLine(stage.PromptOverride.Trim());
+        }
+        else if (!string.IsNullOrWhiteSpace(baselineTask.Prompt))
+        {
+            builder.AppendLine();
+            builder.AppendLine("Original task prompt:");
+            builder.AppendLine(baselineTask.Prompt.Trim());
+        }
+
+        return builder.ToString();
+    }
+
+    private async Task<WorkflowAgentTeamDiffResult> BuildAgentTeamDiffResultAsync(
+        IReadOnlyList<ParallelRunResult> laneResults,
+        CancellationToken cancellationToken)
+    {
+        if (laneResults.Count == 0)
+        {
+            return new WorkflowAgentTeamDiffResult();
+        }
+
+        var laneDiffTasks = laneResults.Select(async lane =>
+        {
+            var runId = lane.RunId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(runId))
+            {
+                return new AgentTeamLaneDiffInput(
+                    LaneLabel: lane.LaneLabel,
+                    Harness: lane.Harness,
+                    RunId: string.Empty,
+                    Succeeded: lane.Success,
+                    Summary: lane.Summary,
+                    DiffStat: string.Empty,
+                    DiffPatch: string.Empty);
+            }
+
+            var diff = await store.GetLatestRunDiffSnapshotAsync(runId, cancellationToken);
+            return new AgentTeamLaneDiffInput(
+                LaneLabel: lane.LaneLabel,
+                Harness: lane.Harness,
+                RunId: runId,
+                Succeeded: lane.Success,
+                Summary: lane.Summary,
+                DiffStat: diff?.DiffStat ?? string.Empty,
+                DiffPatch: diff?.DiffPatch ?? string.Empty);
+        });
+
+        var laneDiffs = await Task.WhenAll(laneDiffTasks);
+        return AgentTeamDiffMergeService.Build(laneDiffs);
+    }
+
+    private static string NormalizeHarness(string harness, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(harness))
+        {
+            return harness.Trim().ToLowerInvariant();
+        }
+
+        return string.IsNullOrWhiteSpace(fallback) ? "codex" : fallback.Trim().ToLowerInvariant();
+    }
+
+    private static void UpsertInstructionFile(TaskDocument task, string name, string content)
+    {
+        var existing = task.InstructionFiles.FindIndex(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+        var instruction = new InstructionFile(name, content, Order: 0);
+        if (existing >= 0)
+        {
+            task.InstructionFiles[existing] = instruction;
+            return;
+        }
+
+        task.InstructionFiles.Add(instruction);
+    }
+
+    private sealed record ParallelRunResult(bool Success, string Summary, string RunId, string LaneLabel, string Harness);
 
     public virtual async Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(
         string executionId,

@@ -12,7 +12,7 @@ public sealed class WorkerImageBootstrapService(
         }
         catch (Exception ex)
         {
-            logger.LogCritical(ex, "Worker image bootstrap failed");
+            logger.ZLogCritical(ex, "Worker image bootstrap failed");
             throw;
         }
     }

@@ -41,7 +41,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "GitHub credential validation failed");
+            logger.ZLogWarning(ex, "GitHub credential validation failed");
             return (false, $"Connection failed: {ex.Message}");
         }
     }
@@ -72,7 +72,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Anthropic credential validation failed");
+            logger.ZLogWarning(ex, "Anthropic credential validation failed");
             return (false, $"Connection failed: {ex.Message}");
         }
     }
@@ -95,7 +95,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "OpenAI credential validation failed");
+            logger.ZLogWarning(ex, "OpenAI credential validation failed");
             return (false, $"Connection failed: {ex.Message}");
         }
     }
@@ -118,7 +118,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Z.ai credential validation failed");
+            logger.ZLogWarning(ex, "Z.ai credential validation failed");
             return (false, $"Connection failed: {ex.Message}");
         }
     }
@@ -149,7 +149,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "LlmTornado credential validation failed");
+            logger.ZLogWarning(ex, "LlmTornado credential validation failed");
             return (false, $"Connection failed: {ex.Message}");
         }
     }

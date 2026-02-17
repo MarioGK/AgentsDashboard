@@ -45,7 +45,7 @@ public sealed class TaskRetentionCleanupService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Task cleanup cycle failed");
+                logger.ZLogWarning(ex, "Task cleanup cycle failed");
             }
 
             await Task.Delay(delay, stoppingToken);
@@ -97,9 +97,14 @@ public sealed class TaskRetentionCleanupService(
         var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
         var protectedDays = Math.Max(0, settings.CleanupProtectedDays);
         var retentionDays = Math.Max(Math.Max(1, settings.TaskRetentionDays), protectedDays);
+        var disabledTaskInactivityDays = Math.Max(0, settings.DisabledTaskInactivityDays);
+        var includeDisabledInactiveEligibility = disabledTaskInactivityDays > 0;
         var maxTasksPerTick = Math.Clamp(settings.MaxTasksDeletedPerTick, 1, 2000);
         var protectedSinceUtc = nowUtc.AddDays(-protectedDays);
         var ageOlderThanUtc = nowUtc.AddDays(-retentionDays);
+        var disabledInactiveOlderThanUtc = includeDisabledInactiveEligibility
+            ? nowUtc.AddDays(-disabledTaskInactivityDays)
+            : default;
 
         var softLimitGb = Math.Max(1, settings.DbSizeSoftLimitGb);
         var targetGb = settings.DbSizeTargetGb;
@@ -122,6 +127,14 @@ public sealed class TaskRetentionCleanupService(
         var totalTasksDeleted = 0;
         var totalFailedTasks = 0;
         var totalDeletedRows = 0;
+        var structuredPruneBatchSize = Math.Max(100, maxTasksPerTick * 50);
+        var structuredPrune = await store.PruneStructuredRunDataAsync(
+            ageOlderThanUtc,
+            structuredPruneBatchSize,
+            settings.CleanupExcludeWorkflowReferencedTasks,
+            settings.CleanupExcludeTasksWithOpenFindings,
+            cancellationToken);
+        totalDeletedRows += CountDeletedRows(structuredPrune);
 
         var ageCandidates = await store.ListTaskCleanupCandidatesAsync(
             new TaskCleanupQuery(
@@ -130,7 +143,12 @@ public sealed class TaskRetentionCleanupService(
                 Limit: remainingDeleteBudget,
                 OnlyWithNoActiveRuns: true,
                 RepositoryId: null,
-                ScanLimit: Math.Max(remainingDeleteBudget * 20, 200)),
+                ScanLimit: Math.Max(remainingDeleteBudget * 20, 200),
+                IncludeRetentionEligibility: true,
+                IncludeDisabledInactiveEligibility: includeDisabledInactiveEligibility,
+                DisabledInactiveOlderThanUtc: disabledInactiveOlderThanUtc,
+                ExcludeWorkflowReferencedTasks: settings.CleanupExcludeWorkflowReferencedTasks,
+                ExcludeTasksWithOpenFindings: settings.CleanupExcludeTasksWithOpenFindings),
             cancellationToken);
 
         if (ageCandidates.Count > 0)
@@ -156,7 +174,12 @@ public sealed class TaskRetentionCleanupService(
                         Limit: batchSize,
                         OnlyWithNoActiveRuns: true,
                         RepositoryId: null,
-                        ScanLimit: Math.Max(batchSize * 20, 200)),
+                        ScanLimit: Math.Max(batchSize * 20, 200),
+                        IncludeRetentionEligibility: true,
+                        IncludeDisabledInactiveEligibility: includeDisabledInactiveEligibility,
+                        DisabledInactiveOlderThanUtc: disabledInactiveOlderThanUtc,
+                        ExcludeWorkflowReferencedTasks: settings.CleanupExcludeWorkflowReferencedTasks,
+                        ExcludeTasksWithOpenFindings: settings.CleanupExcludeTasksWithOpenFindings),
                     cancellationToken);
 
                 if (pressureCandidates.Count == 0)
@@ -203,7 +226,7 @@ public sealed class TaskRetentionCleanupService(
             DeletedRows: totalDeletedRows,
             Reason: BuildReason(ageCleanupApplied, sizeCleanupApplied, totalTasksDeleted, totalFailedTasks));
 
-        logger.LogInformation(
+        logger.ZLogInformation(
             "Task cleanup cycle completed: reason={Reason}, tasksDeleted={TasksDeleted}, failedTasks={FailedTasks}, initialBytes={InitialBytes}, finalBytes={FinalBytes}, vacuum={VacuumExecuted}",
             summary.Reason,
             summary.TasksDeleted,
@@ -224,6 +247,13 @@ public sealed class TaskRetentionCleanupService(
                batch.DeletedPromptEntries +
                batch.DeletedRunSummaries +
                batch.DeletedSemanticChunks;
+    }
+
+    private static int CountDeletedRows(StructuredRunDataPruneResult batch)
+    {
+        return batch.DeletedStructuredEvents +
+               batch.DeletedDiffSnapshots +
+               batch.DeletedToolProjections;
     }
 
     private static long ToBytes(int gigabytes)

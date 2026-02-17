@@ -37,7 +37,8 @@ docs/
 ## Snapshot
 
 - `src/AgentsDashboard.slnx`: 3 production projects (`AgentsDashboard.ControlPlane`, `AgentsDashboard.WorkerGateway`, `AgentsDashboard.Contracts`).
-- Active harness adapters: `CodexAdapter`, `OpenCodeAdapter`, `ClaudeCodeAdapter`, `ZaiAdapter`.
+- Active harness runtimes: `CodexAppServerRuntime`, `OpenCodeSseRuntime`, `ClaudeStreamRuntime`, `ZaiClaudeCompatibleRuntime` with `command` fallback.
+- Harness adapters: `CodexAdapter`, `OpenCodeAdapter`, `ClaudeCodeAdapter`, `ZaiAdapter`.
 - Blazor components: 39 `.razor` files under `src/AgentsDashboard.ControlPlane/Components`.
 
 ## Architecture Rules
@@ -70,6 +71,8 @@ docs/
 - Required properties for DTOs.
 - Async methods use `Async` suffix.
 - No comments unless explicitly requested.
+- Warnings are errors by default: `TreatWarningsAsErrors=true` in `Directory.Build.props`; never set `TreatWarningsAsErrors` to false.
+- Never add `<NoWarn>` in `.csproj`, `.cdproj`, or `.props` files to bypass warning-as-error enforcement.
 
 ### EF Core (Mandatory)
 
@@ -113,11 +116,23 @@ dotnet run --project src/AgentsDashboard.ControlPlane
 DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://0.0.0.0:5266 dotnet watch --no-launch-profile --project src/AgentsDashboard.ControlPlane
 ```
 
+## Logging
+
+- Logging runs through `ZLogger` for both ControlPlane and WorkerGateway.
+- Default format is plain text with friendly, human-readable output and no JSON.
+- Logging uses ZLogger plain-text formatter defaults in both host `Program.cs`.
+- Use interpolation variables (or equivalent template pairs) in `ZLog*` calls to keep logs structured (`... {RunId}`, `{WorkerId}`, `{QueueDepth}`, `{DurationMs}`).
+- Prefer fewer log lines with richer context over repetitive one-off lines in hot paths.
+- Do not log secrets, credentials, or full tokens; include only IDs and derived metadata.
+
 ## Build & Test Quick Commands
 
 ```bash
 # Build
 dotnet build src/AgentsDashboard.slnx -m --tl
+
+# Test
+dotnet test --solution src/AgentsDashboard.slnx
 
 # CI format gate
 dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error
@@ -139,6 +154,17 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 ## Execution Model
 
 - Repository is the only top-level scope (project entity removed).
+- Run execution modes are first-class domain data: `HarnessExecutionMode` (`Default`, `Plan`, `Review`) persisted as task default (`TaskDocument.ExecutionModeDefault`) and run effective mode (`RunDocument.ExecutionMode`), with per-run structured protocol marker (`RunDocument.StructuredProtocol`).
+- Worker execution is runtime-driven (`IHarnessRuntime`) with transport selection by harness/runtime policy, not parser-first command heuristics.
+- Codex primary transport is `codex app-server` with `command` fallback on runtime failure.
+- OpenCode primary/only managed transport is `opencode serve` + HTTP/SSE (`/session`, `/event`, `/session/{id}/message`, `/session/{id}/diff`); no primary OpenCode CLI run mode.
+- Claude transport is CLI `--output-format stream-json`; Z.ai uses Claude-compatible stream path with strict `glm-5` enforcement.
+- Worker emits normalized structured events (v2 canonical payload) with ordered sequence/category/schema metadata; ControlPlane persists and projects these via `RunStructuredEventDocument`, `RunDiffSnapshotDocument`, and `RunToolProjectionDocument`.
+- ControlPlane realtime publishes typed structured events (`RunStructuredEventChangedEvent`, `RunDiffUpdatedEvent`, `RunToolTimelineUpdatedEvent`) while retaining existing log/status event paths during cutover.
+- Run detail UX includes structured panes and Monaco diff rendering (`RunDiffViewer` / `RunDiffFileList`) with side-by-side diff defaults and patch export actions.
+- Diff viewer layout is session-toggleable between side-by-side and inline while keeping side-by-side as default.
+- Workspace prompt submission supports mode override and agent-team execution (`WorkspaceAgentTeamRequest`) with parallel member lanes and optional synthesis.
+- Agent-team parallel stages persist lane diff telemetry, merged non-conflicting patch, and conflict metadata in `WorkflowStageResult.AgentTeamDiff`; synthesis prompts include this conflict context.
 - Repository creation is git-bound and folder-bound: a repo must include `GitUrl` + absolute `LocalPath`, and create flow validates/links/clones before persistence.
 - ControlPlane exposes host folder browsing + create-folder in repository creation UI and stores git status (`CurrentBranch`, ahead/behind, staged/modified/untracked, scan/fetch timestamps, sync error).
 - Git metrics refresh is hybrid: on repository detail open, explicit refresh action, and background refresh for recently viewed repositories.
@@ -157,6 +183,7 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 - Runtime orchestrator behavior is policy-driven from persisted system settings (`SystemSettingsDocument.Orchestrator`) with short-lived cache and hot-reload invalidation on save.
 - New dedicated settings page `/settings/orchestrator` controls worker pool sizing, admission thresholds, image policy/order, pull/build concurrency, start-failure budgets, cooldowns, draining/recycle behavior, and worker resource guardrails.
 - ControlPlane runs background task-retention cleanup with distributed lease coordination (`maintenance-task-cleanup`): age-based deletion (last-activity policy) and DB-size pressure cleanup (`DbSizeSoftLimitGb` -> `DbSizeTargetGb`) with full task-cascade deletion (runs/logs/findings/prompt history/AI summaries/semantic chunks/artifact directories) and optional post-pressure `VACUUM`.
+- Cleanup cycle also prunes structured run payload tables for old terminal runs via `PruneStructuredRunDataAsync`, honoring workflow/open-finding exclusion flags used by task cleanup eligibility.
 - ControlPlane now supports DB-backed distributed leases (`Leases`) for multi-instance coordination of scale-out, image resolution, and reconciliation operations.
 - Harness image bootstrap runs on WorkerGateway startup: missing configured images attempt local build from known harness Dockerfiles before pull fallback.
 - Worker tool diagnostics are worker-scoped: ControlPlane queries each WorkerGateway via MagicOnion (`GetHarnessToolsAsync`) and renders tool/version status in `/settings/workers/{workerId}`.
@@ -180,5 +207,5 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 
 ## Last Verified
 
-- Date: 2026-02-16
+- Date: 2026-02-17
 - Purpose: Date-only freshness marker for this document; do not use this section as a changelog/history log.

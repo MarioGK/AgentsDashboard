@@ -6,6 +6,7 @@
     <PackageReference Include="MagicOnion.Server" />
     <PackageReference Include="Multicaster" />
     <PackageReference Include="MessagePack" />
+    <PackageReference Include="ZLogger" />
   </ItemGroup>
 
   <ItemGroup>

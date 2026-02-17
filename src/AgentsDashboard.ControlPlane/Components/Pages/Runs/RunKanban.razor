@@ -55,11 +55,11 @@ else
         </HeaderContent>
         <RowTemplate>
             <MudTd>
-                <MudLink Href="@($"/settings/runs/{context.Id}")" Typo="Typo.body2" Title="@context.Id">
+                <MudLink Href="@($"/settings/runs/{context.Id}")" Typo="Typo.body2" title="@context.Id">
                     @context.Id[..Math.Min(8, context.Id.Length)]
                 </MudLink>
             </MudTd>
-            <MudTd Title="@context.TaskId">@context.TaskId[..Math.Min(8, context.TaskId.Length)]</MudTd>
+            <MudTd title="@context.TaskId">@context.TaskId[..Math.Min(8, context.TaskId.Length)]</MudTd>
             <MudTd>
                 <MudChip T="string" Size="Size.Small" Color="@GetRunStateColor(context.State)">
                     @GetRunStateLabel(context.State)

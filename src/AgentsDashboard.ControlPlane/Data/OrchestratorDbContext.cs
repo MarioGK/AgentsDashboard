@@ -15,6 +15,9 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<SemanticChunkDocument> SemanticChunks => Set<SemanticChunkDocument>();
     public DbSet<RunAiSummaryDocument> RunAiSummaries => Set<RunAiSummaryDocument>();
     public DbSet<RunLogEvent> RunEvents => Set<RunLogEvent>();
+    public DbSet<RunStructuredEventDocument> RunStructuredEvents => Set<RunStructuredEventDocument>();
+    public DbSet<RunDiffSnapshotDocument> RunDiffSnapshots => Set<RunDiffSnapshotDocument>();
+    public DbSet<RunToolProjectionDocument> RunToolProjections => Set<RunToolProjectionDocument>();
     public DbSet<FindingDocument> Findings => Set<FindingDocument>();
     public DbSet<ProviderSecretDocument> ProviderSecrets => Set<ProviderSecretDocument>();
     public DbSet<WorkerRegistration> Workers => Set<WorkerRegistration>();
@@ -42,6 +45,9 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<SemanticChunkDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<RunAiSummaryDocument>().HasKey(x => x.RunId);
         modelBuilder.Entity<RunLogEvent>().HasKey(x => x.Id);
+        modelBuilder.Entity<RunStructuredEventDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<RunDiffSnapshotDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<RunToolProjectionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<FindingDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<ProviderSecretDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<WorkerRegistration>().HasKey(x => x.Id);
@@ -151,10 +157,6 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<TaskDocument>()
             .HasIndex(x => x.NextRunAtUtc);
         modelBuilder.Entity<TaskDocument>()
-            .HasIndex(x => new { x.RepositoryId, x.WorktreePath });
-        modelBuilder.Entity<TaskDocument>()
-            .HasIndex(x => new { x.RepositoryId, x.WorktreeBranch });
-        modelBuilder.Entity<TaskDocument>()
             .HasIndex(x => x.LastGitSyncAtUtc);
         modelBuilder.Entity<RunDocument>()
             .HasIndex(x => new { x.RepositoryId, x.CreatedAtUtc });
@@ -187,6 +189,17 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
             .HasIndex(x => x.State);
         modelBuilder.Entity<RunLogEvent>()
             .HasIndex(x => new { x.RunId, x.TimestampUtc });
+        modelBuilder.Entity<RunStructuredEventDocument>()
+            .HasIndex(x => new { x.RunId, x.Sequence });
+        modelBuilder.Entity<RunDiffSnapshotDocument>()
+            .HasIndex(x => new { x.RunId, x.Sequence })
+            .IsUnique();
+        modelBuilder.Entity<RunDiffSnapshotDocument>()
+            .HasIndex(x => new { x.RunId, x.CreatedAtUtc });
+        modelBuilder.Entity<RunToolProjectionDocument>()
+            .HasIndex(x => new { x.RunId, x.SequenceStart });
+        modelBuilder.Entity<RunToolProjectionDocument>()
+            .HasIndex(x => new { x.RunId, x.CreatedAtUtc });
         modelBuilder.Entity<ProviderSecretDocument>()
             .HasIndex(x => new { x.RepositoryId, x.Provider })
             .IsUnique();

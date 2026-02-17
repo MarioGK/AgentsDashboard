@@ -16,6 +16,7 @@ public sealed class OrchestratorStore(
     IOptions<OrchestratorOptions> orchestratorOptions) : IOrchestratorStore
 {
     private static readonly RunState[] ActiveStates = [RunState.Queued, RunState.Running, RunState.PendingApproval];
+    private static readonly FindingState[] OpenFindingStates = [FindingState.New, FindingState.Acknowledged, FindingState.InProgress];
     private static readonly Regex PromptSkillTriggerRegex = new("^[a-z0-9-]+$", RegexOptions.Compiled);
     private const string GlobalRepositoryScope = "global";
     private const string TaskWorkspacesRootPath = "/workspaces/repos";
@@ -362,6 +363,7 @@ public sealed class OrchestratorStore(
             Name = request.Name,
             Kind = request.Kind,
             Harness = request.Harness.Trim().ToLowerInvariant(),
+            ExecutionModeDefault = request.ExecutionModeDefault,
             Prompt = request.Prompt,
             Command = request.Command,
             AutoCreatePullRequest = request.AutoCreatePullRequest,
@@ -447,8 +449,6 @@ public sealed class OrchestratorStore(
 
     public async Task<TaskDocument?> UpdateTaskGitMetadataAsync(
         string taskId,
-        string? worktreePath,
-        string? worktreeBranch,
         DateTime? lastGitSyncAtUtc,
         string? lastGitSyncError,
         CancellationToken cancellationToken)
@@ -463,16 +463,6 @@ public sealed class OrchestratorStore(
         if (task is null)
         {
             return null;
-        }
-
-        if (worktreePath is not null)
-        {
-            task.WorktreePath = worktreePath;
-        }
-
-        if (worktreeBranch is not null)
-        {
-            task.WorktreeBranch = worktreeBranch;
         }
 
         if (lastGitSyncAtUtc.HasValue)
@@ -499,6 +489,7 @@ public sealed class OrchestratorStore(
         task.Name = request.Name;
         task.Kind = request.Kind;
         task.Harness = request.Harness.Trim().ToLowerInvariant();
+        task.ExecutionModeDefault = request.ExecutionModeDefault;
         task.Prompt = request.Prompt;
         task.Command = request.Command;
         task.AutoCreatePullRequest = request.AutoCreatePullRequest;
@@ -602,6 +593,16 @@ public sealed class OrchestratorStore(
             800);
         var olderThanUtc = query.OlderThanUtc == default ? DateTime.UtcNow : query.OlderThanUtc;
         var protectedSinceUtc = query.ProtectedSinceUtc;
+        var includeRetentionEligibility = query.IncludeRetentionEligibility;
+        var includeDisabledInactiveEligibility = query.IncludeDisabledInactiveEligibility;
+        var disabledInactiveOlderThanUtc = includeDisabledInactiveEligibility
+            ? (query.DisabledInactiveOlderThanUtc == default ? olderThanUtc : query.DisabledInactiveOlderThanUtc)
+            : default;
+
+        if (!includeRetentionEligibility && !includeDisabledInactiveEligibility)
+        {
+            return [];
+        }
 
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
 
@@ -611,7 +612,13 @@ public sealed class OrchestratorStore(
             taskQuery = taskQuery.Where(x => x.RepositoryId == query.RepositoryId);
         }
 
-        taskQuery = taskQuery.Where(x => x.CreatedAtUtc < olderThanUtc);
+        var seedBeforeUtc = olderThanUtc;
+        if (includeDisabledInactiveEligibility && disabledInactiveOlderThanUtc > seedBeforeUtc)
+        {
+            seedBeforeUtc = disabledInactiveOlderThanUtc;
+        }
+
+        taskQuery = taskQuery.Where(x => x.CreatedAtUtc < seedBeforeUtc);
         if (protectedSinceUtc != default)
         {
             taskQuery = taskQuery.Where(x => x.CreatedAtUtc < protectedSinceUtc);
@@ -620,7 +627,7 @@ public sealed class OrchestratorStore(
         var taskSeeds = await taskQuery
             .OrderBy(x => x.CreatedAtUtc)
             .Take(normalizedScanLimit)
-            .Select(x => new TaskCleanupSeed(x.Id, x.RepositoryId, x.CreatedAtUtc))
+            .Select(x => new TaskCleanupSeed(x.Id, x.RepositoryId, x.CreatedAtUtc, x.Enabled))
             .ToListAsync(cancellationToken);
 
         if (taskSeeds.Count == 0)
@@ -671,6 +678,52 @@ public sealed class OrchestratorStore(
         var logsByTask = logAggregates.ToDictionary(x => x.TaskId, x => x.TimestampUtc, StringComparer.Ordinal);
         var promptsByTask = promptAggregates.ToDictionary(x => x.TaskId, x => x.TimestampUtc, StringComparer.Ordinal);
         var summariesByTask = summaryAggregates.ToDictionary(x => x.TaskId, x => x.TimestampUtc, StringComparer.Ordinal);
+        var workflowReferencedTaskIds = new HashSet<string>(StringComparer.Ordinal);
+        if (query.ExcludeWorkflowReferencedTasks)
+        {
+            var repositoryIds = taskSeeds
+                .Select(x => x.RepositoryId)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (repositoryIds.Count > 0)
+            {
+                var workflowStages = await db.Workflows.AsNoTracking()
+                    .Where(x => repositoryIds.Contains(x.RepositoryId))
+                    .Select(x => x.Stages)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var stages in workflowStages)
+                {
+                    if (stages is null || stages.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    foreach (var stage in stages)
+                    {
+                        if (!string.IsNullOrWhiteSpace(stage.TaskId))
+                        {
+                            workflowReferencedTaskIds.Add(stage.TaskId);
+                        }
+                    }
+                }
+            }
+        }
+
+        var tasksWithOpenFindings = new HashSet<string>(StringComparer.Ordinal);
+        if (query.ExcludeTasksWithOpenFindings)
+        {
+            var taskIdsWithOpenFindings = await (
+                    from finding in db.Findings.AsNoTracking()
+                    join run in db.Runs.AsNoTracking() on finding.RunId equals run.Id
+                    where taskIds.Contains(run.TaskId) && OpenFindingStates.Contains(finding.State)
+                    select run.TaskId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            tasksWithOpenFindings = new HashSet<string>(taskIdsWithOpenFindings, StringComparer.Ordinal);
+        }
 
         var candidates = new List<TaskCleanupCandidate>(taskSeeds.Count);
         foreach (var task in taskSeeds)
@@ -687,17 +740,33 @@ public sealed class OrchestratorStore(
                 latestPromptAtUtc,
                 latestSummaryAtUtc);
 
-            if (lastActivityUtc >= olderThanUtc)
-            {
-                continue;
-            }
-
             if (protectedSinceUtc != default && lastActivityUtc >= protectedSinceUtc)
             {
                 continue;
             }
 
             if (query.OnlyWithNoActiveRuns && runAggregate?.HasActiveRuns == true)
+            {
+                continue;
+            }
+
+            var isRetentionEligible = includeRetentionEligibility && lastActivityUtc < olderThanUtc;
+            var isDisabledInactiveEligible = includeDisabledInactiveEligibility &&
+                                             !task.Enabled &&
+                                             lastActivityUtc < disabledInactiveOlderThanUtc;
+            if (!isRetentionEligible && !isDisabledInactiveEligible)
+            {
+                continue;
+            }
+
+            var isWorkflowReferenced = workflowReferencedTaskIds.Contains(task.TaskId);
+            if (query.ExcludeWorkflowReferencedTasks && isWorkflowReferenced)
+            {
+                continue;
+            }
+
+            var hasOpenFindings = tasksWithOpenFindings.Contains(task.TaskId);
+            if (query.ExcludeTasksWithOpenFindings && hasOpenFindings)
             {
                 continue;
             }
@@ -709,7 +778,11 @@ public sealed class OrchestratorStore(
                 lastActivityUtc,
                 runAggregate?.HasActiveRuns ?? false,
                 runAggregate?.RunCount ?? 0,
-                runAggregate?.OldestRunAtUtc));
+                runAggregate?.OldestRunAtUtc,
+                isRetentionEligible,
+                isDisabledInactiveEligible,
+                isWorkflowReferenced,
+                hasOpenFindings));
         }
 
         return candidates
@@ -785,6 +858,18 @@ public sealed class OrchestratorStore(
         if (runIds.Count > 0)
         {
             deletedRunLogs = await db.RunEvents
+                .Where(x => runIds.Contains(x.RunId))
+                .ExecuteDeleteAsync(cancellationToken);
+
+            _ = await db.RunStructuredEvents
+                .Where(x => runIds.Contains(x.RunId))
+                .ExecuteDeleteAsync(cancellationToken);
+
+            _ = await db.RunDiffSnapshots
+                .Where(x => runIds.Contains(x.RunId))
+                .ExecuteDeleteAsync(cancellationToken);
+
+            _ = await db.RunToolProjections
                 .Where(x => runIds.Contains(x.RunId))
                 .ExecuteDeleteAsync(cancellationToken);
 
@@ -964,7 +1049,11 @@ public sealed class OrchestratorStore(
         await db.Database.ExecuteSqlRawAsync("VACUUM;", cancellationToken);
     }
 
-    public async Task<RunDocument> CreateRunAsync(TaskDocument task, CancellationToken cancellationToken, int attempt = 1)
+    public async Task<RunDocument> CreateRunAsync(
+        TaskDocument task,
+        CancellationToken cancellationToken,
+        int attempt = 1,
+        HarnessExecutionMode? executionModeOverride = null)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var run = new RunDocument
@@ -972,6 +1061,8 @@ public sealed class OrchestratorStore(
             RepositoryId = task.RepositoryId,
             TaskId = task.Id,
             State = RunState.Queued,
+            ExecutionMode = executionModeOverride ?? task.ExecutionModeDefault ?? HarnessExecutionMode.Default,
+            StructuredProtocol = "harness-structured-event-v2",
             Summary = "Queued",
             Attempt = attempt,
         };
@@ -1716,6 +1807,410 @@ public sealed class OrchestratorStore(
         return await db.RunEvents.AsNoTracking().Where(x => x.RunId == runId).OrderBy(x => x.TimestampUtc).ToListAsync(cancellationToken);
     }
 
+    public async Task<RunStructuredEventDocument> AppendRunStructuredEventAsync(RunStructuredEventDocument structuredEvent, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(structuredEvent.RunId))
+        {
+            throw new ArgumentException("RunId is required.", nameof(structuredEvent));
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+
+        if (string.IsNullOrWhiteSpace(structuredEvent.Id))
+        {
+            structuredEvent.Id = Guid.NewGuid().ToString("N");
+        }
+
+        if (structuredEvent.CreatedAtUtc == default)
+        {
+            structuredEvent.CreatedAtUtc = now;
+        }
+
+        if (string.IsNullOrWhiteSpace(structuredEvent.EventType))
+        {
+            structuredEvent.EventType = "unknown";
+        }
+
+        structuredEvent.Category = structuredEvent.Category?.Trim() ?? string.Empty;
+        structuredEvent.Summary = structuredEvent.Summary?.Trim() ?? string.Empty;
+        structuredEvent.Error = structuredEvent.Error?.Trim() ?? string.Empty;
+        structuredEvent.PayloadJson = string.IsNullOrWhiteSpace(structuredEvent.PayloadJson)
+            ? null
+            : structuredEvent.PayloadJson.Trim();
+        structuredEvent.SchemaVersion = structuredEvent.SchemaVersion?.Trim() ?? string.Empty;
+        if (structuredEvent.TimestampUtc == default)
+        {
+            structuredEvent.TimestampUtc = structuredEvent.CreatedAtUtc;
+        }
+
+        if (string.IsNullOrWhiteSpace(structuredEvent.RepositoryId) || string.IsNullOrWhiteSpace(structuredEvent.TaskId))
+        {
+            var runMetadata = await db.Runs.AsNoTracking()
+                .Where(x => x.Id == structuredEvent.RunId)
+                .Select(x => new
+                {
+                    x.RepositoryId,
+                    x.TaskId
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (runMetadata is not null)
+            {
+                if (string.IsNullOrWhiteSpace(structuredEvent.RepositoryId))
+                {
+                    structuredEvent.RepositoryId = runMetadata.RepositoryId;
+                }
+
+                if (string.IsNullOrWhiteSpace(structuredEvent.TaskId))
+                {
+                    structuredEvent.TaskId = runMetadata.TaskId;
+                }
+            }
+        }
+
+        var stored = await db.RunStructuredEvents.FirstOrDefaultAsync(
+            x => x.RunId == structuredEvent.RunId && x.Sequence == structuredEvent.Sequence,
+            cancellationToken);
+
+        if (stored is null)
+        {
+            db.RunStructuredEvents.Add(structuredEvent);
+            stored = structuredEvent;
+        }
+        else
+        {
+            stored.RepositoryId = structuredEvent.RepositoryId;
+            stored.TaskId = structuredEvent.TaskId;
+            stored.EventType = structuredEvent.EventType;
+            stored.Category = structuredEvent.Category;
+            stored.Summary = structuredEvent.Summary;
+            stored.Error = structuredEvent.Error;
+            stored.PayloadJson = structuredEvent.PayloadJson;
+            stored.SchemaVersion = structuredEvent.SchemaVersion;
+            stored.TimestampUtc = structuredEvent.TimestampUtc;
+            stored.CreatedAtUtc = structuredEvent.CreatedAtUtc;
+        }
+
+        var projection = CreateToolProjection(stored);
+        if (projection is not null)
+        {
+            RunToolProjectionDocument? existingProjection;
+            if (!string.IsNullOrWhiteSpace(projection.ToolCallId))
+            {
+                existingProjection = await db.RunToolProjections.FirstOrDefaultAsync(
+                    x => x.RunId == projection.RunId && x.ToolCallId == projection.ToolCallId,
+                    cancellationToken);
+            }
+            else
+            {
+                existingProjection = await db.RunToolProjections.FirstOrDefaultAsync(
+                    x => x.RunId == projection.RunId &&
+                         x.SequenceStart <= projection.SequenceStart &&
+                         x.SequenceEnd >= projection.SequenceEnd,
+                    cancellationToken);
+            }
+
+            if (existingProjection is null)
+            {
+                db.RunToolProjections.Add(projection);
+            }
+            else
+            {
+                if (existingProjection.SequenceStart == 0 || projection.SequenceStart < existingProjection.SequenceStart)
+                {
+                    existingProjection.SequenceStart = projection.SequenceStart;
+                }
+
+                if (projection.SequenceEnd > existingProjection.SequenceEnd)
+                {
+                    existingProjection.SequenceEnd = projection.SequenceEnd;
+                }
+
+                existingProjection.RepositoryId = projection.RepositoryId;
+                existingProjection.TaskId = projection.TaskId;
+                existingProjection.ToolName = projection.ToolName;
+                existingProjection.Status = projection.Status;
+                existingProjection.InputJson = projection.InputJson;
+                existingProjection.OutputJson = projection.OutputJson;
+                existingProjection.Error = projection.Error;
+                existingProjection.SchemaVersion = projection.SchemaVersion;
+                existingProjection.TimestampUtc = projection.TimestampUtc;
+                existingProjection.CreatedAtUtc = projection.CreatedAtUtc;
+                if (!string.IsNullOrWhiteSpace(projection.ToolCallId))
+                {
+                    existingProjection.ToolCallId = projection.ToolCallId;
+                }
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return stored;
+    }
+
+    public async Task<List<RunStructuredEventDocument>> ListRunStructuredEventsAsync(string runId, int limit, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var normalizedLimit = limit <= 0 ? 500 : Math.Clamp(limit, 1, 5000);
+
+        return await db.RunStructuredEvents.AsNoTracking()
+            .Where(x => x.RunId == runId)
+            .OrderBy(x => x.Sequence)
+            .ThenBy(x => x.TimestampUtc)
+            .Take(normalizedLimit)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RunDiffSnapshotDocument> UpsertRunDiffSnapshotAsync(RunDiffSnapshotDocument snapshot, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(snapshot.RunId))
+        {
+            throw new ArgumentException("RunId is required.", nameof(snapshot));
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+
+        if (string.IsNullOrWhiteSpace(snapshot.Id))
+        {
+            snapshot.Id = Guid.NewGuid().ToString("N");
+        }
+
+        if (snapshot.CreatedAtUtc == default)
+        {
+            snapshot.CreatedAtUtc = now;
+        }
+
+        if (snapshot.TimestampUtc == default)
+        {
+            snapshot.TimestampUtc = snapshot.CreatedAtUtc;
+        }
+
+        snapshot.Summary = snapshot.Summary?.Trim() ?? string.Empty;
+        snapshot.DiffStat = snapshot.DiffStat?.Trim() ?? string.Empty;
+        snapshot.DiffPatch = snapshot.DiffPatch?.Trim() ?? string.Empty;
+        snapshot.SchemaVersion = snapshot.SchemaVersion?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(snapshot.RepositoryId) || string.IsNullOrWhiteSpace(snapshot.TaskId))
+        {
+            var runMetadata = await db.Runs.AsNoTracking()
+                .Where(x => x.Id == snapshot.RunId)
+                .Select(x => new
+                {
+                    x.RepositoryId,
+                    x.TaskId
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (runMetadata is not null)
+            {
+                if (string.IsNullOrWhiteSpace(snapshot.RepositoryId))
+                {
+                    snapshot.RepositoryId = runMetadata.RepositoryId;
+                }
+
+                if (string.IsNullOrWhiteSpace(snapshot.TaskId))
+                {
+                    snapshot.TaskId = runMetadata.TaskId;
+                }
+            }
+        }
+
+        var existing = await db.RunDiffSnapshots.FirstOrDefaultAsync(
+            x => x.RunId == snapshot.RunId && x.Sequence == snapshot.Sequence,
+            cancellationToken);
+
+        if (existing is null)
+        {
+            db.RunDiffSnapshots.Add(snapshot);
+            await db.SaveChangesAsync(cancellationToken);
+            return snapshot;
+        }
+
+        existing.RepositoryId = snapshot.RepositoryId;
+        existing.TaskId = snapshot.TaskId;
+        existing.Summary = snapshot.Summary;
+        existing.DiffStat = snapshot.DiffStat;
+        existing.DiffPatch = snapshot.DiffPatch;
+        existing.SchemaVersion = snapshot.SchemaVersion;
+        existing.TimestampUtc = snapshot.TimestampUtc;
+        existing.CreatedAtUtc = snapshot.CreatedAtUtc;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<RunDiffSnapshotDocument?> GetLatestRunDiffSnapshotAsync(string runId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return null;
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RunDiffSnapshots.AsNoTracking()
+            .Where(x => x.RunId == runId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.Sequence)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<List<RunToolProjectionDocument>> ListRunToolProjectionsAsync(string runId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return [];
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RunToolProjections.AsNoTracking()
+            .Where(x => x.RunId == runId)
+            .OrderBy(x => x.SequenceStart)
+            .ThenBy(x => x.SequenceEnd)
+            .ThenBy(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<StructuredRunDataPruneResult> PruneStructuredRunDataAsync(
+        DateTime olderThanUtc,
+        int maxRuns,
+        bool excludeWorkflowReferencedTasks,
+        bool excludeTasksWithOpenFindings,
+        CancellationToken cancellationToken)
+    {
+        var normalizedMaxRuns = Math.Clamp(maxRuns, 1, 5000);
+        var scanLimit = Math.Clamp(normalizedMaxRuns * 5, normalizedMaxRuns, 20_000);
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var runSeeds = await db.Runs.AsNoTracking()
+            .Where(x =>
+                (x.State == RunState.Succeeded ||
+                 x.State == RunState.Failed ||
+                 x.State == RunState.Cancelled ||
+                 x.State == RunState.Obsolete) &&
+                (x.EndedAtUtc ?? x.CreatedAtUtc) < olderThanUtc)
+            .OrderBy(x => x.EndedAtUtc ?? x.CreatedAtUtc)
+            .Select(x => new RunPruneSeed(x.Id, x.TaskId, x.RepositoryId))
+            .Take(scanLimit)
+            .ToListAsync(cancellationToken);
+
+        if (runSeeds.Count == 0)
+        {
+            return new StructuredRunDataPruneResult(
+                RunsScanned: 0,
+                DeletedStructuredEvents: 0,
+                DeletedDiffSnapshots: 0,
+                DeletedToolProjections: 0);
+        }
+
+        var candidateRunSeeds = runSeeds;
+        if (excludeWorkflowReferencedTasks || excludeTasksWithOpenFindings)
+        {
+            var taskIds = candidateRunSeeds
+                .Select(x => x.TaskId)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (taskIds.Count > 0)
+            {
+                var excludedTaskIds = new HashSet<string>(StringComparer.Ordinal);
+                if (excludeWorkflowReferencedTasks)
+                {
+                    var repositoryIds = candidateRunSeeds
+                        .Select(x => x.RepositoryId)
+                        .Where(x => !string.IsNullOrWhiteSpace(x))
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList();
+
+                    if (repositoryIds.Count > 0)
+                    {
+                        var workflowStages = await db.Workflows.AsNoTracking()
+                            .Where(x => repositoryIds.Contains(x.RepositoryId))
+                            .Select(x => x.Stages)
+                            .ToListAsync(cancellationToken);
+
+                        foreach (var stages in workflowStages)
+                        {
+                            if (stages is null || stages.Count == 0)
+                            {
+                                continue;
+                            }
+
+                            foreach (var stage in stages)
+                            {
+                                if (!string.IsNullOrWhiteSpace(stage.TaskId))
+                                {
+                                    excludedTaskIds.Add(stage.TaskId);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (excludeTasksWithOpenFindings)
+                {
+                    var taskIdsWithOpenFindings = await (
+                            from finding in db.Findings.AsNoTracking()
+                            join run in db.Runs.AsNoTracking() on finding.RunId equals run.Id
+                            where taskIds.Contains(run.TaskId) && OpenFindingStates.Contains(finding.State)
+                            select run.TaskId)
+                        .Distinct()
+                        .ToListAsync(cancellationToken);
+
+                    foreach (var taskId in taskIdsWithOpenFindings)
+                    {
+                        if (!string.IsNullOrWhiteSpace(taskId))
+                        {
+                            excludedTaskIds.Add(taskId);
+                        }
+                    }
+                }
+
+                if (excludedTaskIds.Count > 0)
+                {
+                    candidateRunSeeds = candidateRunSeeds
+                        .Where(x => !excludedTaskIds.Contains(x.TaskId))
+                        .ToList();
+                }
+            }
+        }
+
+        var runIds = candidateRunSeeds
+            .Select(x => x.RunId)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Take(normalizedMaxRuns)
+            .ToList();
+
+        if (runIds.Count == 0)
+        {
+            return new StructuredRunDataPruneResult(
+                RunsScanned: 0,
+                DeletedStructuredEvents: 0,
+                DeletedDiffSnapshots: 0,
+                DeletedToolProjections: 0);
+        }
+
+        var deletedStructuredEvents = await db.RunStructuredEvents
+            .Where(x => runIds.Contains(x.RunId))
+            .ExecuteDeleteAsync(cancellationToken);
+        var deletedDiffSnapshots = await db.RunDiffSnapshots
+            .Where(x => runIds.Contains(x.RunId))
+            .ExecuteDeleteAsync(cancellationToken);
+        var deletedToolProjections = await db.RunToolProjections
+            .Where(x => runIds.Contains(x.RunId))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        return new StructuredRunDataPruneResult(
+            RunsScanned: runIds.Count,
+            DeletedStructuredEvents: deletedStructuredEvents,
+            DeletedDiffSnapshots: deletedDiffSnapshots,
+            DeletedToolProjections: deletedToolProjections);
+    }
+
     public async Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -2414,6 +2909,127 @@ public sealed class OrchestratorStore(
         return IsCompletionState(state) && state == RunState.Succeeded;
     }
 
+    private static RunToolProjectionDocument? CreateToolProjection(RunStructuredEventDocument structuredEvent)
+    {
+        var eventType = structuredEvent.EventType?.Trim() ?? string.Empty;
+        var category = structuredEvent.Category?.Trim() ?? string.Empty;
+        var payloadJson = structuredEvent.PayloadJson?.Trim() ?? string.Empty;
+        var toolCallId = string.Empty;
+        var toolName = string.Empty;
+        var status = string.Empty;
+        var inputJson = string.Empty;
+        var outputJson = string.Empty;
+        var error = structuredEvent.Error?.Trim() ?? string.Empty;
+        var isToolEvent =
+            eventType.Contains("tool", StringComparison.OrdinalIgnoreCase) ||
+            category.Contains("tool", StringComparison.OrdinalIgnoreCase);
+
+        if (payloadJson.Length > 0)
+        {
+            try
+            {
+                using var payloadDocument = JsonDocument.Parse(payloadJson);
+                if (payloadDocument.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    var payloadRoot = payloadDocument.RootElement;
+                    toolCallId = ReadJsonString(payloadRoot, "toolCallId", "tool_call_id", "callId", "call_id", "id");
+                    toolName = ReadJsonString(payloadRoot, "toolName", "tool_name", "name", "tool", "tool_name_normalized");
+                    status = ReadJsonString(payloadRoot, "status", "state", "phase");
+                    inputJson = ReadJsonRaw(payloadRoot, "input", "arguments", "inputJson", "input_json");
+                    outputJson = ReadJsonRaw(payloadRoot, "output", "result", "outputJson", "output_json");
+                    if (error.Length == 0)
+                    {
+                        error = ReadJsonString(payloadRoot, "error", "message", "failure");
+                    }
+
+                    isToolEvent = isToolEvent || !string.IsNullOrWhiteSpace(toolCallId) || !string.IsNullOrWhiteSpace(toolName);
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        if (!isToolEvent)
+        {
+            return null;
+        }
+
+        return new RunToolProjectionDocument
+        {
+            RunId = structuredEvent.RunId,
+            RepositoryId = structuredEvent.RepositoryId,
+            TaskId = structuredEvent.TaskId,
+            ToolCallId = toolCallId,
+            SequenceStart = structuredEvent.Sequence,
+            SequenceEnd = structuredEvent.Sequence,
+            ToolName = toolName,
+            Status = status.Length == 0 ? (category.Length == 0 ? eventType : category) : status,
+            InputJson = inputJson.Length == 0 ? payloadJson : inputJson,
+            OutputJson = outputJson,
+            Error = error,
+            SchemaVersion = structuredEvent.SchemaVersion,
+            TimestampUtc = structuredEvent.TimestampUtc,
+            CreatedAtUtc = structuredEvent.CreatedAtUtc,
+        };
+    }
+
+    private static string ReadJsonString(JsonElement root, params string[] propertyNames)
+    {
+        if (root.ValueKind != JsonValueKind.Object || propertyNames.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return property.Value.ValueKind switch
+                {
+                    JsonValueKind.Null => string.Empty,
+                    JsonValueKind.String => property.Value.GetString() ?? string.Empty,
+                    _ => property.Value.GetRawText()
+                };
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string ReadJsonRaw(JsonElement root, params string[] propertyNames)
+    {
+        if (root.ValueKind != JsonValueKind.Object || propertyNames.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (property.Value.ValueKind == JsonValueKind.Null)
+                {
+                    return string.Empty;
+                }
+
+                return property.Value.GetRawText();
+            }
+        }
+
+        return string.Empty;
+    }
+
     private static string NormalizePromptSkillScope(string repositoryId)
     {
         var normalized = repositoryId.Trim();
@@ -2579,7 +3195,8 @@ public sealed class OrchestratorStore(
     private sealed record TaskCleanupSeed(
         string TaskId,
         string RepositoryId,
-        DateTime CreatedAtUtc);
+        DateTime CreatedAtUtc,
+        bool Enabled);
 
     private sealed record TaskRunAggregate(
         string TaskId,
@@ -2591,4 +3208,9 @@ public sealed class OrchestratorStore(
     private sealed record TaskTimestampAggregate(
         string TaskId,
         DateTime? TimestampUtc);
+
+    private sealed record RunPruneSeed(
+        string RunId,
+        string TaskId,
+        string RepositoryId);
 }

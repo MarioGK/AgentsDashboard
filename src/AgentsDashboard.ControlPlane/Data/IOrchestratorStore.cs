@@ -38,8 +38,6 @@ public interface IOrchestratorStore
     Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken);
     Task<TaskDocument?> UpdateTaskGitMetadataAsync(
         string taskId,
-        string? worktreePath,
-        string? worktreeBranch,
         DateTime? lastGitSyncAtUtc,
         string? lastGitSyncError,
         CancellationToken cancellationToken);
@@ -51,7 +49,11 @@ public interface IOrchestratorStore
     Task<CleanupBatchResult> DeleteTasksCascadeAsync(IReadOnlyList<string> taskIds, CancellationToken cancellationToken);
     Task VacuumAsync(CancellationToken cancellationToken);
 
-    Task<RunDocument> CreateRunAsync(TaskDocument task, CancellationToken cancellationToken, int attempt = 1);
+    Task<RunDocument> CreateRunAsync(
+        TaskDocument task,
+        CancellationToken cancellationToken,
+        int attempt = 1,
+        HarnessExecutionMode? executionModeOverride = null);
     Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken);
     Task<List<RepositoryDocument>> ListRepositoriesWithRecentTasksAsync(int limit, CancellationToken cancellationToken);
@@ -95,6 +97,17 @@ public interface IOrchestratorStore
 
     Task AddRunLogAsync(RunLogEvent logEvent, CancellationToken cancellationToken);
     Task<List<RunLogEvent>> ListRunLogsAsync(string runId, CancellationToken cancellationToken);
+    Task<RunStructuredEventDocument> AppendRunStructuredEventAsync(RunStructuredEventDocument structuredEvent, CancellationToken cancellationToken);
+    Task<List<RunStructuredEventDocument>> ListRunStructuredEventsAsync(string runId, int limit, CancellationToken cancellationToken);
+    Task<RunDiffSnapshotDocument> UpsertRunDiffSnapshotAsync(RunDiffSnapshotDocument snapshot, CancellationToken cancellationToken);
+    Task<RunDiffSnapshotDocument?> GetLatestRunDiffSnapshotAsync(string runId, CancellationToken cancellationToken);
+    Task<List<RunToolProjectionDocument>> ListRunToolProjectionsAsync(string runId, CancellationToken cancellationToken);
+    Task<StructuredRunDataPruneResult> PruneStructuredRunDataAsync(
+        DateTime olderThanUtc,
+        int maxRuns,
+        bool excludeWorkflowReferencedTasks,
+        bool excludeTasksWithOpenFindings,
+        CancellationToken cancellationToken);
 
     Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<FindingDocument>> ListAllFindingsAsync(CancellationToken cancellationToken);

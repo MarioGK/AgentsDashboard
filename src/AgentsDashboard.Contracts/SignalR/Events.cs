@@ -13,6 +13,33 @@ public sealed record RunLogChunkEvent(
     string Message,
     DateTime Timestamp);
 
+public sealed record RunStructuredEventChangedEvent(
+    string RunId,
+    long Sequence,
+    string Category,
+    string Payload,
+    string Schema,
+    DateTime Timestamp);
+
+public sealed record RunDiffUpdatedEvent(
+    string RunId,
+    long Sequence,
+    string Category,
+    string Payload,
+    string Schema,
+    DateTime Timestamp);
+
+public sealed record RunToolTimelineUpdatedEvent(
+    string RunId,
+    long Sequence,
+    string Category,
+    string ToolName,
+    string ToolCallId,
+    string State,
+    string Payload,
+    string Schema,
+    DateTime Timestamp);
+
 public sealed record FindingUpdatedEvent(
     string FindingId,
     string RepositoryId,

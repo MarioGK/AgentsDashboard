@@ -156,12 +156,12 @@ public sealed class TaskSemanticEmbeddingService(
 
         if (chunks.Count == 0)
         {
-            logger.LogDebug("Task semantic embedding skipped for task {TaskId}: no changed chunks", taskId);
+            logger.ZLogDebug("Task semantic embedding skipped for task {TaskId}: no changed chunks", taskId);
             return;
         }
 
         await store.UpsertSemanticChunksAsync(taskId, chunks, cancellationToken);
-        logger.LogDebug(
+        logger.ZLogDebug(
             "Task semantic embedding upserted {ChunkCount} chunk rows for task {TaskId} in repository {RepositoryId}",
             chunks.Count,
             taskId,
@@ -197,7 +197,7 @@ public sealed class TaskSemanticEmbeddingService(
 
         try
         {
-            logger.LogDebug(
+            logger.ZLogDebug(
                 "Processing task semantic embedding for task {TaskId} in repository {RepositoryId} ({Reason})",
                 trigger.TaskId,
                 trigger.RepositoryId,
@@ -210,7 +210,7 @@ public sealed class TaskSemanticEmbeddingService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(
+            logger.ZLogWarning(
                 ex,
                 "Task semantic embedding failed for task {TaskId} in repository {RepositoryId}",
                 trigger.TaskId,

@@ -42,7 +42,7 @@ public sealed class WorkerGatewayService(
 
         await queue.EnqueueAsync(new QueuedJob { Request = request }, CancellationToken.None);
 
-        logger.LogInformation("Accepted run {RunId} using harness {Harness}", request.RunId, request.HarnessType);
+        logger.ZLogInformation("Accepted run {RunId} using harness {Harness}", request.RunId, request.HarnessType);
 
         return new DispatchJobReply
         {
@@ -75,7 +75,7 @@ public sealed class WorkerGatewayService(
             };
         }
 
-        logger.LogWarning("KillContainer request received for container {ContainerId}",
+        logger.ZLogWarning("KillContainer request received for container {ContainerId}",
             request.ContainerId);
 
         try
@@ -93,7 +93,7 @@ public sealed class WorkerGatewayService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error killing container {ContainerId}", request.ContainerId);
+            logger.ZLogError(ex, "Error killing container {ContainerId}", request.ContainerId);
 
             return new KillContainerReply
             {
@@ -106,7 +106,7 @@ public sealed class WorkerGatewayService(
 
     public UnaryResult<HeartbeatReply> HeartbeatAsync(HeartbeatRequest request)
     {
-        logger.LogDebug("Heartbeat received from worker {WorkerId} on {HostName}: {ActiveSlots}/{MaxSlots} slots",
+        logger.ZLogDebug("Heartbeat received from worker {WorkerId} on {HostName}: {ActiveSlots}/{MaxSlots} slots",
             request.WorkerId, request.HostName, request.ActiveSlots, request.MaxSlots);
 
         return new UnaryResult<HeartbeatReply>(new HeartbeatReply
@@ -119,7 +119,7 @@ public sealed class WorkerGatewayService(
     public async UnaryResult<ReconcileOrphanedContainersReply> ReconcileOrphanedContainersAsync(
         ReconcileOrphanedContainersRequest request)
     {
-        logger.LogInformation("Received orphan reconciliation request from worker {WorkerId}",
+        logger.ZLogInformation("Received orphan reconciliation request from worker {WorkerId}",
             request.WorkerId);
 
         try
@@ -128,7 +128,7 @@ public sealed class WorkerGatewayService(
 
             var result = await orphanReconciler.ReconcileAsync(activeRunIds, CancellationToken.None);
 
-            logger.LogInformation("Orphan reconciliation complete for worker {WorkerId}: {OrphanedCount} found, {RemovedCount} removed",
+            logger.ZLogInformation("Orphan reconciliation complete for worker {WorkerId}: {OrphanedCount} found, {RemovedCount} removed",
                 request.WorkerId, result.OrphanedCount, result.RemovedContainers.Count);
 
             return new ReconcileOrphanedContainersReply
@@ -141,7 +141,7 @@ public sealed class WorkerGatewayService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error during orphan reconciliation for worker {WorkerId}", request.WorkerId);
+            logger.ZLogError(ex, "Error during orphan reconciliation for worker {WorkerId}", request.WorkerId);
 
             return new ReconcileOrphanedContainersReply
             {
@@ -177,7 +177,7 @@ public sealed class WorkerGatewayService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to retrieve harness tool status for worker");
+            logger.ZLogError(ex, "Failed to retrieve harness tool status for worker");
 
             return new GetHarnessToolsReply
             {

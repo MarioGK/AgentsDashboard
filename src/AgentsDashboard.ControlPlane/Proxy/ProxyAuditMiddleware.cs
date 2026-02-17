@@ -56,13 +56,13 @@ public class ProxyAuditMiddleware(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Failed to record proxy audit for path {Path}", context.Request.Path);
+                    logger.ZLogError(ex, "Failed to record proxy audit for path {Path}", context.Request.Path);
                 }
             });
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to extract proxy audit metadata from path {Path}", context.Request.Path);
+            logger.ZLogWarning(ex, "Failed to extract proxy audit metadata from path {Path}", context.Request.Path);
         }
     }
 

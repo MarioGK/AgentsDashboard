@@ -28,6 +28,72 @@ public sealed class BlazorRunEventPublisher(IUiRealtimeBroker broker) : IRunEven
             cancellationToken);
     }
 
+    public Task PublishStructuredEventChangedAsync(
+        string runId,
+        long sequence,
+        string category,
+        string payload,
+        string schema,
+        DateTime timestampUtc,
+        CancellationToken cancellationToken)
+    {
+        return broker.PublishAsync(
+            new RunStructuredEventChangedEvent(
+                runId,
+                sequence,
+                category,
+                payload,
+                schema,
+                timestampUtc),
+            cancellationToken);
+    }
+
+    public Task PublishDiffUpdatedAsync(
+        string runId,
+        long sequence,
+        string category,
+        string payload,
+        string schema,
+        DateTime timestampUtc,
+        CancellationToken cancellationToken)
+    {
+        return broker.PublishAsync(
+            new RunDiffUpdatedEvent(
+                runId,
+                sequence,
+                category,
+                payload,
+                schema,
+                timestampUtc),
+            cancellationToken);
+    }
+
+    public Task PublishToolTimelineUpdatedAsync(
+        string runId,
+        long sequence,
+        string category,
+        string toolName,
+        string toolCallId,
+        string state,
+        string payload,
+        string schema,
+        DateTime timestampUtc,
+        CancellationToken cancellationToken)
+    {
+        return broker.PublishAsync(
+            new RunToolTimelineUpdatedEvent(
+                runId,
+                sequence,
+                category,
+                toolName,
+                toolCallId,
+                state,
+                payload,
+                schema,
+                timestampUtc),
+            cancellationToken);
+    }
+
     public Task PublishFindingUpdatedAsync(FindingDocument finding, CancellationToken cancellationToken)
     {
         return broker.PublishAsync(

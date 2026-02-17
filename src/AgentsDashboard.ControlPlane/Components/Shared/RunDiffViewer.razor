@@ -1,0 +1,423 @@
+@namespace AgentsDashboard.ControlPlane.Components.Shared
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@implements IAsyncDisposable
+
+@if (string.IsNullOrWhiteSpace(Patch))
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary">No patch captured for this run.</MudText>
+}
+else
+{
+    <div class="run-diff-viewer-shell">
+        <div class="run-diff-files-pane">
+            <RunDiffFileList Files="_files"
+                             SelectedFilePath="_selectedFilePath"
+                             SelectedFilePathChanged="OnSelectedFilePathChangedAsync"
+                             HunkNavigateRequested="OnHunkNavigateRequestedAsync"
+                             OpenFileRequested="OpenChangedFileAsync" />
+        </div>
+
+        <div class="run-diff-main-pane">
+            <MudStack Row AlignItems="AlignItems.Center" Class="mb-2" Spacing="1">
+                <MudChip T="string" Variant="Variant.Outlined">@_files.Count files</MudChip>
+                @if (!string.IsNullOrWhiteSpace(DiffStat))
+                {
+                    <MudText Typo="Typo.caption">@DiffStat</MudText>
+                }
+                <MudChip T="string" Variant="Variant.Outlined">@(_renderSideBySide ? "Side By Side" : "Inline")</MudChip>
+                <MudSpacer />
+                <MudButtonGroup Variant="Variant.Outlined" Color="Color.Primary">
+                    <MudButton Size="Size.Small"
+                               Color="@(_renderSideBySide ? Color.Primary : Color.Default)"
+                               Variant="@(_renderSideBySide ? Variant.Filled : Variant.Outlined)"
+                               OnClick="() => SetDiffLayoutAsync(true)">
+                        Side By Side
+                    </MudButton>
+                    <MudButton Size="Size.Small"
+                               Color="@(!_renderSideBySide ? Color.Primary : Color.Default)"
+                               Variant="@(!_renderSideBySide ? Variant.Filled : Variant.Outlined)"
+                               OnClick="() => SetDiffLayoutAsync(false)">
+                        Inline
+                    </MudButton>
+                </MudButtonGroup>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyPatchAsync">
+                    Copy Patch
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download" OnClick="DownloadPatchAsync">
+                    Download Patch
+                </MudButton>
+                @if (_selectedFile is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInNew" OnClick="() => OpenChangedFileAsync(_selectedFile.Path)">
+                        Open Changed File
+                    </MudButton>
+                }
+            </MudStack>
+
+            <div class="run-diff-editor-host">
+                <StandaloneDiffEditor @ref="_diffEditor"
+                                      ConstructionOptions="editor => DiffEditorOptions(editor, _renderSideBySide)"
+                                      RenderSideBySide="@_renderSideBySide"
+                                      EnableSplitViewResizing="true"
+                                      IgnoreTrimWhitespace="false"
+                                      CssClass="run-diff-editor" />
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .run-diff-viewer-shell {
+        display: grid;
+        grid-template-columns: minmax(240px, 320px) 1fr;
+        gap: 0.75rem;
+        min-height: 540px;
+    }
+
+    .run-diff-files-pane {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 0.5rem;
+        overflow: auto;
+        max-height: 620px;
+    }
+
+    .run-diff-main-pane {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 0.5rem 0.75rem;
+        min-width: 0;
+    }
+
+    .run-diff-editor-host {
+        height: 560px;
+        min-height: 420px;
+    }
+
+    .run-diff-editor {
+        height: 100%;
+    }
+
+    .run-diff-file-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .run-diff-file {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 0.4rem;
+        background: rgba(255, 255, 255, 0.01);
+    }
+
+    .run-diff-file-selected {
+        border-color: rgba(0, 150, 255, 0.55);
+        background: rgba(0, 150, 255, 0.08);
+    }
+
+    .run-diff-file-row {
+        gap: 0.35rem;
+    }
+
+    .run-diff-file-select {
+        justify-content: flex-start;
+        text-transform: none;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .run-diff-hunk-row {
+        flex-wrap: wrap;
+        margin-top: 0.35rem;
+    }
+
+    @@media (max-width: 1200px) {
+        .run-diff-viewer-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .run-diff-files-pane {
+            max-height: 260px;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public string RunId { get; set; } = string.Empty;
+    [Parameter] public string Patch { get; set; } = string.Empty;
+    [Parameter] public string DiffStat { get; set; } = string.Empty;
+    [Parameter] public string OpenFileBaseUrl { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> OpenFileRequested { get; set; }
+
+    private readonly List<RunDiffFileView> _files = [];
+    private StandaloneDiffEditor? _diffEditor;
+    private TextModel? _originalModel;
+    private TextModel? _modifiedModel;
+    private string _selectedFilePath = string.Empty;
+    private string _lastPatch = string.Empty;
+    private RunDiffFileView? _selectedFile;
+    private bool _syncEditorModel;
+    private int _pendingRevealLine;
+    private bool _renderSideBySide = true;
+
+    protected override Task OnParametersSetAsync()
+    {
+        var normalizedPatch = Patch ?? string.Empty;
+        if (!string.Equals(_lastPatch, normalizedPatch, StringComparison.Ordinal))
+        {
+            _lastPatch = normalizedPatch;
+            _files.Clear();
+            _files.AddRange(RunDiffParser.Parse(normalizedPatch));
+            _selectedFilePath = ResolveSelectedFilePath(_selectedFilePath, _files);
+            _selectedFile = _files.FirstOrDefault(file => string.Equals(file.Path, _selectedFilePath, StringComparison.OrdinalIgnoreCase));
+            _syncEditorModel = true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_syncEditorModel)
+        {
+            _syncEditorModel = false;
+            await SyncDiffEditorAsync();
+        }
+    }
+
+    private async Task OnSelectedFilePathChangedAsync(string filePath)
+    {
+        if (string.Equals(_selectedFilePath, filePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _selectedFilePath = filePath;
+        _selectedFile = _files.FirstOrDefault(file => string.Equals(file.Path, filePath, StringComparison.OrdinalIgnoreCase));
+        _syncEditorModel = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnHunkNavigateRequestedAsync(int lineNumber)
+    {
+        _pendingRevealLine = Math.Max(1, lineNumber);
+        await RevealPendingLineAsync();
+    }
+
+    private async Task SetDiffLayoutAsync(bool sideBySide)
+    {
+        if (_renderSideBySide == sideBySide)
+        {
+            return;
+        }
+
+        _renderSideBySide = sideBySide;
+        _syncEditorModel = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SyncDiffEditorAsync()
+    {
+        if (_diffEditor is null)
+        {
+            return;
+        }
+
+        _selectedFilePath = ResolveSelectedFilePath(_selectedFilePath, _files);
+        _selectedFile = _files.FirstOrDefault(file => string.Equals(file.Path, _selectedFilePath, StringComparison.OrdinalIgnoreCase));
+
+        if (_selectedFile is null)
+        {
+            await DisposeModelsAsync();
+            return;
+        }
+
+        await DisposeModelsAsync();
+
+        var language = ResolveLanguage(_selectedFile.Path);
+        var fileKey = _selectedFile.Path.Replace(' ', '-').Replace('/', '-');
+        var originalUri = $"inmemory://runs/{RunId}/original/{fileKey}-{Guid.NewGuid():N}";
+        var modifiedUri = $"inmemory://runs/{RunId}/modified/{fileKey}-{Guid.NewGuid():N}";
+
+        _originalModel = await Global.CreateModel(
+            JS,
+            string.IsNullOrWhiteSpace(_selectedFile.OriginalContent) ? "\n" : _selectedFile.OriginalContent,
+            language,
+            originalUri);
+
+        _modifiedModel = await Global.CreateModel(
+            JS,
+            string.IsNullOrWhiteSpace(_selectedFile.ModifiedContent) ? "\n" : _selectedFile.ModifiedContent,
+            language,
+            modifiedUri);
+
+        await _diffEditor.SetModel(new DiffEditorModel
+        {
+            Original = _originalModel,
+            Modified = _modifiedModel,
+        });
+
+        await RevealPendingLineAsync();
+    }
+
+    private async Task RevealPendingLineAsync()
+    {
+        if (_pendingRevealLine <= 0 || _diffEditor?.ModifiedEditor is null)
+        {
+            return;
+        }
+
+        var line = _pendingRevealLine;
+        _pendingRevealLine = 0;
+
+        await _diffEditor.ModifiedEditor.SetPosition(new BlazorMonaco.Position
+        {
+            LineNumber = line,
+            Column = 1,
+        }, "hunk-navigation");
+
+        await _diffEditor.ModifiedEditor.RevealLineInCenter(line, null);
+    }
+
+    private async Task OpenChangedFileAsync(string filePath)
+    {
+        if (OpenFileRequested.HasDelegate)
+        {
+            await OpenFileRequested.InvokeAsync(filePath);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(OpenFileBaseUrl))
+        {
+            await CopyTextAsync(filePath, "File path copied.");
+            return;
+        }
+
+        var encodedPath = string.Join('/', filePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+        var url = $"{OpenFileBaseUrl.TrimEnd('/')}/{encodedPath}";
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private async Task CopyPatchAsync()
+    {
+        await CopyTextAsync(Patch, "Patch copied.");
+    }
+
+    private async Task DownloadPatchAsync()
+    {
+        var fileName = $"run-{(RunId.Length >= 8 ? RunId[..8] : RunId)}.patch";
+        var payload = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(Patch));
+
+        try
+        {
+            await JS.InvokeVoidAsync("agentsDashboard.downloadBase64File", fileName, "text/x-diff", payload);
+        }
+        catch
+        {
+            await CopyPatchAsync();
+        }
+    }
+
+    private async Task CopyTextAsync(string text, string successMessage)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text ?? string.Empty);
+            Snackbar.Add(successMessage, Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Clipboard write failed.", Severity.Warning);
+        }
+    }
+
+    private static string ResolveSelectedFilePath(string selected, IReadOnlyList<RunDiffFileView> files)
+    {
+        if (files.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selected) && files.Any(file => string.Equals(file.Path, selected, StringComparison.OrdinalIgnoreCase)))
+        {
+            return selected;
+        }
+
+        return files[0].Path;
+    }
+
+    private static string ResolveLanguage(string path)
+    {
+        var extension = Path.GetExtension(path).Trim().ToLowerInvariant();
+        return extension switch
+        {
+            ".cs" => "csharp",
+            ".ts" => "typescript",
+            ".tsx" => "typescript",
+            ".js" => "javascript",
+            ".jsx" => "javascript",
+            ".json" => "json",
+            ".md" => "markdown",
+            ".yaml" or ".yml" => "yaml",
+            ".xml" => "xml",
+            ".html" => "html",
+            ".css" => "css",
+            ".sql" => "sql",
+            ".py" => "python",
+            ".go" => "go",
+            ".java" => "java",
+            ".rb" => "ruby",
+            ".php" => "php",
+            ".sh" => "shell",
+            ".ps1" => "powershell",
+            _ => "plaintext"
+        };
+    }
+
+    private static StandaloneDiffEditorConstructionOptions DiffEditorOptions(StandaloneDiffEditor editor, bool renderSideBySide = true) => new()
+    {
+        Theme = "agents-dashboard-dark",
+        AutoDetectHighContrast = true,
+        RenderSideBySide = renderSideBySide,
+        LineNumbers = "on",
+        GlyphMargin = true,
+        ReadOnly = true,
+        RenderIndicators = true,
+        IgnoreTrimWhitespace = false,
+    };
+
+    private async Task DisposeModelsAsync()
+    {
+        if (_originalModel is not null)
+        {
+            try
+            {
+                await _originalModel.DisposeModel();
+            }
+            catch
+            {
+            }
+            _originalModel = null;
+        }
+
+        if (_modifiedModel is not null)
+        {
+            try
+            {
+                await _modifiedModel.DisposeModel();
+            }
+            catch
+            {
+            }
+            _modifiedModel = null;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeModelsAsync();
+    }
+}

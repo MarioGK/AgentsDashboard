@@ -25,7 +25,8 @@ public sealed record CreateTaskRequest(
     int? ConcurrencyLimit = null,
     List<InstructionFile>? InstructionFiles = null,
     List<string>? ArtifactPatterns = null,
-    List<string>? LinkedFailureRuns = null);
+    List<string>? LinkedFailureRuns = null,
+    HarnessExecutionMode? ExecutionModeDefault = null);
 public sealed record UpdateTaskRequest(
     string Name,
     TaskKind Kind,
@@ -43,7 +44,8 @@ public sealed record UpdateTaskRequest(
     int? ConcurrencyLimit = null,
     List<InstructionFile>? InstructionFiles = null,
     List<string>? ArtifactPatterns = null,
-    List<string>? LinkedFailureRuns = null);
+    List<string>? LinkedFailureRuns = null,
+    HarnessExecutionMode? ExecutionModeDefault = null);
 public sealed record CreateRunRequest(string TaskId);
 public sealed record RetryRunRequest(string RunId);
 public sealed record CancelRunRequest(string RunId);
@@ -63,12 +65,30 @@ public sealed record UpdateSystemSettingsRequest(
     OrchestratorSettings? Orchestrator = null);
 public sealed record CreateWorkflowRequest(string RepositoryId, string Name, string Description, List<WorkflowStageConfigRequest> Stages);
 public sealed record UpdateWorkflowRequest(string Name, string Description, List<WorkflowStageConfigRequest> Stages, bool Enabled);
+public sealed record WorkflowAgentTeamMemberConfigRequest(
+    string Name,
+    string Harness,
+    HarnessExecutionMode Mode,
+    string RolePrompt,
+    string? ModelOverride = null,
+    int? TimeoutSeconds = null);
+public sealed record WorkflowSynthesisStageConfigRequest(
+    bool Enabled,
+    string Prompt,
+    string? Harness = null,
+    HarnessExecutionMode? Mode = null,
+    string? ModelOverride = null,
+    int? TimeoutSeconds = null);
 public sealed record WorkflowStageConfigRequest(
     string Name,
     WorkflowStageType Type,
     string? TaskId = null,
+    string? PromptOverride = null,
+    string? CommandOverride = null,
     int? DelaySeconds = null,
     List<string>? ParallelStageIds = null,
+    List<WorkflowAgentTeamMemberConfigRequest>? AgentTeamMembers = null,
+    WorkflowSynthesisStageConfigRequest? Synthesis = null,
     int? TimeoutMinutes = null,
     int Order = 0);
 public sealed record BuildImageRequest(string DockerfileContent, string Tag);

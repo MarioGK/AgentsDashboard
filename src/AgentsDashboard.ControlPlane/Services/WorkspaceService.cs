@@ -53,7 +53,28 @@ public sealed record WorkspacePromptSubmissionRequest(
     string? Harness = null,
     string? Command = null,
     bool ForceNewRun = false,
-    string? UserMessage = null);
+    string? UserMessage = null,
+    HarnessExecutionMode? ModeOverride = null,
+    WorkspaceAgentTeamRequest? AgentTeam = null);
+
+public sealed record WorkspaceAgentTeamRequest(
+    IReadOnlyList<WorkspaceAgentTeamMemberRequest> Members,
+    WorkspaceAgentTeamSynthesisRequest? Synthesis = null);
+
+public sealed record WorkspaceAgentTeamMemberRequest(
+    string Harness,
+    HarnessExecutionMode Mode,
+    string RolePrompt,
+    string? ModelOverride = null,
+    int? TimeoutSeconds = null);
+
+public sealed record WorkspaceAgentTeamSynthesisRequest(
+    bool Enabled,
+    string Prompt,
+    string? Harness = null,
+    HarnessExecutionMode? Mode = null,
+    string? ModelOverride = null,
+    int? TimeoutSeconds = null);
 
 public sealed record WorkspacePromptSubmissionResult(
     bool Success,
@@ -61,7 +82,10 @@ public sealed record WorkspacePromptSubmissionResult(
     bool DispatchAccepted,
     string Message,
     TaskDocument? Task,
-    RunDocument? Run);
+    RunDocument? Run,
+    WorkflowExecutionDocument? WorkflowExecution = null,
+    int TeamMemberCount = 0,
+    bool TeamSynthesisEnabled = false);
 
 public sealed record WorkspaceSummaryRefreshResult(
     bool Success,
@@ -76,6 +100,7 @@ public sealed record WorkspaceSummaryRefreshResult(
 public sealed class WorkspaceService(
     IOrchestratorStore store,
     RunDispatcher dispatcher,
+    IWorkflowExecutor workflowExecutor,
     IHarnessOutputParserService parserService,
     IWorkspaceAiService workspaceAiService,
     ITaskSemanticEmbeddingService taskSemanticEmbeddingService,
@@ -172,7 +197,7 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
-        logger.LogDebug("Submitting workspace prompt for repository {RepositoryId}", repositoryId);
+        logger.ZLogDebug("Submitting workspace prompt for repository {RepositoryId}", repositoryId);
 
         var tasks = await store.ListTasksAsync(repositoryId, cancellationToken);
         var task = await ResolveTaskAsync(tasks, repositoryId, request, cancellationToken);
@@ -188,13 +213,18 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
+        if (request.AgentTeam is { Members.Count: > 0 })
+        {
+            return await SubmitAgentTeamRunAsync(repository, task, request, cancellationToken);
+        }
+
         var runs = await store.ListRunsByRepositoryAsync(repositoryId, cancellationToken);
         var activeRun = runs
             .Where(run => run.TaskId == task.Id && s_activeStates.Contains(run.State))
             .OrderByDescending(run => run.CreatedAtUtc)
             .FirstOrDefault();
 
-        if (activeRun is not null && !request.ForceNewRun)
+        if (activeRun is not null && !request.ForceNewRun && request.ModeOverride is null)
         {
             if (!string.IsNullOrWhiteSpace(request.UserMessage))
             {
@@ -259,7 +289,10 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
-        var run = await store.CreateRunAsync(task, cancellationToken);
+        var run = await store.CreateRunAsync(
+            task,
+            cancellationToken,
+            executionModeOverride: request.ModeOverride);
         var dispatchAccepted = await dispatcher.DispatchAsync(repository, dispatchTask, run, cancellationToken);
 
         NotifyRunEvent(run.Id, "created", DateTime.UtcNow);
@@ -280,7 +313,7 @@ public sealed class WorkspaceService(
                 promptEntryId: promptEntry?.Id);
         }
 
-        logger.LogDebug(
+        logger.ZLogDebug(
             "Workspace prompt submission created run {RunId} for task {TaskId} (dispatch accepted: {DispatchAccepted})",
             run.Id,
             task.Id,
@@ -295,6 +328,167 @@ public sealed class WorkspaceService(
                 : $"Run {run.Id} created and queued.",
             Task: task,
             Run: run);
+    }
+
+    private async Task<WorkspacePromptSubmissionResult> SubmitAgentTeamRunAsync(
+        RepositoryDocument repository,
+        TaskDocument task,
+        WorkspacePromptSubmissionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var teamRequest = request.AgentTeam;
+        if (teamRequest is null || teamRequest.Members.Count == 0)
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "Agent Team run requires at least one member.",
+                Task: task,
+                Run: null);
+        }
+
+        var command = string.IsNullOrWhiteSpace(request.Command)
+            ? task.Command
+            : request.Command.Trim();
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "Task command is required to start an Agent Team run.",
+                Task: task,
+                Run: null);
+        }
+
+        var prompt = string.IsNullOrWhiteSpace(request.Prompt)
+            ? task.Prompt
+            : request.Prompt.Trim();
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "Prompt cannot be empty for an Agent Team run.",
+                Task: task,
+                Run: null);
+        }
+
+        var members = teamRequest.Members
+            .Select((member, index) => new WorkflowAgentTeamMemberConfig
+            {
+                Name = string.IsNullOrWhiteSpace(member.RolePrompt) ? $"Agent {index + 1}" : $"Agent {index + 1}",
+                Harness = NormalizeHarness(member.Harness, task.Harness),
+                Mode = member.Mode,
+                RolePrompt = member.RolePrompt?.Trim() ?? string.Empty,
+                ModelOverride = member.ModelOverride?.Trim() ?? string.Empty,
+                TimeoutSeconds = member.TimeoutSeconds,
+            })
+            .ToList();
+
+        members = members
+            .Where(member => !string.IsNullOrWhiteSpace(member.Harness))
+            .ToList();
+
+        if (members.Count == 0)
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "Agent Team run members are invalid.",
+                Task: task,
+                Run: null);
+        }
+
+        var synthesis = BuildSynthesisConfig(teamRequest.Synthesis, task, request.ModeOverride);
+        var workflow = new WorkflowDocument
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            RepositoryId = repository.Id,
+            Name = $"workspace-team-{DateTime.UtcNow:yyyyMMdd-HHmmss}",
+            Description = $"Ephemeral workspace team run for task {task.Name}",
+            Enabled = false,
+            Stages =
+            [
+                new WorkflowStageConfig
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Name = "Agent Team Parallel",
+                    Type = WorkflowStageType.Parallel,
+                    TaskId = task.Id,
+                    PromptOverride = prompt,
+                    CommandOverride = command,
+                    AgentTeamMembers = members,
+                    Synthesis = synthesis,
+                    Order = 0
+                }
+            ]
+        };
+
+        var execution = await workflowExecutor.ExecuteWorkflowAsync(workflow, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.UserMessage))
+        {
+            await AppendUserPromptEntryAsync(
+                repository.Id,
+                task.Id,
+                execution.Id,
+                request.UserMessage,
+                cancellationToken);
+        }
+
+        return new WorkspacePromptSubmissionResult(
+            Success: true,
+            CreatedRun: false,
+            DispatchAccepted: true,
+            Message: $"Agent Team run started with {members.Count} lane(s).",
+            Task: task,
+            Run: null,
+            WorkflowExecution: execution,
+            TeamMemberCount: members.Count,
+            TeamSynthesisEnabled: synthesis is { Enabled: true });
+    }
+
+    private static WorkflowSynthesisStageConfig? BuildSynthesisConfig(
+        WorkspaceAgentTeamSynthesisRequest? request,
+        TaskDocument task,
+        HarnessExecutionMode? fallbackMode)
+    {
+        if (request is null || !request.Enabled)
+        {
+            return null;
+        }
+
+        var prompt = request.Prompt?.Trim() ?? string.Empty;
+        if (prompt.Length == 0)
+        {
+            prompt = "Produce a final synthesis from all agent lanes, including risks, changed files, and next steps.";
+        }
+
+        return new WorkflowSynthesisStageConfig
+        {
+            Enabled = true,
+            Harness = NormalizeHarness(request.Harness, task.Harness),
+            Mode = request.Mode ?? fallbackMode ?? task.ExecutionModeDefault ?? HarnessExecutionMode.Default,
+            Prompt = prompt,
+            ModelOverride = request.ModelOverride?.Trim() ?? string.Empty,
+            TimeoutSeconds = request.TimeoutSeconds,
+        };
+    }
+
+    private static string NormalizeHarness(string? harness, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(harness))
+        {
+            return harness.Trim().ToLowerInvariant();
+        }
+
+        return string.IsNullOrWhiteSpace(fallback)
+            ? "codex"
+            : fallback.Trim().ToLowerInvariant();
     }
 
     public void NotifyRunEvent(string runId, string eventType, DateTime eventTimestampUtc)
@@ -478,7 +672,8 @@ public sealed class WorkspaceService(
             Command: request.Command.Trim(),
             AutoCreatePullRequest: false,
             CronExpression: string.Empty,
-            Enabled: true);
+            Enabled: true,
+            ExecutionModeDefault: request.ModeOverride);
 
         return await store.CreateTaskAsync(createRequest, cancellationToken);
     }
@@ -673,6 +868,7 @@ public sealed class WorkspaceService(
             Name = source.Name,
             Kind = source.Kind,
             Harness = source.Harness,
+            ExecutionModeDefault = source.ExecutionModeDefault,
             Prompt = source.Prompt,
             Command = source.Command,
             AutoCreatePullRequest = source.AutoCreatePullRequest,

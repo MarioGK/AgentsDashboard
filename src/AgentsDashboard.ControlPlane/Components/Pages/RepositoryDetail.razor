@@ -114,19 +114,26 @@ else
                     <MudText Typo="Typo.h6" Class="mb-3">Create Task</MudText>
                     <MudGrid>
                         <MudItem xs="12" md="4"><MudTextField @bind-Value="_taskName" Label="Task Name" /></MudItem>
-                        <MudItem xs="12" md="3">
+                        <MudItem xs="12" md="2">
                             <MudSelect T="TaskKind" @bind-Value="_taskKind" Label="Kind">
                                 <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
                                 <MudSelectItem T="TaskKind" Value="@TaskKind.Cron">Cron</MudSelectItem>
                                 <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
                             </MudSelect>
                         </MudItem>
-                        <MudItem xs="12" md="3">
+                        <MudItem xs="12" md="2">
                             <MudSelect T="string" @bind-Value="_taskHarness" Label="Harness">
                                 <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
                                 <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
                                 <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
                                 <MudSelectItem T="string" Value='@("zai")'>Zai (GLM-5)</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="2">
+                            <MudSelect T="HarnessExecutionMode" @bind-Value="_taskExecutionModeDefault" Label="Default Mode">
+                                <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
+                                <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
+                                <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
                             </MudSelect>
                         </MudItem>
                         <MudItem xs="12" md="2" Class="d-flex align-center">
@@ -362,6 +369,7 @@ else
     private string _taskCron = string.Empty;
     private string _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
     private string _taskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
+    private HarnessExecutionMode _taskExecutionModeDefault = HarnessExecutionMode.Default;
     private bool _taskAutoPr;
     private bool _taskEnabled = true;
     private string? _editingTaskId = null;
@@ -461,6 +469,7 @@ else
         _taskCommand = template.Commands.Count > 0 ? string.Join(" && ", template.Commands) : string.Empty;
         _taskPrompt = template.Prompt;
         _taskCron = template.CronExpression;
+        _taskExecutionModeDefault = HarnessExecutionMode.Default;
         _taskEnabled = true;
         _taskAutoPr = template.AutoCreatePullRequest;
         _taskRetryMaxAttempts = template.RetryPolicy.MaxAttempts;
@@ -487,6 +496,7 @@ else
         _taskCommand = task.Command;
         _taskPrompt = task.Prompt;
         _taskCron = task.CronExpression;
+        _taskExecutionModeDefault = task.ExecutionModeDefault ?? HarnessExecutionMode.Default;
         _taskEnabled = task.Enabled;
         _taskAutoPr = task.AutoCreatePullRequest;
         _taskRetryMaxAttempts = task.RetryPolicy.MaxAttempts;
@@ -511,6 +521,7 @@ else
         _taskCron = string.Empty;
         _taskAutoPr = false;
         _taskEnabled = true;
+        _taskExecutionModeDefault = HarnessExecutionMode.Default;
         _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
         _taskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
         _taskRetryMaxAttempts = 1;
@@ -747,47 +758,43 @@ else
         if (_editingTaskId is not null)
         {
             var updateRequest = new UpdateTaskRequest(
-                _taskName.Trim(),
-                _taskKind,
-                _taskHarness,
-                _taskPrompt,
-                _taskCommand,
-                _taskAutoPr,
-                _taskCron,
-                _taskEnabled,
-                retryPolicy,
-                timeouts,
-                sandboxProfile,
-                artifactPolicy,
-                null,
-                null,
-                null,
-                _taskArtifactPatterns.Count > 0 ? _taskArtifactPatterns : null,
-                _taskLinkedFailureRuns.Count > 0 ? _taskLinkedFailureRuns : null);
+                Name: _taskName.Trim(),
+                Kind: _taskKind,
+                Harness: _taskHarness,
+                Prompt: _taskPrompt,
+                Command: _taskCommand,
+                AutoCreatePullRequest: _taskAutoPr,
+                CronExpression: _taskCron,
+                Enabled: _taskEnabled,
+                RetryPolicy: retryPolicy,
+                Timeouts: timeouts,
+                SandboxProfile: sandboxProfile,
+                ArtifactPolicy: artifactPolicy,
+                ArtifactPatterns: _taskArtifactPatterns.Count > 0 ? _taskArtifactPatterns : null,
+                LinkedFailureRuns: _taskLinkedFailureRuns.Count > 0 ? _taskLinkedFailureRuns : null,
+                ExecutionModeDefault: _taskExecutionModeDefault);
             await Store.UpdateTaskAsync(_editingTaskId, updateRequest, CancellationToken.None);
             _editingTaskId = null;
         }
         else
         {
             var request = new CreateTaskRequest(
-                _repository.Id,
-                _taskName.Trim(),
-                _taskKind,
-                _taskHarness,
-                _taskPrompt,
-                _taskCommand,
-                _taskAutoPr,
-                _taskCron,
-                _taskEnabled,
-                retryPolicy,
-                timeouts,
-                sandboxProfile,
-                artifactPolicy,
-                null,
-                null,
-                null,
-                _taskArtifactPatterns.Count > 0 ? _taskArtifactPatterns : null,
-                _taskLinkedFailureRuns.Count > 0 ? _taskLinkedFailureRuns : null);
+                RepositoryId: _repository.Id,
+                Name: _taskName.Trim(),
+                Kind: _taskKind,
+                Harness: _taskHarness,
+                Prompt: _taskPrompt,
+                Command: _taskCommand,
+                AutoCreatePullRequest: _taskAutoPr,
+                CronExpression: _taskCron,
+                Enabled: _taskEnabled,
+                RetryPolicy: retryPolicy,
+                Timeouts: timeouts,
+                SandboxProfile: sandboxProfile,
+                ArtifactPolicy: artifactPolicy,
+                ArtifactPatterns: _taskArtifactPatterns.Count > 0 ? _taskArtifactPatterns : null,
+                LinkedFailureRuns: _taskLinkedFailureRuns.Count > 0 ? _taskLinkedFailureRuns : null,
+                ExecutionModeDefault: _taskExecutionModeDefault);
 
             await Store.CreateTaskAsync(request, CancellationToken.None);
         }

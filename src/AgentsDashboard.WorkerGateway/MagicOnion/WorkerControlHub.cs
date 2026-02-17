@@ -21,7 +21,7 @@ public sealed class WorkerControlHub : StreamingHubBase<IWorkerControlHub, IWork
 
     protected override async ValueTask OnConnecting()
     {
-        _logger.LogDebug("Worker connecting to control hub");
+        _logger.ZLogDebug("Worker connecting to control hub");
         await Task.CompletedTask;
     }
 
@@ -29,11 +29,11 @@ public sealed class WorkerControlHub : StreamingHubBase<IWorkerControlHub, IWork
     {
         if (!string.IsNullOrEmpty(_registeredWorkerId))
         {
-            _logger.LogInformation("Worker {WorkerId} disconnected from control hub", _registeredWorkerId);
+            _logger.ZLogInformation("Worker {WorkerId} disconnected from control hub", _registeredWorkerId);
         }
         else
         {
-            _logger.LogDebug("Unknown worker disconnected from control hub");
+            _logger.ZLogDebug("Unknown worker disconnected from control hub");
         }
         await Task.CompletedTask;
     }
@@ -42,13 +42,13 @@ public sealed class WorkerControlHub : StreamingHubBase<IWorkerControlHub, IWork
     {
         if (string.IsNullOrWhiteSpace(request.WorkerId))
         {
-            _logger.LogWarning("Worker registration rejected: missing WorkerId");
+            _logger.ZLogWarning("Worker registration rejected: missing WorkerId");
             return new WorkerRegistrationResult { Success = false, ErrorMessage = "WorkerId is required" };
         }
 
         _registeredWorkerId = request.WorkerId;
 
-        _logger.LogInformation(
+        _logger.ZLogInformation(
             "Worker {WorkerId} registered from endpoint {Endpoint} with {MaxSlots} slots. Capabilities: {Capabilities}",
             request.WorkerId,
             request.Endpoint ?? "unknown",
@@ -64,11 +64,11 @@ public sealed class WorkerControlHub : StreamingHubBase<IWorkerControlHub, IWork
     {
         if (string.IsNullOrEmpty(_registeredWorkerId))
         {
-            _logger.LogDebug("Unregister called but no worker was registered");
+            _logger.ZLogDebug("Unregister called but no worker was registered");
             return;
         }
 
-        _logger.LogInformation("Worker {WorkerId} unregistered from control hub", _registeredWorkerId);
+        _logger.ZLogInformation("Worker {WorkerId} unregistered from control hub", _registeredWorkerId);
         _registeredWorkerId = null;
 
         await Task.CompletedTask;
@@ -78,11 +78,11 @@ public sealed class WorkerControlHub : StreamingHubBase<IWorkerControlHub, IWork
     {
         if (string.IsNullOrEmpty(_registeredWorkerId))
         {
-            _logger.LogWarning("Status report received from unregistered worker");
+            _logger.ZLogWarning("Status report received from unregistered worker");
             return;
         }
 
-        _logger.LogDebug(
+        _logger.ZLogDebug(
             "Status report from worker {WorkerId}: {ActiveSlots}/{MaxSlots} slots used, CPU: {CpuUsage}%, Memory: {MemoryUsed}",
             report.WorkerId,
             report.ActiveSlots,

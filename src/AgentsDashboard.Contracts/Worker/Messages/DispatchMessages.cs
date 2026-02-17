@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using AgentsDashboard.Contracts.Domain;
 using MessagePack;
 
 namespace AgentsDashboard.Contracts.Worker;
@@ -34,6 +35,8 @@ public record DispatchJobRequest
     [Key(24)] public bool SandboxProfileReadOnlyRootFs { get; set; } = false;
     [Key(25)] public int? ArtifactPolicyMaxArtifacts { get; init; }
     [Key(26)] public long? ArtifactPolicyMaxTotalSizeBytes { get; init; }
+    [Key(27)] public HarnessExecutionMode Mode { get; set; } = HarnessExecutionMode.Default;
+    [Key(28)] public string StructuredProtocolVersion { get; set; } = string.Empty;
 }
 
 [MessagePackObject]

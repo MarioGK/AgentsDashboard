@@ -28,16 +28,16 @@ public sealed class ImagePrePullService : IHostedService
 
         if (images.Count == 0)
         {
-            _logger.LogInformation("No harness images configured for pre-pull");
+            _logger.ZLogInformation("No harness images configured for pre-pull");
             return;
         }
 
-        _logger.LogInformation("Starting pre-pull of {Count} harness images", images.Count);
+        _logger.ZLogInformation("Starting pre-pull of {Count} harness images", images.Count);
 
         var tasks = images.Select(image => PullImageAsync(image, cancellationToken));
         await Task.WhenAll(tasks);
 
-        _logger.LogInformation("Completed pre-pull of harness images");
+        _logger.ZLogInformation("Completed pre-pull of harness images");
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
@@ -68,24 +68,24 @@ public sealed class ImagePrePullService : IHostedService
         {
             if (await ImageExistsLocallyAsync(image, cancellationToken))
             {
-                _logger.LogInformation("Image {Image} already exists locally, skipping pull", image);
+                _logger.ZLogInformation("Image {Image} already exists locally, skipping pull", image);
                 return;
             }
 
             if (await TryBuildImageAsync(image, cancellationToken))
             {
-                _logger.LogInformation("Successfully built image {Image}", image);
+                _logger.ZLogInformation("Successfully built image {Image}", image);
                 return;
             }
 
-            _logger.LogInformation("Pulling image {Image}...", image);
+            _logger.ZLogInformation("Pulling image {Image}...", image);
 
             var authConfig = GetAuthConfig(image);
 
             var progress = new Progress<JSONMessage>(msg =>
             {
                 if (!string.IsNullOrEmpty(msg.Status))
-                    _logger.LogDebug("Pull {Image}: {Status}", image, msg.Status);
+                    _logger.ZLogDebug("Pull {Image}: {Status}", image, msg.Status);
             });
 
             await _client.Images.CreateImageAsync(
@@ -94,11 +94,11 @@ public sealed class ImagePrePullService : IHostedService
                 progress,
                 cancellationToken);
 
-            _logger.LogInformation("Successfully pulled image {Image}", image);
+            _logger.ZLogInformation("Successfully pulled image {Image}", image);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to pull image {Image}", image);
+            _logger.ZLogError(ex, "Failed to pull image {Image}", image);
         }
         finally
         {
@@ -122,7 +122,7 @@ public sealed class ImagePrePullService : IHostedService
         if (!File.Exists(dockerfilePath) || !Directory.Exists(contextPath))
             return false;
 
-        _logger.LogInformation("Building image {Image} from {Dockerfile}", image, dockerfilePath);
+        _logger.ZLogInformation("Building image {Image} from {Dockerfile}", image, dockerfilePath);
         return await BuildImageWithCliAsync(image, dockerfilePath, contextPath, cancellationToken);
     }
 
@@ -152,17 +152,17 @@ public sealed class ImagePrePullService : IHostedService
         process.OutputDataReceived += (_, args) =>
         {
             if (!string.IsNullOrWhiteSpace(args.Data))
-                _logger.LogDebug("Docker build output ({Image}): {Message}", image, args.Data);
+                _logger.ZLogDebug("Docker build output ({Image}): {Message}", image, args.Data);
         };
         process.ErrorDataReceived += (_, args) =>
         {
             if (!string.IsNullOrWhiteSpace(args.Data))
-                _logger.LogDebug("Docker build error ({Image}): {Message}", image, args.Data);
+                _logger.ZLogDebug("Docker build error ({Image}): {Message}", image, args.Data);
         };
 
         if (!process.Start())
         {
-            _logger.LogWarning("Failed to launch docker CLI to build image {Image}", image);
+            _logger.ZLogWarning("Failed to launch docker CLI to build image {Image}", image);
             return false;
         }
 
@@ -173,7 +173,7 @@ public sealed class ImagePrePullService : IHostedService
         if (process.ExitCode == 0)
             return true;
 
-        _logger.LogWarning("docker build for image {Image} failed with exit code {ExitCode}", image, process.ExitCode);
+        _logger.ZLogWarning("docker build for image {Image} failed with exit code {ExitCode}", image, process.ExitCode);
         return false;
     }
 

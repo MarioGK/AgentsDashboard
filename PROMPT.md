@@ -33,7 +33,7 @@
 
   ## Codex-Inspired Patterns to Adopt
 
-  1. Isolated execution workspace per run (worktree-like isolation semantics for each job container).
+  1. Isolated execution workspace per run using container-sandboxed task checkouts.
   2. Project-scoped multitasking model where many task runs can execute concurrently per repo with limits.
   3. Automation triage workflow pattern: queue of outcomes needing review, with retry and promote actions.
   4. Approval and sandbox profiles per task template, not global-only.

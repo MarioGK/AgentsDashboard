@@ -68,7 +68,7 @@ public class WorkerRegistryService : IWorkerRegistryService
         var workers = await _lifecycleManager.ListWorkersAsync(cancellationToken);
         if (workers.Count == 0)
         {
-            _logger.LogInformation("No workers available for status request {RequestId}", request.RequestId);
+            _logger.ZLogInformation("No workers available for status request {RequestId}", request.RequestId);
             return;
         }
 
@@ -88,11 +88,11 @@ public class WorkerRegistryService : IWorkerRegistryService
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Status request heartbeat failed for worker {WorkerId}", worker.WorkerId);
+                _logger.ZLogDebug(ex, "Status request heartbeat failed for worker {WorkerId}", worker.WorkerId);
             }
         }
 
-        _logger.LogInformation("Issued worker status request {RequestId} to {Count} workers", request.RequestId, workers.Count(x => x.IsRunning));
+        _logger.ZLogInformation("Issued worker status request {RequestId} to {Count} workers", request.RequestId, workers.Count(x => x.IsRunning));
     }
 
     public int GetRegisteredWorkerCount()

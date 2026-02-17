@@ -18,10 +18,14 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using MudBlazor.Services;
 using Yarp.ReverseProxy.Configuration;
+using ZLogger;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging
+    .ClearProviders()
+    .AddZLoggerConsole(options => options.UsePlainTextFormatter());
 
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
@@ -126,6 +130,7 @@ builder.Services.AddSingleton<SecretCryptoService>(sp => (SecretCryptoService)sp
 builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddSingleton<IUiRealtimeBroker, UiRealtimeBroker>();
 builder.Services.AddSingleton<IRunEventPublisher, BlazorRunEventPublisher>();
+builder.Services.AddSingleton<IRunStructuredViewService, RunStructuredViewService>();
 builder.Services.AddSingleton<IOrchestratorMetrics, OrchestratorMetrics>();
 builder.Services.AddHostedService<RecoveryService>();
 builder.Services.AddHostedService<CronSchedulerService>();

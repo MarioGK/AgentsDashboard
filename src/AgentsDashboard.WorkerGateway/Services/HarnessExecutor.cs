@@ -6,6 +6,7 @@ using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.WorkerGateway.Adapters;
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Models;
+using AgentsDashboard.WorkerGateway.Services.HarnessRuntimes;
 using CliWrap;
 using CliWrap.Buffered;
 using Microsoft.Extensions.Options;
@@ -15,6 +16,7 @@ namespace AgentsDashboard.WorkerGateway.Services;
 public sealed class HarnessExecutor(
     IOptions<WorkerOptions> options,
     HarnessAdapterFactory adapterFactory,
+    IHarnessRuntimeFactory runtimeFactory,
     SecretRedactor secretRedactor,
     IDockerContainerService dockerService,
     IArtifactExtractor artifactExtractor,
@@ -22,6 +24,7 @@ public sealed class HarnessExecutor(
 {
     private const string WorkspacesRootPath = "/workspaces/repos";
     private const string MainBranch = "main";
+    private const string RuntimeEventWireMarker = "agentsdashboard.harness-runtime-event.v1";
 
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> s_taskGitLocks = new(StringComparer.OrdinalIgnoreCase);
 
@@ -36,28 +39,10 @@ public sealed class HarnessExecutor(
         CancellationToken cancellationToken)
     {
         var request = job.Request;
-        var command = request.CustomArgs ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(command))
-        {
-            return new HarnessResultEnvelope
-            {
-                RunId = request.RunId,
-                TaskId = request.TaskId,
-                Status = "failed",
-                Summary = "Task command is required",
-                Error = "Dispatch command is empty",
-            };
-        }
 
         try
         {
-            if (!options.Value.UseDocker)
-            {
-                return await ExecuteDirectAsync(request, onLogChunk, cancellationToken);
-            }
-
-            return await ExecuteViaAdapterAsync(request, onLogChunk, cancellationToken);
+            return await ExecuteViaRuntimeAsync(request, onLogChunk, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -72,7 +57,7 @@ public sealed class HarnessExecutor(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Harness execution failed for run {RunId}", request.RunId);
+            logger.ZLogError(ex, "Harness execution failed for run {RunId}", request.RunId);
             return new HarnessResultEnvelope
             {
                 RunId = request.RunId,
@@ -82,6 +67,260 @@ public sealed class HarnessExecutor(
                 Error = ex.Message,
             };
         }
+    }
+
+    private async Task<HarnessResultEnvelope> ExecuteViaRuntimeAsync(
+        DispatchJobRequest request,
+        Func<string, CancellationToken, Task>? onLogChunk,
+        CancellationToken cancellationToken)
+    {
+        WorkspaceContext? workspaceContext = null;
+        var workspaceHostPath = request.WorkingDirectory ?? string.Empty;
+        var gitLock = GetTaskLock(request.RepositoryId, request.TaskId);
+        var gitLockAcquired = false;
+
+        if (!string.IsNullOrWhiteSpace(request.CloneUrl))
+        {
+            try
+            {
+                await gitLock.WaitAsync(cancellationToken);
+                gitLockAcquired = true;
+
+                workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
+                workspaceHostPath = workspaceContext.WorkspacePath;
+            }
+            catch (Exception ex)
+            {
+                return new HarnessResultEnvelope
+                {
+                    RunId = request.RunId,
+                    TaskId = request.TaskId,
+                    Status = "failed",
+                    Summary = "Workspace preparation failed",
+                    Error = ex.Message,
+                };
+            }
+        }
+
+        try
+        {
+            var runtimeRequest = BuildRuntimeRequest(request, workspaceHostPath);
+            var runtimeSelection = runtimeFactory.Select(runtimeRequest);
+            IHarnessEventSink sink = onLogChunk is null
+                ? NullHarnessEventSink.Instance
+                : new CallbackHarnessEventSink(onLogChunk);
+
+            HarnessRuntimeResult runtimeResult;
+            Exception? structuredRuntimeFailure = null;
+            var runtimeName = runtimeSelection.Primary.Name;
+
+            try
+            {
+                runtimeResult = await runtimeSelection.Primary.RunAsync(runtimeRequest, sink, cancellationToken);
+            }
+            catch (Exception ex) when (runtimeSelection.Fallback is not null && ex is not OperationCanceledException)
+            {
+                structuredRuntimeFailure = ex;
+                runtimeName = runtimeSelection.Fallback.Name;
+
+                logger.ZLogWarning(
+                    ex,
+                    "Structured runtime {RuntimeName} failed for run {RunId}; falling back to {FallbackRuntime}",
+                    runtimeSelection.Primary.Name,
+                    request.RunId,
+                    runtimeSelection.Fallback.Name);
+
+                await sink.PublishAsync(
+                    new HarnessRuntimeEvent(
+                        HarnessRuntimeEventType.Diagnostic,
+                        $"Structured runtime '{runtimeSelection.Primary.Name}' failed: {ex.Message}",
+                        new Dictionary<string, string>
+                        {
+                            ["fallbackRuntime"] = runtimeSelection.Fallback.Name,
+                        }),
+                    CancellationToken.None);
+
+                runtimeResult = await runtimeSelection.Fallback.RunAsync(runtimeRequest, sink, cancellationToken);
+            }
+
+            var envelope = runtimeResult.Envelope;
+            envelope.RunId = request.RunId;
+            envelope.TaskId = request.TaskId;
+            envelope.Metadata["runtimeMode"] = runtimeSelection.RuntimeMode;
+            envelope.Metadata["runtimeName"] = runtimeName;
+
+            if (structuredRuntimeFailure is not null)
+            {
+                envelope.Metadata["structuredRuntimeFallback"] = "true";
+                envelope.Metadata["structuredRuntimeFailure"] = structuredRuntimeFailure.Message;
+            }
+
+            if (!ValidateEnvelope(envelope))
+            {
+                envelope.Status = "failed";
+                envelope.Error = string.IsNullOrEmpty(envelope.Error)
+                    ? "Envelope validation failed: missing required fields (status, summary)"
+                    : envelope.Error;
+            }
+
+            if (workspaceContext is not null)
+            {
+                await FinalizeWorkspaceAfterRunAsync(request, workspaceContext, envelope, cancellationToken);
+            }
+
+            IHarnessAdapter? adapter = null;
+            try
+            {
+                adapter = adapterFactory.Create(request.HarnessType);
+            }
+            catch (Exception ex)
+            {
+                logger.ZLogWarning(ex, "Failed to create harness adapter {HarnessType} for run {RunId}", request.HarnessType, request.RunId);
+            }
+
+            if (adapter is not null)
+            {
+                var classification = adapter.ClassifyFailure(envelope);
+                if (classification.Class != FailureClass.None)
+                {
+                    envelope.Metadata["failureClass"] = classification.Class.ToString();
+                    envelope.Metadata["isRetryable"] = classification.IsRetryable.ToString().ToLowerInvariant();
+
+                    if (classification.SuggestedBackoffSeconds.HasValue)
+                    {
+                        envelope.Metadata["suggestedBackoffSeconds"] = classification.SuggestedBackoffSeconds.Value.ToString();
+                    }
+
+                    if (classification.RemediationHints.Count > 0)
+                    {
+                        envelope.Metadata["remediationHints"] = string.Join("; ", classification.RemediationHints);
+                    }
+                }
+
+                var artifacts = adapter.MapArtifacts(envelope);
+                if (artifacts.Count > 0)
+                {
+                    envelope.Metadata["artifactCount"] = artifacts.Count.ToString();
+                    envelope.Metadata["artifacts"] = string.Join(",", artifacts.Select(a => a.Path));
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(workspaceHostPath) && Directory.Exists(workspaceHostPath))
+            {
+                var policy = new ArtifactPolicyConfig(
+                    MaxArtifacts: request.ArtifactPolicyMaxArtifacts is > 0 ? request.ArtifactPolicyMaxArtifacts.Value : 50,
+                    MaxTotalSizeBytes: request.ArtifactPolicyMaxTotalSizeBytes is > 0 ? request.ArtifactPolicyMaxTotalSizeBytes.Value : 104_857_600);
+
+                var extractedArtifacts = await artifactExtractor.ExtractArtifactsAsync(
+                    workspaceHostPath,
+                    request.RunId,
+                    policy,
+                    cancellationToken);
+
+                if (extractedArtifacts.Count > 0)
+                {
+                    envelope.Artifacts = extractedArtifacts.Select(a => a.DestinationPath).ToList();
+                    envelope.Metadata["extractedArtifactCount"] = extractedArtifacts.Count.ToString();
+                    envelope.Metadata["extractedArtifactSize"] = extractedArtifacts.Sum(a => a.SizeBytes).ToString();
+                }
+            }
+
+            return envelope;
+        }
+        finally
+        {
+            if (gitLockAcquired)
+            {
+                gitLock.Release();
+            }
+        }
+    }
+
+    private HarnessRunRequest BuildRuntimeRequest(DispatchJobRequest request, string workspaceHostPath)
+    {
+        var timeoutSeconds = request.TimeoutSeconds > 0
+            ? request.TimeoutSeconds
+            : options.Value.DefaultTimeoutSeconds;
+
+        var environment = request.EnvironmentVars is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(request.EnvironmentVars, StringComparer.OrdinalIgnoreCase);
+
+        var labels = request.ContainerLabels is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(request.ContainerLabels, StringComparer.OrdinalIgnoreCase);
+
+        var workspacePath = string.IsNullOrWhiteSpace(workspaceHostPath)
+            ? Directory.GetCurrentDirectory()
+            : workspaceHostPath;
+
+        return new HarnessRunRequest
+        {
+            RunId = request.RunId,
+            TaskId = request.TaskId,
+            Harness = request.HarnessType,
+            Mode = ResolveRuntimeMode(request.HarnessType, request.Mode, environment),
+            Prompt = request.Instruction ?? string.Empty,
+            WorkspacePath = workspacePath,
+            Environment = environment,
+            Timeout = TimeSpan.FromSeconds(timeoutSeconds),
+            Command = request.CustomArgs ?? string.Empty,
+            UseDocker = options.Value.UseDocker,
+            ArtifactsHostPath = Path.Combine(options.Value.ArtifactStoragePath, request.RunId),
+            ContainerLabels = labels,
+            CpuLimit = request.SandboxProfileCpuLimit is > 0 ? request.SandboxProfileCpuLimit.Value : 1.5,
+            MemoryLimit = request.SandboxProfileMemoryLimit is > 0
+                ? $"{request.SandboxProfileMemoryLimit.Value / (1024 * 1024)}m"
+                : "2g",
+            NetworkDisabled = request.SandboxProfileNetworkDisabled,
+            ReadOnlyRootFs = request.SandboxProfileReadOnlyRootFs,
+        };
+    }
+
+    private static string ResolveRuntimeMode(
+        string harness,
+        HarnessExecutionMode requestedMode,
+        IReadOnlyDictionary<string, string> environment)
+    {
+        if (environment.TryGetValue("HARNESS_RUNTIME_MODE", out var runtimeMode) &&
+            !string.IsNullOrWhiteSpace(runtimeMode))
+        {
+            return runtimeMode.Trim();
+        }
+
+        if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
+        {
+            if (environment.TryGetValue("CODEX_TRANSPORT", out var transport) &&
+                !string.IsNullOrWhiteSpace(transport))
+            {
+                return transport.Trim();
+            }
+
+            if (environment.TryGetValue("CODEX_MODE", out var codexMode) &&
+                !string.IsNullOrWhiteSpace(codexMode))
+            {
+                return codexMode.Trim();
+            }
+        }
+
+        if (environment.TryGetValue("HARNESS_MODE", out var harnessMode) &&
+            !string.IsNullOrWhiteSpace(harnessMode))
+        {
+            return harnessMode.Trim();
+        }
+
+        if (environment.TryGetValue("HARNESS_EXECUTION_MODE", out var executionMode) &&
+            !string.IsNullOrWhiteSpace(executionMode))
+        {
+            return executionMode.Trim();
+        }
+
+        if (requestedMode != HarnessExecutionMode.Default)
+        {
+            return requestedMode.ToString().ToLowerInvariant();
+        }
+
+        return "command";
     }
 
     private async Task<HarnessResultEnvelope> ExecuteViaAdapterAsync(
@@ -94,7 +333,7 @@ public sealed class HarnessExecutor(
 
         if (!IsImageAllowed(context.Image))
         {
-            logger.LogWarning("Image {Image} is not in the allowlist for run {RunId}", context.Image, request.RunId);
+            logger.ZLogWarning("Image {Image} is not in the allowlist for run {RunId}", context.Image, request.RunId);
             return new HarnessResultEnvelope
             {
                 RunId = request.RunId,
@@ -183,7 +422,7 @@ public sealed class HarnessExecutor(
                         }
                         catch (Exception ex)
                         {
-                            logger.LogWarning(ex, "Log streaming failed for container {ContainerId}", containerId[..12]);
+                            logger.ZLogWarning(ex, "Log streaming failed for container {ContainerId}", containerId[..12]);
                         }
                     }, CancellationToken.None);
                 }
@@ -454,7 +693,7 @@ public sealed class HarnessExecutor(
 
     private async Task EnsureCommitIdentityAsync(
         DispatchJobRequest request,
-        string worktreePath,
+        string workspacePath,
         CancellationToken cancellationToken)
     {
         var authorName = ResolveEnvValue(request.EnvironmentVars, "GIT_COMMITTER_NAME")
@@ -466,13 +705,13 @@ public sealed class HarnessExecutor(
             ?? "agentsdashboard-bot@local";
 
         await ExecuteGitOrThrowInPathAsync(
-            worktreePath,
+            workspacePath,
             ["config", "user.name", authorName],
             "configure git user.name",
             cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
-            worktreePath,
+            workspacePath,
             ["config", "user.email", authorEmail],
             "configure git user.email",
             cancellationToken);
@@ -739,6 +978,36 @@ public sealed class HarnessExecutor(
             return false;
         }
     }
+
+    private sealed class CallbackHarnessEventSink(
+        Func<string, CancellationToken, Task> onLogChunk) : IHarnessEventSink
+    {
+        private long _sequence;
+
+        public ValueTask PublishAsync(HarnessRuntimeEvent @event, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(@event.Content))
+            {
+                return ValueTask.CompletedTask;
+            }
+
+            var payload = JsonSerializer.Serialize(new RuntimeEventWireEnvelope(
+                RuntimeEventWireMarker,
+                Interlocked.Increment(ref _sequence),
+                @event.Type.ToCanonicalName(),
+                @event.Content,
+                @event.Metadata));
+
+            return new ValueTask(onLogChunk(payload, cancellationToken));
+        }
+    }
+
+    private sealed record RuntimeEventWireEnvelope(
+        string Marker,
+        long Sequence,
+        string Type,
+        string Content,
+        IReadOnlyDictionary<string, string>? Metadata);
 
     private sealed record WorkspaceContext(
         string WorkspacePath,

@@ -55,7 +55,7 @@ public sealed class ControlPlaneStoreGatewayService(
         }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
         {
-            logger.LogError(ex.InnerException, "Store gateway invocation failed for {Method}", request.MethodName);
+            logger.ZLogError(ex.InnerException, "Store gateway invocation failed for {Method}", request.MethodName);
             return new ControlPlaneInvocationResponse(
                 Success: false,
                 IsBinary: false,
@@ -65,7 +65,7 @@ public sealed class ControlPlaneStoreGatewayService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Store gateway invocation failed for {Method}", request.MethodName);
+            logger.ZLogError(ex, "Store gateway invocation failed for {Method}", request.MethodName);
             return new ControlPlaneInvocationResponse(
                 Success: false,
                 IsBinary: false,

@@ -144,11 +144,60 @@ public class RunDispatcherTests
         result.Should().BeTrue();
         service.Store.Verify(s => s.UpdateTaskGitMetadataAsync(
             task.Id,
-            "/workspaces/repos/repo-1/tasks/task-1",
-            "agent/repo/task/task-1",
             null,
             string.Empty,
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task DispatchAsync_ForCodexDefaultMode_SetsAppServerTransportAndApprovalDefaults()
+    {
+        var service = new SutBuilder().WithActiveWorker().Build();
+        var run = CreateRun();
+        run.ExecutionMode = HarnessExecutionMode.Default;
+        var task = CreateTask();
+        var repo = CreateRepository();
+        DispatchJobRequest? dispatchedRequest = null;
+
+        service.WorkerClientMock
+            .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Callback<DispatchJobRequest>(request => dispatchedRequest = request)
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+
+        var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
+
+        result.Should().BeTrue();
+        dispatchedRequest.Should().NotBeNull();
+        dispatchedRequest!.Mode.Should().Be(HarnessExecutionMode.Default);
+        dispatchedRequest.EnvironmentVars.Should().ContainKey("CODEX_TRANSPORT").WhoseValue.Should().Be("app-server");
+        dispatchedRequest.EnvironmentVars.Should().ContainKey("CODEX_APPROVAL_POLICY").WhoseValue.Should().Be("on-failure");
+        dispatchedRequest.EnvironmentVars.Should().ContainKey("TASK_MODE").WhoseValue.Should().Be("default");
+        dispatchedRequest.EnvironmentVars.Should().ContainKey("RUN_MODE").WhoseValue.Should().Be("default");
+    }
+
+    [Test]
+    public async Task DispatchAsync_ForCodexReviewMode_UsesReadOnlyApprovalPolicy()
+    {
+        var service = new SutBuilder().WithActiveWorker().Build();
+        var run = CreateRun();
+        run.ExecutionMode = HarnessExecutionMode.Review;
+        var task = CreateTask();
+        var repo = CreateRepository();
+        DispatchJobRequest? dispatchedRequest = null;
+
+        service.WorkerClientMock
+            .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
+            .Callback<DispatchJobRequest>(request => dispatchedRequest = request)
+            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+
+        var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
+
+        result.Should().BeTrue();
+        dispatchedRequest.Should().NotBeNull();
+        dispatchedRequest!.Mode.Should().Be(HarnessExecutionMode.Review);
+        dispatchedRequest.EnvironmentVars.Should().ContainKey("CODEX_APPROVAL_POLICY").WhoseValue.Should().Be("never");
+        dispatchedRequest.EnvironmentVars.Should().ContainKey("TASK_MODE").WhoseValue.Should().Be("review");
+        dispatchedRequest.EnvironmentVars.Should().ContainKey("RUN_MODE").WhoseValue.Should().Be("review");
     }
 
     [Test]
@@ -259,8 +308,6 @@ public class RunDispatcherTests
             Store.Setup(s => s.GetInstructionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
             Store.Setup(s => s.UpdateTaskGitMetadataAsync(
                     It.IsAny<string>(),
-                    It.IsAny<string?>(),
-                    It.IsAny<string?>(),
                     It.IsAny<DateTime?>(),
                     It.IsAny<string?>(),
                     It.IsAny<CancellationToken>()))

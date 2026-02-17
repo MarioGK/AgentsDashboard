@@ -31,13 +31,13 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
     protected override ValueTask OnConnecting()
     {
         _connectionId = ConnectionId;
-        _logger.LogDebug("Client connecting to event hub");
+        _logger.ZLogDebug("Client connecting to event hub");
         return ValueTask.CompletedTask;
     }
 
     protected override ValueTask OnDisconnected()
     {
-        _logger.LogDebug("Client disconnecting from event hub");
+        _logger.ZLogDebug("Client disconnecting from event hub");
 
         RemoveCurrentConnectionFromGroups();
 
@@ -52,7 +52,7 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
         {
             GetAllGroup().Add(_connectionId, Client);
             _subscribedToAll = true;
-            _logger.LogDebug("Client subscribed to all events");
+            _logger.ZLogDebug("Client subscribed to all events");
         }
         else
         {
@@ -63,7 +63,7 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
 
                 GetRunGroup(runId).Add(_connectionId, Client);
                 _subscribedRunIds.Add(runId);
-                _logger.LogDebug("Client subscribed to run {RunId}", runId);
+                _logger.ZLogDebug("Client subscribed to run {RunId}", runId);
             }
         }
 
@@ -74,7 +74,7 @@ public sealed class WorkerEventHub : StreamingHubBase<IWorkerEventHub, IWorkerEv
     {
         RemoveCurrentConnectionFromGroups();
 
-        _logger.LogDebug("Client unsubscribed from all events");
+        _logger.ZLogDebug("Client unsubscribed from all events");
 
         return Task.CompletedTask;
     }

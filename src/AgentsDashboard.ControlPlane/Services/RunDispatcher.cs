@@ -31,7 +31,7 @@ public sealed class RunDispatcher(
         if (taskQueueHead is not null &&
             !string.Equals(taskQueueHead.Id, run.Id, StringComparison.Ordinal))
         {
-            logger.LogInformation(
+            logger.ZLogInformation(
                 "Task queue head is run {HeadRunId} for task {TaskId}; leaving run {RunId} queued",
                 taskQueueHead.Id,
                 task.Id,
@@ -45,7 +45,7 @@ public sealed class RunDispatcher(
             if (pendingRun is not null)
             {
                 await publisher.PublishStatusAsync(pendingRun, cancellationToken);
-                logger.LogInformation("Run {RunId} marked as pending approval", run.Id);
+                logger.ZLogInformation("Run {RunId} marked as pending approval", run.Id);
             }
             return true;
         }
@@ -58,7 +58,7 @@ public sealed class RunDispatcher(
         var queuedRuns = await store.CountRunsByStateAsync(RunState.Queued, cancellationToken);
         if (queuedRuns > runtime.MaxQueueDepth)
         {
-            logger.LogWarning("Admission rejected for run {RunId}: queue depth {QueuedRuns} exceeds configured limit {Limit}", run.Id, queuedRuns, runtime.MaxQueueDepth);
+            logger.ZLogWarning("Admission rejected for run {RunId}: queue depth {QueuedRuns} exceeds configured limit {Limit}", run.Id, queuedRuns, runtime.MaxQueueDepth);
             var rejected = await store.MarkRunCompletedAsync(
                 run.Id,
                 succeeded: false,
@@ -78,65 +78,55 @@ public sealed class RunDispatcher(
         var globalActive = await store.CountActiveRunsAsync(cancellationToken);
         if (globalActive >= opts.MaxGlobalConcurrentRuns)
         {
-            logger.LogWarning("Global concurrency limit reached ({Limit}), leaving run {RunId} queued", opts.MaxGlobalConcurrentRuns, run.Id);
+            logger.ZLogWarning("Global concurrency limit reached ({Limit}), leaving run {RunId} queued", opts.MaxGlobalConcurrentRuns, run.Id);
             return false;
         }
 
         var repoActive = await store.CountActiveRunsByRepoAsync(repository.Id, cancellationToken);
         if (repoActive >= opts.PerRepoConcurrencyLimit)
         {
-            logger.LogWarning("Repo concurrency limit reached for {RepositoryId}, leaving run {RunId} queued", repository.Id, run.Id);
+            logger.ZLogWarning("Repo concurrency limit reached for {RepositoryId}, leaving run {RunId} queued", repository.Id, run.Id);
             return false;
         }
 
         var workerLease = await workerLifecycleManager.AcquireWorkerForDispatchAsync(cancellationToken);
         if (workerLease is null)
         {
-            logger.LogWarning("No worker capacity available; leaving run {RunId} queued", run.Id);
+            logger.ZLogWarning("No worker capacity available; leaving run {RunId} queued", run.Id);
             return false;
         }
 
-        logger.LogDebug("Selected worker {WorkerId} for run {RunId}", workerLease.WorkerId, run.Id);
+        logger.ZLogDebug("Selected worker {WorkerId} for run {RunId}", workerLease.WorkerId, run.Id);
 
         var selectedWorker = await workerLifecycleManager.GetWorkerAsync(workerLease.WorkerId, cancellationToken);
 
         var defaultBranch = string.IsNullOrWhiteSpace(repository.DefaultBranch) ? "main" : repository.DefaultBranch;
-        var taskBranch = BuildTaskBranchName(repository, task);
-        var taskWorktreePath = BuildTaskWorktreePath(repository.Id, task.Id);
 
         try
         {
             await store.UpdateTaskGitMetadataAsync(
                 task.Id,
-                taskWorktreePath,
-                taskBranch,
                 null,
                 string.Empty,
                 cancellationToken);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to persist task git metadata for task {TaskId}", task.Id);
+            logger.ZLogWarning(ex, "Failed to persist task git metadata for task {TaskId}", task.Id);
         }
 
-        var layeredPrompt = await BuildLayeredPromptAsync(repository, task, taskBranch, defaultBranch, cancellationToken);
+        var layeredPrompt = await BuildLayeredPromptAsync(repository, task, defaultBranch, cancellationToken);
 
         var envVars = new Dictionary<string, string>
         {
             ["GIT_URL"] = repository.GitUrl,
             ["DEFAULT_BRANCH"] = defaultBranch,
-            ["AUTO_CREATE_PR"] = task.AutoCreatePullRequest ? "true" : "false",
+            ["AUTO_CREATE_PR"] = "false",
             ["HARNESS_NAME"] = task.Harness,
+            ["HARNESS_MODE"] = run.ExecutionMode.ToString().ToLowerInvariant(),
+            ["HARNESS_EXECUTION_MODE"] = run.ExecutionMode.ToString().ToLowerInvariant(),
             ["GH_REPO"] = ParseGitHubRepoSlug(repository.GitUrl),
         };
-
-        envVars["TASK_BRANCH"] = taskBranch;
-        envVars["TASK_DEFAULT_BRANCH"] = defaultBranch;
-        envVars["PR_BRANCH"] = taskBranch;
-        var branchSeparator = taskBranch.LastIndexOf('/');
-        envVars["PR_BRANCH_PREFIX"] = branchSeparator > 0 ? taskBranch[..branchSeparator] : taskBranch;
-        envVars["PR_TITLE"] = $"[{task.Harness}] {task.Name} automated update";
-        envVars["PR_BODY"] = $"Automated change from run {run.Id} for task {task.Name}.";
 
         var secrets = await store.ListProviderSecretsAsync(repository.Id, cancellationToken);
         var secretsDict = new Dictionary<string, string>();
@@ -150,7 +140,7 @@ public sealed class RunDispatcher(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to decrypt provider secret for repository {RepositoryId} and provider {Provider}", repository.Id, secret.Provider);
+                logger.ZLogWarning(ex, "Failed to decrypt provider secret for repository {RepositoryId} and provider {Provider}", repository.Id, secret.Provider);
             }
         }
 
@@ -168,7 +158,7 @@ public sealed class RunDispatcher(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogWarning(ex, "Failed to decrypt global provider secret for llmtornado");
+                    logger.ZLogWarning(ex, "Failed to decrypt global provider secret for llmtornado");
                 }
             }
         }
@@ -181,7 +171,7 @@ public sealed class RunDispatcher(
             if (!string.IsNullOrWhiteSpace(hostCodexApiKey))
             {
                 AddMappedProviderEnvironmentVariables(envVars, secretsDict, "codex", hostCodexApiKey);
-                logger.LogInformation("Using host Codex credentials fallback for run {RunId}", run.Id);
+                logger.ZLogInformation("Using host Codex credentials fallback for run {RunId}", run.Id);
             }
         }
 
@@ -205,6 +195,14 @@ public sealed class RunDispatcher(
             envVars["CLAUDE_MODEL"] = "glm-5";
             envVars["ANTHROPIC_MODEL"] = "glm-5";
         }
+
+        var modelOverride = ResolveTaskModelOverride(task);
+        if (!string.IsNullOrWhiteSpace(modelOverride))
+        {
+            ApplyHarnessModelOverride(task.Harness, envVars, modelOverride);
+        }
+
+        ApplyHarnessModeEnvironment(task.Harness, run.ExecutionMode, envVars);
 
         var artifactPatterns = task.ArtifactPatterns.Count > 0
             ? task.ArtifactPatterns.ToList()
@@ -244,6 +242,8 @@ public sealed class RunDispatcher(
             SandboxProfileReadOnlyRootFs = task.SandboxProfile.ReadOnlyRootFs,
             ArtifactPolicyMaxArtifacts = task.ArtifactPolicy.MaxArtifacts,
             ArtifactPolicyMaxTotalSizeBytes = task.ArtifactPolicy.MaxTotalSizeBytes,
+            Mode = run.ExecutionMode,
+            StructuredProtocolVersion = run.StructuredProtocol,
         };
 
         var workerClient = clientFactory.CreateWorkerGatewayService(workerLease.WorkerId, workerLease.GrpcEndpoint);
@@ -251,7 +251,7 @@ public sealed class RunDispatcher(
 
         if (!response.Success)
         {
-            logger.LogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.ErrorMessage);
+            logger.ZLogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.ErrorMessage);
             var failed = await store.MarkRunCompletedAsync(run.Id, false, $"Dispatch failed: {response.ErrorMessage}", "{}", cancellationToken);
             if (failed is not null)
             {
@@ -330,14 +330,14 @@ public sealed class RunDispatcher(
             var run = await store.GetRunAsync(runId, cancellationToken);
             if (run is null || string.IsNullOrWhiteSpace(run.WorkerId))
             {
-                logger.LogWarning("Skipping cancel for run {RunId}: no assigned worker", runId);
+                logger.ZLogWarning("Skipping cancel for run {RunId}: no assigned worker", runId);
                 return;
             }
 
             var worker = await workerLifecycleManager.GetWorkerAsync(run.WorkerId, cancellationToken);
             if (worker is null || !worker.IsRunning)
             {
-                logger.LogWarning("Skipping cancel for run {RunId}: worker {WorkerId} is unavailable", runId, run.WorkerId);
+                logger.ZLogWarning("Skipping cancel for run {RunId}: worker {WorkerId} is unavailable", runId, run.WorkerId);
                 return;
             }
 
@@ -346,7 +346,7 @@ public sealed class RunDispatcher(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to send cancel to worker for run {RunId}", runId);
+            logger.ZLogWarning(ex, "Failed to send cancel to worker for run {RunId}", runId);
         }
     }
 
@@ -479,16 +479,15 @@ public sealed class RunDispatcher(
     private async Task<string> BuildLayeredPromptAsync(
         RepositoryDocument repository,
         TaskDocument task,
-        string taskBranch,
         string defaultBranch,
         CancellationToken cancellationToken)
     {
         var systemSettings = await store.GetSettingsAsync(cancellationToken);
         var globalPrefix = string.IsNullOrWhiteSpace(systemSettings.Orchestrator.TaskPromptPrefix)
-            ? BuildRequiredTaskPrefix(taskBranch, defaultBranch)
+            ? BuildRequiredTaskPrefix(defaultBranch)
             : systemSettings.Orchestrator.TaskPromptPrefix;
         var globalSuffix = string.IsNullOrWhiteSpace(systemSettings.Orchestrator.TaskPromptSuffix)
-            ? BuildRequiredTaskSuffix(taskBranch)
+            ? BuildRequiredTaskSuffix(defaultBranch)
             : systemSettings.Orchestrator.TaskPromptSuffix;
 
         var repoInstructionsFromCollection = await store.GetInstructionsAsync(repository.Id, cancellationToken);
@@ -564,66 +563,20 @@ public sealed class RunDispatcher(
         return sb.ToString();
     }
 
-    private static string BuildTaskBranchName(RepositoryDocument repository, TaskDocument task)
-    {
-        var repoSlug = ParseGitHubRepoSlug(repository.GitUrl);
-        var repoSegment = repoSlug.Contains('/', StringComparison.Ordinal)
-            ? repoSlug.Split('/')[1]
-            : repository.Name;
-
-        return $"agent/{SanitizeBranchSegment(repoSegment)}/{SanitizeBranchSegment(task.Name)}/{task.Id}";
-    }
-
-    private static string BuildTaskWorktreePath(string repositoryId, string taskId)
-    {
-        return $"/workspaces/repos/{ToPathSegment(repositoryId)}/tasks/{ToPathSegment(taskId)}";
-    }
-
-    private static string SanitizeBranchSegment(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "task";
-        }
-
-        var sanitized = new string(value
-            .Trim()
-            .ToLowerInvariant()
-            .Select(ch => char.IsLetterOrDigit(ch) || ch is '.' or '-' or '_' ? ch : '-')
-            .ToArray());
-
-        var trimmed = sanitized.Trim('-');
-        return string.IsNullOrWhiteSpace(trimmed) ? "task" : trimmed;
-    }
-
-    private static string ToPathSegment(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "unknown";
-        }
-
-        return value.Trim().Replace('/', '-').Replace('\\', '-');
-    }
-
-    private static string BuildRequiredTaskPrefix(string taskBranch, string defaultBranch)
+    private static string BuildRequiredTaskPrefix(string defaultBranch)
     {
         return $"""
-                You must create and use a dedicated branch for this run before making any change.
                 Execute these git steps at the start:
                 1. git fetch --all
                 2. git checkout {defaultBranch}
                 3. git pull --ff-only origin {defaultBranch}
-                4. git checkout -B {taskBranch}
-                All edits and commits must happen only on branch {taskBranch}.
-                Do not commit or push to {defaultBranch}.
+                Keep all edits on {defaultBranch}.
                 """;
     }
 
-    private static string BuildRequiredTaskSuffix(string taskBranch)
+    private static string BuildRequiredTaskSuffix(string defaultBranch)
     {
         return $"""
-                Before finishing, analyze the current branch changes and prepare a precise commit message based on the diff.
                 Required end steps:
                 1. git status
                 2. git diff --stat
@@ -631,8 +584,8 @@ public sealed class RunDispatcher(
                 4. create a commit message that matches the actual changes
                 5. git add -A
                 6. git commit -m "<generated-message>" (only if there are staged changes)
-                7. git push -u origin {taskBranch}
-                Keep all work on branch {taskBranch}.
+                7. git push origin {defaultBranch}
+                Keep all work on branch {defaultBranch}.
                 """;
     }
 
@@ -775,6 +728,127 @@ public sealed class RunDispatcher(
             var envKey = $"HARNESS_{key.ToUpperInvariant().Replace(' ', '_').Replace('-', '_')}";
             envVars[envKey] = value;
         }
+    }
+
+    private static string ResolveTaskModelOverride(TaskDocument task)
+    {
+        if (task.InstructionFiles.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        foreach (var instruction in task.InstructionFiles)
+        {
+            if (instruction.Content.Length == 0)
+            {
+                continue;
+            }
+
+            var normalizedName = NormalizePromptWrapperName(instruction.Name);
+            if (normalizedName is "modeloverride" or "harnessmodel")
+            {
+                return instruction.Content.Trim();
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static void ApplyHarnessModelOverride(string harness, Dictionary<string, string> envVars, string modelOverride)
+    {
+        var normalizedHarness = harness.Trim().ToLowerInvariant();
+        var model = modelOverride.Trim();
+        if (model.Length == 0)
+        {
+            return;
+        }
+
+        envVars["HARNESS_MODEL"] = model;
+
+        switch (normalizedHarness)
+        {
+            case "codex":
+                envVars["CODEX_MODEL"] = model;
+                break;
+            case "opencode":
+                envVars["OPENCODE_MODEL"] = model;
+                break;
+            case "claude-code":
+                envVars["CLAUDE_MODEL"] = model;
+                envVars["ANTHROPIC_MODEL"] = model;
+                break;
+            case "zai":
+                envVars["ZAI_MODEL"] = model;
+                break;
+        }
+    }
+
+    private static void ApplyHarnessModeEnvironment(string harness, HarnessExecutionMode mode, IDictionary<string, string> envVars)
+    {
+        var modeValue = mode.ToString().ToLowerInvariant();
+        envVars["TASK_MODE"] = modeValue;
+        envVars["RUN_MODE"] = modeValue;
+
+        if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
+        {
+            SetOrReplace(envVars, "CODEX_TRANSPORT", "app-server");
+            SetIfMissing(envVars, "CODEX_MODE", "app-server");
+
+            var approvalPolicy = mode is HarnessExecutionMode.Plan or HarnessExecutionMode.Review
+                ? "never"
+                : "on-failure";
+            SetIfMissing(envVars, "CODEX_APPROVAL_POLICY", approvalPolicy);
+            return;
+        }
+
+        if (string.Equals(harness, "opencode", StringComparison.OrdinalIgnoreCase))
+        {
+            SetIfMissing(envVars, "OPENCODE_MODE", modeValue);
+            return;
+        }
+
+        if (string.Equals(harness, "zai", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(harness, "claude-code", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(harness, "claude", StringComparison.OrdinalIgnoreCase))
+        {
+            SetIfMissing(envVars, "CLAUDE_PERMISSION_MODE", mode is HarnessExecutionMode.Default ? "default" : "plan");
+        }
+    }
+
+    private static void SetIfMissing(IDictionary<string, string> envVars, string key, string value)
+    {
+        var existingKey = FindKeyIgnoreCase(envVars, key);
+        if (existingKey is not null)
+        {
+            return;
+        }
+
+        envVars[key] = value;
+    }
+
+    private static void SetOrReplace(IDictionary<string, string> envVars, string key, string value)
+    {
+        var existingKey = FindKeyIgnoreCase(envVars, key);
+        if (existingKey is null)
+        {
+            envVars[key] = value;
+            return;
+        }
+
+        envVars[existingKey] = value;
+    }
+
+    private static string? FindKeyIgnoreCase(IDictionary<string, string> envVars, string key)
+    {
+        foreach (var existingKey in envVars.Keys)
+        {
+            if (string.Equals(existingKey, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return existingKey;
+            }
+        }
+
+        return null;
     }
 
     private static string ParseGitHubRepoSlug(string gitUrl)

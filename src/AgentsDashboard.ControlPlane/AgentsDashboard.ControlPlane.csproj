@@ -22,6 +22,7 @@
     <PackageReference Include="MagicOnion.Client" />
     <PackageReference Include="MessagePack" />
     <PackageReference Include="MagicOnion.Server" />
+    <PackageReference Include="ZLogger" />
   </ItemGroup>
 
   <PropertyGroup>

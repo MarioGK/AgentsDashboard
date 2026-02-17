@@ -119,7 +119,7 @@ public sealed class WorkspaceSearchService(
         var candidates = BuildCandidates(tasks, runs, findings, logsByRun);
         var keywordHits = ScoreCandidates(candidates, request, sqliteVecBootstrapService.IsAvailable);
         var hits = MergeSearchHits(keywordHits, semanticHits, request.Limit);
-        logger.LogDebug(
+        logger.ZLogDebug(
             "Workspace search query '{Query}' for repository {RepositoryId} produced {HitCount} hits",
             request.Query,
             request.RepositoryId,
@@ -202,7 +202,7 @@ public sealed class WorkspaceSearchService(
 
         if (indexedTaskCount > 0)
         {
-            logger.LogDebug("Indexed semantic chunks for {TaskCount} tasks in repository {RepositoryId}", indexedTaskCount, repositoryId);
+            logger.ZLogDebug("Indexed semantic chunks for {TaskCount} tasks in repository {RepositoryId}", indexedTaskCount, repositoryId);
         }
     }
 

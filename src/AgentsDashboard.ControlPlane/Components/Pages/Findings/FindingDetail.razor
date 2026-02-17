@@ -94,7 +94,7 @@ else
     </MudStack>
 }
 
-<MudDialog @bind-IsOpen="_showTaskDialog">
+<MudDialog @bind-Visible="_showTaskDialog">
     <TitleContent>Create Follow-up Task</TitleContent>
     <DialogContent>
         <MudTextField @bind-Value="_taskName" Label="Task Name" Class="mb-3" />
@@ -113,7 +113,7 @@ else
     </DialogActions>
 </MudDialog>
 
-<MudDialog @bind-IsOpen="_showRegressionDialog">
+<MudDialog @bind-Visible="_showRegressionDialog">
     <TitleContent>Create Regression Replay Task</TitleContent>
     <DialogContent>
         <MudAlert Severity="Severity.Info" Class="mb-3">

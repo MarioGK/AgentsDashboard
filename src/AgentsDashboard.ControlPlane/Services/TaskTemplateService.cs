@@ -431,9 +431,9 @@ public class TaskTemplateInitializationService(TaskTemplateService templateServi
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("Initializing task templates...");
+        logger.ZLogInformation("Initializing task templates...");
         await templateService.InitializeAsync(cancellationToken);
-        logger.LogInformation("Task templates initialized");
+        logger.ZLogInformation("Task templates initialized");
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

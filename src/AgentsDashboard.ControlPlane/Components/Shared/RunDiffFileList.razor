@@ -1,0 +1,83 @@
+@namespace AgentsDashboard.ControlPlane.Components.Shared
+
+@if (Files.Count == 0)
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary">No changed files.</MudText>
+}
+else
+{
+    <div class="run-diff-file-list">
+        @foreach (var file in Files)
+        {
+            var selected = string.Equals(file.Path, SelectedFilePath, StringComparison.OrdinalIgnoreCase);
+            <MudPaper Class="@(selected ? "run-diff-file run-diff-file-selected" : "run-diff-file")" Elevation="0">
+                <MudStack Spacing="0">
+                    <MudStack Row AlignItems="AlignItems.Center" Class="run-diff-file-row">
+                        <MudButton Variant="Variant.Text"
+                                   Class="run-diff-file-select"
+                                   OnClick="() => SelectFileAsync(file.Path)">
+                            @file.Path
+                        </MudButton>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">+@file.AddedLines</MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">-@file.RemovedLines</MudChip>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@file.Hunks.Count hunks</MudChip>
+                        <MudSpacer />
+                        <MudTooltip Text="Open changed file">
+                            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" OnClick="() => OpenFileAsync(file.Path)" />
+                        </MudTooltip>
+                    </MudStack>
+
+                    @if (selected && file.Hunks.Count > 0)
+                    {
+                        <MudStack Row Class="run-diff-hunk-row" Spacing="1">
+                            @foreach (var hunk in file.Hunks)
+                            {
+                                var label = hunk.NewCount <= 1
+                                    ? $"L{hunk.NewStart}"
+                                    : $"L{hunk.NewStart}-{hunk.NewStart + hunk.NewCount - 1}";
+                                <MudChip T="string"
+                                         Size="Size.Small"
+                                         Variant="Variant.Outlined"
+                                         OnClick="() => NavigateToHunkAsync(hunk.NewStart)">
+                                    @label
+                                </MudChip>
+                            }
+                        </MudStack>
+                    }
+                </MudStack>
+            </MudPaper>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<RunDiffFileView> Files { get; set; } = [];
+    [Parameter] public string? SelectedFilePath { get; set; }
+    [Parameter] public EventCallback<string> SelectedFilePathChanged { get; set; }
+    [Parameter] public EventCallback<int> HunkNavigateRequested { get; set; }
+    [Parameter] public EventCallback<string> OpenFileRequested { get; set; }
+
+    private async Task SelectFileAsync(string path)
+    {
+        if (SelectedFilePathChanged.HasDelegate)
+        {
+            await SelectedFilePathChanged.InvokeAsync(path);
+        }
+    }
+
+    private async Task NavigateToHunkAsync(int lineNumber)
+    {
+        if (HunkNavigateRequested.HasDelegate)
+        {
+            await HunkNavigateRequested.InvokeAsync(lineNumber);
+        }
+    }
+
+    private async Task OpenFileAsync(string path)
+    {
+        if (OpenFileRequested.HasDelegate)
+        {
+            await OpenFileRequested.InvokeAsync(path);
+        }
+    }
+}

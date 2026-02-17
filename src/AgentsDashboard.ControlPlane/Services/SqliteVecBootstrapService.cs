@@ -37,14 +37,14 @@ public sealed class SqliteVecBootstrapService(
 
         if (status.IsAvailable)
         {
-            logger.LogInformation(
+            logger.ZLogInformation(
                 "sqlite-vec available (path: {Path}, detail: {Detail})",
                 status.ExtensionPath ?? "built-in",
                 status.Detail ?? string.Empty);
         }
         else
         {
-            logger.LogInformation(
+            logger.ZLogInformation(
                 "sqlite-vec unavailable; fallback mode enabled ({Detail})",
                 status.Detail ?? "unknown reason");
         }

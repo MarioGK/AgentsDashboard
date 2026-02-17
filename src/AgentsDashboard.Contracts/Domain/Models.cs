@@ -43,6 +43,13 @@ public enum HarnessType
     Zai = 3
 }
 
+public enum HarnessExecutionMode
+{
+    Default = 0,
+    Plan = 1,
+    Review = 2
+}
+
 public enum WorkerImagePolicy
 {
     PullOnly = 0,
@@ -141,14 +148,13 @@ public sealed class TaskDocument
     public string Name { get; set; } = string.Empty;
     public TaskKind Kind { get; set; }
     public string Harness { get; set; } = "codex";
+    public HarnessExecutionMode? ExecutionModeDefault { get; set; }
     public string Prompt { get; set; } = string.Empty;
     public string Command { get; set; } = string.Empty;
     public bool AutoCreatePullRequest { get; set; }
     public string CronExpression { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
     public DateTime? NextRunAtUtc { get; set; }
-    public string WorktreePath { get; set; } = string.Empty;
-    public string WorktreeBranch { get; set; } = string.Empty;
     public DateTime? LastGitSyncAtUtc { get; set; }
     public string LastGitSyncError { get; set; } = string.Empty;
     public RetryPolicyConfig RetryPolicy { get; set; } = new();
@@ -170,6 +176,8 @@ public sealed class RunDocument
     public string TaskId { get; set; } = string.Empty;
     public string WorkerId { get; set; } = string.Empty;
     public RunState State { get; set; } = RunState.Queued;
+    public HarnessExecutionMode ExecutionMode { get; set; } = HarnessExecutionMode.Default;
+    public string StructuredProtocol { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
     public string OutputJson { get; set; } = string.Empty;
     public int Attempt { get; set; } = 1;
@@ -182,6 +190,57 @@ public sealed class RunDocument
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? EndedAtUtc { get; set; }
+}
+
+public sealed class RunStructuredEventDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RunId { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public long Sequence { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
+    public string? PayloadJson { get; set; }
+    public string SchemaVersion { get; set; } = string.Empty;
+    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class RunDiffSnapshotDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RunId { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public long Sequence { get; set; }
+    public string Summary { get; set; } = string.Empty;
+    public string DiffStat { get; set; } = string.Empty;
+    public string DiffPatch { get; set; } = string.Empty;
+    public string SchemaVersion { get; set; } = string.Empty;
+    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class RunToolProjectionDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RunId { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public long SequenceStart { get; set; }
+    public long SequenceEnd { get; set; }
+    public string ToolName { get; set; } = string.Empty;
+    public string ToolCallId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string InputJson { get; set; } = string.Empty;
+    public string OutputJson { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
+    public string SchemaVersion { get; set; } = string.Empty;
+    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 public sealed class WorkspacePromptEntryDocument
@@ -393,7 +452,10 @@ public sealed class OrchestratorSettings
     public bool EnableTaskAutoCleanup { get; set; } = true;
     public int CleanupIntervalMinutes { get; set; } = 10;
     public int TaskRetentionDays { get; set; } = 180;
+    public int DisabledTaskInactivityDays { get; set; } = 30;
     public int CleanupProtectedDays { get; set; } = 14;
+    public bool CleanupExcludeWorkflowReferencedTasks { get; set; } = true;
+    public bool CleanupExcludeTasksWithOpenFindings { get; set; } = true;
     public int DbSizeSoftLimitGb { get; set; } = 100;
     public int DbSizeTargetGb { get; set; } = 90;
     public int MaxTasksDeletedPerTick { get; set; } = 50;
@@ -425,14 +487,38 @@ public enum WorkflowStageType
     Parallel = 3,
 }
 
+public sealed class WorkflowAgentTeamMemberConfig
+{
+    public string Name { get; set; } = string.Empty;
+    public string Harness { get; set; } = "codex";
+    public HarnessExecutionMode Mode { get; set; } = HarnessExecutionMode.Default;
+    public string RolePrompt { get; set; } = string.Empty;
+    public string ModelOverride { get; set; } = string.Empty;
+    public int? TimeoutSeconds { get; set; }
+}
+
+public sealed class WorkflowSynthesisStageConfig
+{
+    public bool Enabled { get; set; }
+    public string Harness { get; set; } = "codex";
+    public HarnessExecutionMode Mode { get; set; } = HarnessExecutionMode.Default;
+    public string Prompt { get; set; } = string.Empty;
+    public string ModelOverride { get; set; } = string.Empty;
+    public int? TimeoutSeconds { get; set; }
+}
+
 public sealed class WorkflowStageConfig
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = string.Empty;
     public WorkflowStageType Type { get; set; }
     public string? TaskId { get; set; }
+    public string PromptOverride { get; set; } = string.Empty;
+    public string CommandOverride { get; set; } = string.Empty;
     public int? DelaySeconds { get; set; }
     public List<string>? ParallelStageIds { get; set; }
+    public List<WorkflowAgentTeamMemberConfig>? AgentTeamMembers { get; set; }
+    public WorkflowSynthesisStageConfig? Synthesis { get; set; }
     public int? TimeoutMinutes { get; set; }
     public int Order { get; set; }
 }
@@ -465,8 +551,44 @@ public sealed class WorkflowStageResult
     public bool Succeeded { get; set; }
     public string Summary { get; set; } = string.Empty;
     public List<string> RunIds { get; set; } = [];
+    public WorkflowAgentTeamDiffResult? AgentTeamDiff { get; set; }
     public DateTime StartedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? EndedAtUtc { get; set; }
+}
+
+public sealed class WorkflowAgentTeamDiffResult
+{
+    public int MergedFiles { get; set; }
+    public int ConflictCount { get; set; }
+    public int Additions { get; set; }
+    public int Deletions { get; set; }
+    public string MergedDiffStat { get; set; } = string.Empty;
+    public string MergedPatch { get; set; } = string.Empty;
+    public List<WorkflowAgentTeamLaneDiff> LaneDiffs { get; set; } = [];
+    public List<WorkflowAgentTeamConflict> Conflicts { get; set; } = [];
+}
+
+public sealed class WorkflowAgentTeamLaneDiff
+{
+    public string LaneLabel { get; set; } = string.Empty;
+    public string Harness { get; set; } = string.Empty;
+    public string RunId { get; set; } = string.Empty;
+    public bool Succeeded { get; set; }
+    public string Summary { get; set; } = string.Empty;
+    public string DiffStat { get; set; } = string.Empty;
+    public string DiffPatch { get; set; } = string.Empty;
+    public int FilesChanged { get; set; }
+    public int Additions { get; set; }
+    public int Deletions { get; set; }
+    public List<string> FilePaths { get; set; } = [];
+}
+
+public sealed class WorkflowAgentTeamConflict
+{
+    public string FilePath { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public List<string> LaneLabels { get; set; } = [];
+    public List<string> HunkHeaders { get; set; } = [];
 }
 
 public sealed class WorkflowExecutionDocument

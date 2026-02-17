@@ -60,7 +60,7 @@ public sealed class UiRealtimeBroker(ILogger<UiRealtimeBroker> logger) : IUiReal
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to deliver UI realtime event {EventType}", typeof(TEvent).Name);
+                logger.ZLogWarning(ex, "Failed to deliver UI realtime event {EventType}", typeof(TEvent).Name);
             }
         }
     }

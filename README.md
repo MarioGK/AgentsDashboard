@@ -66,7 +66,7 @@ Control plane: `http://localhost:8080`
 }
 ```
 - If output is not JSON, worker wraps stdout/stderr into the normalized envelope.
-- If `AUTO_CREATE_PR=true`, worker can call `gh pr create` with run-provided env (`GH_REPO`, `PR_BRANCH`, `PR_TITLE`, `PR_BODY`).
+- Task runs execute in container-sandboxed persistent task checkouts; git worktrees and PR-branch env orchestration are not part of runtime flow.
 
 ## Current feature set
 - Project -> Repository -> Task hierarchy

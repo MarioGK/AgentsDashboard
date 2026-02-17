@@ -33,7 +33,7 @@ public sealed class CronSchedulerService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Scheduler tick failed");
+                logger.ZLogError(ex, "Scheduler tick failed");
             }
 
             var delay = nextTick - _timeProvider.GetUtcNow().UtcDateTime;
@@ -53,7 +53,7 @@ public sealed class CronSchedulerService(
         var globalActive = await store.CountActiveRunsAsync(cancellationToken);
         if (globalActive >= opts.MaxGlobalConcurrentRuns)
         {
-            logger.LogDebug("Global concurrency limit reached ({Active}/{Max}), skipping scheduler tick", globalActive, opts.MaxGlobalConcurrentRuns);
+            logger.ZLogDebug("Global concurrency limit reached ({Active}/{Max}), skipping scheduler tick", globalActive, opts.MaxGlobalConcurrentRuns);
             return;
         }
 

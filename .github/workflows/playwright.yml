@@ -1,0 +1,101 @@
+name: Playwright Critical Flows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  NODE_VERSION: '20'
+  SOLUTION_PATH: 'src/AgentsDashboard.slnx'
+  CONTROLPLANE_URL: 'http://127.0.0.1:5266'
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: preview
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tests/AgentsDashboard.Playwright/package-lock.json
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore -m --tl
+
+      - name: Install Playwright dependencies
+        working-directory: tests/AgentsDashboard.Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build WorkerGateway image
+        run: docker build --tag agentsdashboard-worker-gateway:latest --file src/AgentsDashboard.WorkerGateway/Dockerfile .
+
+      - name: Start ControlPlane
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: ${{ env.CONTROLPLANE_URL }}
+          Orchestrator__SqliteConnectionString: Data Source=${{ github.workspace }}/.artifacts/playwright/orchestrator.db
+          Orchestrator__ArtifactsRootPath: ${{ github.workspace }}/.artifacts/playwright/artifacts
+          Orchestrator__Workers__ContainerImage: agentsdashboard-worker-gateway:latest
+          Orchestrator__Workers__ContainerNamePrefix: worker-gateway
+          Orchestrator__Workers__DockerNetwork: agentsdashboard
+        run: |
+          mkdir -p .artifacts/playwright/artifacts
+          dotnet run --project src/AgentsDashboard.ControlPlane --configuration Release --no-build --no-launch-profile > .artifacts/playwright/controlplane.log 2>&1 &
+          echo $! > .artifacts/playwright/controlplane.pid
+
+      - name: Wait for app readiness
+        run: |
+          for attempt in $(seq 1 120); do
+            if curl -fsS "${CONTROLPLANE_URL}/ready" > /dev/null; then
+              echo "ControlPlane is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          tail -n 200 .artifacts/playwright/controlplane.log || true
+          exit 1
+
+      - name: Run Playwright tests
+        working-directory: tests/AgentsDashboard.Playwright
+        env:
+          BASE_URL: ${{ env.CONTROLPLANE_URL }}
+        run: npm test
+
+      - name: Stop ControlPlane
+        if: always()
+        run: |
+          if [ -f .artifacts/playwright/controlplane.pid ]; then
+            kill "$(cat .artifacts/playwright/controlplane.pid)" || true
+          fi
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            tests/AgentsDashboard.Playwright/playwright-report
+            tests/AgentsDashboard.Playwright/test-results
+            .artifacts/playwright/controlplane.log
+          if-no-files-found: warn
+          retention-days: 7

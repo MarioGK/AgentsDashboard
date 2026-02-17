@@ -66,7 +66,7 @@ public sealed class DockerWorkerLifecycleManager(
             forceRefresh: true);
         if (!baseResolution.Available)
         {
-            logger.LogWarning(
+            logger.ZLogWarning(
                 "Worker image {Image} is unavailable after image policy execution. Dispatch will fail until the image is available.",
                 baseImage);
             return;
@@ -82,14 +82,14 @@ public sealed class DockerWorkerLifecycleManager(
                 forceRefresh: true);
             if (!canaryResolution.Available)
             {
-                logger.LogWarning(
+                logger.ZLogWarning(
                     "Worker canary image {Image} is unavailable; continuing with base image {BaseImage}.",
                     canaryImage,
                     baseImage);
             }
         }
 
-        logger.LogInformation("Worker image {Image} is available", baseImage);
+        logger.ZLogInformation("Worker image {Image} is available", baseImage);
     }
 
     private sealed record ImageResolutionResult(bool Available, string Source);
@@ -108,7 +108,7 @@ public sealed class DockerWorkerLifecycleManager(
         {
             if (!CanScaleOut(runtime, out var reason))
             {
-                logger.LogWarning(
+                logger.ZLogWarning(
                     "Unable to satisfy MinWorkers={MinWorkers}. Scale-out blocked: {Reason}",
                     runtime.MinWorkers,
                     reason);
@@ -403,7 +403,7 @@ public sealed class DockerWorkerLifecycleManager(
                     }
                     catch (Exception ex)
                     {
-                        logger.LogDebug(ex, "Failed to refresh pressure metrics for worker {WorkerId}", workerId);
+                        logger.ZLogDebug(ex, "Failed to refresh pressure metrics for worker {WorkerId}", workerId);
                     }
                 }
 
@@ -474,7 +474,7 @@ public sealed class DockerWorkerLifecycleManager(
                 cancellationToken);
             if (scaleLease is null)
             {
-                logger.LogDebug("Skipped worker spawn because scale lease is currently held by another orchestrator instance");
+                logger.ZLogDebug("Skipped worker spawn because scale lease is currently held by another orchestrator instance");
                 return null;
             }
 
@@ -491,7 +491,7 @@ public sealed class DockerWorkerLifecycleManager(
             if (!imageResolution.Available && imageSelection.IsCanary)
             {
                 var baseImage = ResolveEffectiveImageReference(runtime.ContainerImage, runtime.WorkerImageRegistry);
-                logger.LogWarning(
+                logger.ZLogWarning(
                     "Canary worker image {CanaryImage} could not be resolved ({Reason}); falling back to base image {BaseImage}.",
                     selectedImage,
                     imageSelection.CanaryReason,
@@ -507,7 +507,7 @@ public sealed class DockerWorkerLifecycleManager(
 
             if (!CanScaleOut(runtime, out var blockedReason))
             {
-                logger.LogWarning("Scale-out blocked while attempting to spawn worker: {Reason}", blockedReason);
+                logger.ZLogWarning("Scale-out blocked while attempting to spawn worker: {Reason}", blockedReason);
                 return null;
             }
 
@@ -576,7 +576,7 @@ public sealed class DockerWorkerLifecycleManager(
             }
             catch (DockerApiException ex) when (IsMissingImageException(ex, createParameters.Image))
             {
-                logger.LogWarning(ex, "Worker image {Image} was not found locally; attempting resolution and retry.", createParameters.Image);
+                logger.ZLogWarning(ex, "Worker image {Image} was not found locally; attempting resolution and retry.", createParameters.Image);
 
                 imageResolution = await EnsureWorkerImageResolvedWithSourceAsync(createParameters.Image, runtime, cancellationToken);
                 if (!imageResolution.Available)
@@ -592,7 +592,7 @@ public sealed class DockerWorkerLifecycleManager(
                 createParameters.NetworkingConfig is not null &&
                 ex.Message.Contains("network", StringComparison.OrdinalIgnoreCase))
             {
-                logger.LogWarning(ex, "Worker network {Network} is unavailable; retrying worker create without explicit network", runtime.DockerNetwork);
+                logger.ZLogWarning(ex, "Worker network {Network} is unavailable; retrying worker create without explicit network", runtime.DockerNetwork);
                 createParameters.NetworkingConfig = null;
                 created = await _dockerClient.Containers.CreateContainerAsync(createParameters, cancellationToken);
             }
@@ -605,7 +605,7 @@ public sealed class DockerWorkerLifecycleManager(
             if (worker is null)
             {
                 RegisterScaleOutFailure(runtime);
-                logger.LogWarning("Worker {WorkerId} did not become ready in time", workerId);
+                logger.ZLogWarning("Worker {WorkerId} did not become ready in time", workerId);
                 if (_workers.TryGetValue(workerId, out var workerState))
                 {
                     workerState.LifecycleState = WorkerLifecycleState.FailedStart;
@@ -622,13 +622,13 @@ public sealed class DockerWorkerLifecycleManager(
                 readyWorkerState.ImageDigest = worker.ImageDigest;
             }
 
-            logger.LogInformation("Spawned worker {WorkerId} ({ContainerId})", worker.WorkerId, worker.ContainerId[..Math.Min(12, worker.ContainerId.Length)]);
+            logger.ZLogInformation("Spawned worker {WorkerId} ({ContainerId})", worker.WorkerId, worker.ContainerId[..Math.Min(12, worker.ContainerId.Length)]);
             return worker;
         }
         catch (Exception ex)
         {
             RegisterScaleOutFailure(runtime);
-            logger.LogWarning(ex, "Failed to spawn worker");
+            logger.ZLogWarning(ex, "Failed to spawn worker");
             return null;
         }
         finally
@@ -661,7 +661,7 @@ public sealed class DockerWorkerLifecycleManager(
                 },
                 cancellationToken);
 
-            logger.LogInformation("Created missing Docker network {Network}", networkName);
+            logger.ZLogInformation("Created missing Docker network {Network}", networkName);
         }
         catch (DockerApiException ex)
         {
@@ -670,7 +670,7 @@ public sealed class DockerWorkerLifecycleManager(
                 return;
             }
 
-            logger.LogWarning(ex, "Unable to create Docker network {Network}; worker creation may fall back.", networkName);
+            logger.ZLogWarning(ex, "Unable to create Docker network {Network}; worker creation may fall back.", networkName);
         }
     }
 
@@ -719,7 +719,7 @@ public sealed class DockerWorkerLifecycleManager(
             }
 
             clientFactory.RemoveWorker(workerId);
-            logger.LogInformation("Stopped and removed worker {WorkerId} ({ContainerId})", workerId, containerId[..Math.Min(12, containerId.Length)]);
+            logger.ZLogInformation("Stopped and removed worker {WorkerId} ({ContainerId})", workerId, containerId[..Math.Min(12, containerId.Length)]);
             return true;
         }
         catch (DockerContainerNotFoundException)
@@ -731,7 +731,7 @@ public sealed class DockerWorkerLifecycleManager(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to stop worker {WorkerId}", workerId);
+            logger.ZLogWarning(ex, "Failed to stop worker {WorkerId}", workerId);
             return false;
         }
     }
@@ -783,12 +783,12 @@ public sealed class DockerWorkerLifecycleManager(
                 await process.WaitForExitAsync(cancellationToken);
                 if (process.ExitCode == 0)
                 {
-                    logger.LogInformation("Removed worker storage volume {VolumeName} for {WorkerId}", volumeName, workerId);
+                    logger.ZLogInformation("Removed worker storage volume {VolumeName} for {WorkerId}", volumeName, workerId);
                 }
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "Failed to remove worker volume {VolumeName} for {WorkerId}", volumeName, workerId);
+                logger.ZLogDebug(ex, "Failed to remove worker volume {VolumeName} for {WorkerId}", volumeName, workerId);
             }
         }
     }
@@ -899,7 +899,7 @@ public sealed class DockerWorkerLifecycleManager(
             _imageFailureCooldownUntilUtc.TryGetValue(imageReference, out var cooldownUntil) &&
             cooldownUntil > DateTime.UtcNow)
         {
-            logger.LogWarning("Skipping worker image resolution for {Image}; cooldown active until {CooldownUntil}", imageReference, cooldownUntil);
+            logger.ZLogWarning("Skipping worker image resolution for {Image}; cooldown active until {CooldownUntil}", imageReference, cooldownUntil);
             return UnavailableImageResolution;
         }
 
@@ -931,7 +931,7 @@ public sealed class DockerWorkerLifecycleManager(
             {
                 if (localImageExists)
                 {
-                    logger.LogWarning(
+                    logger.ZLogWarning(
                         "Worker image resolution failed for {Image}; keeping existing local image.",
                         imageReference);
                     return new ImageResolutionResult(true, "local-fallback");
@@ -976,7 +976,7 @@ public sealed class DockerWorkerLifecycleManager(
         OrchestratorRuntimeSettings runtime,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Resolving worker image {Image} with policy {Policy}", imageReference, runtime.WorkerImagePolicy);
+        logger.ZLogInformation("Resolving worker image {Image} with policy {Policy}", imageReference, runtime.WorkerImagePolicy);
 
         if (runtime.WorkerImagePolicy == WorkerImagePolicy.PullOnly)
         {
@@ -1039,7 +1039,7 @@ public sealed class DockerWorkerLifecycleManager(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to inspect worker image {Image}", imageReference);
+            logger.ZLogWarning(ex, "Failed to inspect worker image {Image}", imageReference);
             return false;
         }
     }
@@ -1055,12 +1055,12 @@ public sealed class DockerWorkerLifecycleManager(
 
             var imageSplit = SplitImageReference(imageReference);
 
-            logger.LogInformation("Pulling worker image {Image}", imageReference);
+            logger.ZLogInformation("Pulling worker image {Image}", imageReference);
             var progress = new Progress<JSONMessage>(message =>
             {
                 if (!string.IsNullOrWhiteSpace(message.ProgressMessage))
                 {
-                    logger.LogDebug("Pull progress for {Image}: {Progress}", imageReference, message.ProgressMessage);
+                    logger.ZLogDebug("Pull progress for {Image}: {Progress}", imageReference, message.ProgressMessage);
                 }
             });
 
@@ -1074,12 +1074,12 @@ public sealed class DockerWorkerLifecycleManager(
                 progress,
                 timeoutCts.Token);
 
-            logger.LogInformation("Successfully pulled worker image {Image}", imageReference);
+            logger.ZLogInformation("Successfully pulled worker image {Image}", imageReference);
             return true;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to pull worker image {Image}", imageReference);
+            logger.ZLogWarning(ex, "Failed to pull worker image {Image}", imageReference);
             return false;
         }
     }
@@ -1089,7 +1089,7 @@ public sealed class DockerWorkerLifecycleManager(
         var dockerfilePath = ResolveWorkerGatewayDockerfilePath(runtime);
         if (string.IsNullOrWhiteSpace(dockerfilePath))
         {
-            logger.LogWarning("Worker Dockerfile could not be resolved for automatic image build");
+            logger.ZLogWarning("Worker Dockerfile could not be resolved for automatic image build");
             return false;
         }
 
@@ -1100,7 +1100,7 @@ public sealed class DockerWorkerLifecycleManager(
                 continue;
             }
 
-            logger.LogInformation("Building worker image {Image} from {Dockerfile} in context {Context}", imageReference, dockerfilePath, buildContext);
+            logger.ZLogInformation("Building worker image {Image} from {Dockerfile} in context {Context}", imageReference, dockerfilePath, buildContext);
 
             try
             {
@@ -1111,12 +1111,12 @@ public sealed class DockerWorkerLifecycleManager(
 
                 await BuildImageWithCliAsync(imageReference, buildContext, dockerfilePath, timeoutCts.Token);
 
-                logger.LogInformation("Built worker image {Image}", imageReference);
+                logger.ZLogInformation("Built worker image {Image}", imageReference);
                 return true;
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to build worker image {Image} from context {Context}", imageReference, buildContext);
+                logger.ZLogWarning(ex, "Failed to build worker image {Image} from context {Context}", imageReference, buildContext);
             }
         }
 
@@ -1189,14 +1189,14 @@ public sealed class DockerWorkerLifecycleManager(
         {
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
-                logger.LogDebug("Docker build output ({Image}): {Message}", imageReference, args.Data);
+                logger.ZLogDebug("Docker build output ({Image}): {Message}", imageReference, args.Data);
             }
         };
         process.ErrorDataReceived += (_, args) =>
         {
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
-                logger.LogDebug("Docker build error ({Image}): {Message}", imageReference, args.Data);
+                logger.ZLogDebug("Docker build error ({Image}): {Message}", imageReference, args.Data);
             }
         };
 

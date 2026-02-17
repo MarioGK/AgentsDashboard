@@ -35,18 +35,18 @@ public sealed class ContainerOrphanReconciler(
 
         if (orphanedContainers.Count == 0)
         {
-            logger.LogInformation("No orphaned containers found");
+            logger.ZLogInformation("No orphaned containers found");
             return new OrphanReconciliationResult(0, []);
         }
 
         s_orphansDetected.Add(orphanedContainers.Count);
-        logger.LogWarning("Found {Count} orphaned containers with orchestrator labels but no matching run", orphanedContainers.Count);
+        logger.ZLogWarning("Found {Count} orphaned containers with orchestrator labels but no matching run", orphanedContainers.Count);
 
         var removedContainers = new List<OrphanedContainer>();
 
         foreach (var orphan in orphanedContainers)
         {
-            logger.LogWarning(
+            logger.ZLogWarning(
                 "Removing orphaned container {ContainerId} (RunId: {RunId}, State: {State})",
                 orphan.ContainerId[..Math.Min(12, orphan.ContainerId.Length)],
                 orphan.RunId,
@@ -60,7 +60,7 @@ public sealed class ContainerOrphanReconciler(
         }
 
         s_orphansRemoved.Add(removedContainers.Count);
-        logger.LogInformation("Reconciliation complete: removed {RemovedCount}/{DetectedCount} orphaned containers",
+        logger.ZLogInformation("Reconciliation complete: removed {RemovedCount}/{DetectedCount} orphaned containers",
             removedContainers.Count, orphanedContainers.Count);
 
         return new OrphanReconciliationResult(orphanedContainers.Count, removedContainers);

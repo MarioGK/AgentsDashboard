@@ -1,15 +1,19 @@
 @page "/workspace"
 @rendermode InteractiveServer
+@using System.Text.Json
+@using AgentsDashboard.ControlPlane.Components.Shared
+@using AgentsDashboard.ControlPlane.Services
 @inject Data.IOrchestratorStore Store
 @inject Services.IGlobalSelectionService SelectionService
 @inject Services.IWorkspaceService WorkspaceService
 @inject Services.IWorkspaceSearchService WorkspaceSearchService
 @inject Services.IWorkspaceAiService WorkspaceAiService
-@inject Services.IHarnessOutputParserService HarnessOutputParserService
+@inject Services.IRunStructuredViewService RunStructuredViewService
+@inject Services.IHarnessOutputParserService HarnessOutputParser
+@inject Services.IUiRealtimeBroker UiRealtimeBroker
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 @implements IAsyncDisposable
-@using AgentsDashboard.ControlPlane.Services
 
 <PageTitle>Workspace</PageTitle>
 
@@ -246,7 +250,7 @@
                         </MudStack>
 
                         <MudGrid>
-                            <MudItem xs="12" md="4">
+                            <MudItem xs="12" md="3">
                                 <MudTextField T="string"
                                               @ref="_createTaskNameField"
                                               @bind-Value="_createTaskName"
@@ -256,7 +260,7 @@
                                               Immediate="true" />
                             </MudItem>
 
-                            <MudItem xs="12" md="4">
+                            <MudItem xs="12" md="3">
                                 <MudSelect T="string"
                                            @bind-Value="_createTaskHarness"
                                            Label="Harness"
@@ -269,7 +273,7 @@
                                 </MudSelect>
                             </MudItem>
 
-                            <MudItem xs="12" md="4">
+                            <MudItem xs="12" md="3">
                                 <MudSelect T="TaskKind"
                                            @bind-Value="_createTaskKind"
                                            Label="Kind"
@@ -278,6 +282,18 @@
                                     <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
                                     <MudSelectItem T="TaskKind" Value="@TaskKind.Cron">Cron</MudSelectItem>
                                     <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudSelect T="HarnessExecutionMode"
+                                           @bind-Value="_createTaskModeDefault"
+                                           Label="Default Mode"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense">
+                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
+                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
+                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
                                 </MudSelect>
                             </MudItem>
 
@@ -389,7 +405,7 @@
                             </MudStack>
 
                             <MudTabs Elevation="0" Rounded>
-                                <MudTabPanel Text="Execution" Icon="@Icons.Material.Filled.PlayCircle">
+                                <MudTabPanel Text="Timeline" Icon="@Icons.Material.Filled.Timeline">
                                     <div class="workspace-console-scroll">
                                         @if (_selectedRun is null)
                                         {
@@ -398,6 +414,39 @@
                                         else
                                         {
                                             <MudStack Spacing="1">
+                                                <MudGrid Class="mb-1">
+                                                    <MudItem xs="6" md="2">
+                                                        <MudPaper Class="workspace-structured-section" Elevation="0">
+                                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Thinking</MudText>
+                                                            <MudText Typo="Typo.h6">@_selectedRunStructuredView.Thinking.Count</MudText>
+                                                        </MudPaper>
+                                                    </MudItem>
+                                                    <MudItem xs="6" md="2">
+                                                        <MudPaper Class="workspace-structured-section" Elevation="0">
+                                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Tools</MudText>
+                                                            <MudText Typo="Typo.h6">@_selectedRunStructuredView.Tools.Count</MudText>
+                                                        </MudPaper>
+                                                    </MudItem>
+                                                    <MudItem xs="6" md="2">
+                                                        <MudPaper Class="workspace-structured-section" Elevation="0">
+                                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Diff</MudText>
+                                                            <MudText Typo="Typo.h6">@RunDiffParser.Parse(GetWorkspaceResolvedDiffPatch()).Count</MudText>
+                                                        </MudPaper>
+                                                    </MudItem>
+                                                    <MudItem xs="6" md="3">
+                                                        <MudPaper Class="workspace-structured-section" Elevation="0">
+                                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Summary</MudText>
+                                                            <MudText Typo="Typo.body2">@TruncateForDisplay(_selectedRunAiSummary?.Summary ?? _selectedRunParsed?.Summary ?? GetRunSummary(_selectedRun), 120)</MudText>
+                                                        </MudPaper>
+                                                    </MudItem>
+                                                    <MudItem xs="12" md="3">
+                                                        <MudPaper Class="workspace-structured-section workspace-structured-section-error" Elevation="0">
+                                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Errors</MudText>
+                                                            <MudText Typo="Typo.body2">@TruncateForDisplay(_selectedRunParsed?.Error ?? string.Empty, 120)</MudText>
+                                                        </MudPaper>
+                                                    </MudItem>
+                                                </MudGrid>
+
                                                 @if (!string.IsNullOrWhiteSpace(_selectedRunAiSummary?.Summary))
                                                 {
                                                     <MudAlert Severity="Severity.Info">
@@ -490,6 +539,72 @@
                                     }
                                 </MudTabPanel>
 
+                                <MudTabPanel Text="Thinking" Icon="@Icons.Material.Filled.Psychology">
+                                    <div class="workspace-console-scroll">
+                                        @if (_selectedRun is null)
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">No run selected.</MudText>
+                                        }
+                                        else if (_selectedRunStructuredView.Thinking.Count == 0)
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">No thinking events captured.</MudText>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var item in _selectedRunStructuredView.Thinking.TakeLast(160))
+                                            {
+                                                <MudText Typo="Typo.body2" Class="workspace-console-line">[@item.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")] @item.Content</MudText>
+                                            }
+                                        }
+                                    </div>
+                                </MudTabPanel>
+
+                                <MudTabPanel Text="Tools" Icon="@Icons.Material.Filled.Build">
+                                    <div class="workspace-console-scroll">
+                                        @if (_selectedRun is null)
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">No run selected.</MudText>
+                                        }
+                                        else if (_selectedRunStructuredView.Tools.Count == 0)
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">No tool lifecycle events captured.</MudText>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var tool in _selectedRunStructuredView.Tools.TakeLast(240))
+                                            {
+                                                <MudPaper Class="workspace-structured-section" Elevation="0">
+                                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@tool.ToolName</MudChip>
+                                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@tool.State</MudChip>
+                                                        @if (!string.IsNullOrWhiteSpace(tool.ToolCallId))
+                                                        {
+                                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@tool.ToolCallId</MudText>
+                                                        }
+                                                        <MudSpacer />
+                                                        <MudText Typo="Typo.caption">@tool.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</MudText>
+                                                    </MudStack>
+                                                </MudPaper>
+                                            }
+                                        }
+                                    </div>
+                                </MudTabPanel>
+
+                                <MudTabPanel Text="Diff" Icon="@Icons.Material.Filled.Difference">
+                                    <div class="workspace-console-scroll">
+                                        @if (_selectedRun is null)
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">No run selected.</MudText>
+                                        }
+                                        else
+                                        {
+                                            <RunDiffViewer RunId="@_selectedRun.Id"
+                                                           Patch="@GetWorkspaceResolvedDiffPatch()"
+                                                           DiffStat="@GetWorkspaceResolvedDiffStat()" />
+                                        }
+                                    </div>
+                                </MudTabPanel>
+
                                 <MudTabPanel Text="Raw" Icon="@Icons.Material.Filled.DataObject">
                                     <div class="workspace-console-scroll">
                                         @if (_selectedRun is null)
@@ -502,9 +617,20 @@
                                                 <MudText Typo="Typo.caption">Run ID: @_selectedRun.Id</MudText>
                                                 <MudText Typo="Typo.caption">Created: @_selectedRun.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
                                                 <MudText Typo="Typo.caption">Summary: @(_selectedRun.Summary == string.Empty ? "-" : _selectedRun.Summary)</MudText>
+                                                <MudStack Row Spacing="1">
+                                                    <MudButton Variant="Variant.Outlined"
+                                                               Size="Size.Small"
+                                                               StartIcon="@Icons.Material.Filled.ContentCopy"
+                                                               OnClick="CopySelectedRunStructuredEventsJsonAsync">
+                                                        Copy Event JSON
+                                                    </MudButton>
+                                                </MudStack>
                                                 <MudDivider />
                                                 <MudText Typo="Typo.caption">Raw OutputJson</MudText>
                                                 <pre class="workspace-raw-output">@GetSelectedRunRawOutput()</pre>
+
+                                                <MudText Typo="Typo.caption">Structured Events (@_selectedRunStructuredEvents.Count)</MudText>
+                                                <pre class="workspace-raw-output">@GetSelectedRunStructuredEventsJson()</pre>
 
                                                 @if (_selectedRunParsed is not null && _selectedRunParsed.RawStream.Count > 0)
                                                 {
@@ -538,8 +664,90 @@
                                               placeholder="Add run guidance, press Tab or ArrowRight to accept suggestion"></textarea>
                                 </div>
 
+                                <MudExpansionPanels Elevation="0">
+                                    <MudExpansionPanel Text="Agent Team Configuration" Dense>
+                                        @for (var index = 0; index < _agentTeamMembers.Count; index++)
+                                        {
+                                            <MudPaper Class="workspace-structured-section mb-1" Elevation="0">
+                                                <MudText Typo="Typo.caption">Member @(index + 1)</MudText>
+                                                <MudGrid>
+                                                    <MudItem xs="12" md="2">
+                                                        <MudSelect T="string" @bind-Value="_agentTeamMembers[index].Harness" Label="Harness" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                                                            <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
+                                                            <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
+                                                            <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
+                                                            <MudSelectItem T="string" Value='@("zai")'>Zai</MudSelectItem>
+                                                        </MudSelect>
+                                                    </MudItem>
+                                                    <MudItem xs="12" md="2">
+                                                        <MudSelect T="HarnessExecutionMode" @bind-Value="_agentTeamMembers[index].Mode" Label="Mode" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                                                            <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
+                                                            <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
+                                                            <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
+                                                        </MudSelect>
+                                                    </MudItem>
+                                                    <MudItem xs="12" md="4">
+                                                        <MudTextField T="string" @bind-Value="_agentTeamMembers[index].RolePrompt" Label="Role Prompt" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                                    </MudItem>
+                                                    <MudItem xs="12" md="2">
+                                                        <MudTextField T="string" @bind-Value="_agentTeamMembers[index].ModelOverride" Label="Model Override" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                                    </MudItem>
+                                                    <MudItem xs="12" md="2">
+                                                        <MudNumericField T="int?" @bind-Value="_agentTeamMembers[index].TimeoutSeconds" Label="Timeout (sec)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+                                                    </MudItem>
+                                                </MudGrid>
+                                            </MudPaper>
+                                        }
+
+                                        <MudPaper Class="workspace-structured-section mt-1" Elevation="0">
+                                            <MudText Typo="Typo.caption">Synthesis</MudText>
+                                            <MudGrid>
+                                                <MudItem xs="12" md="2" Class="d-flex align-center">
+                                                    <MudSwitch T="bool" @bind-Value="_agentTeamSynthesisEnabled" Label="Enabled" />
+                                                </MudItem>
+                                                <MudItem xs="12" md="2">
+                                                    <MudSelect T="string" @bind-Value="_agentTeamSynthesisHarness" Label="Harness" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                                                        <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
+                                                        <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
+                                                        <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
+                                                        <MudSelectItem T="string" Value='@("zai")'>Zai</MudSelectItem>
+                                                    </MudSelect>
+                                                </MudItem>
+                                                <MudItem xs="12" md="2">
+                                                    <MudSelect T="HarnessExecutionMode" @bind-Value="_agentTeamSynthesisMode" Label="Mode" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                                                        <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
+                                                        <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
+                                                        <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
+                                                    </MudSelect>
+                                                </MudItem>
+                                                <MudItem xs="12" md="3">
+                                                    <MudTextField T="string" @bind-Value="_agentTeamSynthesisModelOverride" Label="Model Override" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                                </MudItem>
+                                                <MudItem xs="12" md="3">
+                                                    <MudNumericField T="int?" @bind-Value="_agentTeamSynthesisTimeoutSeconds" Label="Timeout (sec)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+                                                </MudItem>
+                                                <MudItem xs="12">
+                                                    <MudTextField T="string" @bind-Value="_agentTeamSynthesisPrompt" Label="Synthesis Prompt" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                                </MudItem>
+                                            </MudGrid>
+                                        </MudPaper>
+                                    </MudExpansionPanel>
+                                </MudExpansionPanels>
+
                                 <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">Composer guidance is submitted as follow-up prompt context.</MudText>
+                                    <MudSelect T="HarnessExecutionMode?"
+                                               @bind-Value="_composerModeOverride"
+                                               Label="Run Mode"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense"
+                                               Dense="true"
+                                               Class="workspace-filter-select">
+                                        <MudSelectItem T="HarnessExecutionMode?" Value="@((HarnessExecutionMode?)null)">Task Default</MudSelectItem>
+                                        <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
+                                        <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
+                                        <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
+                                    </MudSelect>
                                     <MudSpacer />
                                     <MudButton Variant="Variant.Filled"
                                                Color="Color.Primary"
@@ -562,6 +770,13 @@
                                         Run Again With Edits
                                     </MudButton>
                                     <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Success"
+                                               StartIcon="@Icons.Material.Filled.Groups"
+                                               OnClick="SubmitDefaultAgentTeamAsync"
+                                               Disabled="@_isSubmittingComposer">
+                                        Agent Team Run
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined"
                                                Color="Color.Secondary"
                                                StartIcon="@Icons.Material.Filled.Tune"
                                                OnClick="() => OpenPromptDraftDialogAsync(PromptDraftMode.Improve)">
@@ -582,6 +797,50 @@
                                 <MudText Typo="Typo.subtitle1">History</MudText>
                                 <MudSpacer />
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@SelectedTaskRuns.Count runs</MudChip>
+                            </MudStack>
+
+                            <MudStack Row Spacing="1" Class="mb-2">
+                                <MudSelect T="string"
+                                           @bind-Value="_historyStateFilter"
+                                           Label="State"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Dense="true"
+                                           Class="workspace-filter-select">
+                                    <MudSelectItem T="string" Value='@("all")'>All States</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("running")'>Running</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("queued")'>Queued</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("pendingapproval")'>Pending Approval</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("succeeded")'>Succeeded</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("failed")'>Failed</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("cancelled")'>Cancelled</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("obsolete")'>Obsolete</MudSelectItem>
+                                </MudSelect>
+                                <MudSelect T="string"
+                                           @bind-Value="_historyModeFilter"
+                                           Label="Mode"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Dense="true"
+                                           Class="workspace-filter-select">
+                                    <MudSelectItem T="string" Value='@("all")'>All Modes</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("default")'>Default</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("plan")'>Plan</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("review")'>Review</MudSelectItem>
+                                </MudSelect>
+                                <MudSelect T="string"
+                                           @bind-Value="_historyHarnessFilter"
+                                           Label="Harness"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Dense="true"
+                                           Class="workspace-filter-select">
+                                    <MudSelectItem T="string" Value='@("all")'>All Harnesses</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("zai")'>Zai</MudSelectItem>
+                                </MudSelect>
                             </MudStack>
 
                             @if (SelectedTaskRuns.Count == 0)
@@ -644,7 +903,7 @@
     }
 </MudStack>
 
-<MudDialog @bind-IsVisible="_promptDraftDialogOpen" Options="_promptDraftDialogOptions" Class="workspace-prompt-dialog">
+    <MudDialog @bind-Visible="_promptDraftDialogOpen" Options="_promptDraftDialogOptions" Class="workspace-prompt-dialog">
     <TitleContent>
         <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
             <MudText Typo="Typo.h6">@GetPromptDraftTitle()</MudText>
@@ -731,6 +990,9 @@
     private RunDocument? _selectedRun;
     private List<RunLogEvent> _selectedRunLogs = [];
     private ParsedHarnessOutput? _selectedRunParsed;
+    private List<RunStructuredEventDocument> _selectedRunStructuredEvents = [];
+    private RunDiffSnapshotDocument? _selectedRunDiffSnapshot;
+    private RunStructuredViewSnapshot _selectedRunStructuredView = new(string.Empty, 0, [], [], [], null, DateTime.UtcNow);
     private RunAiSummaryDocument? _selectedRunAiSummary;
     private List<WorkspacePromptEntryDocument> _selectedTaskPromptHistory = [];
 
@@ -756,8 +1018,10 @@
     private string _createTaskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Workspace run\",\"artifacts\":[]}'";
     private string _createTaskCron = string.Empty;
     private bool _createTaskAutoPr;
+    private HarnessExecutionMode _createTaskModeDefault = HarnessExecutionMode.Default;
 
     private bool _isSubmittingComposer;
+    private HarnessExecutionMode? _composerModeOverride;
     private string _composerValue = string.Empty;
     private string _composerGhostSuggestion = string.Empty;
     private string _composerGhostSuffix = string.Empty;
@@ -765,6 +1029,36 @@
     private CancellationTokenSource? _composerSuggestionCts;
 
     private bool _historyPanelOpen = true;
+    private string _historyStateFilter = "all";
+    private string _historyModeFilter = "all";
+    private string _historyHarnessFilter = "all";
+    private readonly List<WorkspaceTeamMemberDraft> _agentTeamMembers =
+    [
+        new()
+        {
+            Harness = "codex",
+            Mode = HarnessExecutionMode.Plan,
+            RolePrompt = "Planner. Produce an explicit implementation plan with ordered steps, risks, and validation checkpoints."
+        },
+        new()
+        {
+            Harness = "codex",
+            Mode = HarnessExecutionMode.Default,
+            RolePrompt = "Implementer. Execute the plan with concrete code changes and verification."
+        },
+        new()
+        {
+            Harness = "codex",
+            Mode = HarnessExecutionMode.Review,
+            RolePrompt = "Reviewer. Focus on defects, regressions, and missing tests. Return issue-first findings."
+        }
+    ];
+    private bool _agentTeamSynthesisEnabled = true;
+    private string _agentTeamSynthesisPrompt = "Synthesize planner, implementer, and reviewer outputs. Summarize consensus, conflicts, and the recommended final patch.";
+    private string _agentTeamSynthesisHarness = string.Empty;
+    private HarnessExecutionMode _agentTeamSynthesisMode = HarnessExecutionMode.Review;
+    private string _agentTeamSynthesisModelOverride = string.Empty;
+    private int? _agentTeamSynthesisTimeoutSeconds;
 
     private bool _promptDraftDialogOpen;
     private bool _isPromptDraftLoading;
@@ -778,6 +1072,11 @@
     private readonly DialogOptions _promptDraftDialogOptions = new() { MaxWidth = MaxWidth.False, FullWidth = true, CloseOnEscapeKey = true };
 
     private IDisposable? _selectionSubscription;
+    private IDisposable? _runLogSubscription;
+    private IDisposable? _runStatusSubscription;
+    private IDisposable? _structuredSubscription;
+    private IDisposable? _diffSubscription;
+    private IDisposable? _toolSubscription;
     private IJSObjectReference? _workspaceJsModule;
     private DotNetObjectReference<Workspace>? _dotNetRef;
     private string? _viewportListenerHandle;
@@ -828,6 +1127,9 @@
             ? []
             : _selectedRepositoryRuns
                 .Where(run => run.TaskId == _selectedTask.Id)
+                .Where(MatchesHistoryRunState)
+                .Where(MatchesHistoryRunMode)
+                .Where(MatchesHistoryRunHarness)
                 .OrderByDescending(run => run.CreatedAtUtc)
                 .Take(20)
                 .ToList();
@@ -838,6 +1140,11 @@
         {
             _ = InvokeAsync(OnExternalSelectionChangedAsync);
         });
+        _runLogSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunLogChunkEvent>(OnRunLogChunkAsync);
+        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(OnRunStatusChangedAsync);
+        _structuredSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStructuredEventChangedEvent>(OnRunStructuredEventChangedAsync);
+        _diffSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunDiffUpdatedEvent>(OnRunDiffUpdatedAsync);
+        _toolSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunToolTimelineUpdatedEvent>(OnRunToolTimelineUpdatedAsync);
         RefreshComposerSuggestionFallback();
         await LoadWorkspaceAsync();
     }
@@ -928,6 +1235,7 @@
                 _selectedRun = null;
                 _selectedRunLogs = [];
                 _selectedRunParsed = null;
+                ClearSelectedRunStructuredState();
                 _selectedRunAiSummary = null;
                 _selectedTaskPromptHistory = [];
             }
@@ -973,6 +1281,7 @@
         _selectedRun = null;
         _selectedRunLogs = [];
         _selectedRunParsed = null;
+        ClearSelectedRunStructuredState();
         _selectedRunAiSummary = null;
         _selectedTaskPromptHistory = [];
 
@@ -1017,6 +1326,7 @@
                 _selectedRun = null;
                 _selectedRunLogs = [];
                 _selectedRunParsed = null;
+                ClearSelectedRunStructuredState();
                 _selectedRunAiSummary = null;
                 _selectedTaskPromptHistory = [];
                 return;
@@ -1045,6 +1355,12 @@
 
         _isCreateTaskMode = false;
         _selectedTask = task;
+        _composerModeOverride = null;
+        foreach (var member in _agentTeamMembers)
+        {
+            member.Harness = task.Harness;
+        }
+        _agentTeamSynthesisHarness = task.Harness;
         _selectedTaskPromptHistory = await Store.ListWorkspacePromptHistoryAsync(task.Id, 80, CancellationToken.None);
 
         var taskRuns = GetRunsForTask(task.Id);
@@ -1070,6 +1386,7 @@
             _selectedRun = null;
             _selectedRunLogs = [];
             _selectedRunParsed = null;
+            ClearSelectedRunStructuredState();
             _selectedRunAiSummary = null;
         }
         else
@@ -1088,6 +1405,7 @@
             _selectedRun = null;
             _selectedRunLogs = [];
             _selectedRunParsed = null;
+            ClearSelectedRunStructuredState();
             _selectedRunAiSummary = null;
             return;
         }
@@ -1095,9 +1413,128 @@
         _selectedRun = run;
         _selectedRunLogs = await Store.ListRunLogsAsync(run.Id, CancellationToken.None);
         _selectedRunLogs = _selectedRunLogs.OrderBy(log => log.TimestampUtc).ToList();
-        _selectedRunParsed = HarnessOutputParserService.Parse(_selectedRun.OutputJson, _selectedRunLogs);
+        _selectedRunParsed = HarnessOutputParser.Parse(_selectedRun.OutputJson, _selectedRunLogs);
+        await RefreshSelectedRunStructuredStateAsync(run.Id);
         _selectedRunAiSummary = await Store.GetRunAiSummaryAsync(run.Id, CancellationToken.None);
         await RefreshRunSummaryAsync(force: false);
+    }
+
+    private async Task OnRunLogChunkAsync(AgentsDashboard.Contracts.SignalR.RunLogChunkEvent logEvent)
+    {
+        if (_selectedRun is null || !string.Equals(logEvent.RunId, _selectedRun.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _selectedRunLogs.Add(new RunLogEvent
+        {
+            RunId = logEvent.RunId,
+            Level = logEvent.Level,
+            Message = logEvent.Message,
+            TimestampUtc = logEvent.Timestamp,
+        });
+        _selectedRunLogs = _selectedRunLogs.OrderBy(log => log.TimestampUtc).ToList();
+        _selectedRunParsed = HarnessOutputParser.Parse(_selectedRun.OutputJson, _selectedRunLogs);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnRunStatusChangedAsync(AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent statusEvent)
+    {
+        if (_selectedRepository is null ||
+            _selectedRepositoryRuns.All(run => !string.Equals(run.Id, statusEvent.RunId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var refreshed = await Store.GetRunAsync(statusEvent.RunId, CancellationToken.None);
+        if (refreshed is null || !string.Equals(refreshed.RepositoryId, _selectedRepository.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var existingIndex = _selectedRepositoryRuns.FindIndex(run => string.Equals(run.Id, refreshed.Id, StringComparison.OrdinalIgnoreCase));
+        if (existingIndex >= 0)
+        {
+            _selectedRepositoryRuns[existingIndex] = refreshed;
+        }
+        else
+        {
+            _selectedRepositoryRuns.Add(refreshed);
+        }
+
+        _selectedRepositoryRuns = _selectedRepositoryRuns
+            .OrderByDescending(run => run.CreatedAtUtc)
+            .ToList();
+        RebuildLatestRunsIndex();
+
+        if (_selectedRun is not null && string.Equals(_selectedRun.Id, refreshed.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedRun = refreshed;
+            _selectedRunParsed = HarnessOutputParser.Parse(_selectedRun.OutputJson, _selectedRunLogs);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnRunStructuredEventChangedAsync(AgentsDashboard.Contracts.SignalR.RunStructuredEventChangedEvent structuredEvent)
+    {
+        if (_selectedRun is null || !string.Equals(_selectedRun.Id, structuredEvent.RunId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await RefreshSelectedRunStructuredStateAsync(structuredEvent.RunId);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnRunDiffUpdatedAsync(AgentsDashboard.Contracts.SignalR.RunDiffUpdatedEvent diffEvent)
+    {
+        if (_selectedRun is null || !string.Equals(_selectedRun.Id, diffEvent.RunId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await RefreshSelectedRunStructuredStateAsync(diffEvent.RunId);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnRunToolTimelineUpdatedAsync(AgentsDashboard.Contracts.SignalR.RunToolTimelineUpdatedEvent toolEvent)
+    {
+        if (_selectedRun is null || !string.Equals(_selectedRun.Id, toolEvent.RunId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await RefreshSelectedRunStructuredStateAsync(toolEvent.RunId);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshSelectedRunStructuredStateAsync(string? expectedRunId = null)
+    {
+        var runId = expectedRunId;
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            runId = _selectedRun?.Id;
+        }
+
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            ClearSelectedRunStructuredState();
+            return;
+        }
+
+        var structuredEvents = await Store.ListRunStructuredEventsAsync(runId, 2000, CancellationToken.None);
+        var diffSnapshot = await Store.GetLatestRunDiffSnapshotAsync(runId, CancellationToken.None);
+        var structuredView = await RunStructuredViewService.GetViewAsync(runId, CancellationToken.None);
+
+        if (_selectedRun is null || !string.Equals(_selectedRun.Id, runId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _selectedRunStructuredEvents = structuredEvents;
+        _selectedRunDiffSnapshot = diffSnapshot;
+        _selectedRunStructuredView = structuredView;
     }
 
     private async Task RefreshRunSummaryAsync(bool force)
@@ -1183,6 +1620,7 @@
         _createTaskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Workspace run\",\"artifacts\":[]}'";
         _createTaskCron = string.Empty;
         _createTaskAutoPr = false;
+        _createTaskModeDefault = HarnessExecutionMode.Default;
     }
 
     private async Task CreateTaskAsync()
@@ -1203,24 +1641,16 @@
         try
         {
             var request = new CreateTaskRequest(
-                _selectedRepository.Id,
-                _createTaskName.Trim(),
-                _createTaskKind,
-                _createTaskHarness,
-                _createTaskPrompt,
-                _createTaskCommand,
-                _createTaskAutoPr,
-                _createTaskCron,
-                true,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+                RepositoryId: _selectedRepository.Id,
+                Name: _createTaskName.Trim(),
+                Kind: _createTaskKind,
+                Harness: _createTaskHarness,
+                Prompt: _createTaskPrompt,
+                Command: _createTaskCommand,
+                AutoCreatePullRequest: _createTaskAutoPr,
+                CronExpression: _createTaskCron,
+                Enabled: true,
+                ExecutionModeDefault: _createTaskModeDefault);
 
             var created = await Store.CreateTaskAsync(request, CancellationToken.None);
             _isCreateTaskMode = false;
@@ -1269,7 +1699,8 @@
                     Harness: _selectedTask.Harness,
                     Command: _selectedTask.Command,
                     ForceNewRun: forceNewRun,
-                    UserMessage: composerText),
+                    UserMessage: composerText,
+                    ModeOverride: _composerModeOverride),
                 CancellationToken.None);
 
             if (!submission.Success)
@@ -1322,6 +1753,105 @@
         }
 
         await SubmitComposerAsync(forceNewRun: true);
+    }
+
+    private async Task SubmitDefaultAgentTeamAsync()
+    {
+        if (_selectedRepository is null || _selectedTask is null)
+        {
+            return;
+        }
+
+        var composerText = _composerValue.Trim();
+        if (string.IsNullOrWhiteSpace(composerText))
+        {
+            Snackbar.Add("Enter prompt guidance first.", Severity.Info);
+            return;
+        }
+
+        _isSubmittingComposer = true;
+
+        try
+        {
+            var mergedPrompt = MergePrompt(_selectedTask.Prompt, composerText);
+            var harness = _selectedTask.Harness;
+            var teamMembers = _agentTeamMembers
+                .Select(member => new WorkspaceAgentTeamMemberRequest(
+                    Harness: string.IsNullOrWhiteSpace(member.Harness) ? harness : member.Harness,
+                    Mode: member.Mode,
+                    RolePrompt: string.IsNullOrWhiteSpace(member.RolePrompt) ? "Team member" : member.RolePrompt.Trim(),
+                    ModelOverride: string.IsNullOrWhiteSpace(member.ModelOverride) ? null : member.ModelOverride.Trim(),
+                    TimeoutSeconds: member.TimeoutSeconds))
+                .ToList();
+
+            if (teamMembers.Count == 0)
+            {
+                Snackbar.Add("Configure at least one team member.", Severity.Warning);
+                return;
+            }
+
+            var synthesisHarness = string.IsNullOrWhiteSpace(_agentTeamSynthesisHarness)
+                ? harness
+                : _agentTeamSynthesisHarness.Trim();
+            var teamRequest = new WorkspaceAgentTeamRequest(
+                Members: teamMembers,
+                Synthesis: new WorkspaceAgentTeamSynthesisRequest(
+                    Enabled: _agentTeamSynthesisEnabled,
+                    Prompt: string.IsNullOrWhiteSpace(_agentTeamSynthesisPrompt)
+                        ? "Synthesize team outputs and return the recommended final patch."
+                        : _agentTeamSynthesisPrompt.Trim(),
+                    Harness: synthesisHarness,
+                    Mode: _agentTeamSynthesisMode,
+                    ModelOverride: string.IsNullOrWhiteSpace(_agentTeamSynthesisModelOverride) ? null : _agentTeamSynthesisModelOverride.Trim(),
+                    TimeoutSeconds: _agentTeamSynthesisTimeoutSeconds));
+
+            var submission = await WorkspaceService.SubmitPromptAsync(
+                _selectedRepository.Id,
+                new WorkspacePromptSubmissionRequest(
+                    Prompt: mergedPrompt,
+                    TaskId: _selectedTask.Id,
+                    Harness: harness,
+                    Command: _selectedTask.Command,
+                    ForceNewRun: true,
+                    UserMessage: composerText,
+                    ModeOverride: _composerModeOverride,
+                    AgentTeam: teamRequest),
+                CancellationToken.None);
+
+            if (!submission.Success)
+            {
+                Snackbar.Add(submission.Message, Severity.Warning);
+                return;
+            }
+
+            if (submission.Task is not null)
+            {
+                _selectedTask = submission.Task;
+            }
+
+            _composerValue = string.Empty;
+            _ = QueueComposerSuggestionAsync();
+            await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
+
+            if (submission.Run is not null)
+            {
+                await SelectRunAsync(submission.Run.Id);
+            }
+
+            var severity = submission.DispatchAccepted ? Severity.Success : Severity.Info;
+            var message = submission.WorkflowExecution is null
+                ? submission.Message
+                : $"Agent team run queued. Workflow {submission.WorkflowExecution.Id[..Math.Min(8, submission.WorkflowExecution.Id.Length)]}.";
+            Snackbar.Add(message, severity);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Team run submit failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmittingComposer = false;
+        }
     }
 
     private async Task OpenPromptDraftDialogAsync(PromptDraftMode mode)
@@ -1796,6 +2326,42 @@ Composer Focus:
         };
     }
 
+    private bool MatchesHistoryRunState(RunDocument run)
+    {
+        if (string.Equals(_historyStateFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.Equals(_historyStateFilter, run.State.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesHistoryRunMode(RunDocument run)
+    {
+        if (string.Equals(_historyModeFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.Equals(_historyModeFilter, run.ExecutionMode.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesHistoryRunHarness(RunDocument run)
+    {
+        if (string.Equals(_historyHarnessFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (_selectedTask is not null && string.Equals(_selectedTask.Harness, _historyHarnessFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.Equals(run.StructuredProtocol, _historyHarnessFilter, StringComparison.OrdinalIgnoreCase)
+               || run.StructuredProtocol.Contains(_historyHarnessFilter, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsAttentionRepository(RepositoryDocument repository)
     {
         return !string.IsNullOrWhiteSpace(repository.LastSyncError)
@@ -1989,6 +2555,59 @@ Composer Focus:
             : _selectedRun.OutputJson;
     }
 
+    private void ClearSelectedRunStructuredState()
+    {
+        _selectedRunStructuredEvents = [];
+        _selectedRunDiffSnapshot = null;
+        _selectedRunStructuredView = new RunStructuredViewSnapshot(string.Empty, 0, [], [], [], null, DateTime.UtcNow);
+    }
+
+    private string GetSelectedRunStructuredEventsJson()
+    {
+        if (_selectedRunStructuredEvents.Count == 0)
+        {
+            return "[]";
+        }
+
+        return JsonSerializer.Serialize(_selectedRunStructuredEvents, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+    }
+
+    private async Task CopySelectedRunStructuredEventsJsonAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", GetSelectedRunStructuredEventsJson());
+            Snackbar.Add("Event JSON copied.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unable to copy event JSON: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private string GetWorkspaceResolvedDiffPatch()
+    {
+        if (!string.IsNullOrWhiteSpace(_selectedRunDiffSnapshot?.DiffPatch))
+        {
+            return _selectedRunDiffSnapshot.DiffPatch;
+        }
+
+        return _selectedRunStructuredView.Diff?.DiffPatch ?? string.Empty;
+    }
+
+    private string GetWorkspaceResolvedDiffStat()
+    {
+        if (!string.IsNullOrWhiteSpace(_selectedRunDiffSnapshot?.DiffStat))
+        {
+            return _selectedRunDiffSnapshot.DiffStat;
+        }
+
+        return _selectedRunStructuredView.Diff?.DiffStat ?? string.Empty;
+    }
+
     private static string MergePrompt(string currentPrompt, string composerText)
     {
         var suffix = $"Workspace instruction:\n{composerText}";
@@ -2019,7 +2638,8 @@ Composer Focus:
             task.ConcurrencyLimit,
             task.InstructionFiles.Count > 0 ? [.. task.InstructionFiles] : null,
             task.ArtifactPatterns.Count > 0 ? [.. task.ArtifactPatterns] : null,
-            task.LinkedFailureRuns.Count > 0 ? [.. task.LinkedFailureRuns] : null);
+            task.LinkedFailureRuns.Count > 0 ? [.. task.LinkedFailureRuns] : null,
+            task.ExecutionModeDefault);
     }
 
     private static string TruncateForDisplay(string text, int maxLength)
@@ -2051,6 +2671,11 @@ Composer Focus:
     public async ValueTask DisposeAsync()
     {
         _selectionSubscription?.Dispose();
+        _runLogSubscription?.Dispose();
+        _runStatusSubscription?.Dispose();
+        _structuredSubscription?.Dispose();
+        _diffSubscription?.Dispose();
+        _toolSubscription?.Dispose();
         _searchDebounceCts?.Cancel();
         _searchDebounceCts?.Dispose();
         _composerSuggestionCts?.Cancel();
@@ -2093,6 +2718,15 @@ Composer Focus:
     }
 
     private sealed record RepositoryGroup(string Name, List<RepositoryDocument> Repositories);
+
+    private sealed class WorkspaceTeamMemberDraft
+    {
+        public string Harness { get; set; } = "codex";
+        public HarnessExecutionMode Mode { get; set; } = HarnessExecutionMode.Default;
+        public string RolePrompt { get; set; } = string.Empty;
+        public string ModelOverride { get; set; } = string.Empty;
+        public int? TimeoutSeconds { get; set; }
+    }
 
     private enum PromptDraftMode
     {

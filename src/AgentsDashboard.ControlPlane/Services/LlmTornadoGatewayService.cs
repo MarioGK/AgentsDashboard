@@ -79,7 +79,7 @@ Output only Dockerfile content.
                 return new AiDockerfileResult(false, string.Empty, $"The current account/plan cannot use {RequiredModel}. Update your Z.ai plan/access and retry.");
             }
 
-            logger.LogWarning(ex, "LlmTornado Dockerfile generation failed");
+            logger.ZLogWarning(ex, "LlmTornado Dockerfile generation failed");
             return new AiDockerfileResult(false, string.Empty, $"AI generation failed: {ex.Message}");
         }
     }
@@ -268,7 +268,7 @@ Write the final task prompt.
                 return new TaskPromptGenerationResult(false, string.Empty, $"The current account/plan cannot use {RequiredModel}. Update your Z.ai plan/access and retry.");
             }
 
-            logger.LogWarning(ex, "LlmTornado task prompt generation failed");
+            logger.ZLogWarning(ex, "LlmTornado task prompt generation failed");
             return new TaskPromptGenerationResult(false, string.Empty, $"AI generation failed: {ex.Message}");
         }
     }
@@ -312,7 +312,7 @@ Write the final task prompt.
                 return new LlmTornadoTextResult(false, string.Empty, $"The current account/plan cannot use {RequiredModel}. Update your Z.ai plan/access and retry.");
             }
 
-            logger.LogWarning(ex, "LlmTornado {OperationName} failed", operationName);
+            logger.ZLogWarning(ex, "LlmTornado {OperationName} failed", operationName);
             return new LlmTornadoTextResult(false, string.Empty, $"AI generation failed: {ex.Message}");
         }
     }

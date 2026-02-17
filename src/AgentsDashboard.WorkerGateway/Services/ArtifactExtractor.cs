@@ -104,7 +104,7 @@ public sealed class ArtifactExtractor(
     {
         if (!Directory.Exists(workspacePath))
         {
-            logger.LogWarning("Workspace path does not exist: {Path}", workspacePath);
+            logger.ZLogWarning("Workspace path does not exist: {Path}", workspacePath);
             return [];
         }
 
@@ -122,7 +122,7 @@ public sealed class ArtifactExtractor(
         {
             if (artifacts.Count >= maxFiles)
             {
-                logger.LogInformation("Artifact limit reached ({Max}), skipping remaining files", maxFiles);
+                logger.ZLogInformation("Artifact limit reached ({Max}), skipping remaining files", maxFiles);
                 break;
             }
 
@@ -133,7 +133,7 @@ public sealed class ArtifactExtractor(
                 var fileInfo = new FileInfo(file);
                 if (totalSize + fileInfo.Length > policy.MaxTotalSizeBytes)
                 {
-                    logger.LogInformation("Artifact size limit reached, skipping {File}", file);
+                    logger.ZLogInformation("Artifact size limit reached, skipping {File}", file);
                     break;
                 }
 
@@ -164,15 +164,15 @@ public sealed class ArtifactExtractor(
                 artifacts.Add(artifact);
                 totalSize += fileInfo.Length;
 
-                logger.LogDebug("Extracted artifact: {File} ({Size} bytes)", relativePath, fileInfo.Length);
+                logger.ZLogDebug("Extracted artifact: {File} ({Size} bytes)", relativePath, fileInfo.Length);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to extract artifact: {File}", file);
+                logger.ZLogWarning(ex, "Failed to extract artifact: {File}", file);
             }
         }
 
-        logger.LogInformation("Extracted {Count} artifacts ({Size} bytes total) to {Dir}",
+        logger.ZLogInformation("Extracted {Count} artifacts ({Size} bytes total) to {Dir}",
             artifacts.Count, totalSize, artifactDir);
 
         return artifacts;
@@ -191,7 +191,7 @@ public sealed class ArtifactExtractor(
         }
         catch (UnauthorizedAccessException ex)
         {
-            logger.LogWarning(ex, "Access denied while searching for artifacts in {Path}", workspacePath);
+            logger.ZLogWarning(ex, "Access denied while searching for artifacts in {Path}", workspacePath);
         }
 
         files = files

@@ -16,12 +16,18 @@ public sealed class WorkerEventListenerService(
     IRunEventPublisher publisher,
     InMemoryYarpConfigProvider yarpProvider,
     RunDispatcher dispatcher,
-    ILogger<WorkerEventListenerService> logger) : BackgroundService, IWorkerEventReceiver
+    ILogger<WorkerEventListenerService> logger,
+    IRunStructuredViewService? runStructuredViewService = null) : BackgroundService, IWorkerEventReceiver
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan WorkerTtl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan DiffPublishThrottle = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan ToolPublishThrottle = TimeSpan.FromMilliseconds(125);
 
     private readonly ConcurrentDictionary<string, WorkerHubConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTime> _structuredPublishWatermarks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, long> _structuredSequenceWatermarks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IRunStructuredViewService _runStructuredViewService = runStructuredViewService ?? NullRunStructuredViewService.Instance;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -38,7 +44,7 @@ public sealed class WorkerEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Worker event listener synchronization failed");
+                logger.ZLogError(ex, "Worker event listener synchronization failed");
             }
 
             await Task.Delay(PollInterval, stoppingToken);
@@ -88,7 +94,7 @@ public sealed class WorkerEventListenerService(
         {
             try
             {
-                logger.LogInformation("Connecting worker event hub for {WorkerId} at {Endpoint}", connection.WorkerId, connection.Endpoint);
+                logger.ZLogInformation("Connecting worker event hub for {WorkerId} at {Endpoint}", connection.WorkerId, connection.Endpoint);
                 var hub = await clientFactory.ConnectEventHubAsync(connection.WorkerId, connection.Endpoint, this, cancellationToken);
                 connection.SetHub(hub);
                 reconnectDelay = TimeSpan.FromSeconds(1);
@@ -96,7 +102,7 @@ public sealed class WorkerEventListenerService(
                 await hub.SubscribeAsync(runIds: null);
                 await hub.WaitForDisconnect();
 
-                logger.LogWarning("Worker event hub disconnected for {WorkerId}", connection.WorkerId);
+                logger.ZLogWarning("Worker event hub disconnected for {WorkerId}", connection.WorkerId);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -104,7 +110,7 @@ public sealed class WorkerEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Worker event hub connection failed for {WorkerId}", connection.WorkerId);
+                logger.ZLogWarning(ex, "Worker event hub connection failed for {WorkerId}", connection.WorkerId);
                 await Task.Delay(reconnectDelay, cancellationToken);
                 reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
             }
@@ -157,6 +163,7 @@ public sealed class WorkerEventListenerService(
         try
         {
             var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(message.Timestamp).UtcDateTime;
+            await HandleStructuredEventAsync(message, timestamp);
 
             if (string.Equals(message.EventType, "log_chunk", StringComparison.OrdinalIgnoreCase))
             {
@@ -232,15 +239,13 @@ public sealed class WorkerEventListenerService(
             {
                 await store.UpdateTaskGitMetadataAsync(
                     completedRun.TaskId,
-                    null,
-                    null,
                     timestamp,
                     gitSyncError,
                     CancellationToken.None);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to update task git metadata for task {TaskId}", completedRun.TaskId);
+                logger.ZLogWarning(ex, "Failed to update task git metadata for task {TaskId}", completedRun.TaskId);
             }
 
             if (!string.IsNullOrWhiteSpace(completedRun.OutputJson) &&
@@ -265,7 +270,7 @@ public sealed class WorkerEventListenerService(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogWarning(ex, "Failed recycling worker {WorkerId} after run {RunId} completion", completedRun.WorkerId, completedRun.Id);
+                    logger.ZLogWarning(ex, "Failed recycling worker {WorkerId} after run {RunId} completion", completedRun.WorkerId, completedRun.Id);
                 }
             }
 
@@ -276,18 +281,216 @@ public sealed class WorkerEventListenerService(
                 await store.CreateFindingFromFailureAsync(completedRun, envelope.Error, CancellationToken.None);
                 await TryRetryAsync(completedRun);
             }
+
+            ClearStructuredRunCaches(completedRun.Id);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to handle job event for run {RunId}", message.RunId);
+            logger.ZLogError(ex, "Failed to handle job event for run {RunId}", message.RunId);
         }
+    }
+
+    private async Task HandleStructuredEventAsync(JobEventMessage message, DateTime timestampUtc)
+    {
+        if (!TryCreateStructuredEventDocument(message, timestampUtc, out var structuredEvent))
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = await store.AppendRunStructuredEventAsync(structuredEvent, CancellationToken.None);
+            var decoded = RunStructuredEventCodec.Decode(stored);
+
+            var projectionDelta = await _runStructuredViewService.ApplyStructuredEventAsync(stored, CancellationToken.None);
+            await publisher.PublishStructuredEventChangedAsync(
+                stored.RunId,
+                stored.Sequence,
+                decoded.Category,
+                decoded.PayloadJson,
+                decoded.Schema,
+                decoded.TimestampUtc,
+                CancellationToken.None);
+
+            if (projectionDelta.DiffUpdated is not null)
+            {
+                var diff = projectionDelta.DiffUpdated;
+                await store.UpsertRunDiffSnapshotAsync(
+                    new RunDiffSnapshotDocument
+                    {
+                        RunId = stored.RunId,
+                        RepositoryId = stored.RepositoryId,
+                        TaskId = stored.TaskId,
+                        Sequence = diff.Sequence,
+                        Summary = diff.Summary,
+                        DiffStat = diff.DiffStat,
+                        DiffPatch = diff.DiffPatch,
+                        SchemaVersion = diff.Schema,
+                        TimestampUtc = diff.TimestampUtc == default ? stored.TimestampUtc : diff.TimestampUtc,
+                        CreatedAtUtc = diff.TimestampUtc == default ? stored.TimestampUtc : diff.TimestampUtc,
+                    },
+                    CancellationToken.None);
+
+                if (ShouldPublishStructuredDelta(stored.RunId, "diff", DiffPublishThrottle))
+                {
+                    await publisher.PublishDiffUpdatedAsync(
+                        stored.RunId,
+                        diff.Sequence,
+                        diff.Category,
+                        diff.Payload,
+                        diff.Schema,
+                        diff.TimestampUtc,
+                        CancellationToken.None);
+                }
+            }
+
+            if (projectionDelta.ToolUpdated is not null &&
+                ShouldPublishStructuredDelta(stored.RunId, "tool", ToolPublishThrottle))
+            {
+                var tool = projectionDelta.ToolUpdated;
+                await publisher.PublishToolTimelineUpdatedAsync(
+                    stored.RunId,
+                    tool.Sequence,
+                    tool.Category,
+                    tool.ToolName,
+                    tool.ToolCallId,
+                    tool.State,
+                    tool.Payload,
+                    tool.Schema,
+                    tool.TimestampUtc,
+                    CancellationToken.None);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.ZLogWarning(ex, "Failed handling structured event for run {RunId}", message.RunId);
+        }
+    }
+
+    private bool TryCreateStructuredEventDocument(JobEventMessage message, DateTime timestampUtc, out RunStructuredEventDocument structuredEvent)
+    {
+        structuredEvent = new RunStructuredEventDocument();
+        var category = message.Category?.Trim() ?? string.Empty;
+        var payloadJson = message.PayloadJson?.Trim();
+        var schema = message.SchemaVersion?.Trim() ?? string.Empty;
+
+        if (message.Sequence <= 0 &&
+            category.Length == 0 &&
+            string.IsNullOrWhiteSpace(payloadJson) &&
+            schema.Length == 0)
+        {
+            return false;
+        }
+
+        var sequence = ResolveStructuredSequence(message.RunId, message.Sequence, timestampUtc);
+        var eventType = string.IsNullOrWhiteSpace(message.EventType)
+            ? "structured"
+            : message.EventType.Trim();
+        if (category.Length == 0)
+        {
+            category = eventType;
+        }
+
+        structuredEvent = new RunStructuredEventDocument
+        {
+            RunId = message.RunId,
+            Sequence = sequence,
+            EventType = eventType,
+            Category = category,
+            Summary = message.Summary ?? string.Empty,
+            Error = message.Error ?? string.Empty,
+            PayloadJson = RunStructuredEventCodec.NormalizePayloadJson(payloadJson),
+            SchemaVersion = schema,
+            TimestampUtc = timestampUtc,
+            CreatedAtUtc = timestampUtc,
+        };
+
+        return true;
+    }
+
+    private long ResolveStructuredSequence(string runId, long sequence, DateTime timestampUtc)
+    {
+        if (sequence > 0)
+        {
+            _structuredSequenceWatermarks.AddOrUpdate(
+                runId,
+                sequence,
+                (_, existing) => Math.Max(existing, sequence));
+            return sequence;
+        }
+
+        var seed = timestampUtc.Ticks;
+        return _structuredSequenceWatermarks.AddOrUpdate(
+            runId,
+            seed,
+            (_, existing) => Math.Max(existing + 1, seed));
+    }
+
+    private bool ShouldPublishStructuredDelta(string runId, string projectionType, TimeSpan throttleWindow)
+    {
+        var key = $"{projectionType}:{runId}";
+        var now = DateTime.UtcNow;
+
+        while (true)
+        {
+            if (!_structuredPublishWatermarks.TryGetValue(key, out var lastPublishedAtUtc))
+            {
+                if (_structuredPublishWatermarks.TryAdd(key, now))
+                {
+                    TrimStructuredPublishWatermarks(now);
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (now - lastPublishedAtUtc < throttleWindow)
+            {
+                return false;
+            }
+
+            if (_structuredPublishWatermarks.TryUpdate(key, now, lastPublishedAtUtc))
+            {
+                TrimStructuredPublishWatermarks(now);
+                return true;
+            }
+        }
+    }
+
+    private void TrimStructuredPublishWatermarks(DateTime now)
+    {
+        if (_structuredPublishWatermarks.Count < 2000)
+        {
+            return;
+        }
+
+        var cutoff = now - TimeSpan.FromMinutes(15);
+        foreach (var watermark in _structuredPublishWatermarks)
+        {
+            if (watermark.Value < cutoff)
+            {
+                _structuredPublishWatermarks.TryRemove(watermark.Key, out _);
+            }
+        }
+    }
+
+    private void ClearStructuredRunCaches(string runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return;
+        }
+
+        _structuredSequenceWatermarks.TryRemove(runId, out _);
+        _structuredPublishWatermarks.TryRemove($"diff:{runId}", out _);
+        _structuredPublishWatermarks.TryRemove($"tool:{runId}", out _);
     }
 
     private async Task HandleWorkerStatusAsync(WorkerStatusMessage statusMessage)
     {
         try
         {
-            logger.LogDebug("Worker {WorkerId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
+            logger.ZLogDebug("Worker {WorkerId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
                 statusMessage.WorkerId, statusMessage.Status, statusMessage.ActiveSlots, statusMessage.MaxSlots);
 
             var endpoint = await ResolveWorkerEndpointAsync(statusMessage.WorkerId);
@@ -319,7 +522,7 @@ public sealed class WorkerEventListenerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to handle worker status for worker {WorkerId}", statusMessage.WorkerId);
+            logger.ZLogError(ex, "Failed to handle worker status for worker {WorkerId}", statusMessage.WorkerId);
         }
     }
 
@@ -351,7 +554,7 @@ public sealed class WorkerEventListenerService(
         var nextAttempt = failedRun.Attempt + 1;
         var delaySeconds = task.RetryPolicy.BackoffBaseSeconds * Math.Pow(task.RetryPolicy.BackoffMultiplier, failedRun.Attempt - 1);
 
-        logger.LogInformation("Scheduling retry {Attempt}/{Max} for run {RunId} in {Delay}s",
+        logger.ZLogInformation("Scheduling retry {Attempt}/{Max} for run {RunId} in {Delay}s",
             nextAttempt, maxAttempts, failedRun.Id, delaySeconds);
 
         await Task.Delay(TimeSpan.FromSeconds(Math.Min(delaySeconds, 300)));
@@ -372,12 +575,12 @@ public sealed class WorkerEventListenerService(
             var dispatched = await dispatcher.DispatchNextQueuedRunForTaskAsync(taskId, CancellationToken.None);
             if (dispatched)
             {
-                logger.LogInformation("Dispatched next queued run for task {TaskId}", taskId);
+                logger.ZLogInformation("Dispatched next queued run for task {TaskId}", taskId);
             }
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed dispatching next queued run for task {TaskId}", taskId);
+            logger.ZLogWarning(ex, "Failed dispatching next queued run for task {TaskId}", taskId);
         }
     }
 
@@ -426,6 +629,29 @@ public sealed class WorkerEventListenerService(
         }
 
         await base.StopAsync(cancellationToken);
+    }
+
+    private sealed class NullRunStructuredViewService : IRunStructuredViewService
+    {
+        public static readonly NullRunStructuredViewService Instance = new();
+
+        public Task<RunStructuredProjectionDelta> ApplyStructuredEventAsync(RunStructuredEventDocument structuredEvent, CancellationToken cancellationToken)
+        {
+            var snapshot = new RunStructuredViewSnapshot(
+                structuredEvent.RunId,
+                structuredEvent.Sequence,
+                [],
+                [],
+                [],
+                null,
+                structuredEvent.CreatedAtUtc == default ? DateTime.UtcNow : structuredEvent.CreatedAtUtc);
+            return Task.FromResult(new RunStructuredProjectionDelta(snapshot, null, null));
+        }
+
+        public Task<RunStructuredViewSnapshot> GetViewAsync(string runId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new RunStructuredViewSnapshot(runId, 0, [], [], [], null, DateTime.UtcNow));
+        }
     }
 
     private sealed class WorkerHubConnection

@@ -197,7 +197,7 @@ public sealed class GlobalSearchService(
             .Take(normalizedLimit)
             .ToList();
 
-        logger.LogDebug(
+        logger.ZLogDebug(
             "Global search '{Query}' produced {HitCount} hits ({TotalMatches} total matches)",
             normalizedQuery,
             hits.Count,
@@ -351,7 +351,7 @@ public sealed class GlobalSearchService(
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "Semantic chunk lookup failed for task {TaskId}", task.Id);
+                logger.ZLogDebug(ex, "Semantic chunk lookup failed for task {TaskId}", task.Id);
             }
         }
 

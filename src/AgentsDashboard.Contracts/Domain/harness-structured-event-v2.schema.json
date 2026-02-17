@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentsdashboard.internal/schemas/harness-structured-event-v2.schema.json",
+  "title": "HarnessStructuredEventV2",
+  "description": "Canonical structured event envelope for normalized harness run streams",
+  "type": "object",
+  "required": ["runId", "sequence", "eventType", "category", "schemaVersion", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Unique identifier for the run"
+    },
+    "repositoryId": {
+      "type": "string",
+      "description": "Owning repository identifier"
+    },
+    "taskId": {
+      "type": "string",
+      "description": "Owning task identifier"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic sequence number within the run stream"
+    },
+    "eventType": {
+      "type": "string",
+      "description": "Harness event type"
+    },
+    "category": {
+      "type": "string",
+      "description": "Normalized event category"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Optional human-readable summary"
+    },
+    "error": {
+      "type": "string",
+      "description": "Optional error message"
+    },
+    "payloadJson": {
+      "type": "string",
+      "description": "Optional serialized event payload"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "description": "Structured payload schema version"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event timestamp in UTC"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional metadata bag",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}
