@@ -8,9 +8,9 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public interface IMagicOnionClientFactory
 {
-    ITaskRuntimeGatewayService CreateTaskRuntimeGatewayService(string workerId, string grpcAddress);
-    Task<ITaskRuntimeEventHub> ConnectEventHubAsync(string workerId, string grpcAddress, ITaskRuntimeEventReceiver receiver, CancellationToken ct = default);
-    void RemoveWorker(string workerId);
+    ITaskRuntimeGatewayService CreateTaskRuntimeGatewayService(string runtimeId, string grpcAddress);
+    Task<ITaskRuntimeEventHub> ConnectEventHubAsync(string runtimeId, string grpcAddress, ITaskRuntimeEventReceiver receiver, CancellationToken ct = default);
+    void RemoveTaskRuntime(string runtimeId);
 }
 
 public class MagicOnionClientFactory : IMagicOnionClientFactory
@@ -32,15 +32,15 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
         return address;
     }
 
-    public ITaskRuntimeGatewayService CreateTaskRuntimeGatewayService(string workerId, string grpcAddress)
+    public ITaskRuntimeGatewayService CreateTaskRuntimeGatewayService(string runtimeId, string grpcAddress)
     {
-        var channel = GetOrCreateChannel(workerId, grpcAddress);
+        var channel = GetOrCreateChannel(runtimeId, grpcAddress);
         return MagicOnionClient.Create<ITaskRuntimeGatewayService>(channel);
     }
 
-    public async Task<ITaskRuntimeEventHub> ConnectEventHubAsync(string workerId, string grpcAddress, ITaskRuntimeEventReceiver receiver, CancellationToken ct = default)
+    public async Task<ITaskRuntimeEventHub> ConnectEventHubAsync(string runtimeId, string grpcAddress, ITaskRuntimeEventReceiver receiver, CancellationToken ct = default)
     {
-        var channel = GetOrCreateChannel(workerId, grpcAddress);
+        var channel = GetOrCreateChannel(runtimeId, grpcAddress);
         return await StreamingHubClient.ConnectAsync<ITaskRuntimeEventHub, ITaskRuntimeEventReceiver>(
             channel,
             receiver,
@@ -48,9 +48,9 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
         );
     }
 
-    public void RemoveWorker(string workerId)
+    public void RemoveTaskRuntime(string runtimeId)
     {
-        if (!_channels.TryRemove(workerId, out var entry))
+        if (!_channels.TryRemove(runtimeId, out var entry))
         {
             return;
         }
@@ -58,11 +58,11 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
         entry.Channel.Dispose();
     }
 
-    private GrpcChannel GetOrCreateChannel(string workerId, string grpcAddress)
+    private GrpcChannel GetOrCreateChannel(string runtimeId, string grpcAddress)
     {
         var normalized = NormalizeGrpcAddress(grpcAddress);
         var entry = _channels.AddOrUpdate(
-            workerId,
+            runtimeId,
             _ => new ChannelEntry(normalized, GrpcChannel.ForAddress(normalized)),
             (_, existing) =>
             {

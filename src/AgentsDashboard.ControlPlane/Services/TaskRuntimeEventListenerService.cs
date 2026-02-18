@@ -20,11 +20,11 @@ public sealed class TaskRuntimeEventListenerService(
     IRunStructuredViewService? runStructuredViewService = null) : BackgroundService, ITaskRuntimeEventReceiver
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan WorkerTtl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan TaskRuntimeTtl = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan DiffPublishThrottle = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan ToolPublishThrottle = TimeSpan.FromMilliseconds(125);
 
-    private readonly ConcurrentDictionary<string, WorkerHubConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, TaskRuntimeHubConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTime> _structuredPublishWatermarks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _structuredSequenceWatermarks = new(StringComparer.OrdinalIgnoreCase);
     private readonly IRunStructuredViewService _runStructuredViewService = runStructuredViewService ?? NullRunStructuredViewService.Instance;
@@ -36,7 +36,7 @@ public sealed class TaskRuntimeEventListenerService(
             try
             {
                 await SyncConnectionsAsync(stoppingToken);
-                await store.MarkStaleTaskRuntimeRegistrationsOfflineAsync(WorkerTtl, stoppingToken);
+                await store.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TaskRuntimeTtl, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -68,7 +68,7 @@ public sealed class TaskRuntimeEventListenerService(
                 await RemoveConnectionAsync(worker.TaskRuntimeId);
             }
 
-            var connection = WorkerHubConnection.Create(worker.TaskRuntimeId, worker.GrpcEndpoint);
+            var connection = TaskRuntimeHubConnection.Create(worker.TaskRuntimeId, worker.GrpcEndpoint);
             if (_connections.TryAdd(worker.TaskRuntimeId, connection))
             {
                 connection.ConnectionTask = Task.Run(() => RunConnectionLoopAsync(connection, connection.Cancellation.Token), CancellationToken.None);
@@ -86,7 +86,7 @@ public sealed class TaskRuntimeEventListenerService(
         }
     }
 
-    private async Task RunConnectionLoopAsync(WorkerHubConnection connection, CancellationToken cancellationToken)
+    private async Task RunConnectionLoopAsync(TaskRuntimeHubConnection connection, CancellationToken cancellationToken)
     {
         var reconnectDelay = TimeSpan.FromSeconds(1);
 
@@ -121,9 +121,9 @@ public sealed class TaskRuntimeEventListenerService(
         }
     }
 
-    private async Task RemoveConnectionAsync(string workerId)
+    private async Task RemoveConnectionAsync(string runtimeId)
     {
-        if (!_connections.TryRemove(workerId, out var connection))
+        if (!_connections.TryRemove(runtimeId, out var connection))
         {
             return;
         }
@@ -144,7 +144,7 @@ public sealed class TaskRuntimeEventListenerService(
         {
             await connection.DisposeHubAsync();
             connection.Cancellation.Dispose();
-            clientFactory.RemoveWorker(workerId);
+            clientFactory.RemoveTaskRuntime(runtimeId);
         }
     }
 
@@ -521,8 +521,8 @@ public sealed class TaskRuntimeEventListenerService(
             return connection.Endpoint;
         }
 
-        var worker = await lifecycleManager.GetTaskRuntimeAsync(runtimeId, CancellationToken.None);
-        return worker?.GrpcEndpoint;
+        var runtime = await lifecycleManager.GetTaskRuntimeAsync(runtimeId, CancellationToken.None);
+        return runtime?.GrpcEndpoint;
     }
 
     private async Task TryRetryAsync(RunDocument failedRun)
@@ -611,9 +611,9 @@ public sealed class TaskRuntimeEventListenerService(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         var knownTaskRuntimeIds = _connections.Keys.ToList();
-        foreach (var workerId in knownTaskRuntimeIds)
+        foreach (var runtimeId in knownTaskRuntimeIds)
         {
-            await RemoveConnectionAsync(workerId);
+            await RemoveConnectionAsync(runtimeId);
         }
 
         await base.StopAsync(cancellationToken);
@@ -642,7 +642,7 @@ public sealed class TaskRuntimeEventListenerService(
         }
     }
 
-    private sealed class WorkerHubConnection
+    private sealed class TaskRuntimeHubConnection
     {
         public required string TaskRuntimeId { get; init; }
         public required string Endpoint { get; init; }
@@ -651,11 +651,11 @@ public sealed class TaskRuntimeEventListenerService(
         private ITaskRuntimeEventHub? _hub;
         private readonly SemaphoreSlim _hubLock = new(1, 1);
 
-        public static WorkerHubConnection Create(string workerId, string endpoint)
+        public static TaskRuntimeHubConnection Create(string runtimeId, string endpoint)
         {
-            return new WorkerHubConnection
+            return new TaskRuntimeHubConnection
             {
-                TaskRuntimeId = workerId,
+                TaskRuntimeId = runtimeId,
                 Endpoint = endpoint,
                 Cancellation = new CancellationTokenSource(),
             };

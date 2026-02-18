@@ -51,7 +51,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
     private readonly OrchestratorOptions _options = options.Value;
     private readonly DockerClient _dockerClient = new DockerClientConfiguration().CreateClient();
-    private readonly ConcurrentDictionary<string, WorkerState> _workers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, TaskRuntimeStateEntry> _workers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, string> _taskRepositoryCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _imageAcquireLocks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTime> _imageFailureCooldownUntilUtc = new(StringComparer.OrdinalIgnoreCase);
@@ -441,7 +441,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
                 var state = _workers.AddOrUpdate(
                     workerId,
-                    _ => WorkerState.Create(
+                    _ => TaskRuntimeStateEntry.Create(
                         workerId,
                         taskId,
                         container.ID,
@@ -511,7 +511,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                         updateLastActivityUtc: false);
                 }
 
-                clientFactory.RemoveWorker(staleTaskRuntimeId);
+                clientFactory.RemoveTaskRuntime(staleTaskRuntimeId);
             }
 
             _lastRefreshUtc = DateTime.UtcNow;
@@ -873,7 +873,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                     clearInactiveAfterUtc: finalState != TaskRuntimeState.Inactive);
             }
 
-            clientFactory.RemoveWorker(workerId);
+            clientFactory.RemoveTaskRuntime(workerId);
             logger.ZLogInformation("Stopped and removed worker {TaskRuntimeId} ({ContainerId})", workerId, containerId[..Math.Min(12, containerId.Length)]);
             return true;
         }
@@ -892,7 +892,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                     clearInactiveAfterUtc: finalState != TaskRuntimeState.Inactive);
             }
 
-            clientFactory.RemoveWorker(workerId);
+            clientFactory.RemoveTaskRuntime(workerId);
             return true;
         }
         catch (Exception ex)
@@ -1870,7 +1870,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
     }
 
     private async Task PersistTaskRuntimeStateAsync(
-        WorkerState state,
+        TaskRuntimeStateEntry state,
         CancellationToken cancellationToken,
         TaskRuntimeState? explicitState = null,
         bool updateLastActivityUtc = true,
@@ -2226,7 +2226,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
     }
 
-    private sealed class WorkerState
+    private sealed class TaskRuntimeStateEntry
     {
         public required string TaskRuntimeId { get; init; }
         public required string TaskId { get; set; }
@@ -2250,7 +2250,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         public required string ImageDigest { get; set; }
         public required string ImageSource { get; set; }
 
-        public static WorkerState Create(
+        public static TaskRuntimeStateEntry Create(
             string workerId,
             string taskId,
             string containerId,
@@ -2260,7 +2260,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             bool isRunning,
             int slotsPerWorker)
         {
-            return new WorkerState
+            return new TaskRuntimeStateEntry
             {
                 TaskRuntimeId = workerId,
                 TaskId = taskId,
