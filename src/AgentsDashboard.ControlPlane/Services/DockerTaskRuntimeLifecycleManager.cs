@@ -498,7 +498,18 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
             foreach (var staleTaskRuntimeId in _workers.Keys.Where(id => !currentIds.Contains(id)).ToList())
             {
-                _workers.TryRemove(staleTaskRuntimeId, out _);
+                if (_workers.TryRemove(staleTaskRuntimeId, out var staleState))
+                {
+                    staleState.IsRunning = false;
+                    staleState.ActiveSlots = 0;
+                    staleState.LifecycleState = TaskRuntimeLifecycleState.Stopped;
+                    await PersistTaskRuntimeStateAsync(
+                        staleState,
+                        cancellationToken,
+                        explicitState: TaskRuntimeState.Inactive,
+                        updateLastActivityUtc: false);
+                }
+
                 clientFactory.RemoveWorker(staleTaskRuntimeId);
             }
 
