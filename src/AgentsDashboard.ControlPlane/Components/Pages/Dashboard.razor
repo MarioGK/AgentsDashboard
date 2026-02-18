@@ -2,7 +2,7 @@
 @rendermode InteractiveServer
 @inject Data.IOrchestratorStore Store
 @inject Services.IGlobalSelectionService SelectionService
-@inject Services.IWorkerLifecycleManager WorkerLifecycle
+@inject Services.ITaskRuntimeLifecycleManager WorkerLifecycle
 @inject Services.IBackgroundWorkCoordinator BackgroundWorkCoordinator
 @inject Microsoft.Extensions.Options.IOptions<Configuration.OrchestratorOptions> OrchestratorOptions
 @inject NavigationManager NavigationManager
@@ -27,7 +27,7 @@ else
 
             <MudTextField T="string"
                           @bind-Value="_commandText"
-                          Placeholder="Type a command like 'runs', 'findings', 'workflows stages', 'workers'"
+                          Placeholder="Type a command like 'runs', 'findings', 'workflows stages', 'runtimes'"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
                           Adornment="Adornment.Start"
@@ -266,7 +266,7 @@ else
                                 <MudText Typo="Typo.h6" Class="mb-2">Orchestrator Snapshot</MudText>
                                 <MudText Typo="Typo.caption">Scale-out paused: @(_orchestratorHealth?.ScaleOutPaused ?? false)</MudText>
                                 <MudText Typo="Typo.caption">Start failures (10m): @(_orchestratorHealth?.FailedStartsInWindow ?? 0)</MudText>
-                                <MudText Typo="Typo.caption">Running workers: @_orchestratorHealth?.RunningWorkers ?? 0</MudText>
+                                <MudText Typo="Typo.caption">Running workers: @_orchestratorHealth?.RunningTaskRuntimes ?? 0</MudText>
                                 <MudText Typo="Typo.caption">Queued starts in window: @(_orchestratorHealth?.StartAttemptsInWindow ?? 0)</MudText>
                                 <MudText Typo="Typo.caption">@(_orchestratorHealth?.ScaleOutCooldownUntilUtc is null ? "No scale-out cooldown" : $"Cooldown until {_orchestratorHealth?.ScaleOutCooldownUntilUtc.Value.ToLocalTime():g}")</MudText>
                                 <div class="overview-chart-surface">
@@ -499,10 +499,10 @@ else
         new("Workflows", "Manage stage workflows", "/settings/workflows/stages", Icons.Material.Filled.AccountTree),
         new("Repositories", "Manage git-linked repositories", "/settings/repositories", Icons.Material.Filled.AccountTree),
         new("Session Profiles", "Manage per-run behavior presets", "/settings/session-profiles", Icons.Material.Filled.Person),
-        new("Workers", "Inspect worker status and tool availability", "/settings/workers", Icons.Material.Filled.Engineering),
+        new("Orchestrator", "Inspect task runtime status and queueing", "/settings/task-runtimes", Icons.Material.Filled.Engineering),
         new("Automations", "Manage cron/webhook automation definitions", "/settings/automations", Icons.Material.Filled.AutoMode),
         new("MCP", "Configure model context protocol routing snapshot", "/settings/mcp", Icons.Material.Filled.Extension),
-        new("Orchestrator", "Tune worker pool reliability and scaling", "/settings/orchestrator", Icons.Material.Filled.Memory),
+        new("Orchestrator Policy", "Tune task runtime reliability and scaling", "/settings/task-runtimes", Icons.Material.Filled.Memory),
         new("System", "Update retention and docker policies", "/settings/system", Icons.Material.Filled.Tune)
     ];
 
@@ -681,7 +681,7 @@ else
         _workerMemoryAvgPercent = 0;
         _workerMemoryMaxPercent = 0;
 
-        var workerRegistrations = await Store.ListWorkersAsync(CancellationToken.None);
+        var workerRegistrations = await Store.ListTaskRuntimesAsync(CancellationToken.None);
         _workerContainersTotal = workerRegistrations.Count;
         _workerContainersRunning = workerRegistrations.Count(w => w.Online);
         _workerOfflineCount = _workerContainersTotal - _workerContainersRunning;
@@ -692,15 +692,15 @@ else
 
         try
         {
-            var workerRuntimes = await WorkerLifecycle.ListWorkersAsync(CancellationToken.None);
+            var workerRuntimes = await WorkerLifecycle.ListTaskRuntimesAsync(CancellationToken.None);
             if (workerRuntimes.Count > 0)
             {
                 _workerContainersTotal = workerRuntimes.Count;
                 _workerContainersRunning = workerRuntimes.Count(w => w.IsRunning);
                 _workerOfflineCount = _workerContainersTotal - _workerContainersRunning;
-                _workerReadyCount = workerRuntimes.Count(w => w.LifecycleState is WorkerLifecycleState.Ready);
-                _workerBusyCount = workerRuntimes.Count(w => w.LifecycleState is WorkerLifecycleState.Busy);
-                _workerDrainingCount = workerRuntimes.Count(w => w.LifecycleState is WorkerLifecycleState.Draining);
+                _workerReadyCount = workerRuntimes.Count(w => w.LifecycleState is TaskRuntimeLifecycleState.Ready);
+                _workerBusyCount = workerRuntimes.Count(w => w.LifecycleState is TaskRuntimeLifecycleState.Busy);
+                _workerDrainingCount = workerRuntimes.Count(w => w.LifecycleState is TaskRuntimeLifecycleState.Draining);
 
                 var runningWorkers = workerRuntimes
                     .Where(w => w.IsRunning)
@@ -1295,12 +1295,13 @@ else
         if (normalized.Contains("workflow") && normalized.Contains("stage")) return "/settings/workflows/stages";
         if (normalized.Contains("workflow") || normalized.Contains("stage")) return "/settings/workflows/stages";
         if (normalized.Contains("provider")) return "/providers";
-        if (normalized.Contains("tool")) return "/settings/workers";
-        if (normalized.Contains("worker")) return "/settings/workers";
+        if (normalized.Contains("tool")) return "/settings/task-runtimes";
+        if (normalized.Contains("worker")) return "/settings/task-runtimes";
+        if (normalized.Contains("runtime")) return "/settings/task-runtimes";
         if (normalized.Contains("template")) return "/settings/templates";
         if (normalized.Contains("alert")) return "/settings/alerts";
         if (normalized.Contains("proxy")) return "/settings/proxy-audits";
-        if (normalized.Contains("orchestrator")) return "/settings/orchestrator";
+        if (normalized.Contains("orchestrator")) return "/settings/task-runtimes";
         if (normalized.Contains("system") || normalized.Contains("settings")) return "/settings/system";
         return "/settings";
     }

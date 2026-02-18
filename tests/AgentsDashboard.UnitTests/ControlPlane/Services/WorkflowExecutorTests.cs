@@ -38,7 +38,7 @@ public class WorkflowExecutorTests
         var options = Options.Create(new OrchestratorOptions());
         var executor = new WorkflowExecutor(
             store.Object,
-            new RunDispatcher(Mock.Of<IMagicOnionClientFactory>(), store.Object, Mock.Of<IWorkerLifecycleManager>(), Mock.Of<ISecretCryptoService>(), Mock.Of<IRunEventPublisher>(), new InMemoryYarpConfigProvider(), options, NullLogger<RunDispatcher>.Instance),
+            new RunDispatcher(Mock.Of<IMagicOnionClientFactory>(), store.Object, Mock.Of<ITaskRuntimeLifecycleManager>(), Mock.Of<ISecretCryptoService>(), Mock.Of<IRunEventPublisher>(), new InMemoryYarpConfigProvider(), options, NullLogger<RunDispatcher>.Instance),
             Mock.Of<IContainerReaper>(),
             options,
             NullLogger<WorkflowExecutor>.Instance,
@@ -100,7 +100,7 @@ public class WorkflowExecutorTests
             new RunDispatcher(
                 Mock.Of<IMagicOnionClientFactory>(),
                 store.Object,
-                Mock.Of<IWorkerLifecycleManager>(),
+                Mock.Of<ITaskRuntimeLifecycleManager>(),
                 Mock.Of<ISecretCryptoService>(),
                 Mock.Of<IRunEventPublisher>(),
                 new InMemoryYarpConfigProvider(),

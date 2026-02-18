@@ -1,0 +1,6 @@
+@AgentsDashboard.TaskRuntimeGateway_HostAddress = http://localhost:5031
+
+GET {{AgentsDashboard.TaskRuntimeGateway_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

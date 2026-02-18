@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane.Data;
 
 namespace AgentsDashboard.ControlPlane.Services;

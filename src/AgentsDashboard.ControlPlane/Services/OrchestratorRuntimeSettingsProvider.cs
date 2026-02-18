@@ -12,6 +12,9 @@ public interface IOrchestratorRuntimeSettingsProvider
 }
 
 public sealed record OrchestratorRuntimeSettings(
+    int MaxActiveTaskRuntimes,
+    int DefaultTaskParallelRuns,
+    int TaskRuntimeInactiveTimeoutMinutes,
     int MinWorkers,
     int MaxWorkers,
     int MaxProcessesPerWorker,
@@ -22,7 +25,7 @@ public sealed record OrchestratorRuntimeSettings(
     string ContainerImage,
     string ContainerNamePrefix,
     string DockerNetwork,
-    WorkerConnectivityMode ConnectivityMode,
+    TaskRuntimeConnectivityMode ConnectivityMode,
     string WorkerImageRegistry,
     string WorkerCanaryImage,
     string WorkerDockerBuildContextPath,
@@ -83,25 +86,32 @@ public sealed class OrchestratorRuntimeSettingsProvider(
         }
 
         var saved = await store.GetSettingsAsync(cancellationToken);
-        var workerDefaults = options.Value.Workers;
+        var taskRuntimeDefaults = options.Value.TaskRuntimes;
         var orchestrator = saved.Orchestrator ?? new OrchestratorSettings();
 
-        var maxWorkers = ClampPositive(orchestrator.MaxWorkers, 1, 256, workerDefaults.MaxWorkers);
+        var maxWorkers = ClampPositive(orchestrator.MaxWorkers, 1, 256, taskRuntimeDefaults.MaxTaskRuntimes);
         var minWorkers = ClampPositive(orchestrator.MinWorkers, 1, maxWorkers, 1);
         var maxProcessesPerWorker = 1;
+        var maxActiveTaskRuntimes = ClampPositive(orchestrator.MaxActiveTaskRuntimes, 1, 512, maxWorkers);
+        maxActiveTaskRuntimes = Math.Min(maxWorkers, maxActiveTaskRuntimes);
+        var defaultTaskParallelRuns = ClampPositive(orchestrator.DefaultTaskParallelRuns, 1, 64, 1);
+        var taskRuntimeInactiveTimeoutMinutes = ClampPositive(orchestrator.TaskRuntimeInactiveTimeoutMinutes, 1, 1440, 15);
 
         var resolved = new OrchestratorRuntimeSettings(
+            MaxActiveTaskRuntimes: maxActiveTaskRuntimes,
+            DefaultTaskParallelRuns: defaultTaskParallelRuns,
+            TaskRuntimeInactiveTimeoutMinutes: taskRuntimeInactiveTimeoutMinutes,
             MinWorkers: minWorkers,
-            MaxWorkers: maxWorkers,
+            MaxWorkers: maxActiveTaskRuntimes,
             MaxProcessesPerWorker: maxProcessesPerWorker,
             ReserveWorkers: ClampAllowZero(orchestrator.ReserveWorkers, 0, 128, 0),
             MaxQueueDepth: ClampPositive(orchestrator.MaxQueueDepth, 1, 50000, 200),
             QueueWaitTimeoutSeconds: ClampPositive(orchestrator.QueueWaitTimeoutSeconds, 5, 7200, 300),
             WorkerImagePolicy: orchestrator.WorkerImagePolicy,
-            ContainerImage: string.IsNullOrWhiteSpace(workerDefaults.ContainerImage) ? "agentsdashboard-worker-gateway:latest" : workerDefaults.ContainerImage,
-            ContainerNamePrefix: string.IsNullOrWhiteSpace(workerDefaults.ContainerNamePrefix) ? "worker-gateway" : workerDefaults.ContainerNamePrefix,
-            DockerNetwork: string.IsNullOrWhiteSpace(workerDefaults.DockerNetwork) ? "agentsdashboard" : workerDefaults.DockerNetwork,
-            ConnectivityMode: workerDefaults.ConnectivityMode,
+            ContainerImage: string.IsNullOrWhiteSpace(taskRuntimeDefaults.ContainerImage) ? "agentsdashboard-task-runtime-gateway:latest" : taskRuntimeDefaults.ContainerImage,
+            ContainerNamePrefix: string.IsNullOrWhiteSpace(taskRuntimeDefaults.ContainerNamePrefix) ? "task-runtime-gateway" : taskRuntimeDefaults.ContainerNamePrefix,
+            DockerNetwork: string.IsNullOrWhiteSpace(taskRuntimeDefaults.DockerNetwork) ? "agentsdashboard" : taskRuntimeDefaults.DockerNetwork,
+            ConnectivityMode: taskRuntimeDefaults.ConnectivityMode,
             WorkerImageRegistry: orchestrator.WorkerImageRegistry ?? string.Empty,
             WorkerCanaryImage: orchestrator.WorkerCanaryImage?.Trim() ?? string.Empty,
             WorkerDockerBuildContextPath: orchestrator.WorkerDockerBuildContextPath ?? string.Empty,
@@ -116,7 +126,7 @@ public sealed class OrchestratorRuntimeSettingsProvider(
             MaxWorkerStartAttemptsPer10Min: ClampPositive(orchestrator.MaxWorkerStartAttemptsPer10Min, 1, 1000, 30),
             MaxFailedStartsPer10Min: ClampPositive(orchestrator.MaxFailedStartsPer10Min, 1, 1000, 10),
             CooldownMinutes: ClampPositive(orchestrator.CooldownMinutes, 1, 240, 15),
-            ContainerStartTimeoutSeconds: ClampPositive(orchestrator.ContainerStartTimeoutSeconds, 5, 600, workerDefaults.StartupTimeoutSeconds),
+            ContainerStartTimeoutSeconds: ClampPositive(orchestrator.ContainerStartTimeoutSeconds, 5, 600, taskRuntimeDefaults.StartupTimeoutSeconds),
             ContainerStopTimeoutSeconds: ClampPositive(orchestrator.ContainerStopTimeoutSeconds, 1, 600, 30),
             HealthProbeIntervalSeconds: ClampPositive(orchestrator.HealthProbeIntervalSeconds, 1, 300, 10),
             ContainerRestartLimit: ClampAllowZero(orchestrator.ContainerRestartLimit, 0, 100, 3),
@@ -135,10 +145,10 @@ public sealed class OrchestratorRuntimeSettingsProvider(
             WorkerFileDescriptorLimit: ClampAllowZero(orchestrator.WorkerFileDescriptorLimit, 0, 1048576, 0),
             RunHardTimeoutSeconds: ClampPositive(orchestrator.RunHardTimeoutSeconds, 30, 86400, 3600),
             MaxRunLogMb: ClampPositive(orchestrator.MaxRunLogMb, 1, 10240, 50),
-            EnablePressureScaling: workerDefaults.EnablePressureScaling,
-            CpuScaleOutThresholdPercent: workerDefaults.CpuScaleOutThresholdPercent,
-            MemoryScaleOutThresholdPercent: workerDefaults.MemoryScaleOutThresholdPercent,
-            PressureSampleWindowSeconds: workerDefaults.PressureSampleWindowSeconds);
+            EnablePressureScaling: taskRuntimeDefaults.EnablePressureScaling,
+            CpuScaleOutThresholdPercent: taskRuntimeDefaults.CpuScaleOutThresholdPercent,
+            MemoryScaleOutThresholdPercent: taskRuntimeDefaults.MemoryScaleOutThresholdPercent,
+            PressureSampleWindowSeconds: taskRuntimeDefaults.PressureSampleWindowSeconds);
 
         lock (_cacheLock)
         {

@@ -576,7 +576,7 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkerId")
+                    b.Property<string>("TaskRuntimeId")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -1099,13 +1099,13 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.Property<DateTime>("RegisteredAtUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkerId")
+                    b.Property<string>("TaskRuntimeId")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("WorkerId")
+                    b.HasIndex("TaskRuntimeId")
                         .IsUnique();
 
                     b.ToTable("Workers");

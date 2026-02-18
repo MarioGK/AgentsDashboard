@@ -57,7 +57,7 @@
             <div class="codex-health-strip">
                 <MudChip T="string" Size="Size.Small" Color="@GetWorkerHealthColor()">
                     <MudIcon Icon="@Icons.Material.Filled.Dns" Size="Size.Small" Class="mr-1" />
-                    @(_onlineWorkers)/@_totalWorkers Workers
+                    @(_onlineWorkers)/@_totalWorkers Task Runtimes
                 </MudChip>
                 <MudChip T="string" Size="Size.Small" Color="@GetRunHealthColor()">
                     <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Size="Size.Small" Class="mr-1" />
@@ -336,7 +336,7 @@
 
     private async Task LoadHealthAsync()
     {
-        var workers = await Store.ListWorkersAsync(CancellationToken.None);
+        var workers = await Store.ListTaskRuntimesAsync(CancellationToken.None);
         _totalWorkers = workers.Count;
         _onlineWorkers = workers.Count(w => w.Online);
 

@@ -5,7 +5,7 @@ This suite covers:
 - Smoke checks:
   - Home dashboard load (`/`)
   - Global search page load (`/search`)
-  - Orchestrator settings load (`/settings/orchestrator`)
+  - Orchestrator settings load (`/settings/task-runtimes`)
   - Workspace task-list surface visibility (`/workspace` -> `Recent Tasks`)
 - Full workflow check (`workflow-zai-e2e.spec.ts`):
   - Create repository

@@ -34,6 +34,6 @@ public interface IRunEventPublisher
         DateTime timestampUtc,
         CancellationToken cancellationToken);
     Task PublishFindingUpdatedAsync(FindingDocument finding, CancellationToken cancellationToken);
-    Task PublishWorkerHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken);
+    Task PublishTaskRuntimeHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken);
     Task PublishRouteAvailableAsync(string runId, string routePath, CancellationToken cancellationToken);
 }

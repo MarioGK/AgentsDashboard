@@ -13,7 +13,7 @@ test('global search page loads', async ({ page }) => {
 });
 
 test('orchestrator settings page loads', async ({ page }) => {
-  await page.goto('/settings/orchestrator');
+  await page.goto('/settings/task-runtimes');
 
   await expect(page.getByRole('heading', { name: 'Orchestrator Settings' })).toBeVisible();
 });

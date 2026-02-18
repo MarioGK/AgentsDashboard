@@ -1,5 +1,5 @@
 using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Proxy;
@@ -31,7 +31,7 @@ public class RunDispatcherTests
 
         result.Should().BeTrue();
         service.WorkerLifecycleManagerMock.Verify(
-            x => x.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>()),
+            x => x.AcquireTaskRuntimeForDispatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Never);
         service.Store.Verify(
             x => x.MarkRunCompletedAsync(
@@ -55,8 +55,8 @@ public class RunDispatcherTests
         service.Store.Setup(s => s.CountActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
         service.Store.Setup(s => s.CountActiveRunsByRepoAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
         service.Store.Setup(s => s.CountActiveRunsByTaskAsync(task.Id, It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        service.WorkerLifecycleManagerMock.Setup(x => x.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((WorkerLease?)null);
+        service.WorkerLifecycleManagerMock.Setup(x => x.AcquireTaskRuntimeForDispatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TaskRuntimeLease?)null);
 
         var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
@@ -95,7 +95,7 @@ public class RunDispatcherTests
         var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
         result.Should().BeFalse();
-        service.WorkerLifecycleManagerMock.Verify(x => x.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>()), Times.Never);
+        service.WorkerLifecycleManagerMock.Verify(x => x.AcquireTaskRuntimeForDispatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
         service.Store.Verify(s => s.MarkRunPendingApprovalAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -362,11 +362,11 @@ public class RunDispatcherTests
     private sealed class SutBuilder
     {
         public Mock<IOrchestratorStore> Store { get; } = new();
-        public Mock<IWorkerLifecycleManager> WorkerLifecycleManagerMock { get; } = new();
+        public Mock<ITaskRuntimeLifecycleManager> WorkerLifecycleManagerMock { get; } = new();
         public Mock<ISecretCryptoService> SecretCryptoMock { get; } = new();
         public Mock<IRunEventPublisher> PublisherMock { get; } = new();
         public Mock<IMagicOnionClientFactory> ClientFactoryMock { get; } = new();
-        public Mock<IWorkerGatewayService> WorkerClientMock { get; } = new();
+        public Mock<ITaskRuntimeGatewayService> WorkerClientMock { get; } = new();
         public RunDispatcher Dispatcher { get; }
 
         private readonly OrchestratorOptions _options = new();
@@ -374,12 +374,12 @@ public class RunDispatcherTests
 
         public SutBuilder()
         {
-            WorkerLifecycleManagerMock.Setup(x => x.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>())).ReturnsAsync(
-                new WorkerLease("worker-1", "container-1", "http://worker.local:5201", "http://worker.local:8080"));
+            WorkerLifecycleManagerMock.Setup(x => x.AcquireTaskRuntimeForDispatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(
+                new TaskRuntimeLease("worker-1", "container-1", "http://worker.local:5201", "http://worker.local:8080"));
             WorkerLifecycleManagerMock.Setup(x => x.RecordDispatchActivityAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
             ClientFactoryMock
-                .Setup(f => f.CreateWorkerGatewayService(It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(f => f.CreateTaskRuntimeGatewayService(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(WorkerClientMock.Object);
             Store.Setup(s => s.CountActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
             Store.Setup(s => s.CountActiveRunsByRepoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
@@ -430,8 +430,8 @@ public class RunDispatcherTests
         public SutBuilder WithActiveWorker()
         {
             WorkerLifecycleManagerMock
-                .Setup(x => x.AcquireWorkerForDispatchAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new WorkerLease("worker-1", "container-1", "http://worker.local:5201", "http://worker.local:8080"));
+                .Setup(x => x.AcquireTaskRuntimeForDispatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new TaskRuntimeLease("worker-1", "container-1", "http://worker.local:5201", "http://worker.local:8080"));
             return this;
         }
 

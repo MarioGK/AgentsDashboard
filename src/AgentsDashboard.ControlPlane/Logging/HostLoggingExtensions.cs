@@ -1,6 +1,8 @@
+using System.IO;
 using Microsoft.Extensions.Logging;
 using ZLogger;
 using ZLogger.Formatters;
+using ZLogger.Providers;
 
 namespace AgentsDashboard.ControlPlane;
 
@@ -10,6 +12,12 @@ internal static class HostLoggingExtensions
     {
         var useAnsi = ShouldEnableAnsi();
         logging.ClearProviders();
+
+        logging.AddFilter<ZLoggerConsoleLoggerProvider>((_, level) => level >= LogLevel.Information);
+        logging.AddFilter<ZLoggerRollingFileLoggerProvider>((_, level) => level >= LogLevel.Trace);
+        logging.AddFilter<ZLoggerConsoleLoggerProvider>("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+        logging.AddFilter<ZLoggerRollingFileLoggerProvider>("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+
         logging.AddZLoggerConsole(options =>
         {
             options.ConfigureEnableAnsiEscapeCode = useAnsi;
@@ -36,7 +44,18 @@ internal static class HostLoggingExtensions
             });
         });
 
+        logging.AddZLoggerRollingFile(
+            (timestamp, sequence) => GetLogFilePath(serviceName, timestamp, sequence),
+            RollingInterval.Day);
+
         return logging;
+    }
+
+    private static string GetLogFilePath(string serviceName, DateTimeOffset timestamp, int sequence)
+    {
+        var logsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+        Directory.CreateDirectory(logsDirectory);
+        return Path.Combine(logsDirectory, $"{serviceName}-{timestamp:yyyy-MM-dd}.{sequence:D4}.log");
     }
 
     private static bool ShouldEnableAnsi()

@@ -18,6 +18,17 @@ public enum RunState
     Obsolete = 6
 }
 
+public enum TaskRuntimeState
+{
+    Cold = 0,
+    Starting = 1,
+    Ready = 2,
+    Busy = 3,
+    Stopping = 4,
+    Inactive = 5,
+    Failed = 6
+}
+
 public enum FindingSeverity
 {
     Low = 0,
@@ -181,7 +192,7 @@ public sealed class RunDocument
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string RepositoryId { get; set; } = string.Empty;
     public string TaskId { get; set; } = string.Empty;
-    public string WorkerId { get; set; } = string.Empty;
+    public string TaskRuntimeId { get; set; } = string.Empty;
     public RunState State { get; set; } = RunState.Queued;
     public HarnessExecutionMode ExecutionMode { get; set; } = HarnessExecutionMode.Default;
     public string StructuredProtocol { get; set; } = string.Empty;
@@ -404,10 +415,10 @@ public sealed class ProviderSecretDocument
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
-public sealed class WorkerRegistration
+public sealed class TaskRuntimeRegistration
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string WorkerId { get; set; } = string.Empty;
+    public string RuntimeId { get; set; } = string.Empty;
     public string Endpoint { get; set; } = string.Empty;
     public int MaxSlots { get; set; } = 4;
     public int ActiveSlots { get; set; }
@@ -415,6 +426,66 @@ public sealed class WorkerRegistration
     public DateTime LastHeartbeatUtc { get; set; } = DateTime.UtcNow;
     public DateTime RegisteredAtUtc { get; set; } = DateTime.UtcNow;
 }
+
+public sealed class TaskRuntimeDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public string RuntimeId { get; set; } = string.Empty;
+    public TaskRuntimeState State { get; set; } = TaskRuntimeState.Inactive;
+    public int ActiveRuns { get; set; }
+    public int MaxParallelRuns { get; set; } = 1;
+    public string Endpoint { get; set; } = string.Empty;
+    public string ContainerId { get; set; } = string.Empty;
+    public string WorkspacePath { get; set; } = string.Empty;
+    public string RuntimeHomePath { get; set; } = string.Empty;
+    public DateTime LastActivityUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? InactiveAfterUtc { get; set; }
+    public string LastError { get; set; } = string.Empty;
+    public DateTime? LastStateChangeUtc { get; set; }
+    public DateTime? LastStartedAtUtc { get; set; }
+    public DateTime? LastReadyAtUtc { get; set; }
+    public long ColdStartCount { get; set; }
+    public long ColdStartDurationTotalMs { get; set; }
+    public long LastColdStartDurationMs { get; set; }
+    public DateTime? LastBecameInactiveUtc { get; set; }
+    public long InactiveTransitionCount { get; set; }
+    public long InactiveDurationTotalMs { get; set; }
+    public long LastInactiveDurationMs { get; set; }
+}
+
+public sealed class TaskRuntimeStateUpdate
+{
+    public string RuntimeId { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public TaskRuntimeState State { get; set; } = TaskRuntimeState.Inactive;
+    public int ActiveRuns { get; set; }
+    public int MaxParallelRuns { get; set; } = 1;
+    public string Endpoint { get; set; } = string.Empty;
+    public string ContainerId { get; set; } = string.Empty;
+    public string WorkspacePath { get; set; } = string.Empty;
+    public string RuntimeHomePath { get; set; } = string.Empty;
+    public DateTime ObservedAtUtc { get; set; } = DateTime.UtcNow;
+    public bool UpdateLastActivityUtc { get; set; } = true;
+    public DateTime? InactiveAfterUtc { get; set; }
+    public bool ClearInactiveAfterUtc { get; set; }
+    public string LastError { get; set; } = string.Empty;
+}
+
+public sealed record TaskRuntimeTelemetrySnapshot(
+    int TotalRuntimes,
+    int ReadyRuntimes,
+    int BusyRuntimes,
+    int InactiveRuntimes,
+    int FailedRuntimes,
+    long TotalColdStarts,
+    double AverageColdStartSeconds,
+    double LastColdStartSeconds,
+    long TotalInactiveTransitions,
+    double AverageInactiveSeconds,
+    double LastInactiveSeconds);
 
 public sealed class WebhookRegistration
 {
@@ -488,6 +559,9 @@ public sealed class SystemSettingsDocument
 
 public sealed class OrchestratorSettings
 {
+    public int MaxActiveTaskRuntimes { get; set; } = 100;
+    public int DefaultTaskParallelRuns { get; set; } = 1;
+    public int TaskRuntimeInactiveTimeoutMinutes { get; set; } = 15;
     public int MinWorkers { get; set; } = 4;
     public int MaxWorkers { get; set; } = 100;
     public int MaxProcessesPerWorker { get; set; } = 1;

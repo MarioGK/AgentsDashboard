@@ -47,8 +47,8 @@ public sealed record FindingUpdatedEvent(
     string Severity,
     string Title);
 
-public sealed record WorkerHeartbeatEvent(
-    string WorkerId,
+public sealed record TaskRuntimeHeartbeatEvent(
+    string TaskRuntimeId,
     string HostName,
     int ActiveSlots,
     int MaxSlots,

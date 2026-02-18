@@ -106,10 +106,10 @@ public sealed class BlazorRunEventPublisher(IUiRealtimeBroker broker) : IRunEven
             cancellationToken);
     }
 
-    public Task PublishWorkerHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken)
+    public Task PublishTaskRuntimeHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken)
     {
         return broker.PublishAsync(
-            new WorkerHeartbeatEvent(
+            new TaskRuntimeHeartbeatEvent(
                 workerId,
                 hostName,
                 activeSlots,

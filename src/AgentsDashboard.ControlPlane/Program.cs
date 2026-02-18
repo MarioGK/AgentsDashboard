@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Threading.RateLimiting;
-using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane;
 using AgentsDashboard.ControlPlane.Components;
 using AgentsDashboard.ControlPlane.Configuration;
@@ -141,8 +141,8 @@ builder.Services.AddSingleton<INotificationSink>(sp => sp.GetRequiredService<INo
 builder.Services.AddHostedService<BackgroundWorkNotificationRelay>();
 builder.Services.AddSingleton<IOrchestratorRuntimeSettingsProvider, OrchestratorRuntimeSettingsProvider>();
 builder.Services.AddSingleton<ILeaseCoordinator, LeaseCoordinator>();
-builder.Services.AddSingleton<IWorkerLifecycleManager, DockerWorkerLifecycleManager>();
-builder.Services.AddHostedService<WorkerImageBootstrapService>();
+builder.Services.AddSingleton<ITaskRuntimeLifecycleManager, DockerTaskRuntimeLifecycleManager>();
+builder.Services.AddHostedService<TaskRuntimeImageBootstrapService>();
 builder.Services.AddSingleton<ISecretCryptoService, SecretCryptoService>();
 builder.Services.AddSingleton<SecretCryptoService>(sp => (SecretCryptoService)sp.GetRequiredService<ISecretCryptoService>());
 builder.Services.AddSingleton<WebhookService>();
@@ -154,9 +154,9 @@ builder.Services.AddHostedService<RecoveryService>();
 builder.Services.AddHostedService<CronSchedulerService>();
 builder.Services.AddHostedService<AutomationSchedulerService>();
 builder.Services.AddHostedService<TaskRetentionCleanupService>();
-builder.Services.AddHostedService<WorkerEventListenerService>();
-builder.Services.AddHostedService<WorkerIdleShutdownService>();
-builder.Services.AddHostedService<WorkerPoolReconciliationService>();
+builder.Services.AddHostedService<TaskRuntimeEventListenerService>();
+builder.Services.AddHostedService<TaskRuntimeIdleShutdownService>();
+builder.Services.AddHostedService<TaskRuntimePoolReconciliationService>();
 builder.Services.AddHttpClient();
 builder.Services.AddHostedService<AlertingService>();
 builder.Services.AddSingleton<IWorkflowExecutor, WorkflowExecutor>();
@@ -184,11 +184,11 @@ builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 builder.Services.AddScoped<ProjectContext>();
 builder.Services.AddScoped<IGlobalSelectionService, GlobalSelectionService>();
 
-// MagicOnion client factory for WorkerGateway communication (must be registered before IWorkerRegistryService)
+// MagicOnion client factory for WorkerGateway communication (must be registered before ITaskRuntimeRegistryService)
 builder.Services.AddSingleton<IMagicOnionClientFactory, MagicOnionClientFactory>();
 
 // Worker registry service (depends on IMagicOnionClientFactory)
-builder.Services.AddSingleton<IWorkerRegistryService, WorkerRegistryService>();
+builder.Services.AddSingleton<ITaskRuntimeRegistryService, TaskRuntimeRegistryService>();
 
 builder.Services.AddSingleton<InMemoryYarpConfigProvider>();
 builder.Services.AddSingleton<IProxyConfigProvider>(sp => sp.GetRequiredService<InMemoryYarpConfigProvider>());

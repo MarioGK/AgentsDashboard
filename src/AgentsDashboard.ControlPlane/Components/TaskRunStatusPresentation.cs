@@ -5,14 +5,15 @@ namespace AgentsDashboard.ControlPlane.Components;
 
 public enum TaskRunStatus
 {
-    Idle = 0,
-    Queued = 1,
-    Running = 2,
-    PendingApproval = 3,
-    Succeeded = 4,
-    Failed = 5,
-    Cancelled = 6,
-    Obsolete = 7
+    Inactive = 0,
+    Idle = 1,
+    Queued = 2,
+    Running = 3,
+    PendingApproval = 4,
+    Succeeded = 5,
+    Failed = 6,
+    Cancelled = 7,
+    Obsolete = 8
 }
 
 public sealed record StatusChipVisual(string Label, Color Color, bool IsWorking);
@@ -60,6 +61,7 @@ public static class TaskRunStatusPresentation
 
     public static StatusChipVisual FromTaskStatus(TaskRunStatus status) => status switch
     {
+        TaskRunStatus.Inactive => new("Inactive", Color.Default, false),
         TaskRunStatus.Idle => new("Idle", Color.Default, false),
         TaskRunStatus.Queued => new("Queued", Color.Warning, true),
         TaskRunStatus.Running => new("Running", Color.Info, true),
@@ -98,7 +100,7 @@ public static class TaskRunStatusPresentation
 
         if (latestRun is null)
         {
-            return TaskRunStatus.Idle;
+            return TaskRunStatus.Inactive;
         }
 
         return latestRun.State switch
@@ -106,10 +108,10 @@ public static class TaskRunStatusPresentation
             RunState.Queued => TaskRunStatus.Queued,
             RunState.Running => TaskRunStatus.Running,
             RunState.PendingApproval => TaskRunStatus.PendingApproval,
-            RunState.Succeeded => TaskRunStatus.Succeeded,
-            RunState.Failed => TaskRunStatus.Failed,
-            RunState.Cancelled => TaskRunStatus.Cancelled,
-            RunState.Obsolete => TaskRunStatus.Obsolete,
+            RunState.Succeeded => TaskRunStatus.Inactive,
+            RunState.Failed => TaskRunStatus.Inactive,
+            RunState.Cancelled => TaskRunStatus.Inactive,
+            RunState.Obsolete => TaskRunStatus.Inactive,
             _ => TaskRunStatus.Obsolete
         };
     }

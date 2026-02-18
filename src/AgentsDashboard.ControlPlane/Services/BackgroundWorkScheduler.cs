@@ -247,6 +247,11 @@ public sealed class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> log
             workId,
             snapshot =>
             {
+                if (snapshot.State is BackgroundWorkState.Succeeded or BackgroundWorkState.Failed or BackgroundWorkState.Cancelled)
+                {
+                    return snapshot;
+                }
+
                 var state = update.State == BackgroundWorkState.Pending
                     ? BackgroundWorkState.Running
                     : update.State;

@@ -27,7 +27,7 @@ public class TaskRunStatusPresentationTests
     }
 
     [Test]
-    public void FromTaskAndLatestRun_NoRunForEnabledTask_ReturnsIdle()
+    public void FromTaskAndLatestRun_NoRunForEnabledTask_ReturnsInactive()
     {
         var task = new TaskDocument
         {
@@ -38,8 +38,8 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, null);
 
-        visual.Status.Should().Be(TaskRunStatus.Idle);
-        visual.Label.Should().Be("Idle");
+        visual.Status.Should().Be(TaskRunStatus.Inactive);
+        visual.Label.Should().Be("Inactive");
         visual.IsWorking.Should().BeFalse();
         visual.Tooltip.Should().Be("No runs recorded yet.");
     }
@@ -81,7 +81,7 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, run);
 
-        visual.Status.Should().Be(TaskRunStatus.Succeeded);
+        visual.Status.Should().Be(TaskRunStatus.Inactive);
         visual.Tooltip.Should().Contain("Latest run:");
         visual.Tooltip.Should().Contain("Summary: Completed successfully");
     }

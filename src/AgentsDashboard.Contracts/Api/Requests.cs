@@ -57,7 +57,7 @@ public sealed record CreateTaskFromFindingRequest(string Name, string Harness, s
 public sealed record SetProviderSecretRequest(string SecretValue);
 public sealed record CreateWebhookRequest(string RepositoryId, string TaskId, string EventFilter, string Secret);
 public sealed record UpdateWebhookRequest(string TaskId, string EventFilter, string Secret, bool Enabled);
-public sealed record WorkerHeartbeatRequest(string WorkerId, string? Endpoint, int ActiveSlots, int MaxSlots);
+public sealed record WorkerHeartbeatRequest(string TaskRuntimeId, string? Endpoint, int ActiveSlots, int MaxSlots);
 public sealed record UpdateSystemSettingsRequest(
     List<string>? DockerAllowedImages = null,
     int? RetentionDaysLogs = null,

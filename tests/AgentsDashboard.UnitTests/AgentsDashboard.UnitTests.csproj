@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AgentsDashboard.Contracts\AgentsDashboard.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\AgentsDashboard.WorkerGateway\AgentsDashboard.WorkerGateway.csproj" />
+    <ProjectReference Include="..\..\src\AgentsDashboard.TaskRuntimeGateway\AgentsDashboard.TaskRuntimeGateway.csproj" />
     <ProjectReference Include="..\..\src\AgentsDashboard.ControlPlane\AgentsDashboard.ControlPlane.csproj" />
   </ItemGroup>
 

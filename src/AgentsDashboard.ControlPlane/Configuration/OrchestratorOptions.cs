@@ -8,7 +8,7 @@ public sealed class OrchestratorOptions : IValidatableObject
 
     public string SqliteConnectionString { get; set; } = "Data Source=/data/orchestrator.db";
     public string ArtifactsRootPath { get; set; } = "/data/artifacts";
-    public WorkerPoolConfig Workers { get; set; } = new();
+    public TaskRuntimePoolConfig TaskRuntimes { get; set; } = new();
     public int SchedulerIntervalSeconds { get; set; } = 10;
     public int MaxGlobalConcurrentRuns { get; set; } = 50;
     public int PerProjectConcurrencyLimit { get; set; } = 10;
@@ -45,55 +45,55 @@ public sealed class OrchestratorOptions : IValidatableObject
         if (PerRepoConcurrencyLimit > PerProjectConcurrencyLimit)
             yield return new ValidationResult("PerRepoConcurrencyLimit cannot exceed PerProjectConcurrencyLimit", [nameof(PerRepoConcurrencyLimit)]);
 
-        if (Workers.MaxWorkers < 1 || Workers.MaxWorkers > 256)
-            yield return new ValidationResult("Workers.MaxWorkers must be between 1 and 256", [$"{nameof(Workers)}.{nameof(Workers.MaxWorkers)}"]);
+        if (TaskRuntimes.MaxTaskRuntimes < 1 || TaskRuntimes.MaxTaskRuntimes > 256)
+            yield return new ValidationResult("TaskRuntimes.MaxTaskRuntimes must be between 1 and 256", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.MaxTaskRuntimes)}"]);
 
-        if (Workers.SlotsPerWorker < 1 || Workers.SlotsPerWorker > 128)
-            yield return new ValidationResult("Workers.SlotsPerWorker must be between 1 and 128", [$"{nameof(Workers)}.{nameof(Workers.SlotsPerWorker)}"]);
+        if (TaskRuntimes.ParallelSlotsPerTaskRuntime < 1 || TaskRuntimes.ParallelSlotsPerTaskRuntime > 128)
+            yield return new ValidationResult("TaskRuntimes.ParallelSlotsPerTaskRuntime must be between 1 and 128", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.ParallelSlotsPerTaskRuntime)}"]);
 
-        if (Workers.IdleTimeoutMinutes < 1 || Workers.IdleTimeoutMinutes > 1440)
-            yield return new ValidationResult("Workers.IdleTimeoutMinutes must be between 1 and 1440", [$"{nameof(Workers)}.{nameof(Workers.IdleTimeoutMinutes)}"]);
+        if (TaskRuntimes.IdleTimeoutMinutes < 1 || TaskRuntimes.IdleTimeoutMinutes > 1440)
+            yield return new ValidationResult("TaskRuntimes.IdleTimeoutMinutes must be between 1 and 1440", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.IdleTimeoutMinutes)}"]);
 
-        if (Workers.StartupTimeoutSeconds < 5 || Workers.StartupTimeoutSeconds > 300)
-            yield return new ValidationResult("Workers.StartupTimeoutSeconds must be between 5 and 300", [$"{nameof(Workers)}.{nameof(Workers.StartupTimeoutSeconds)}"]);
+        if (TaskRuntimes.StartupTimeoutSeconds < 5 || TaskRuntimes.StartupTimeoutSeconds > 300)
+            yield return new ValidationResult("TaskRuntimes.StartupTimeoutSeconds must be between 5 and 300", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.StartupTimeoutSeconds)}"]);
 
-        if (string.IsNullOrWhiteSpace(Workers.ContainerImage))
-            yield return new ValidationResult("Workers.ContainerImage is required", [$"{nameof(Workers)}.{nameof(Workers.ContainerImage)}"]);
+        if (string.IsNullOrWhiteSpace(TaskRuntimes.ContainerImage))
+            yield return new ValidationResult("TaskRuntimes.ContainerImage is required", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.ContainerImage)}"]);
 
-        if (string.IsNullOrWhiteSpace(Workers.ContainerNamePrefix))
-            yield return new ValidationResult("Workers.ContainerNamePrefix is required", [$"{nameof(Workers)}.{nameof(Workers.ContainerNamePrefix)}"]);
+        if (string.IsNullOrWhiteSpace(TaskRuntimes.ContainerNamePrefix))
+            yield return new ValidationResult("TaskRuntimes.ContainerNamePrefix is required", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.ContainerNamePrefix)}"]);
 
-        if (string.IsNullOrWhiteSpace(Workers.DockerNetwork))
-            yield return new ValidationResult("Workers.DockerNetwork is required", [$"{nameof(Workers)}.{nameof(Workers.DockerNetwork)}"]);
+        if (string.IsNullOrWhiteSpace(TaskRuntimes.DockerNetwork))
+            yield return new ValidationResult("TaskRuntimes.DockerNetwork is required", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.DockerNetwork)}"]);
 
-        if (Workers.PressureSampleWindowSeconds < 5 || Workers.PressureSampleWindowSeconds > 600)
-            yield return new ValidationResult("Workers.PressureSampleWindowSeconds must be between 5 and 600", [$"{nameof(Workers)}.{nameof(Workers.PressureSampleWindowSeconds)}"]);
+        if (TaskRuntimes.PressureSampleWindowSeconds < 5 || TaskRuntimes.PressureSampleWindowSeconds > 600)
+            yield return new ValidationResult("TaskRuntimes.PressureSampleWindowSeconds must be between 5 and 600", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.PressureSampleWindowSeconds)}"]);
 
-        if (Workers.CpuScaleOutThresholdPercent < 1 || Workers.CpuScaleOutThresholdPercent > 100)
-            yield return new ValidationResult("Workers.CpuScaleOutThresholdPercent must be between 1 and 100", [$"{nameof(Workers)}.{nameof(Workers.CpuScaleOutThresholdPercent)}"]);
+        if (TaskRuntimes.CpuScaleOutThresholdPercent < 1 || TaskRuntimes.CpuScaleOutThresholdPercent > 100)
+            yield return new ValidationResult("TaskRuntimes.CpuScaleOutThresholdPercent must be between 1 and 100", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.CpuScaleOutThresholdPercent)}"]);
 
-        if (Workers.MemoryScaleOutThresholdPercent < 1 || Workers.MemoryScaleOutThresholdPercent > 100)
-            yield return new ValidationResult("Workers.MemoryScaleOutThresholdPercent must be between 1 and 100", [$"{nameof(Workers)}.{nameof(Workers.MemoryScaleOutThresholdPercent)}"]);
+        if (TaskRuntimes.MemoryScaleOutThresholdPercent < 1 || TaskRuntimes.MemoryScaleOutThresholdPercent > 100)
+            yield return new ValidationResult("TaskRuntimes.MemoryScaleOutThresholdPercent must be between 1 and 100", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.MemoryScaleOutThresholdPercent)}"]);
     }
 }
 
-public enum WorkerConnectivityMode
+public enum TaskRuntimeConnectivityMode
 {
     AutoDetect = 0,
     DockerDnsOnly = 1,
     HostPortOnly = 2
 }
 
-public sealed class WorkerPoolConfig
+public sealed class TaskRuntimePoolConfig
 {
-    public int MaxWorkers { get; set; } = 100;
-    public int SlotsPerWorker { get; set; } = 1;
+    public int MaxTaskRuntimes { get; set; } = 100;
+    public int ParallelSlotsPerTaskRuntime { get; set; } = 1;
     public int IdleTimeoutMinutes { get; set; } = 5;
     public int StartupTimeoutSeconds { get; set; } = 60;
-    public string ContainerImage { get; set; } = "agentsdashboard-worker-gateway:latest";
-    public string ContainerNamePrefix { get; set; } = "worker-gateway";
+    public string ContainerImage { get; set; } = "agentsdashboard-task-runtime-gateway:latest";
+    public string ContainerNamePrefix { get; set; } = "task-runtime-gateway";
     public string DockerNetwork { get; set; } = "agentsdashboard";
-    public WorkerConnectivityMode ConnectivityMode { get; set; } = WorkerConnectivityMode.AutoDetect;
+    public TaskRuntimeConnectivityMode ConnectivityMode { get; set; } = TaskRuntimeConnectivityMode.AutoDetect;
     public bool EnablePressureScaling { get; set; } = true;
     public int CpuScaleOutThresholdPercent { get; set; } = 85;
     public int MemoryScaleOutThresholdPercent { get; set; } = 85;

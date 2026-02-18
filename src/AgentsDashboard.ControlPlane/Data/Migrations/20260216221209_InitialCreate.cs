@@ -239,7 +239,7 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     RepositoryId = table.Column<string>(type: "TEXT", nullable: false),
                     TaskId = table.Column<string>(type: "TEXT", nullable: false),
-                    WorkerId = table.Column<string>(type: "TEXT", nullable: false),
+                    TaskRuntimeId = table.Column<string>(type: "TEXT", nullable: false),
                     State = table.Column<int>(type: "INTEGER", nullable: false),
                     Summary = table.Column<string>(type: "TEXT", nullable: false),
                     OutputJson = table.Column<string>(type: "TEXT", nullable: false),
@@ -390,7 +390,7 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    WorkerId = table.Column<string>(type: "TEXT", nullable: false),
+                    TaskRuntimeId = table.Column<string>(type: "TEXT", nullable: false),
                     Endpoint = table.Column<string>(type: "TEXT", nullable: false),
                     MaxSlots = table.Column<int>(type: "INTEGER", nullable: false),
                     ActiveSlots = table.Column<int>(type: "INTEGER", nullable: false),
@@ -626,7 +626,7 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_Workers_WorkerId",
                 table: "Workers",
-                column: "WorkerId",
+                column: "TaskRuntimeId",
                 unique: true);
 
             migrationBuilder.CreateIndex(

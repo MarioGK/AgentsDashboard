@@ -1850,7 +1850,7 @@ public sealed class OrchestratorStore(
             return null;
 
         run.State = RunState.Running;
-        run.WorkerId = workerId;
+        run.TaskRuntimeId = workerId;
         run.StartedAtUtc = DateTime.UtcNow;
         run.Summary = "Running";
         if (!string.IsNullOrWhiteSpace(workerImageRef))
@@ -2665,48 +2665,204 @@ public sealed class OrchestratorStore(
         return true;
     }
 
-    public async Task<List<WorkerRegistration>> ListWorkersAsync(CancellationToken cancellationToken)
+    public async Task<List<TaskRuntimeRegistration>> ListTaskRuntimeRegistrationsAsync(CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Workers.AsNoTracking().OrderBy(x => x.WorkerId).ToListAsync(cancellationToken);
+        return await db.TaskRuntimeRegistrations.AsNoTracking().OrderBy(x => x.RuntimeId).ToListAsync(cancellationToken);
     }
 
-    public async Task UpsertWorkerHeartbeatAsync(string workerId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken)
+    public async Task UpsertTaskRuntimeRegistrationHeartbeatAsync(string runtimeId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var worker = await db.Workers.FirstOrDefaultAsync(x => x.WorkerId == workerId, cancellationToken);
-        if (worker is null)
+        var registration = await db.TaskRuntimeRegistrations.FirstOrDefaultAsync(x => x.RuntimeId == runtimeId, cancellationToken);
+        if (registration is null)
         {
-            worker = new WorkerRegistration
+            registration = new TaskRuntimeRegistration
             {
-                WorkerId = workerId,
+                RuntimeId = runtimeId,
                 RegisteredAtUtc = DateTime.UtcNow,
             };
-            db.Workers.Add(worker);
+            db.TaskRuntimeRegistrations.Add(registration);
         }
 
-        worker.Endpoint = endpoint;
-        worker.ActiveSlots = activeSlots;
-        worker.MaxSlots = maxSlots;
-        worker.Online = true;
-        worker.LastHeartbeatUtc = DateTime.UtcNow;
+        registration.Endpoint = endpoint;
+        registration.ActiveSlots = Math.Max(0, activeSlots);
+        registration.MaxSlots = maxSlots > 0 ? maxSlots : Math.Max(1, registration.MaxSlots);
+        registration.Online = true;
+        registration.LastHeartbeatUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task MarkStaleWorkersOfflineAsync(TimeSpan threshold, CancellationToken cancellationToken)
+    public async Task MarkStaleTaskRuntimeRegistrationsOfflineAsync(TimeSpan threshold, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var cutoff = DateTime.UtcNow - threshold;
-        var stale = await db.Workers.Where(x => x.Online && x.LastHeartbeatUtc < cutoff).ToListAsync(cancellationToken);
+        var stale = await db.TaskRuntimeRegistrations
+            .Where(x => x.Online && x.LastHeartbeatUtc < cutoff)
+            .ToListAsync(cancellationToken);
         if (stale.Count == 0)
-            return;
-
-        foreach (var worker in stale)
         {
-            worker.Online = false;
+            return;
+        }
+
+        foreach (var registration in stale)
+        {
+            registration.Online = false;
         }
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<List<TaskRuntimeDocument>> ListTaskRuntimesAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.TaskRuntimes.AsNoTracking().OrderBy(x => x.RuntimeId).ToListAsync(cancellationToken);
+    }
+
+    public async Task<TaskRuntimeDocument> UpsertTaskRuntimeStateAsync(TaskRuntimeStateUpdate update, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(update.RuntimeId))
+        {
+            throw new InvalidOperationException("RuntimeId is required.");
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var now = update.ObservedAtUtc == default ? DateTime.UtcNow : update.ObservedAtUtc;
+        var runtime = await db.TaskRuntimes.FirstOrDefaultAsync(x => x.RuntimeId == update.RuntimeId, cancellationToken);
+        if (runtime is null)
+        {
+            runtime = new TaskRuntimeDocument
+            {
+                RuntimeId = update.RuntimeId,
+                RepositoryId = update.RepositoryId,
+                TaskId = update.TaskId,
+                LastActivityUtc = now,
+                LastStateChangeUtc = now,
+            };
+            db.TaskRuntimes.Add(runtime);
+        }
+
+        var previousState = runtime.State;
+        var previousLastActivityUtc = runtime.LastActivityUtc;
+
+        runtime.RepositoryId = string.IsNullOrWhiteSpace(update.RepositoryId) ? runtime.RepositoryId : update.RepositoryId;
+        runtime.TaskId = string.IsNullOrWhiteSpace(update.TaskId) ? runtime.TaskId : update.TaskId;
+        runtime.State = update.State;
+        runtime.ActiveRuns = Math.Max(0, update.ActiveRuns);
+        runtime.MaxParallelRuns = update.MaxParallelRuns > 0 ? update.MaxParallelRuns : Math.Max(1, runtime.MaxParallelRuns);
+        runtime.Endpoint = string.IsNullOrWhiteSpace(update.Endpoint) ? runtime.Endpoint : update.Endpoint;
+        runtime.ContainerId = string.IsNullOrWhiteSpace(update.ContainerId) ? runtime.ContainerId : update.ContainerId;
+        runtime.WorkspacePath = string.IsNullOrWhiteSpace(update.WorkspacePath) ? runtime.WorkspacePath : update.WorkspacePath;
+        runtime.RuntimeHomePath = string.IsNullOrWhiteSpace(update.RuntimeHomePath) ? runtime.RuntimeHomePath : update.RuntimeHomePath;
+        runtime.LastStateChangeUtc = now;
+
+        if (update.UpdateLastActivityUtc)
+        {
+            runtime.LastActivityUtc = now;
+        }
+
+        if (!string.IsNullOrWhiteSpace(update.LastError))
+        {
+            runtime.LastError = update.LastError.Trim();
+        }
+        else if (runtime.State != TaskRuntimeState.Failed)
+        {
+            runtime.LastError = string.Empty;
+        }
+
+        if (update.ClearInactiveAfterUtc)
+        {
+            runtime.InactiveAfterUtc = null;
+        }
+        else if (update.InactiveAfterUtc.HasValue)
+        {
+            runtime.InactiveAfterUtc = update.InactiveAfterUtc.Value;
+        }
+        else if (runtime.State == TaskRuntimeState.Inactive)
+        {
+            runtime.InactiveAfterUtc = now;
+        }
+
+        if (runtime.State == TaskRuntimeState.Starting)
+        {
+            runtime.LastStartedAtUtc = now;
+        }
+
+        if (runtime.State == TaskRuntimeState.Ready)
+        {
+            runtime.LastReadyAtUtc = now;
+            if (previousState is TaskRuntimeState.Cold or TaskRuntimeState.Starting &&
+                runtime.LastStartedAtUtc.HasValue &&
+                now >= runtime.LastStartedAtUtc.Value)
+            {
+                var durationMs = Math.Max(0L, (long)(now - runtime.LastStartedAtUtc.Value).TotalMilliseconds);
+                runtime.ColdStartCount++;
+                runtime.ColdStartDurationTotalMs += durationMs;
+                runtime.LastColdStartDurationMs = durationMs;
+            }
+        }
+
+        if (runtime.State == TaskRuntimeState.Inactive &&
+            previousState != TaskRuntimeState.Inactive &&
+            previousLastActivityUtc != default &&
+            now >= previousLastActivityUtc)
+        {
+            var inactiveDurationMs = Math.Max(0L, (long)(now - previousLastActivityUtc).TotalMilliseconds);
+            runtime.LastBecameInactiveUtc = now;
+            runtime.InactiveTransitionCount++;
+            runtime.InactiveDurationTotalMs += inactiveDurationMs;
+            runtime.LastInactiveDurationMs = inactiveDurationMs;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return runtime;
+    }
+
+    public async Task<TaskRuntimeTelemetrySnapshot> GetTaskRuntimeTelemetryAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var runtimes = await db.TaskRuntimes.AsNoTracking().ToListAsync(cancellationToken);
+        if (runtimes.Count == 0)
+        {
+            return new TaskRuntimeTelemetrySnapshot(
+                TotalRuntimes: 0,
+                ReadyRuntimes: 0,
+                BusyRuntimes: 0,
+                InactiveRuntimes: 0,
+                FailedRuntimes: 0,
+                TotalColdStarts: 0,
+                AverageColdStartSeconds: 0,
+                LastColdStartSeconds: 0,
+                TotalInactiveTransitions: 0,
+                AverageInactiveSeconds: 0,
+                LastInactiveSeconds: 0);
+        }
+
+        var totalColdStarts = runtimes.Sum(x => x.ColdStartCount);
+        var totalColdStartDurationMs = runtimes.Sum(x => x.ColdStartDurationTotalMs);
+        var totalInactiveTransitions = runtimes.Sum(x => x.InactiveTransitionCount);
+        var totalInactiveDurationMs = runtimes.Sum(x => x.InactiveDurationTotalMs);
+        var lastColdStartSeconds = runtimes.Where(x => x.LastColdStartDurationMs > 0)
+            .Select(x => x.LastColdStartDurationMs / 1000d)
+            .DefaultIfEmpty(0)
+            .Average();
+        var lastInactiveSeconds = runtimes.Where(x => x.LastInactiveDurationMs > 0)
+            .Select(x => x.LastInactiveDurationMs / 1000d)
+            .DefaultIfEmpty(0)
+            .Average();
+
+        return new TaskRuntimeTelemetrySnapshot(
+            TotalRuntimes: runtimes.Count,
+            ReadyRuntimes: runtimes.Count(x => x.State == TaskRuntimeState.Ready),
+            BusyRuntimes: runtimes.Count(x => x.State == TaskRuntimeState.Busy),
+            InactiveRuntimes: runtimes.Count(x => x.State == TaskRuntimeState.Inactive),
+            FailedRuntimes: runtimes.Count(x => x.State == TaskRuntimeState.Failed),
+            TotalColdStarts: totalColdStarts,
+            AverageColdStartSeconds: totalColdStarts > 0 ? totalColdStartDurationMs / 1000d / totalColdStarts : 0,
+            LastColdStartSeconds: lastColdStartSeconds,
+            TotalInactiveTransitions: totalInactiveTransitions,
+            AverageInactiveSeconds: totalInactiveTransitions > 0 ? totalInactiveDurationMs / 1000d / totalInactiveTransitions : 0,
+            LastInactiveSeconds: lastInactiveSeconds);
     }
 
     public async Task<WebhookRegistration> CreateWebhookAsync(CreateWebhookRequest request, CancellationToken cancellationToken)

@@ -139,9 +139,12 @@ public interface IOrchestratorStore
     Task<ProviderSecretDocument?> GetProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken);
     Task<bool> DeleteProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken);
 
-    Task<List<WorkerRegistration>> ListWorkersAsync(CancellationToken cancellationToken);
-    Task UpsertWorkerHeartbeatAsync(string workerId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken);
-    Task MarkStaleWorkersOfflineAsync(TimeSpan threshold, CancellationToken cancellationToken);
+    Task<List<TaskRuntimeRegistration>> ListTaskRuntimeRegistrationsAsync(CancellationToken cancellationToken);
+    Task UpsertTaskRuntimeRegistrationHeartbeatAsync(string runtimeId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken);
+    Task MarkStaleTaskRuntimeRegistrationsOfflineAsync(TimeSpan threshold, CancellationToken cancellationToken);
+    Task<List<TaskRuntimeDocument>> ListTaskRuntimesAsync(CancellationToken cancellationToken);
+    Task<TaskRuntimeDocument> UpsertTaskRuntimeStateAsync(TaskRuntimeStateUpdate update, CancellationToken cancellationToken);
+    Task<TaskRuntimeTelemetrySnapshot> GetTaskRuntimeTelemetryAsync(CancellationToken cancellationToken);
 
     Task<WebhookRegistration> CreateWebhookAsync(CreateWebhookRequest request, CancellationToken cancellationToken);
     Task<WebhookRegistration?> GetWebhookAsync(string webhookId, CancellationToken cancellationToken);

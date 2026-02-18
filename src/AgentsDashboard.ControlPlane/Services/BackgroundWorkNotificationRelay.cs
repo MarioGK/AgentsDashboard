@@ -148,7 +148,7 @@ public sealed class BackgroundWorkNotificationRelay(
                 : snapshot.Message;
             var remediation = snapshot.Kind switch
             {
-                BackgroundWorkKind.WorkerImageResolution => "Retry from /settings/orchestrator using Ensure Worker Image.",
+                BackgroundWorkKind.WorkerImageResolution => "Retry from /settings/task-runtimes using Ensure Worker Image.",
                 BackgroundWorkKind.SqliteVecBootstrap => "Check sqlite extension configuration and restart the probe.",
                 BackgroundWorkKind.RepositoryGitRefresh => "Verify repository paths and credentials, then retry refresh.",
                 BackgroundWorkKind.Recovery => "Inspect recovery logs and run reconciliation from orchestrator settings.",

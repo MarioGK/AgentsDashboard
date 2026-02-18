@@ -169,19 +169,21 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 
 - Repository is the only top-level scope (project entity removed).
 - Run execution modes are first-class domain data: `HarnessExecutionMode` (`Default`, `Plan`, `Review`) persisted as task default (`TaskDocument.ExecutionModeDefault`) and run effective mode (`RunDocument.ExecutionMode`), with per-run structured protocol marker (`RunDocument.StructuredProtocol`).
-- Worker execution is runtime-driven (`IHarnessRuntime`) with transport selection by harness/runtime policy, not parser-first command heuristics.
+- Task runtime execution is runtime-driven (`IHarnessRuntime`) with transport selection by harness/runtime policy, not parser-first command heuristics.
 - Codex primary transport is `codex app-server` with `command` fallback on runtime failure.
 - OpenCode primary/only managed transport is `opencode serve` + HTTP/SSE (`/session`, `/event`, `/session/{id}/message`, `/session/{id}/diff`); no primary OpenCode CLI run mode.
 - Claude transport is CLI `--output-format stream-json`; Z.ai uses Claude-compatible stream path with strict `glm-5` enforcement.
-- Worker emits normalized structured events (v2 canonical payload) with ordered sequence/category/schema metadata; ControlPlane persists and projects these via `RunStructuredEventDocument`, `RunDiffSnapshotDocument`, and `RunToolProjectionDocument`.
+- Task runtime gateways emit normalized structured events (v2 canonical payload) with ordered sequence/category/schema metadata; ControlPlane persists and projects these via `RunStructuredEventDocument`, `RunDiffSnapshotDocument`, and `RunToolProjectionDocument`.
 - ControlPlane realtime publishes typed structured events (`RunStructuredEventChangedEvent`, `RunDiffUpdatedEvent`, `RunToolTimelineUpdatedEvent`) while retaining existing log/status event paths during cutover.
+- ControlPlane now runs non-critical startup/bootstrap operations through a background coordinator (`IBackgroundWorkCoordinator`) with live snapshots (`Pending`/`Running`/`Succeeded`/`Failed`/`Cancelled`), operation-key dedupe, and bounded concurrency.
+- Background work updates flow into the notification layer (`INotificationService` / `INotificationSink`) and surface in UI via toasts plus a persistent System Activity feed in `MainLayout`, with startup/background task visibility on `/overview`.
 - Run detail UX includes structured panes and Monaco diff rendering (`RunDiffViewer` / `RunDiffFileList`) with side-by-side diff defaults and patch export actions.
 - Diff viewer layout is session-toggleable between side-by-side and inline while keeping side-by-side as default.
 - Workspace prompt submission supports mode override and agent-team execution (`WorkspaceAgentTeamRequest`) with parallel member lanes and optional synthesis.
-- Workspace prompt inputs now support image paste/upload in both task creation and workspace composer UX; workspace run submission persists run-scoped image artifacts, emits structured multimodal input parts/attachments to workers, and auto-falls back to textual image references when runtimes reject native image payloads.
+- Workspace prompt inputs now support image paste/upload in both task creation and workspace composer UX; workspace run submission persists run-scoped image artifacts, emits structured multimodal input parts/attachments to task runtimes, and auto-falls back to textual image references when runtimes reject native image payloads.
 - Session profiles are first-class run presets: `RunSessionProfileDocument` supports `global` + repository scopes with optional harness/mode defaults, and tasks can pin a default via `TaskDocument.SessionProfileId`.
-- Run dispatch persists normalized instruction stacks and hashes (`RunInstructionStackDocument`, `RunDocument.InstructionStackHash`) so worker execution metadata is reproducible across retries and audits.
-- MCP configuration is managed centrally (`SystemSettingsDocument.Orchestrator.McpConfigJson`) and snapshotted onto runs (`RunDocument.McpConfigSnapshotJson`) before worker dispatch.
+- Run dispatch persists normalized instruction stacks and hashes (`RunInstructionStackDocument`, `RunDocument.InstructionStackHash`) so runtime execution metadata is reproducible across retries and audits.
+- MCP configuration is managed centrally (`SystemSettingsDocument.Orchestrator.McpConfigJson`) and snapshotted onto runs (`RunDocument.McpConfigSnapshotJson`) before runtime dispatch.
 - Automations are first-class domain data (`AutomationDefinitionDocument`, `AutomationExecutionDocument`) with scheduler-driven cron dispatch plus manual Run-Now execution from `/settings/automations`.
 - Run detail supports share/export bundles persisted as `RunShareBundleDocument` including run metadata, projections, and artifacts for external review.
 - Agent-team parallel stages persist lane diff telemetry, merged non-conflicting patch, and conflict metadata in `WorkflowStageResult.AgentTeamDiff`; synthesis prompts include this conflict context.
@@ -191,23 +193,22 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 - Git metrics refresh is hybrid: on repository detail open, explicit refresh action, and background refresh for recently viewed repositories.
 - Git auth paths are system git-native: URL credentials, repository GitHub token (when configured), and host SSH keys/agent.
 - Harness-only execution (no direct provider APIs).
-- ControlPlane is the parent orchestrator and spawns worker-gateway containers on demand via Docker socket.
-- Worker gateways launch ephemeral harness Docker containers.
-- Worker pool is elastic (1..N) using `Orchestrator:Workers:*` settings for capacity, startup timeout, idle scale-down, and connectivity mode; runtime enforces single-slot workers (`MaxSlots=1`).
-- Worker allocation is single-occupancy: each dispatch gets a dedicated worker container instead of reusing an idle worker.
-- Worker teardown is destructive for compute and artifacts: worker containers are removed after recycle/stop and per-worker artifact volumes (`worker-artifacts-*`) are removed; `/workspaces` is mounted from a shared persistent volume (`agentsdashboard-workspaces` by default, override via `WORKER_SHARED_WORKSPACES_BIND`).
+- ControlPlane is the parent orchestrator and spawns task-runtime gateway containers on demand via Docker socket.
+- Task runtime gateways launch ephemeral harness Docker containers for run execution.
+- Runtime allocation is task-scoped: one runtime container per task is reused while active, with per-task parallel slots configured at dispatch.
+- Inactivity policy is task-scoped: idle task runtime containers are stopped after timeout (no warm pool requirement), while task workspace and runtime home volumes remain persisted for later reactivation.
 - Task git execution uses persistent task-scoped checkouts under `/workspaces/repos/{repositoryId}/tasks/{taskId}`. Container sandboxing is the isolation boundary; git worktrees are not used.
 - Task dispatch enforces singleton queue semantics per task: at most one active/pending run per task; additional triggers remain queued and the next queued run is dispatched when the current run reaches a terminal state.
 - Successful changed runs auto-commit and push the default branch; successful no-diff runs are terminal `Obsolete`.
 - Task list surfaces (repository, schedules, workflow task lists) show status chips based on latest run state with spinner for working states (`Queued`, `Running`, `PendingApproval`).
-- Worker image bootstrap runs on ControlPlane startup: if `Orchestrator:Workers:ContainerImage` is missing locally, ControlPlane attempts local build first and then pull fallback, and ControlPlane startup fails fast if the image is still unavailable.
+- Worker image ensure/rebuild runs as background work (`WorkerImageResolution`) instead of blocking startup paths; image resolution keeps in-process dedupe plus distributed lease safety and emits progress updates from pull/build steps.
 - Runtime orchestrator behavior is policy-driven from persisted system settings (`SystemSettingsDocument.Orchestrator`) with short-lived cache and hot-reload invalidation on save.
-- New dedicated settings page `/settings/orchestrator` controls worker pool sizing, admission thresholds, image policy/order, pull/build concurrency, start-failure budgets, cooldowns, draining/recycle behavior, and worker resource guardrails.
+- Dedicated settings page `/settings/orchestrator` controls task-runtime capacity, admission thresholds, image policy/order, pull/build concurrency, start-failure budgets, cooldowns, draining/recycle behavior, and runtime resource guardrails.
 - ControlPlane runs background task-retention cleanup with distributed lease coordination (`maintenance-task-cleanup`): age-based deletion (last-activity policy) and DB-size pressure cleanup (`DbSizeSoftLimitGb` -> `DbSizeTargetGb`) with full task-cascade deletion (runs/logs/findings/prompt history/AI summaries/semantic chunks/artifact directories) and optional post-pressure `VACUUM`.
 - Cleanup cycle also prunes structured run payload tables for old terminal runs via `PruneStructuredRunDataAsync`, honoring workflow/open-finding exclusion flags used by task cleanup eligibility.
 - ControlPlane now supports DB-backed distributed leases (`Leases`) for multi-instance coordination of scale-out, image resolution, and reconciliation operations.
-- Harness image bootstrap runs on WorkerGateway startup: missing configured images attempt local build from known harness Dockerfiles before pull fallback.
-- Worker tool diagnostics are worker-scoped: ControlPlane queries each WorkerGateway via MagicOnion (`GetHarnessToolsAsync`) and renders tool/version status in `/settings/workers/{workerId}`.
+- WorkerGateway image warmup is queued through `IImageBootstrapWorkScheduler` (`ImagePrePullPolicy`) and runs asynchronously after startup; startup no longer blocks on pre-pull/build completion.
+- Runtime tool diagnostics are runtime-scoped: ControlPlane queries each gateway via MagicOnion (`GetHarnessToolsAsync`) and surfaces tool/version status from orchestrator views.
 - Provider secrets are injected into run environment variables and the secrets map; Codex credentials map to both `CODEX_API_KEY` and `OPENAI_API_KEY`.
 - Added provider mapping `llmtornado` for Z.ai Anthropic-compatible routing: maps to `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic`, and `Z_AI_API_KEY`.
 - Provider fallback now supports global `llmtornado` secret scope (`repositoryId=global`) when repository-level Anthropic/Z.ai credentials are not present.

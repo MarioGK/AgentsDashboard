@@ -25,7 +25,8 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<AutomationExecutionDocument> AutomationExecutions => Set<AutomationExecutionDocument>();
     public DbSet<FindingDocument> Findings => Set<FindingDocument>();
     public DbSet<ProviderSecretDocument> ProviderSecrets => Set<ProviderSecretDocument>();
-    public DbSet<WorkerRegistration> Workers => Set<WorkerRegistration>();
+    public DbSet<TaskRuntimeRegistration> TaskRuntimeRegistrations => Set<TaskRuntimeRegistration>();
+    public DbSet<TaskRuntimeDocument> TaskRuntimes => Set<TaskRuntimeDocument>();
     public DbSet<WebhookRegistration> Webhooks => Set<WebhookRegistration>();
     public DbSet<ProxyAuditDocument> ProxyAudits => Set<ProxyAuditDocument>();
     public DbSet<SystemSettingsDocument> Settings => Set<SystemSettingsDocument>();
@@ -60,7 +61,8 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<AutomationExecutionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<FindingDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<ProviderSecretDocument>().HasKey(x => x.Id);
-        modelBuilder.Entity<WorkerRegistration>().HasKey(x => x.Id);
+        modelBuilder.Entity<TaskRuntimeRegistration>().HasKey(x => x.Id);
+        modelBuilder.Entity<TaskRuntimeDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<WebhookRegistration>().HasKey(x => x.Id);
         modelBuilder.Entity<ProxyAuditDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<SystemSettingsDocument>().HasKey(x => x.Id);
@@ -233,9 +235,19 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<ProviderSecretDocument>()
             .HasIndex(x => new { x.RepositoryId, x.Provider })
             .IsUnique();
-        modelBuilder.Entity<WorkerRegistration>()
-            .HasIndex(x => x.WorkerId)
+        modelBuilder.Entity<TaskRuntimeRegistration>()
+            .HasIndex(x => x.RuntimeId)
             .IsUnique();
+        modelBuilder.Entity<TaskRuntimeRegistration>()
+            .ToTable("TaskRuntimeRegistrations");
+        modelBuilder.Entity<TaskRuntimeDocument>()
+            .HasIndex(x => x.RuntimeId)
+            .IsUnique();
+        modelBuilder.Entity<TaskRuntimeDocument>()
+            .HasIndex(x => x.TaskId)
+            .IsUnique();
+        modelBuilder.Entity<TaskRuntimeDocument>()
+            .HasIndex(x => new { x.State, x.InactiveAfterUtc });
         modelBuilder.Entity<WebhookRegistration>()
             .HasIndex(x => x.RepositoryId);
         modelBuilder.Entity<ProxyAuditDocument>()

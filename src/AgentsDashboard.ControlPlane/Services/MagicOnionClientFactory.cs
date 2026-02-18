@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.Contracts.TaskRuntime;
 using Grpc.Net.Client;
 using MagicOnion;
 using MagicOnion.Client;
@@ -8,8 +8,8 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public interface IMagicOnionClientFactory
 {
-    IWorkerGatewayService CreateWorkerGatewayService(string workerId, string grpcAddress);
-    Task<IWorkerEventHub> ConnectEventHubAsync(string workerId, string grpcAddress, IWorkerEventReceiver receiver, CancellationToken ct = default);
+    ITaskRuntimeGatewayService CreateTaskRuntimeGatewayService(string workerId, string grpcAddress);
+    Task<ITaskRuntimeEventHub> ConnectEventHubAsync(string workerId, string grpcAddress, ITaskRuntimeEventReceiver receiver, CancellationToken ct = default);
     void RemoveWorker(string workerId);
 }
 
@@ -32,16 +32,16 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
         return address;
     }
 
-    public IWorkerGatewayService CreateWorkerGatewayService(string workerId, string grpcAddress)
+    public ITaskRuntimeGatewayService CreateTaskRuntimeGatewayService(string workerId, string grpcAddress)
     {
         var channel = GetOrCreateChannel(workerId, grpcAddress);
-        return MagicOnionClient.Create<IWorkerGatewayService>(channel);
+        return MagicOnionClient.Create<ITaskRuntimeGatewayService>(channel);
     }
 
-    public async Task<IWorkerEventHub> ConnectEventHubAsync(string workerId, string grpcAddress, IWorkerEventReceiver receiver, CancellationToken ct = default)
+    public async Task<ITaskRuntimeEventHub> ConnectEventHubAsync(string workerId, string grpcAddress, ITaskRuntimeEventReceiver receiver, CancellationToken ct = default)
     {
         var channel = GetOrCreateChannel(workerId, grpcAddress);
-        return await StreamingHubClient.ConnectAsync<IWorkerEventHub, IWorkerEventReceiver>(
+        return await StreamingHubClient.ConnectAsync<ITaskRuntimeEventHub, ITaskRuntimeEventReceiver>(
             channel,
             receiver,
             cancellationToken: ct

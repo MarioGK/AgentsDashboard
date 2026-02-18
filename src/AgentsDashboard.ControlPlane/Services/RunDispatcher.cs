@@ -1,6 +1,6 @@
 using System.Globalization;
 using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
@@ -12,7 +12,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 public sealed class RunDispatcher(
     IMagicOnionClientFactory clientFactory,
     IOrchestratorStore store,
-    IWorkerLifecycleManager workerLifecycleManager,
+    ITaskRuntimeLifecycleManager workerLifecycleManager,
     ISecretCryptoService secretCrypto,
     IRunEventPublisher publisher,
     InMemoryYarpConfigProvider yarpProvider,
@@ -111,16 +111,23 @@ public sealed class RunDispatcher(
             return false;
         }
 
-        var workerLease = await workerLifecycleManager.AcquireWorkerForDispatchAsync(cancellationToken);
+        var taskParallelSlots = task.ConcurrencyLimit > 0
+            ? task.ConcurrencyLimit
+            : Math.Max(1, runtime.DefaultTaskParallelRuns);
+        var workerLease = await workerLifecycleManager.AcquireTaskRuntimeForDispatchAsync(
+            repository.Id,
+            task.Id,
+            taskParallelSlots,
+            cancellationToken);
         if (workerLease is null)
         {
             logger.ZLogWarning("No worker capacity available; leaving run {RunId} queued", run.Id);
             return false;
         }
 
-        logger.ZLogDebug("Selected worker {WorkerId} for run {RunId}", workerLease.WorkerId, run.Id);
+        logger.ZLogDebug("Selected worker {TaskRuntimeId} for run {RunId}", workerLease.TaskRuntimeId, run.Id);
 
-        var selectedWorker = await workerLifecycleManager.GetWorkerAsync(workerLease.WorkerId, cancellationToken);
+        var selectedWorker = await workerLifecycleManager.GetTaskRuntimeAsync(workerLease.TaskRuntimeId, cancellationToken);
 
         var defaultBranch = string.IsNullOrWhiteSpace(repository.DefaultBranch) ? "main" : repository.DefaultBranch;
 
@@ -278,7 +285,7 @@ public sealed class RunDispatcher(
             AutomationRunId = automationRunId?.Trim() ?? run.AutomationRunId ?? string.Empty,
         };
 
-        var workerClient = clientFactory.CreateWorkerGatewayService(workerLease.WorkerId, workerLease.GrpcEndpoint);
+        var workerClient = clientFactory.CreateTaskRuntimeGatewayService(workerLease.TaskRuntimeId, workerLease.GrpcEndpoint);
         var response = await workerClient.DispatchJobAsync(request);
 
         if (!response.Success)
@@ -293,11 +300,11 @@ public sealed class RunDispatcher(
             return false;
         }
 
-        await workerLifecycleManager.RecordDispatchActivityAsync(workerLease.WorkerId, cancellationToken);
+        await workerLifecycleManager.RecordDispatchActivityAsync(workerLease.TaskRuntimeId, cancellationToken);
 
         var started = await store.MarkRunStartedAsync(
             run.Id,
-            workerLease.WorkerId,
+            workerLease.TaskRuntimeId,
             cancellationToken,
             selectedWorker?.ImageRef,
             selectedWorker?.ImageDigest,
@@ -360,20 +367,20 @@ public sealed class RunDispatcher(
         try
         {
             var run = await store.GetRunAsync(runId, cancellationToken);
-            if (run is null || string.IsNullOrWhiteSpace(run.WorkerId))
+            if (run is null || string.IsNullOrWhiteSpace(run.TaskRuntimeId))
             {
                 logger.ZLogWarning("Skipping cancel for run {RunId}: no assigned worker", runId);
                 return;
             }
 
-            var worker = await workerLifecycleManager.GetWorkerAsync(run.WorkerId, cancellationToken);
+            var worker = await workerLifecycleManager.GetTaskRuntimeAsync(run.TaskRuntimeId, cancellationToken);
             if (worker is null || !worker.IsRunning)
             {
-                logger.ZLogWarning("Skipping cancel for run {RunId}: worker {WorkerId} is unavailable", runId, run.WorkerId);
+                logger.ZLogWarning("Skipping cancel for run {RunId}: worker {TaskRuntimeId} is unavailable", runId, run.TaskRuntimeId);
                 return;
             }
 
-            var workerClient = clientFactory.CreateWorkerGatewayService(worker.WorkerId, worker.GrpcEndpoint);
+            var workerClient = clientFactory.CreateTaskRuntimeGatewayService(worker.TaskRuntimeId, worker.GrpcEndpoint);
             await workerClient.CancelJobAsync(new CancelJobRequest { RunId = runId });
         }
         catch (Exception ex)
@@ -458,17 +465,20 @@ public sealed class RunDispatcher(
         var minWorkers = 1;
 
         return new OrchestratorRuntimeSettings(
+            MaxActiveTaskRuntimes: options.TaskRuntimes.MaxTaskRuntimes,
+            DefaultTaskParallelRuns: 1,
+            TaskRuntimeInactiveTimeoutMinutes: options.TaskRuntimes.IdleTimeoutMinutes,
             MinWorkers: minWorkers,
-            MaxWorkers: options.Workers.MaxWorkers,
+            MaxWorkers: options.TaskRuntimes.MaxTaskRuntimes,
             MaxProcessesPerWorker: 1,
             ReserveWorkers: 0,
             MaxQueueDepth: 200,
             QueueWaitTimeoutSeconds: 300,
             WorkerImagePolicy: WorkerImagePolicy.PreferLocal,
-            ContainerImage: options.Workers.ContainerImage,
-            ContainerNamePrefix: options.Workers.ContainerNamePrefix,
-            DockerNetwork: options.Workers.DockerNetwork,
-            ConnectivityMode: options.Workers.ConnectivityMode,
+            ContainerImage: options.TaskRuntimes.ContainerImage,
+            ContainerNamePrefix: options.TaskRuntimes.ContainerNamePrefix,
+            DockerNetwork: options.TaskRuntimes.DockerNetwork,
+            ConnectivityMode: options.TaskRuntimes.ConnectivityMode,
             WorkerImageRegistry: string.Empty,
             WorkerCanaryImage: string.Empty,
             WorkerDockerBuildContextPath: string.Empty,
@@ -483,7 +493,7 @@ public sealed class RunDispatcher(
             MaxWorkerStartAttemptsPer10Min: 30,
             MaxFailedStartsPer10Min: 10,
             CooldownMinutes: 15,
-            ContainerStartTimeoutSeconds: options.Workers.StartupTimeoutSeconds,
+            ContainerStartTimeoutSeconds: options.TaskRuntimes.StartupTimeoutSeconds,
             ContainerStopTimeoutSeconds: 30,
             HealthProbeIntervalSeconds: 10,
             ContainerRestartLimit: 3,
@@ -502,10 +512,10 @@ public sealed class RunDispatcher(
             WorkerFileDescriptorLimit: 0,
             RunHardTimeoutSeconds: 3600,
             MaxRunLogMb: 50,
-            EnablePressureScaling: options.Workers.EnablePressureScaling,
-            CpuScaleOutThresholdPercent: options.Workers.CpuScaleOutThresholdPercent,
-            MemoryScaleOutThresholdPercent: options.Workers.MemoryScaleOutThresholdPercent,
-            PressureSampleWindowSeconds: options.Workers.PressureSampleWindowSeconds);
+            EnablePressureScaling: options.TaskRuntimes.EnablePressureScaling,
+            CpuScaleOutThresholdPercent: options.TaskRuntimes.CpuScaleOutThresholdPercent,
+            MemoryScaleOutThresholdPercent: options.TaskRuntimes.MemoryScaleOutThresholdPercent,
+            PressureSampleWindowSeconds: options.TaskRuntimes.PressureSampleWindowSeconds);
     }
 
     private async Task<string> BuildLayeredPromptAsync(

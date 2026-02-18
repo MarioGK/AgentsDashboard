@@ -1,20 +1,20 @@
-@page "/settings/orchestrator"
+@page "/settings/task-runtimes"
 @layout SettingsLayout
 @rendermode InteractiveServer
 @using AgentsDashboard.Contracts.Domain
 @using AgentsDashboard.ControlPlane.Services
 @using OrchestratorConfig = AgentsDashboard.Contracts.Domain.OrchestratorSettings
 @inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
-@inject AgentsDashboard.ControlPlane.Services.IWorkerLifecycleManager WorkerLifecycle
+@inject AgentsDashboard.ControlPlane.Services.ITaskRuntimeLifecycleManager WorkerLifecycle
 @inject AgentsDashboard.ControlPlane.Services.IOrchestratorRuntimeSettingsProvider RuntimeSettingsProvider
 @inject AgentsDashboard.ControlPlane.Services.IBackgroundWorkCoordinator BackgroundWorkCoordinator
 @inject ISnackbar Snackbar
 @implements IDisposable
 
-<PageTitle>Orchestrator Settings - AgentsDashboard</PageTitle>
+<PageTitle>Task Runtime Settings - AgentsDashboard</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
-    <MudText Typo="Typo.h4">Orchestrator Settings</MudText>
+    <MudText Typo="Typo.h4">Task Runtime Settings</MudText>
     <MudSpacer />
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshAllAsync" Disabled="_loading || _saving">
         Refresh
@@ -31,10 +31,9 @@ else
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
                 <MudText Typo="Typo.h6" Class="mb-3">Capacity & Admission</MudText>
-                <MudNumericField T="int" Label="Min Workers" Variant="Variant.Outlined" @bind-Value="_settings.MinWorkers" Min="1" Max="256" Class="mb-2" />
-                <MudNumericField T="int" Label="Max Workers" Variant="Variant.Outlined" @bind-Value="_settings.MaxWorkers" Min="1" Max="256" Class="mb-2" />
-                <MudNumericField T="int" Label="Max Processes Per Worker" Variant="Variant.Outlined" @bind-Value="_settings.MaxProcessesPerWorker" Min="1" Max="128" Class="mb-2" />
-                <MudNumericField T="int" Label="Reserve Workers" Variant="Variant.Outlined" @bind-Value="_settings.ReserveWorkers" Min="0" Max="128" Class="mb-2" />
+                <MudNumericField T="int" Label="Max Active Task Runtimes" Variant="Variant.Outlined" @bind-Value="_settings.MaxActiveTaskRuntimes" Min="1" Max="512" Class="mb-2" />
+                <MudNumericField T="int" Label="Default Task Parallel Runs" Variant="Variant.Outlined" @bind-Value="_settings.DefaultTaskParallelRuns" Min="1" Max="64" Class="mb-2" />
+                <MudNumericField T="int" Label="Task Runtime Inactive Timeout (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeInactiveTimeoutMinutes" Min="1" Max="1440" Class="mb-2" />
                 <MudNumericField T="int" Label="Max Queue Depth" Variant="Variant.Outlined" @bind-Value="_settings.MaxQueueDepth" Min="1" Max="50000" Class="mb-2" />
                 <MudNumericField T="int" Label="Queue Wait Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.QueueWaitTimeoutSeconds" Min="5" Max="7200" />
             </MudPaper>
@@ -43,7 +42,7 @@ else
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
                 <MudText Typo="Typo.h6" Class="mb-3">Image Lifecycle</MudText>
-                <MudSelect T="WorkerImagePolicy" Label="Worker Image Policy" Variant="Variant.Outlined" @bind-Value="_settings.WorkerImagePolicy" Class="mb-2">
+                <MudSelect T="WorkerImagePolicy" Label="Task Runtime Image Policy" Variant="Variant.Outlined" @bind-Value="_settings.WorkerImagePolicy" Class="mb-2">
                     @foreach (var policy in Enum.GetValues<WorkerImagePolicy>())
                     {
                         <MudSelectItem T="WorkerImagePolicy" Value="@policy">@policy</MudSelectItem>
@@ -126,25 +125,25 @@ else
                     <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="PauseScaleOutAsync">Pause Scale-Out</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Success" OnClick="ResumeScaleOutAsync">Resume Scale-Out</MudButton>
                     <MudButton Variant="Variant.Outlined" OnClick="ClearCooldownAsync">Clear Cooldown</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="EnsureImageAsync">Ensure Worker Image</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="RecyclePoolAsync">Recycle Worker Pool</MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="EnsureImageAsync">Ensure Runtime Image</MudButton>
+                    <MudButton Variant="Variant.Outlined" OnClick="RecyclePoolAsync">Recycle Task Runtime Pool</MudButton>
                     <MudButton Variant="Variant.Outlined" OnClick="RunReconciliationAsync">Run Reconciliation</MudButton>
                 </MudStack>
 
                 <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-3">
-                    <MudTextField T="string" Label="Worker ID" Variant="Variant.Outlined" @bind-Value="_workerActionId" Immediate="true" />
-                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="@string.IsNullOrWhiteSpace(_workerActionId)" OnClick="DrainWorkerAsync">Drain Worker</MudButton>
-                    <MudButton Variant="Variant.Outlined" Disabled="@string.IsNullOrWhiteSpace(_workerActionId)" OnClick="RecycleWorkerAsync">Recycle Worker</MudButton>
+                    <MudTextField T="string" Label="Task Runtime ID" Variant="Variant.Outlined" @bind-Value="_workerActionId" Immediate="true" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="@string.IsNullOrWhiteSpace(_workerActionId)" OnClick="DrainWorkerAsync">Drain Runtime</MudButton>
+                    <MudButton Variant="Variant.Outlined" Disabled="@string.IsNullOrWhiteSpace(_workerActionId)" OnClick="RecycleTaskRuntimeAsync">Recycle Runtime</MudButton>
                 </MudStack>
 
                 @if (_health is not null)
                 {
                     <MudText Typo="Typo.subtitle2" Class="mb-2">Current Health Snapshot</MudText>
                     <MudGrid>
-                        <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Info">Running: @_health.RunningWorkers</MudChip></MudItem>
-                        <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Success">Ready: @_health.ReadyWorkers</MudChip></MudItem>
-                        <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Warning">Busy: @_health.BusyWorkers</MudChip></MudItem>
-                        <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Default">Draining: @_health.DrainingWorkers</MudChip></MudItem>
+                        <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Info">Running: @_health.RunningTaskRuntimes</MudChip></MudItem>
+                        <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Success">Ready: @_health.ReadyTaskRuntimes</MudChip></MudItem>
+                        <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Warning">Busy: @_health.BusyTaskRuntimes</MudChip></MudItem>
+                        <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Default">Draining: @_health.DrainingTaskRuntimes</MudChip></MudItem>
                         <MudItem xs="6" md="2"><MudChip T="string" Color="@(_health.ScaleOutPaused ? Color.Warning : Color.Success)">Paused: @_health.ScaleOutPaused</MudChip></MudItem>
                         <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Default">Fails/10m: @_health.FailedStartsInWindow</MudChip></MudItem>
                     </MudGrid>
@@ -192,7 +191,7 @@ else
             {
                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
             }
-            Save Orchestrator Settings
+            Save Task Runtime Settings
         </MudButton>
     </MudStack>
 }
@@ -288,7 +287,7 @@ else
             operationKey,
             async (cancellationToken, progress) =>
             {
-                await WorkerLifecycle.EnsureWorkerImageAvailableAsync(cancellationToken, progress);
+                await WorkerLifecycle.EnsureTaskRuntimeImageAvailableAsync(cancellationToken, progress);
             },
             dedupeByOperationKey: true,
             isCritical: false);
@@ -299,7 +298,7 @@ else
 
     private async Task RecyclePoolAsync()
     {
-        await WorkerLifecycle.RecycleWorkerPoolAsync(CancellationToken.None);
+        await WorkerLifecycle.RecycleTaskRuntimePoolAsync(CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
         Snackbar.Add("Worker pool marked for recycle", Severity.Info);
     }
@@ -318,19 +317,19 @@ else
             return;
         }
 
-        await WorkerLifecycle.SetWorkerDrainingAsync(_workerActionId.Trim(), true, CancellationToken.None);
+        await WorkerLifecycle.SetTaskRuntimeDrainingAsync(_workerActionId.Trim(), true, CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
         Snackbar.Add($"Worker {_workerActionId.Trim()} marked as draining", Severity.Info);
     }
 
-    private async Task RecycleWorkerAsync()
+    private async Task RecycleTaskRuntimeAsync()
     {
         if (string.IsNullOrWhiteSpace(_workerActionId))
         {
             return;
         }
 
-        await WorkerLifecycle.RecycleWorkerAsync(_workerActionId.Trim(), CancellationToken.None);
+        await WorkerLifecycle.RecycleTaskRuntimeAsync(_workerActionId.Trim(), CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
         Snackbar.Add($"Worker {_workerActionId.Trim()} recycle requested", Severity.Info);
     }
@@ -388,6 +387,9 @@ else
     {
         return new OrchestratorConfig
         {
+            MaxActiveTaskRuntimes = source.MaxActiveTaskRuntimes,
+            DefaultTaskParallelRuns = source.DefaultTaskParallelRuns,
+            TaskRuntimeInactiveTimeoutMinutes = source.TaskRuntimeInactiveTimeoutMinutes,
             MinWorkers = source.MinWorkers,
             MaxWorkers = source.MaxWorkers,
             MaxProcessesPerWorker = source.MaxProcessesPerWorker,
@@ -445,6 +447,21 @@ else
 
     private static void ValidateSettings(OrchestratorConfig settings)
     {
+        if (settings.MaxActiveTaskRuntimes < 1)
+        {
+            throw new InvalidOperationException("MaxActiveTaskRuntimes must be at least 1");
+        }
+
+        if (settings.DefaultTaskParallelRuns < 1)
+        {
+            throw new InvalidOperationException("DefaultTaskParallelRuns must be at least 1");
+        }
+
+        if (settings.TaskRuntimeInactiveTimeoutMinutes < 1 || settings.TaskRuntimeInactiveTimeoutMinutes > 1440)
+        {
+            throw new InvalidOperationException("TaskRuntimeInactiveTimeoutMinutes must be between 1 and 1440");
+        }
+
         if (settings.MaxWorkers < 1)
         {
             throw new InvalidOperationException("MaxWorkers must be at least 1");

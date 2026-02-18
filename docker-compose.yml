@@ -8,8 +8,8 @@ services:
       - "8080:8080"
     environment:
       Orchestrator__SqliteConnectionString: Data Source=/data/orchestrator.db
-      Orchestrator__Workers__ContainerImage: ${WORKER_CONTAINER_IMAGE:-agentsdashboard-worker-gateway:latest}
-      Orchestrator__Workers__ContainerNamePrefix: worker-gateway
+      Orchestrator__Workers__ContainerImage: ${WORKER_CONTAINER_IMAGE:-agentsdashboard-task-runtime-gateway:latest}
+      Orchestrator__Workers__ContainerNamePrefix: task-runtime-gateway
       Orchestrator__Workers__DockerNetwork: agentsdashboard
       Orchestrator__Workers__ConnectivityMode: DockerDnsOnly
       WORKER_DEFAULT_IMAGE: ${WORKER_DEFAULT_IMAGE:-ghcr.io/mariogk/ai-harness:latest}
