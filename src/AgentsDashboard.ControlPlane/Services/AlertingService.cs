@@ -83,7 +83,7 @@ public sealed class AlertingService(
         IOrchestratorStore store,
         CancellationToken cancellationToken)
     {
-        var workers = await store.ListTaskRuntimesAsync(cancellationToken);
+        var workers = await store.ListTaskRuntimeRegistrationsAsync(cancellationToken);
         var staleThreshold = DateTime.UtcNow.AddMinutes(-rule.Threshold);
 
         var staleWorkers = workers
@@ -92,7 +92,7 @@ public sealed class AlertingService(
 
         if (staleWorkers.Count > 0)
         {
-            var workerIds = string.Join(", ", staleWorkers.Select(w => w.TaskRuntimeId));
+            var workerIds = string.Join(", ", staleWorkers.Select(w => w.RuntimeId));
             return (true, $"{staleWorkers.Count} worker(s) missing heartbeat for {rule.Threshold} minutes: {workerIds}");
         }
 

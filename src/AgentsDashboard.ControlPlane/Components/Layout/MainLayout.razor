@@ -336,7 +336,7 @@
 
     private async Task LoadHealthAsync()
     {
-        var workers = await Store.ListTaskRuntimesAsync(CancellationToken.None);
+        var workers = await Store.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
         _totalWorkers = workers.Count;
         _onlineWorkers = workers.Count(w => w.Online);
 
