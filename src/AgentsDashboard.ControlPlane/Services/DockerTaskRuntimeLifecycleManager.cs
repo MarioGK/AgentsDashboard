@@ -1847,6 +1847,89 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         return null;
     }
 
+    private async Task PersistTaskRuntimeStateAsync(
+        WorkerState state,
+        CancellationToken cancellationToken,
+        TaskRuntimeState? explicitState = null,
+        bool updateLastActivityUtc = true,
+        bool clearInactiveAfterUtc = false,
+        string? lastError = null)
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            var resolvedState = explicitState ?? MapLifecycleState(state.LifecycleState);
+            DateTime? inactiveAfterUtc = null;
+            if (resolvedState is TaskRuntimeState.Ready or TaskRuntimeState.Busy)
+            {
+                var runtime = await runtimeSettingsProvider.GetAsync(cancellationToken);
+                inactiveAfterUtc = now.AddMinutes(runtime.TaskRuntimeInactiveTimeoutMinutes);
+            }
+
+            await store.UpsertTaskRuntimeStateAsync(
+                new TaskRuntimeStateUpdate
+                {
+                    RuntimeId = state.TaskRuntimeId,
+                    RepositoryId = await ResolveRepositoryIdAsync(state.TaskId, cancellationToken),
+                    TaskId = state.TaskId,
+                    State = resolvedState,
+                    ActiveRuns = state.ActiveSlots,
+                    MaxParallelRuns = state.MaxSlots,
+                    Endpoint = state.GrpcEndpoint,
+                    ContainerId = state.ContainerId,
+                    ObservedAtUtc = now,
+                    UpdateLastActivityUtc = updateLastActivityUtc,
+                    InactiveAfterUtc = inactiveAfterUtc,
+                    ClearInactiveAfterUtc = clearInactiveAfterUtc,
+                    LastError = lastError ?? string.Empty,
+                },
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.ZLogDebug(ex, "Failed to persist task runtime state for {TaskRuntimeId}", state.TaskRuntimeId);
+        }
+    }
+
+    private async Task<string> ResolveRepositoryIdAsync(string taskId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return string.Empty;
+        }
+
+        if (_taskRepositoryCache.TryGetValue(taskId, out var cached))
+        {
+            return cached;
+        }
+
+        var task = await store.GetTaskAsync(taskId, cancellationToken);
+        if (task is null || string.IsNullOrWhiteSpace(task.RepositoryId))
+        {
+            return string.Empty;
+        }
+
+        _taskRepositoryCache[taskId] = task.RepositoryId;
+        return task.RepositoryId;
+    }
+
+    private static TaskRuntimeState MapLifecycleState(TaskRuntimeLifecycleState state)
+    {
+        return state switch
+        {
+            TaskRuntimeLifecycleState.Provisioning => TaskRuntimeState.Starting,
+            TaskRuntimeLifecycleState.Starting => TaskRuntimeState.Starting,
+            TaskRuntimeLifecycleState.Ready => TaskRuntimeState.Ready,
+            TaskRuntimeLifecycleState.Busy => TaskRuntimeState.Busy,
+            TaskRuntimeLifecycleState.Draining => TaskRuntimeState.Busy,
+            TaskRuntimeLifecycleState.Stopping => TaskRuntimeState.Stopping,
+            TaskRuntimeLifecycleState.Stopped => TaskRuntimeState.Inactive,
+            TaskRuntimeLifecycleState.Quarantined => TaskRuntimeState.Failed,
+            TaskRuntimeLifecycleState.FailedStart => TaskRuntimeState.Failed,
+            _ => TaskRuntimeState.Inactive
+        };
+    }
+
     private TaskRuntimeInstance? SelectAvailableWorker(List<TaskRuntimeInstance> runningWorkers)
     {
         return runningWorkers
