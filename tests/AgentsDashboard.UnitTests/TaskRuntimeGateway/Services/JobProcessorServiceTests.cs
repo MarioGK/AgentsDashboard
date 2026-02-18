@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using AgentsDashboard.TaskRuntimeGateway.Services;
 
-namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
 
 public sealed class JobProcessorServiceTests
 {

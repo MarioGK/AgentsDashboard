@@ -4,7 +4,7 @@
 
 The repository now uses `ZLogger` for all runtime logging in:
 - `src/AgentsDashboard.ControlPlane`
-- `src/AgentsDashboard.WorkerGateway`
+- `src/AgentsDashboard.TaskRuntimeGateway`
 
 ## Why ZLogger
 

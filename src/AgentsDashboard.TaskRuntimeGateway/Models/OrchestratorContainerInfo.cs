@@ -10,5 +10,3 @@ public sealed class OrchestratorContainerInfo
     public string Image { get; init; } = string.Empty;
     public DateTime CreatedAt { get; init; }
 }
-
-public sealed record ContainerKillResult(bool Killed, string ContainerId, string Error);

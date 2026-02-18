@@ -2,7 +2,7 @@ using System.Reflection;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.TaskRuntimeGateway.Services;
 
-namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
 
 public sealed class HarnessExecutorModeResolutionTests
 {

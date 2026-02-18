@@ -6,12 +6,12 @@ using Microsoft.Extensions.Logging;
 namespace AgentsDashboard.TaskRuntimeGateway.MagicOnion;
 
 /// <summary>
-/// StreamingHub for broadcasting job events from worker to control plane.
+/// StreamingHub for broadcasting job events from task runtime to control plane.
 /// The control plane connects as a client and subscribes to specific run IDs.
 /// </summary>
 public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub, ITaskRuntimeEventReceiver>, ITaskRuntimeEventHub
 {
-    private const string AllEventsGroupName = "worker-events:all";
+    private const string AllEventsGroupName = "task-runtime-events:all";
     private readonly ILogger<TaskRuntimeEventHub> _logger;
     private readonly HashSet<string> _subscribedRunIds = [];
     private Guid _connectionId;
@@ -160,6 +160,6 @@ public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub,
 
     private static string GetRunGroupName(string runId)
     {
-        return $"worker-events:run:{runId}";
+        return $"task-runtime-events:run:{runId}";
     }
 }

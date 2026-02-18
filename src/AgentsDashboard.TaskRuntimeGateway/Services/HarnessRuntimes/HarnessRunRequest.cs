@@ -24,8 +24,4 @@ public sealed record HarnessRunRequest
     public IReadOnlyList<DispatchImageAttachment> ImageAttachments { get; init; } = [];
     public bool PreferNativeMultimodal { get; init; } = true;
     public string MultimodalFallbackPolicy { get; init; } = "auto-text-reference";
-    public string SessionProfileId { get; init; } = string.Empty;
-    public string InstructionStackHash { get; init; } = string.Empty;
-    public string McpConfigSnapshotJson { get; init; } = string.Empty;
-    public string AutomationRunId { get; init; } = string.Empty;
 }

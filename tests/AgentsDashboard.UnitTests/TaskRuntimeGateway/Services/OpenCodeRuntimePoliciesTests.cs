@@ -1,7 +1,7 @@
 using System.Reflection;
 using AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 
-namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
 
 public sealed class OpenCodeRuntimePoliciesTests
 {

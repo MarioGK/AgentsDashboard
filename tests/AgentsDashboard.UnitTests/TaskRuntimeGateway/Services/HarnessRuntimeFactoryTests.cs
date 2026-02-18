@@ -4,7 +4,7 @@ using AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
 
 public sealed class HarnessRuntimeFactoryTests
 {

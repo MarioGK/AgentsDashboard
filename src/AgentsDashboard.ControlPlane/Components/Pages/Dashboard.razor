@@ -302,6 +302,17 @@ else
 
                         <MudItem xs="12" lg="4">
                             <MudPaper Class="overview-card" Elevation="0">
+                                <MudText Typo="Typo.h6" Class="mb-2">Runtime Cold-Start & Inactivity</MudText>
+                                <MudText Typo="Typo.caption">Tune timeout and parallel slots from observed lifecycle behavior.</MudText>
+                                <MudText Typo="Typo.caption">Avg cold-start: @FormatDurationSeconds(_taskRuntimeTelemetry.AverageColdStartSeconds) · Last: @FormatDurationSeconds(_taskRuntimeTelemetry.LastColdStartSeconds)</MudText>
+                                <MudText Typo="Typo.caption">Cold-start samples: @_taskRuntimeTelemetry.TotalColdStarts</MudText>
+                                <MudText Typo="Typo.caption">Avg inactive window: @FormatDurationSeconds(_taskRuntimeTelemetry.AverageInactiveSeconds) · Last: @FormatDurationSeconds(_taskRuntimeTelemetry.LastInactiveSeconds)</MudText>
+                                <MudText Typo="Typo.caption">Inactive transitions: @_taskRuntimeTelemetry.TotalInactiveTransitions · Inactive runtimes: @_taskRuntimeTelemetry.InactiveRuntimes</MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" lg="4">
+                            <MudPaper Class="overview-card" Elevation="0">
                                 <MudText Typo="Typo.h6" Class="mb-2">Run Outcome Distribution</MudText>
                                 <MudText Typo="Typo.caption">@GetRunDistributionText()</MudText>
                                 <div class="overview-chart-surface">
@@ -574,6 +585,7 @@ else
 
     private OrchestratorHealthSnapshot? _orchestratorHealth;
     private string? _orchestratorHealthError;
+    private TaskRuntimeTelemetrySnapshot _taskRuntimeTelemetry = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     private bool _hostDiskAvailable;
     private string _hostDiskLabel = "/";
@@ -680,10 +692,11 @@ else
         _workerCpuMaxPercent = 0;
         _workerMemoryAvgPercent = 0;
         _workerMemoryMaxPercent = 0;
+        _taskRuntimeTelemetry = await Store.GetTaskRuntimeTelemetryAsync(CancellationToken.None);
 
-        var workerRegistrations = await Store.ListTaskRuntimesAsync(CancellationToken.None);
-        _workerContainersTotal = workerRegistrations.Count;
-        _workerContainersRunning = workerRegistrations.Count(w => w.Online);
+        var runtimeRegistrations = await Store.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
+        _workerContainersTotal = runtimeRegistrations.Count;
+        _workerContainersRunning = runtimeRegistrations.Count(w => w.Online);
         _workerOfflineCount = _workerContainersTotal - _workerContainersRunning;
 
         _workerReadyCount = _workerContainersRunning;
@@ -966,6 +979,16 @@ else
     private static string FormatPercent(double value)
     {
         return $"{Math.Max(0, value):0.0}%";
+    }
+
+    private static string FormatDurationSeconds(double value)
+    {
+        if (value <= 0)
+        {
+            return "0.0s";
+        }
+
+        return $"{value:0.0}s";
     }
 
     private static string FormatTimespan(TimeSpan value)
@@ -1345,7 +1368,7 @@ else
         return snapshots
             .Where(snapshot =>
                 snapshot.OperationKey.StartsWith("startup:", StringComparison.OrdinalIgnoreCase) ||
-                snapshot.Kind is BackgroundWorkKind.WorkerImageResolution or BackgroundWorkKind.SqliteVecBootstrap or BackgroundWorkKind.Recovery or BackgroundWorkKind.TaskTemplateInit)
+                snapshot.Kind is BackgroundWorkKind.TaskRuntimeImageResolution or BackgroundWorkKind.SqliteVecBootstrap or BackgroundWorkKind.Recovery or BackgroundWorkKind.TaskTemplateInit)
             .OrderByDescending(snapshot => snapshot.UpdatedAt ?? snapshot.StartedAt ?? DateTimeOffset.MinValue)
             .Take(12)
             .ToArray();

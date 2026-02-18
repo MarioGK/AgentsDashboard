@@ -181,13 +181,12 @@ builder.Services.AddHostedService<RepositoryGitRefreshService>();
 builder.Services.AddSingleton<IContainerReaper, ContainerReaper>();
 builder.Services.AddTransient<ProxyAuditMiddleware>();
 builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
-builder.Services.AddScoped<ProjectContext>();
 builder.Services.AddScoped<IGlobalSelectionService, GlobalSelectionService>();
 
-// MagicOnion client factory for WorkerGateway communication (must be registered before ITaskRuntimeRegistryService)
+// MagicOnion client factory for TaskRuntimeGateway communication (must be registered before ITaskRuntimeRegistryService)
 builder.Services.AddSingleton<IMagicOnionClientFactory, MagicOnionClientFactory>();
 
-// Worker registry service (depends on IMagicOnionClientFactory)
+// Task runtime registry service (depends on IMagicOnionClientFactory)
 builder.Services.AddSingleton<ITaskRuntimeRegistryService, TaskRuntimeRegistryService>();
 
 builder.Services.AddSingleton<InMemoryYarpConfigProvider>();

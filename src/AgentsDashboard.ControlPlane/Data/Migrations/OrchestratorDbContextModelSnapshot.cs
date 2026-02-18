@@ -689,15 +689,15 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkerImageDigest")
+                    b.Property<string>("TaskRuntimeImageDigest")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkerImageRef")
+                    b.Property<string>("TaskRuntimeImageRef")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkerImageSource")
+                    b.Property<string>("TaskRuntimeImageSource")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -1229,6 +1229,12 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.Property<int>("ActiveRuns")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("ColdStartCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ColdStartDurationTotalMs")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ContainerId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1240,11 +1246,35 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.Property<DateTime?>("InactiveAfterUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("InactiveDurationTotalMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InactiveTransitionCount")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("LastActivityUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("LastBecameInactiveUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LastColdStartDurationMs")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("LastError")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LastInactiveDurationMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastReadyAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastStartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastStateChangeUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("MaxParallelRuns")
@@ -1284,6 +1314,42 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.HasIndex("State", "InactiveAfterUtc");
 
                     b.ToTable("TaskRuntimes");
+                });
+
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.TaskRuntimeRegistration", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ActiveSlots")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastHeartbeatUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaxSlots")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Online")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RegisteredAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RuntimeId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RuntimeId")
+                        .IsUnique();
+
+                    b.ToTable("TaskRuntimeRegistrations", (string)null);
                 });
 
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.TaskTemplateDocument", b =>
@@ -1398,42 +1464,6 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.HasIndex("RepositoryId");
 
                     b.ToTable("Webhooks");
-                });
-
-            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.WorkerRegistration", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("ActiveSlots")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Endpoint")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("LastHeartbeatUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("MaxSlots")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("Online")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("RegisteredAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TaskRuntimeId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TaskRuntimeId")
-                        .IsUnique();
-
-                    b.ToTable("Workers");
                 });
 
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.WorkflowDocument", b =>

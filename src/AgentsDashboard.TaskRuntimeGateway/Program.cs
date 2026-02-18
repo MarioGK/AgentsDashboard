@@ -15,7 +15,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using ZLogger;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Logging.AddStructuredContainerLogging("WorkerGateway");
+builder.Logging.AddStructuredContainerLogging("TaskRuntimeGateway");
 
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
@@ -66,11 +66,11 @@ builder.Services.AddSingleton<IDockerContainerService>(sp => sp.GetRequiredServi
 builder.Services.AddSingleton<IArtifactExtractor, ArtifactExtractor>();
 builder.Services.AddSingleton<IHarnessExecutor, HarnessExecutor>();
 builder.Services.AddSingleton<IContainerOrphanReconciler, ContainerOrphanReconciler>();
-builder.Services.AddSingleton<IJobProcessorService, JobProcessorService>();
-builder.Services.AddSingleton<IImageBootstrapWorkScheduler, ImageBootstrapWorkScheduler>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<IJobProcessorService>());
+builder.Services.AddSingleton<JobProcessorService>();
+builder.Services.AddSingleton<ImageBootstrapWorkScheduler>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<JobProcessorService>());
 builder.Services.AddHostedService<TaskRuntimeHeartbeatService>();
-builder.Services.AddHostedService(sp => (ImageBootstrapWorkScheduler)sp.GetRequiredService<IImageBootstrapWorkScheduler>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ImageBootstrapWorkScheduler>());
 builder.Services.AddHostedService<ImagePrePullService>();
 builder.Services.AddSingleton<DockerHealthCheckService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DockerHealthCheckService>());
@@ -78,7 +78,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<DockerHealthCheckS
 var app = builder.Build();
 
 app.MapMagicOnionService();
-app.MapGet("/", () => "WorkerGateway MagicOnion endpoint is running.");
+app.MapGet("/", () => "TaskRuntimeGateway MagicOnion endpoint is running.");
 
 var readyHealthCheckOptions = new HealthCheckOptions
 {

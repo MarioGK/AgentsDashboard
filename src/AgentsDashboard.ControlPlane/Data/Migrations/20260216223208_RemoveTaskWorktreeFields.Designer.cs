@@ -521,15 +521,15 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkerImageDigest")
+                    b.Property<string>("TaskRuntimeImageDigest")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkerImageRef")
+                    b.Property<string>("TaskRuntimeImageRef")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("WorkerImageSource")
+                    b.Property<string>("TaskRuntimeImageSource")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

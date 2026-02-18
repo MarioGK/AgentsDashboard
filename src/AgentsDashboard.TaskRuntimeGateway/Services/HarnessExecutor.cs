@@ -431,10 +431,6 @@ public sealed class HarnessExecutor(
             ImageAttachments = request.ImageAttachments is { Count: > 0 } ? [.. request.ImageAttachments] : [],
             PreferNativeMultimodal = request.PreferNativeMultimodal,
             MultimodalFallbackPolicy = request.MultimodalFallbackPolicy,
-            SessionProfileId = request.SessionProfileId,
-            InstructionStackHash = request.InstructionStackHash,
-            McpConfigSnapshotJson = request.McpConfigSnapshotJson,
-            AutomationRunId = request.AutomationRunId,
         };
     }
 

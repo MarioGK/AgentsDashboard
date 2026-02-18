@@ -4,7 +4,7 @@ Production-oriented AI orchestration control plane built with .NET 10.
 
 ## Stack
 - Blazor Server control plane with MudBlazor UI and BlazorMonaco editors
-- Worker gateway over gRPC with ControlPlane-managed elastic worker pool
+- Task runtime gateway over gRPC with ControlPlane-managed elastic worker pool
 - Harness-only execution (`codex`, `opencode`, `claude-code`)
 - SQLite persistence via EF Core
 - YARP embedded in control plane
@@ -12,7 +12,7 @@ Production-oriented AI orchestration control plane built with .NET 10.
 
 ## Solution
 - `src/AgentsDashboard.ControlPlane`: UI, scheduler, SignalR, YARP
-- `src/AgentsDashboard.WorkerGateway`: gRPC worker, queue, harness execution
+- `src/AgentsDashboard.TaskRuntimeGateway`: gRPC worker, queue, harness execution
 - `src/AgentsDashboard.Contracts`: shared domain + gRPC contracts
 
 ## Local run (recommended)

@@ -1,7 +1,7 @@
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
 public sealed class ImagePrePullService(
-    IImageBootstrapWorkScheduler imageBootstrapWorkScheduler,
+    ImageBootstrapWorkScheduler imageBootstrapWorkScheduler,
     ILogger<ImagePrePullService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)

@@ -13,7 +13,7 @@ public sealed class TaskRuntimeQueue : ITaskRuntimeQueue
 
     public TaskRuntimeQueue(TaskRuntimeOptions options)
     {
-        _maxSlots = Math.Max(1, Math.Min(options.MaxSlots, 1));
+        _maxSlots = Math.Max(1, options.MaxSlots);
     }
 
     public int MaxSlots => _maxSlots;

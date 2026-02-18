@@ -3,9 +3,9 @@ using AgentsDashboard.TaskRuntimeGateway.Configuration;
 using AgentsDashboard.TaskRuntimeGateway.Models;
 using AgentsDashboard.TaskRuntimeGateway.Services;
 
-namespace AgentsDashboard.UnitTests.WorkerGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
 
-public class WorkerQueueTests
+public class TaskRuntimeQueueTests
 {
     private static TaskRuntimeQueue CreateQueue(int maxSlots = 3) => new(new TaskRuntimeOptions { MaxSlots = maxSlots });
 

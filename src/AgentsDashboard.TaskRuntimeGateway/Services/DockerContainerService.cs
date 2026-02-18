@@ -198,19 +198,6 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         }
     }
 
-    public async Task<bool> VerifyContainerLabelsAsync(string containerId, string expectedRunId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var inspect = await _client.Containers.InspectContainerAsync(containerId, cancellationToken);
-            return inspect.Config.Labels.TryGetValue("orchestrator.run-id", out var runId) && runId == expectedRunId;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     public async Task<List<OrchestratorContainerInfo>> ListOrchestratorContainersAsync(CancellationToken cancellationToken)
     {
         var containers = await _client.Containers.ListContainersAsync(
@@ -264,52 +251,6 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         {
             logger.ZLogWarning(ex, "Failed to force remove container {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
             return false;
-        }
-    }
-
-    public async Task<ContainerKillResult> KillContainerByRunIdAsync(string runId, string reason, bool force, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var containers = await ListOrchestratorContainersAsync(cancellationToken);
-            var container = containers.FirstOrDefault(c =>
-                string.Equals(c.RunId, runId, StringComparison.OrdinalIgnoreCase));
-
-            if (container is null)
-            {
-                logger.ZLogWarning("No container found for run {RunId}", runId);
-                return new ContainerKillResult(false, string.Empty, $"No container found for run {runId}");
-            }
-
-            var containerId = container.ContainerId;
-            logger.ZLogWarning("Killing container {ContainerId} for run {RunId}. Reason: {Reason}, Force: {Force}",
-                containerId[..Math.Min(12, containerId.Length)], runId, reason, force);
-
-            if (force)
-            {
-                var removed = await RemoveContainerForceAsync(containerId, cancellationToken);
-                return new ContainerKillResult(removed, containerId, removed ? string.Empty : "Failed to force remove container");
-            }
-
-            try
-            {
-                await _client.Containers.StopContainerAsync(
-                    containerId,
-                    new ContainerStopParameters { WaitBeforeKillSeconds = 5 },
-                    cancellationToken);
-
-                logger.ZLogInformation("Stopped container {ContainerId} for run {RunId}", containerId[..12], runId);
-                return new ContainerKillResult(true, containerId, string.Empty);
-            }
-            catch (DockerContainerNotFoundException)
-            {
-                return new ContainerKillResult(false, string.Empty, "Container not found");
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.ZLogError(ex, "Error killing container for run {RunId}", runId);
-            return new ContainerKillResult(false, string.Empty, ex.Message);
         }
     }
 

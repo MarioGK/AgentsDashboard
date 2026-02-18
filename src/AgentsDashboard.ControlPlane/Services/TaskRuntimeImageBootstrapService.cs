@@ -10,13 +10,13 @@ public sealed class TaskRuntimeImageBootstrapService(
     public Task StartAsync(CancellationToken cancellationToken)
     {
         var workId = backgroundWorkCoordinator.Enqueue(
-            BackgroundWorkKind.WorkerImageResolution,
+            BackgroundWorkKind.TaskRuntimeImageResolution,
             StartupOperationKey,
             async (workCancellationToken, progress) => await lifecycleManager.EnsureTaskRuntimeImageAvailableAsync(workCancellationToken, progress),
             dedupeByOperationKey: true,
             isCritical: false);
 
-        logger.ZLogInformation("Queued startup worker image bootstrap as background work {WorkId}", workId);
+        logger.ZLogInformation("Queued startup task runtime image bootstrap as background work {WorkId}", workId);
         return Task.CompletedTask;
     }
 

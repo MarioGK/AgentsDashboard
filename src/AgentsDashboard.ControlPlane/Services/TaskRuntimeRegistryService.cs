@@ -5,24 +5,24 @@ namespace AgentsDashboard.ControlPlane.Services;
 public interface ITaskRuntimeRegistryService
 {
     /// <summary>
-    /// Record a worker heartbeat (called by TaskRuntimeEventListenerService when receiving heartbeats).
+    /// Record a task runtime heartbeat (called by TaskRuntimeEventListenerService when receiving heartbeats).
     /// </summary>
-    void RecordHeartbeat(string workerId, string hostName, int activeSlots, int maxSlots);
+    void RecordHeartbeat(string runtimeId, string hostName, int activeSlots, int maxSlots);
 
     /// <summary>
-    /// Broadcast a status request to all registered workers via WorkerGateway.
+    /// Broadcast a status request to all registered task runtimes via TaskRuntimeGateway.
     /// </summary>
     Task BroadcastStatusRequestAsync(StatusRequestMessage request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Get the count of registered workers.
+    /// Get the count of registered task runtimes.
     /// </summary>
-    int GetRegisteredWorkerCount();
+    int GetRegisteredTaskRuntimeCount();
 
     /// <summary>
-    /// Get information about registered workers.
+    /// Get information about registered task runtimes.
     /// </summary>
-    IEnumerable<TaskRuntimeInfo> GetRegisteredWorkers();
+    IEnumerable<TaskRuntimeInfo> GetRegisteredTaskRuntimes();
 }
 
 public record TaskRuntimeInfo(string TaskRuntimeId, string HostName, int ActiveSlots, int MaxSlots, DateTimeOffset LastHeartbeat);
@@ -32,9 +32,9 @@ public class TaskRuntimeRegistryService : ITaskRuntimeRegistryService
     private readonly IMagicOnionClientFactory _clientFactory;
     private readonly ITaskRuntimeLifecycleManager _lifecycleManager;
     private readonly ILogger<TaskRuntimeRegistryService> _logger;
-    private readonly Dictionary<string, TaskRuntimeInfo> _registeredWorkers = new();
+    private readonly Dictionary<string, TaskRuntimeInfo> _registeredTaskRuntimes = new();
     private readonly object _lock = new();
-    private static readonly TimeSpan WorkerTtl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan TaskRuntimeTtl = TimeSpan.FromMinutes(2);
 
     public TaskRuntimeRegistryService(
         IMagicOnionClientFactory clientFactory,
@@ -46,12 +46,12 @@ public class TaskRuntimeRegistryService : ITaskRuntimeRegistryService
         _logger = logger;
     }
 
-    public void RecordHeartbeat(string workerId, string hostName, int activeSlots, int maxSlots)
+    public void RecordHeartbeat(string runtimeId, string hostName, int activeSlots, int maxSlots)
     {
         lock (_lock)
         {
-            _registeredWorkers[workerId] = new TaskRuntimeInfo(
-                workerId,
+            _registeredTaskRuntimes[runtimeId] = new TaskRuntimeInfo(
+                runtimeId,
                 hostName,
                 activeSlots,
                 maxSlots,
@@ -63,20 +63,20 @@ public class TaskRuntimeRegistryService : ITaskRuntimeRegistryService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        PruneExpiredWorkers();
+        PruneExpiredTaskRuntimes();
 
-        var workers = await _lifecycleManager.ListTaskRuntimesAsync(cancellationToken);
-        if (workers.Count == 0)
+        var taskRuntimes = await _lifecycleManager.ListTaskRuntimesAsync(cancellationToken);
+        if (taskRuntimes.Count == 0)
         {
-            _logger.ZLogInformation("No workers available for status request {RequestId}", request.RequestId);
+            _logger.ZLogInformation("No task runtimes available for status request {RequestId}", request.RequestId);
             return;
         }
 
-        foreach (var worker in workers.Where(x => x.IsRunning))
+        foreach (var runtime in taskRuntimes.Where(x => x.IsRunning))
         {
             try
             {
-                var client = _clientFactory.CreateTaskRuntimeGatewayService(worker.TaskRuntimeId, worker.GrpcEndpoint);
+                var client = _clientFactory.CreateTaskRuntimeGatewayService(runtime.TaskRuntimeId, runtime.GrpcEndpoint);
                 await client.HeartbeatAsync(new HeartbeatRequest
                 {
                     TaskRuntimeId = $"control-plane-status-request-{request.RequestId}",
@@ -88,49 +88,49 @@ public class TaskRuntimeRegistryService : ITaskRuntimeRegistryService
             }
             catch (Exception ex)
             {
-                _logger.ZLogDebug(ex, "Status request heartbeat failed for worker {TaskRuntimeId}", worker.TaskRuntimeId);
+                _logger.ZLogDebug(ex, "Status request heartbeat failed for task runtime {TaskRuntimeId}", runtime.TaskRuntimeId);
             }
         }
 
-        _logger.ZLogInformation("Issued worker status request {RequestId} to {Count} workers", request.RequestId, workers.Count(x => x.IsRunning));
+        _logger.ZLogInformation("Issued task runtime status request {RequestId} to {Count} task runtimes", request.RequestId, taskRuntimes.Count(x => x.IsRunning));
     }
 
-    public int GetRegisteredWorkerCount()
+    public int GetRegisteredTaskRuntimeCount()
     {
         lock (_lock)
         {
-            RemoveExpiredWorkersUnsafe(DateTimeOffset.UtcNow);
-            return _registeredWorkers.Count;
+            RemoveExpiredTaskRuntimesUnsafe(DateTimeOffset.UtcNow);
+            return _registeredTaskRuntimes.Count;
         }
     }
 
-    public IEnumerable<TaskRuntimeInfo> GetRegisteredWorkers()
+    public IEnumerable<TaskRuntimeInfo> GetRegisteredTaskRuntimes()
     {
         lock (_lock)
         {
-            RemoveExpiredWorkersUnsafe(DateTimeOffset.UtcNow);
-            return _registeredWorkers.Values.ToList();
+            RemoveExpiredTaskRuntimesUnsafe(DateTimeOffset.UtcNow);
+            return _registeredTaskRuntimes.Values.ToList();
         }
     }
 
-    private void PruneExpiredWorkers()
+    private void PruneExpiredTaskRuntimes()
     {
         lock (_lock)
         {
-            RemoveExpiredWorkersUnsafe(DateTimeOffset.UtcNow);
+            RemoveExpiredTaskRuntimesUnsafe(DateTimeOffset.UtcNow);
         }
     }
 
-    private void RemoveExpiredWorkersUnsafe(DateTimeOffset now)
+    private void RemoveExpiredTaskRuntimesUnsafe(DateTimeOffset now)
     {
-        var expiredTaskRuntimeIds = _registeredWorkers
-            .Where(pair => now - pair.Value.LastHeartbeat > WorkerTtl)
+        var expiredTaskRuntimeIds = _registeredTaskRuntimes
+            .Where(pair => now - pair.Value.LastHeartbeat > TaskRuntimeTtl)
             .Select(pair => pair.Key)
             .ToList();
 
-        foreach (var workerId in expiredTaskRuntimeIds)
+        foreach (var runtimeId in expiredTaskRuntimeIds)
         {
-            _registeredWorkers.Remove(workerId);
+            _registeredTaskRuntimes.Remove(runtimeId);
         }
     }
 }

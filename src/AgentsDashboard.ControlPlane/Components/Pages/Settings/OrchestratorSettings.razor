@@ -42,14 +42,14 @@ else
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
                 <MudText Typo="Typo.h6" Class="mb-3">Image Lifecycle</MudText>
-                <MudSelect T="WorkerImagePolicy" Label="Task Runtime Image Policy" Variant="Variant.Outlined" @bind-Value="_settings.WorkerImagePolicy" Class="mb-2">
-                    @foreach (var policy in Enum.GetValues<WorkerImagePolicy>())
+                <MudSelect T="TaskRuntimeImagePolicy" Label="Task Runtime Image Policy" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeImagePolicy" Class="mb-2">
+                    @foreach (var policy in Enum.GetValues<TaskRuntimeImagePolicy>())
                     {
-                        <MudSelectItem T="WorkerImagePolicy" Value="@policy">@policy</MudSelectItem>
+                        <MudSelectItem T="TaskRuntimeImagePolicy" Value="@policy">@policy</MudSelectItem>
                     }
                 </MudSelect>
-                <MudTextField T="string" Label="Image Registry (optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerImageRegistry" Class="mb-2" />
-                <MudTextField T="string" Label="Canary Image (optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerCanaryImage" Class="mb-2" />
+                <MudTextField T="string" Label="Image Registry (optional)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeImageRegistry" Class="mb-2" />
+                <MudTextField T="string" Label="Canary Image (optional)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeCanaryImage" Class="mb-2" />
                 <MudTextField T="string" Label="Dockerfile Path (optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerDockerfilePath" Class="mb-2" />
                 <MudTextField T="string" Label="Build Context Path (optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerDockerBuildContextPath" Class="mb-2" />
                 <MudNumericField T="int" Label="Max Concurrent Pulls" Variant="Variant.Outlined" @bind-Value="_settings.MaxConcurrentPulls" Min="1" Max="16" Class="mb-2" />
@@ -283,7 +283,7 @@ else
     {
         const string operationKey = "manual:worker-image-resolution";
         var workId = BackgroundWorkCoordinator.Enqueue(
-            BackgroundWorkKind.WorkerImageResolution,
+            BackgroundWorkKind.TaskRuntimeImageResolution,
             operationKey,
             async (cancellationToken, progress) =>
             {
@@ -293,7 +293,7 @@ else
             isCritical: false);
 
         RefreshImageBackgroundWork();
-        Snackbar.Add($"Worker image ensure queued ({workId[..8]})", Severity.Info);
+        Snackbar.Add($"Task runtime image ensure queued ({workId[..8]})", Severity.Info);
     }
 
     private async Task RecyclePoolAsync()
@@ -336,7 +336,7 @@ else
 
     private void OnBackgroundWorkUpdated(BackgroundWorkSnapshot snapshot)
     {
-        if (snapshot.Kind != BackgroundWorkKind.WorkerImageResolution)
+        if (snapshot.Kind != BackgroundWorkKind.TaskRuntimeImageResolution)
         {
             return;
         }
@@ -351,7 +351,7 @@ else
     private void RefreshImageBackgroundWork()
     {
         _imageBackgroundWork = BackgroundWorkCoordinator.Snapshot()
-            .Where(snapshot => snapshot.Kind == BackgroundWorkKind.WorkerImageResolution)
+            .Where(snapshot => snapshot.Kind == BackgroundWorkKind.TaskRuntimeImageResolution)
             .OrderByDescending(snapshot => snapshot.UpdatedAt ?? snapshot.StartedAt ?? DateTimeOffset.MinValue)
             .Take(8)
             .ToArray();
@@ -396,16 +396,16 @@ else
             ReserveWorkers = source.ReserveWorkers,
             MaxQueueDepth = source.MaxQueueDepth,
             QueueWaitTimeoutSeconds = source.QueueWaitTimeoutSeconds,
-            WorkerImagePolicy = source.WorkerImagePolicy,
-            WorkerImageRegistry = source.WorkerImageRegistry,
-            WorkerCanaryImage = source.WorkerCanaryImage,
+            TaskRuntimeImagePolicy = source.TaskRuntimeImagePolicy,
+            TaskRuntimeImageRegistry = source.TaskRuntimeImageRegistry,
+            TaskRuntimeCanaryImage = source.TaskRuntimeCanaryImage,
             WorkerDockerBuildContextPath = source.WorkerDockerBuildContextPath,
             WorkerDockerfilePath = source.WorkerDockerfilePath,
             MaxConcurrentPulls = source.MaxConcurrentPulls,
             MaxConcurrentBuilds = source.MaxConcurrentBuilds,
             ImagePullTimeoutSeconds = source.ImagePullTimeoutSeconds,
             ImageBuildTimeoutSeconds = source.ImageBuildTimeoutSeconds,
-            WorkerImageCacheTtlMinutes = source.WorkerImageCacheTtlMinutes,
+            TaskRuntimeImageCacheTtlMinutes = source.TaskRuntimeImageCacheTtlMinutes,
             ImageFailureCooldownMinutes = source.ImageFailureCooldownMinutes,
             CanaryPercent = source.CanaryPercent,
             MaxWorkerStartAttemptsPer10Min = source.MaxWorkerStartAttemptsPer10Min,

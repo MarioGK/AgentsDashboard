@@ -6,8 +6,8 @@ using Microsoft.Extensions.Logging;
 namespace AgentsDashboard.TaskRuntimeGateway.MagicOnion;
 
 /// <summary>
-/// StreamingHub for worker control via multicaster.
-/// Workers connect to register themselves and receive broadcast commands from the control plane.
+/// StreamingHub for task runtime control via multicaster.
+/// Task Runtimes connect to register themselves and receive broadcast commands from the control plane.
 /// </summary>
 public sealed class TaskRuntimeControlHub : StreamingHubBase<ITaskRuntimeControlHub, ITaskRuntimeControlReceiver>, ITaskRuntimeControlHub
 {
@@ -21,7 +21,7 @@ public sealed class TaskRuntimeControlHub : StreamingHubBase<ITaskRuntimeControl
 
     protected override async ValueTask OnConnecting()
     {
-        _logger.ZLogDebug("Worker connecting to control hub");
+        _logger.ZLogDebug("TaskRuntime connecting to control hub");
         await Task.CompletedTask;
     }
 
@@ -29,11 +29,11 @@ public sealed class TaskRuntimeControlHub : StreamingHubBase<ITaskRuntimeControl
     {
         if (!string.IsNullOrEmpty(_registeredTaskRuntimeId))
         {
-            _logger.ZLogInformation("Worker {TaskRuntimeId} disconnected from control hub", _registeredTaskRuntimeId);
+            _logger.ZLogInformation("TaskRuntime {TaskRuntimeId} disconnected from control hub", _registeredTaskRuntimeId);
         }
         else
         {
-            _logger.ZLogDebug("Unknown worker disconnected from control hub");
+            _logger.ZLogDebug("Unknown task runtime disconnected from control hub");
         }
         await Task.CompletedTask;
     }
@@ -42,14 +42,14 @@ public sealed class TaskRuntimeControlHub : StreamingHubBase<ITaskRuntimeControl
     {
         if (string.IsNullOrWhiteSpace(request.TaskRuntimeId))
         {
-            _logger.ZLogWarning("Worker registration rejected: missing TaskRuntimeId");
+            _logger.ZLogWarning("TaskRuntime registration rejected: missing TaskRuntimeId");
             return new TaskRuntimeRegistrationResult { Success = false, ErrorMessage = "TaskRuntimeId is required" };
         }
 
         _registeredTaskRuntimeId = request.TaskRuntimeId;
 
         _logger.ZLogInformation(
-            "Worker {TaskRuntimeId} registered from endpoint {Endpoint} with {MaxSlots} slots. Capabilities: {Capabilities}",
+            "TaskRuntime {TaskRuntimeId} registered from endpoint {Endpoint} with {MaxSlots} slots. Capabilities: {Capabilities}",
             request.TaskRuntimeId,
             request.Endpoint ?? "unknown",
             request.MaxSlots,
@@ -64,11 +64,11 @@ public sealed class TaskRuntimeControlHub : StreamingHubBase<ITaskRuntimeControl
     {
         if (string.IsNullOrEmpty(_registeredTaskRuntimeId))
         {
-            _logger.ZLogDebug("Unregister called but no worker was registered");
+            _logger.ZLogDebug("Unregister called but no task runtime was registered");
             return;
         }
 
-        _logger.ZLogInformation("Worker {TaskRuntimeId} unregistered from control hub", _registeredTaskRuntimeId);
+        _logger.ZLogInformation("TaskRuntime {TaskRuntimeId} unregistered from control hub", _registeredTaskRuntimeId);
         _registeredTaskRuntimeId = null;
 
         await Task.CompletedTask;
@@ -78,12 +78,12 @@ public sealed class TaskRuntimeControlHub : StreamingHubBase<ITaskRuntimeControl
     {
         if (string.IsNullOrEmpty(_registeredTaskRuntimeId))
         {
-            _logger.ZLogWarning("Status report received from unregistered worker");
+            _logger.ZLogWarning("Status report received from unregistered task runtime");
             return;
         }
 
         _logger.ZLogDebug(
-            "Status report from worker {TaskRuntimeId}: {ActiveSlots}/{MaxSlots} slots used, CPU: {CpuUsage}%, Memory: {MemoryUsed}",
+            "Status report from task runtime {TaskRuntimeId}: {ActiveSlots}/{MaxSlots} slots used, CPU: {CpuUsage}%, Memory: {MemoryUsed}",
             report.TaskRuntimeId,
             report.ActiveSlots,
             report.MaxSlots,

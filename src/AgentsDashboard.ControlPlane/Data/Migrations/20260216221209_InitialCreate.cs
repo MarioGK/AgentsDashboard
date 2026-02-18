@@ -247,9 +247,9 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     ResultEnvelopeRef = table.Column<string>(type: "TEXT", nullable: false),
                     FailureClass = table.Column<string>(type: "TEXT", nullable: false),
                     PrUrl = table.Column<string>(type: "TEXT", nullable: false),
-                    WorkerImageRef = table.Column<string>(type: "TEXT", nullable: false),
-                    WorkerImageDigest = table.Column<string>(type: "TEXT", nullable: false),
-                    WorkerImageSource = table.Column<string>(type: "TEXT", nullable: false),
+                    TaskRuntimeImageRef = table.Column<string>(type: "TEXT", nullable: false),
+                    TaskRuntimeImageDigest = table.Column<string>(type: "TEXT", nullable: false),
+                    TaskRuntimeImageSource = table.Column<string>(type: "TEXT", nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
                     StartedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
                     EndedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)

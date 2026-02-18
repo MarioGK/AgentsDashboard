@@ -311,7 +311,7 @@ public sealed class CodexAppServerRuntime(
                     clientInfo = new
                     {
                         name = "agents-dashboard-worker",
-                        title = "AgentsDashboard WorkerGateway",
+                        title = "AgentsDashboard TaskRuntimeGateway",
                         version = ThisAssemblyVersion,
                     },
                     capabilities = new

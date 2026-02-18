@@ -13,13 +13,13 @@ public sealed class TaskRuntimeHarnessToolHealthService
         new("zai", "Z.ai")
     ];
 
-    public async Task<IReadOnlyList<WorkerHarnessToolHealth>> GetHarnessToolsAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<TaskRuntimeHarnessToolHealth>> GetHarnessToolsAsync(CancellationToken cancellationToken)
     {
         var checks = Tools.Select(tool => CheckToolAsync(tool, cancellationToken));
         return await Task.WhenAll(checks);
     }
 
-    private static async Task<WorkerHarnessToolHealth> CheckToolAsync(ToolDefinition tool, CancellationToken cancellationToken)
+    private static async Task<TaskRuntimeHarnessToolHealth> CheckToolAsync(ToolDefinition tool, CancellationToken cancellationToken)
     {
         try
         {
@@ -29,15 +29,15 @@ public sealed class TaskRuntimeHarnessToolHealthService
 
             if (whichResult.ExitCode != 0)
             {
-                return new WorkerHarnessToolHealth(tool.Command, tool.DisplayName, "unavailable", null);
+                return new TaskRuntimeHarnessToolHealth(tool.Command, tool.DisplayName, "unavailable", null);
             }
 
             var version = await GetVersionAsync(tool.Command, cancellationToken);
-            return new WorkerHarnessToolHealth(tool.Command, tool.DisplayName, "available", version);
+            return new TaskRuntimeHarnessToolHealth(tool.Command, tool.DisplayName, "available", version);
         }
         catch
         {
-            return new WorkerHarnessToolHealth(tool.Command, tool.DisplayName, "unknown", null);
+            return new TaskRuntimeHarnessToolHealth(tool.Command, tool.DisplayName, "unknown", null);
         }
     }
 
@@ -74,7 +74,7 @@ public sealed class TaskRuntimeHarnessToolHealthService
     private sealed record ToolDefinition(string Command, string DisplayName);
 }
 
-public sealed record WorkerHarnessToolHealth(
+public sealed record TaskRuntimeHarnessToolHealth(
     string Command,
     string DisplayName,
     string Status,

@@ -22,9 +22,7 @@ public interface IDockerContainerService
     Task<string> GetLogsAsync(string containerId, CancellationToken cancellationToken);
     Task StreamLogsAsync(string containerId, Func<string, CancellationToken, Task> onLogChunk, CancellationToken cancellationToken);
     Task RemoveAsync(string containerId, CancellationToken cancellationToken);
-    Task<bool> VerifyContainerLabelsAsync(string containerId, string expectedRunId, CancellationToken cancellationToken);
     Task<List<OrchestratorContainerInfo>> ListOrchestratorContainersAsync(CancellationToken cancellationToken);
     Task<bool> RemoveContainerForceAsync(string containerId, CancellationToken cancellationToken);
-    Task<ContainerKillResult> KillContainerByRunIdAsync(string runId, string reason, bool force, CancellationToken cancellationToken);
     Task<Contracts.Domain.ContainerMetrics?> GetContainerStatsAsync(string containerId, CancellationToken cancellationToken);
 }

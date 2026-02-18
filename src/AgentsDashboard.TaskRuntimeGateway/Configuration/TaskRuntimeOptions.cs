@@ -5,7 +5,6 @@ public sealed class TaskRuntimeOptions
     public const string SectionName = "TaskRuntime";
 
     public string TaskRuntimeId { get; set; } = Environment.MachineName;
-    public string ControlPlaneUrl { get; set; } = "http://localhost:5266";
     public int MaxSlots { get; set; } = 1;
     public bool UseDocker { get; set; } = true;
     public string DefaultImage { get; set; } = "ghcr.io/mariogk/ai-harness:latest";
@@ -39,6 +38,5 @@ public sealed class TaskRuntimeOptions
         "Z_AI_API_KEY",
     ];
     public int DefaultTimeoutSeconds { get; set; } = 600;
-    public string ContainerLabelPrefix { get; set; } = "orchestrator";
     public string ArtifactStoragePath { get; set; } = "/data/artifacts";
 }

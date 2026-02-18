@@ -14,7 +14,7 @@ public interface ITaskRuntimeLifecycleManager
     Task<TaskRuntimeInstance?> GetTaskRuntimeAsync(string runtimeId, CancellationToken cancellationToken);
     Task<IReadOnlyList<TaskRuntimeInstance>> ListTaskRuntimesAsync(CancellationToken cancellationToken);
     Task ReportTaskRuntimeHeartbeatAsync(string runtimeId, int activeSlots, int maxSlots, CancellationToken cancellationToken);
-    Task RecordDispatchActivityAsync(string workerId, CancellationToken cancellationToken);
+    Task RecordDispatchActivityAsync(string runtimeId, CancellationToken cancellationToken);
     Task ScaleDownIdleTaskRuntimesAsync(CancellationToken cancellationToken);
     Task SetTaskRuntimeDrainingAsync(string runtimeId, bool draining, CancellationToken cancellationToken);
     Task RecycleTaskRuntimeAsync(string runtimeId, CancellationToken cancellationToken);

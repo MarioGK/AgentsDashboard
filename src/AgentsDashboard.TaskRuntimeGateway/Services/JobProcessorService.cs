@@ -9,7 +9,7 @@ public class JobProcessorService(
     ITaskRuntimeQueue queue,
     IHarnessExecutor executor,
     TaskRuntimeEventBus eventBus,
-    ILogger<JobProcessorService> logger) : BackgroundService, IJobProcessorService
+    ILogger<JobProcessorService> logger) : BackgroundService
 {
     private const string RuntimeEventWireMarker = "agentsdashboard.harness-runtime-event.v1";
     private const string DefaultStructuredSchemaVersion = "harness-structured-event-v2";

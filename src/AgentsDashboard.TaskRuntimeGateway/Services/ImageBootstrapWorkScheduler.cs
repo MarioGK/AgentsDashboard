@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
-public sealed class ImageBootstrapWorkScheduler : BackgroundService, IImageBootstrapWorkScheduler
+public sealed class ImageBootstrapWorkScheduler : BackgroundService
 {
     private readonly DockerClient _client;
     private readonly TaskRuntimeOptions _options;

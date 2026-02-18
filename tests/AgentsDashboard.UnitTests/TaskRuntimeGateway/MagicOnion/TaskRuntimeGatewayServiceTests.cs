@@ -5,9 +5,9 @@ using AgentsDashboard.TaskRuntimeGateway.Models;
 using AgentsDashboard.TaskRuntimeGateway.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace AgentsDashboard.UnitTests.WorkerGateway.MagicOnion;
+namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.MagicOnion;
 
-public class WorkerGatewayServiceTests
+public class TaskRuntimeGatewayServiceTests
 {
     [Test]
     public async Task ReconcileOrphanedContainersAsync_UsesActiveRunIdsFromQueue()
@@ -28,7 +28,7 @@ public class WorkerGatewayServiceTests
             new TaskRuntimeHarnessToolHealthService(),
             NullLogger<TaskRuntimeGatewayService>.Instance);
 
-        await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { TaskRuntimeId = "worker-1" });
+        await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { TaskRuntimeId = "task-runtime-1" });
 
         reconcilerMock.Verify(
             x => x.ReconcileAsync(
@@ -54,7 +54,7 @@ public class WorkerGatewayServiceTests
             new TaskRuntimeHarnessToolHealthService(),
             NullLogger<TaskRuntimeGatewayService>.Instance);
 
-        var response = await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { TaskRuntimeId = "worker-1" });
+        var response = await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { TaskRuntimeId = "task-runtime-1" });
 
         response.Success.Should().BeFalse();
         response.ErrorMessage.Should().Be("reconciler disconnected");

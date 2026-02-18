@@ -7,8 +7,8 @@ using MagicOnion.Server;
 namespace AgentsDashboard.TaskRuntimeGateway.MagicOnion;
 
 /// <summary>
-/// MagicOnion unary service for worker gateway operations.
-/// Replaces gRPC WorkerGateway service.
+/// MagicOnion unary service for task runtime gateway operations.
+/// Replaces gRPC TaskRuntimeGateway service.
 /// </summary>
 public sealed class TaskRuntimeGatewayService(
     ITaskRuntimeQueue queue,
@@ -35,7 +35,7 @@ public sealed class TaskRuntimeGatewayService(
             return new DispatchJobReply
             {
                 Success = false,
-                ErrorMessage = "worker at capacity",
+                ErrorMessage = "task runtime at capacity",
                 DispatchedAt = DateTimeOffset.UtcNow
             };
         }
@@ -106,7 +106,7 @@ public sealed class TaskRuntimeGatewayService(
 
     public UnaryResult<HeartbeatReply> HeartbeatAsync(HeartbeatRequest request)
     {
-        logger.ZLogDebug("Heartbeat received from worker {TaskRuntimeId} on {HostName}: {ActiveSlots}/{MaxSlots} slots",
+        logger.ZLogDebug("Heartbeat received from task runtime {TaskRuntimeId} on {HostName}: {ActiveSlots}/{MaxSlots} slots",
             request.TaskRuntimeId, request.HostName, request.ActiveSlots, request.MaxSlots);
 
         return new UnaryResult<HeartbeatReply>(new HeartbeatReply
@@ -119,7 +119,7 @@ public sealed class TaskRuntimeGatewayService(
     public async UnaryResult<ReconcileOrphanedContainersReply> ReconcileOrphanedContainersAsync(
         ReconcileOrphanedContainersRequest request)
     {
-        logger.ZLogInformation("Received orphan reconciliation request from worker {TaskRuntimeId}",
+        logger.ZLogInformation("Received orphan reconciliation request from task runtime {TaskRuntimeId}",
             request.TaskRuntimeId);
 
         try
@@ -128,7 +128,7 @@ public sealed class TaskRuntimeGatewayService(
 
             var result = await orphanReconciler.ReconcileAsync(activeRunIds, CancellationToken.None);
 
-            logger.ZLogInformation("Orphan reconciliation complete for worker {TaskRuntimeId}: {OrphanedCount} found, {RemovedCount} removed",
+            logger.ZLogInformation("Orphan reconciliation complete for task runtime {TaskRuntimeId}: {OrphanedCount} found, {RemovedCount} removed",
                 request.TaskRuntimeId, result.OrphanedCount, result.RemovedContainers.Count);
 
             return new ReconcileOrphanedContainersReply
@@ -141,7 +141,7 @@ public sealed class TaskRuntimeGatewayService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Error during orphan reconciliation for worker {TaskRuntimeId}", request.TaskRuntimeId);
+            logger.ZLogError(ex, "Error during orphan reconciliation for task runtime {TaskRuntimeId}", request.TaskRuntimeId);
 
             return new ReconcileOrphanedContainersReply
             {
@@ -177,7 +177,7 @@ public sealed class TaskRuntimeGatewayService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Failed to retrieve harness tool status for worker");
+            logger.ZLogError(ex, "Failed to retrieve harness tool status for task runtime");
 
             return new GetHarnessToolsReply
             {

@@ -34,7 +34,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
     private const int WorkerGrpcPort = 5201;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ScaleOutAttemptWindow = TimeSpan.FromMinutes(10);
-    private static readonly string[] WorkerGatewayBuildContextRequirements =
+    private static readonly string[] TaskRuntimeGatewayBuildContextRequirements =
     [
         "global.json",
         "Directory.Build.props",
@@ -74,21 +74,21 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         CancellationToken cancellationToken,
         IProgress<BackgroundWorkSnapshot>? progress = null)
     {
-        ReportWorkerImageProgress(progress, "Resolving worker image policy.");
+        ReportTaskRuntimeImageProgress(progress, "Resolving task runtime image policy.");
         var runtime = await runtimeSettingsProvider.GetAsync(cancellationToken);
-        var baseImage = ResolveEffectiveImageReference(runtime.ContainerImage, runtime.WorkerImageRegistry);
+        var baseImage = ResolveEffectiveImageReference(runtime.ContainerImage, runtime.TaskRuntimeImageRegistry);
         if (string.IsNullOrWhiteSpace(baseImage))
         {
-            ReportWorkerImageProgress(
+            ReportTaskRuntimeImageProgress(
                 progress,
-                "Worker image configuration is empty; skipping startup image resolution.",
+                "Task runtime image configuration is empty; skipping startup image resolution.",
                 percentComplete: 100,
                 state: BackgroundWorkState.Succeeded);
             return;
         }
 
-        ReportWorkerImageProgress(progress, $"Resolving base worker image {baseImage}.", percentComplete: 5);
-        var baseResolution = await EnsureWorkerImageResolvedWithSourceAsync(
+        ReportTaskRuntimeImageProgress(progress, $"Resolving base task runtime image {baseImage}.", percentComplete: 5);
+        var baseResolution = await EnsureTaskRuntimeImageResolvedWithSourceAsync(
             baseImage,
             runtime,
             cancellationToken: cancellationToken,
@@ -97,22 +97,22 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         if (!baseResolution.Available)
         {
             logger.ZLogWarning(
-                "Worker image {Image} is unavailable after image policy execution. Dispatch will fail until the image is available.",
+                "Task runtime image {Image} is unavailable after image policy execution. Dispatch will fail until the image is available.",
                 baseImage);
-            ReportWorkerImageProgress(
+            ReportTaskRuntimeImageProgress(
                 progress,
-                $"Worker image {baseImage} is unavailable after policy execution.",
+                $"Task runtime image {baseImage} is unavailable after policy execution.",
                 state: BackgroundWorkState.Failed,
                 errorCode: "image_unavailable",
-                errorMessage: $"Worker image {baseImage} is unavailable.");
+                errorMessage: $"Task runtime image {baseImage} is unavailable.");
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(runtime.WorkerCanaryImage) && runtime.CanaryPercent > 0)
+        if (!string.IsNullOrWhiteSpace(runtime.TaskRuntimeCanaryImage) && runtime.CanaryPercent > 0)
         {
-            var canaryImage = ResolveEffectiveImageReference(runtime.WorkerCanaryImage, runtime.WorkerImageRegistry);
-            ReportWorkerImageProgress(progress, $"Resolving canary worker image {canaryImage}.", percentComplete: 65);
-            var canaryResolution = await EnsureWorkerImageResolvedWithSourceAsync(
+            var canaryImage = ResolveEffectiveImageReference(runtime.TaskRuntimeCanaryImage, runtime.TaskRuntimeImageRegistry);
+            ReportTaskRuntimeImageProgress(progress, $"Resolving canary task runtime image {canaryImage}.", percentComplete: 65);
+            var canaryResolution = await EnsureTaskRuntimeImageResolvedWithSourceAsync(
                 canaryImage,
                 runtime,
                 cancellationToken: cancellationToken,
@@ -124,17 +124,17 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                     "Worker canary image {Image} is unavailable; continuing with base image {BaseImage}.",
                     canaryImage,
                     baseImage);
-                ReportWorkerImageProgress(
+                ReportTaskRuntimeImageProgress(
                     progress,
                     $"Canary image {canaryImage} is unavailable; continuing with base image {baseImage}.",
                     percentComplete: 85);
             }
         }
 
-        logger.ZLogInformation("Worker image {Image} is available", baseImage);
-        ReportWorkerImageProgress(
+        logger.ZLogInformation("Task runtime image {Image} is available", baseImage);
+        ReportTaskRuntimeImageProgress(
             progress,
-            $"Worker image {baseImage} is available.",
+            $"Task runtime image {baseImage} is available.",
             percentComplete: 100,
             state: BackgroundWorkState.Succeeded);
     }
@@ -346,6 +346,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 new TaskRuntimeStateUpdate
                 {
                     RuntimeId = worker.TaskRuntimeId,
+                    RepositoryId = await ResolveRepositoryIdAsync(worker.TaskId, cancellationToken),
                     TaskId = worker.TaskId,
                     State = MapLifecycleState(worker.LifecycleState),
                     ActiveRuns = worker.ActiveSlots,
@@ -533,8 +534,8 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
     private SpawnImageSelection SelectSpawnImage(OrchestratorRuntimeSettings runtime, IReadOnlyList<TaskRuntimeInstance> workers)
     {
-        var baseImage = ResolveEffectiveImageReference(runtime.ContainerImage, runtime.WorkerImageRegistry);
-        var canaryImage = ResolveEffectiveImageReference(runtime.WorkerCanaryImage, runtime.WorkerImageRegistry);
+        var baseImage = ResolveEffectiveImageReference(runtime.ContainerImage, runtime.TaskRuntimeImageRegistry);
+        var canaryImage = ResolveEffectiveImageReference(runtime.TaskRuntimeCanaryImage, runtime.TaskRuntimeImageRegistry);
 
         if (string.IsNullOrWhiteSpace(canaryImage) || runtime.CanaryPercent <= 0)
         {
@@ -597,22 +598,22 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
             var imageSelection = SelectSpawnImage(runtime, workers);
             var selectedImage = imageSelection.Image;
-            var imageResolution = await EnsureWorkerImageResolvedWithSourceAsync(selectedImage, runtime, cancellationToken);
+            var imageResolution = await EnsureTaskRuntimeImageResolvedWithSourceAsync(selectedImage, runtime, cancellationToken);
             if (!imageResolution.Available && imageSelection.IsCanary)
             {
-                var baseImage = ResolveEffectiveImageReference(runtime.ContainerImage, runtime.WorkerImageRegistry);
+                var baseImage = ResolveEffectiveImageReference(runtime.ContainerImage, runtime.TaskRuntimeImageRegistry);
                 logger.ZLogWarning(
-                    "Canary worker image {CanaryImage} could not be resolved ({Reason}); falling back to base image {BaseImage}.",
+                    "Canary task runtime image {CanaryImage} could not be resolved ({Reason}); falling back to base image {BaseImage}.",
                     selectedImage,
                     imageSelection.CanaryReason,
                     baseImage);
                 selectedImage = baseImage;
-                imageResolution = await EnsureWorkerImageResolvedWithSourceAsync(selectedImage, runtime, cancellationToken);
+                imageResolution = await EnsureTaskRuntimeImageResolvedWithSourceAsync(selectedImage, runtime, cancellationToken);
             }
 
             if (!imageResolution.Available)
             {
-                throw new InvalidOperationException($"Worker image '{selectedImage}' is unavailable.");
+                throw new InvalidOperationException($"Task runtime image '{selectedImage}' is unavailable.");
             }
 
             if (!CanScaleOut(runtime, out var blockedReason))
@@ -623,7 +624,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
             RegisterScaleOutAttempt(runtime);
 
-            var workerId = BuildTaskRuntimeTaskRuntimeId(runtime.ContainerNamePrefix, taskId);
+            var workerId = BuildTaskRuntimeId(runtime.ContainerNamePrefix, taskId);
             var containerName = workerId;
 
             var codexApiKey = HostCredentialDiscovery.TryGetCodexApiKey();
@@ -660,7 +661,6 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                     "TaskRuntime__UseDocker=true",
                     $"TaskRuntime__TaskRuntimeId={workerId}",
                     $"TaskRuntime__MaxSlots={Math.Clamp(maxSlots, 1, 64)}",
-                    $"TaskRuntime__ControlPlaneUrl={ResolveControlPlaneUrl()}",
                     $"TaskRuntime__DefaultImage={Environment.GetEnvironmentVariable("TASK_RUNTIME_DEFAULT_IMAGE") ?? "ghcr.io/mariogk/ai-harness:latest"}",
                     $"CODEX_API_KEY={codexApiKey ?? string.Empty}",
                     $"OPENAI_API_KEY={openAiApiKey ?? string.Empty}",
@@ -694,13 +694,13 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             }
             catch (DockerApiException ex) when (IsMissingImageException(ex, createParameters.Image))
             {
-                logger.ZLogWarning(ex, "Worker image {Image} was not found locally; attempting resolution and retry.", createParameters.Image);
+                logger.ZLogWarning(ex, "Task runtime image {Image} was not found locally; attempting resolution and retry.", createParameters.Image);
 
-                imageResolution = await EnsureWorkerImageResolvedWithSourceAsync(createParameters.Image, runtime, cancellationToken);
+                imageResolution = await EnsureTaskRuntimeImageResolvedWithSourceAsync(createParameters.Image, runtime, cancellationToken);
                 if (!imageResolution.Available)
                 {
                     throw new InvalidOperationException(
-                        $"Worker image '{createParameters.Image}' is unavailable. Build from source or pull it, then retry.",
+                        $"Task runtime image '{createParameters.Image}' is unavailable. Build from source or pull it, then retry.",
                         ex);
                 }
 
@@ -1060,7 +1060,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                ex.Message.Contains("No such image", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<ImageResolutionResult> EnsureWorkerImageResolvedWithSourceAsync(
+    private async Task<ImageResolutionResult> EnsureTaskRuntimeImageResolvedWithSourceAsync(
         string imageReference,
         OrchestratorRuntimeSettings runtime,
         CancellationToken cancellationToken,
@@ -1070,9 +1070,9 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         var localImageExists = await ImageExistsLocallyAsync(imageReference, cancellationToken);
         if (localImageExists && !forceRefresh)
         {
-            ReportWorkerImageProgress(
+            ReportTaskRuntimeImageProgress(
                 progress,
-                $"Worker image {imageReference} is already present locally.",
+                $"Task runtime image {imageReference} is already present locally.",
                 percentComplete: 100);
             return new ImageResolutionResult(true, "local");
         }
@@ -1081,10 +1081,10 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             _imageFailureCooldownUntilUtc.TryGetValue(imageReference, out var cooldownUntil) &&
             cooldownUntil > DateTime.UtcNow)
         {
-            logger.ZLogWarning("Skipping worker image resolution for {Image}; cooldown active until {CooldownUntil}", imageReference, cooldownUntil);
-            ReportWorkerImageProgress(
+            logger.ZLogWarning("Skipping task runtime image resolution for {Image}; cooldown active until {CooldownUntil}", imageReference, cooldownUntil);
+            ReportTaskRuntimeImageProgress(
                 progress,
-                $"Skipped worker image resolution for {imageReference}; cooldown active until {cooldownUntil:O}.",
+                $"Skipped task runtime image resolution for {imageReference}; cooldown active until {cooldownUntil:O}.",
                 state: BackgroundWorkState.Failed,
                 errorCode: "cooldown_active");
             return UnavailableImageResolution;
@@ -1099,15 +1099,15 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 localImageExists = true;
                 if (!forceRefresh)
                 {
-                    ReportWorkerImageProgress(
+                    ReportTaskRuntimeImageProgress(
                         progress,
-                        $"Worker image {imageReference} became available locally.",
+                        $"Task runtime image {imageReference} became available locally.",
                         percentComplete: 100);
                     return new ImageResolutionResult(true, "local");
                 }
             }
 
-            ReportWorkerImageProgress(progress, $"Acquiring distributed lease for image {imageReference}.");
+            ReportTaskRuntimeImageProgress(progress, $"Acquiring distributed lease for image {imageReference}.");
             await using var lease = await leaseCoordinator.TryAcquireAsync(
                 $"image-resolve:{imageReference}",
                 TimeSpan.FromSeconds(runtime.ImageBuildTimeoutSeconds + runtime.ImagePullTimeoutSeconds + 120),
@@ -1115,7 +1115,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
             if (lease is null)
             {
-                ReportWorkerImageProgress(progress, $"Waiting for peer to resolve image {imageReference}.");
+                ReportTaskRuntimeImageProgress(progress, $"Waiting for peer to resolve image {imageReference}.");
                 return await WaitForPeerImageResolutionAsync(imageReference, runtime, cancellationToken, progress);
             }
 
@@ -1125,30 +1125,30 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 if (localImageExists)
                 {
                     logger.ZLogWarning(
-                        "Worker image resolution failed for {Image}; keeping existing local image.",
+                        "Task runtime image resolution failed for {Image}; keeping existing local image.",
                         imageReference);
-                    ReportWorkerImageProgress(
+                    ReportTaskRuntimeImageProgress(
                         progress,
-                        $"Worker image resolution failed for {imageReference}; using existing local image.",
+                        $"Task runtime image resolution failed for {imageReference}; using existing local image.",
                         percentComplete: 100,
                         state: BackgroundWorkState.Succeeded);
                     return new ImageResolutionResult(true, "local-fallback");
                 }
 
                 _imageFailureCooldownUntilUtc[imageReference] = DateTime.UtcNow.AddMinutes(runtime.ImageFailureCooldownMinutes);
-                ReportWorkerImageProgress(
+                ReportTaskRuntimeImageProgress(
                     progress,
-                    $"Worker image resolution failed for {imageReference}.",
+                    $"Task runtime image resolution failed for {imageReference}.",
                     state: BackgroundWorkState.Failed,
                     errorCode: "image_resolution_failed",
-                    errorMessage: $"Worker image resolution failed for {imageReference}.");
+                    errorMessage: $"Task runtime image resolution failed for {imageReference}.");
                 return resolved;
             }
 
             _imageFailureCooldownUntilUtc.TryRemove(imageReference, out _);
-            ReportWorkerImageProgress(
+            ReportTaskRuntimeImageProgress(
                 progress,
-                $"Worker image {imageReference} resolved from {resolved.Source}.",
+                $"Task runtime image {imageReference} resolved from {resolved.Source}.",
                 percentComplete: 100);
             return resolved;
         }
@@ -1171,9 +1171,9 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         {
             if (await ImageExistsLocallyAsync(imageReference, cancellationToken))
             {
-                ReportWorkerImageProgress(
+                ReportTaskRuntimeImageProgress(
                     progress,
-                    $"Peer resolved worker image {imageReference}.",
+                    $"Peer resolved task runtime image {imageReference}.",
                     percentComplete: 100);
                 return new ImageResolutionResult(true, "peer");
             }
@@ -1181,7 +1181,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
 
-        ReportWorkerImageProgress(
+        ReportTaskRuntimeImageProgress(
             progress,
             $"Timed out waiting for peer image resolution for {imageReference}.",
             state: BackgroundWorkState.Failed,
@@ -1189,12 +1189,12 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         return UnavailableImageResolution;
     }
 
-    private ValueTask<WorkerImagePolicy> ResolvePolicyAsync(
+    private ValueTask<TaskRuntimeImagePolicy> ResolvePolicyAsync(
         OrchestratorRuntimeSettings runtime,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(runtime.WorkerImagePolicy);
+        return ValueTask.FromResult(runtime.TaskRuntimeImagePolicy);
     }
 
     private ValueTask<SemaphoreSlim> GetOrCreateImageStateAsync(
@@ -1218,28 +1218,28 @@ public sealed class DockerTaskRuntimeLifecycleManager(
     private async Task<ImageResolutionResult> ResolveImageByPolicyAsync(
         string imageReference,
         OrchestratorRuntimeSettings runtime,
-        WorkerImagePolicy workerImagePolicy,
+        TaskRuntimeImagePolicy taskRuntimeImagePolicy,
         IProgress<BackgroundWorkSnapshot>? progress,
         CancellationToken cancellationToken)
     {
-        logger.ZLogInformation("Resolving worker image {Image} with policy {Policy}", imageReference, workerImagePolicy);
-        ReportWorkerImageProgress(progress, $"Resolving worker image {imageReference} with policy {workerImagePolicy}.", percentComplete: 10);
+        logger.ZLogInformation("Resolving task runtime image {Image} with policy {Policy}", imageReference, taskRuntimeImagePolicy);
+        ReportTaskRuntimeImageProgress(progress, $"Resolving task runtime image {imageReference} with policy {taskRuntimeImagePolicy}.", percentComplete: 10);
 
-        if (workerImagePolicy == WorkerImagePolicy.PullOnly)
+        if (taskRuntimeImagePolicy == TaskRuntimeImagePolicy.PullOnly)
         {
             return await PullWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
                 ? new ImageResolutionResult(true, "pull")
                 : UnavailableImageResolution;
         }
 
-        if (workerImagePolicy == WorkerImagePolicy.BuildOnly)
+        if (taskRuntimeImagePolicy == TaskRuntimeImagePolicy.BuildOnly)
         {
             return await BuildWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
                 ? new ImageResolutionResult(true, "build")
                 : UnavailableImageResolution;
         }
 
-        if (workerImagePolicy == WorkerImagePolicy.PullThenBuild)
+        if (taskRuntimeImagePolicy == TaskRuntimeImagePolicy.PullThenBuild)
         {
             if (await PullWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken))
             {
@@ -1251,7 +1251,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 : UnavailableImageResolution;
         }
 
-        if (workerImagePolicy == WorkerImagePolicy.BuildThenPull)
+        if (taskRuntimeImagePolicy == TaskRuntimeImagePolicy.BuildThenPull)
         {
             if (await BuildWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken))
             {
@@ -1286,7 +1286,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to inspect worker image {Image}", imageReference);
+            logger.ZLogWarning(ex, "Failed to inspect task runtime image {Image}", imageReference);
             return false;
         }
     }
@@ -1306,14 +1306,14 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
             var imageSplit = SplitImageReference(imageReference);
 
-            logger.ZLogInformation("Pulling worker image {Image}", imageReference);
-            ReportWorkerImageProgress(progress, $"Pulling worker image {imageReference}.", percentComplete: 20);
+            logger.ZLogInformation("Pulling task runtime image {Image}", imageReference);
+            ReportTaskRuntimeImageProgress(progress, $"Pulling task runtime image {imageReference}.", percentComplete: 20);
             var pullProgress = new Progress<JSONMessage>(message =>
             {
                 if (!string.IsNullOrWhiteSpace(message.ProgressMessage))
                 {
                     logger.ZLogDebug("Pull progress for {Image}: {Progress}", imageReference, message.ProgressMessage);
-                    ReportWorkerImageProgress(
+                    ReportTaskRuntimeImageProgress(
                         progress,
                         $"Pulling {imageReference}: {message.ProgressMessage}",
                         percentComplete: TryParsePullPercent(message.ProgressMessage));
@@ -1330,16 +1330,16 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 pullProgress,
                 timeoutCts.Token);
 
-            logger.ZLogInformation("Successfully pulled worker image {Image}", imageReference);
-            ReportWorkerImageProgress(progress, $"Pulled worker image {imageReference}.", percentComplete: 75);
+            logger.ZLogInformation("Successfully pulled task runtime image {Image}", imageReference);
+            ReportTaskRuntimeImageProgress(progress, $"Pulled task runtime image {imageReference}.", percentComplete: 75);
             return true;
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to pull worker image {Image}", imageReference);
-            ReportWorkerImageProgress(
+            logger.ZLogWarning(ex, "Failed to pull task runtime image {Image}", imageReference);
+            ReportTaskRuntimeImageProgress(
                 progress,
-                $"Failed to pull worker image {imageReference}.",
+                $"Failed to pull task runtime image {imageReference}.",
                 state: BackgroundWorkState.Running,
                 errorCode: "pull_failed",
                 errorMessage: ex.Message);
@@ -1353,11 +1353,11 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         IProgress<BackgroundWorkSnapshot>? progress,
         CancellationToken cancellationToken)
     {
-        var dockerfilePath = ResolveWorkerGatewayDockerfilePath(runtime);
+        var dockerfilePath = ResolveTaskRuntimeGatewayDockerfilePath(runtime);
         if (string.IsNullOrWhiteSpace(dockerfilePath))
         {
             logger.ZLogWarning("Worker Dockerfile could not be resolved for automatic image build");
-            ReportWorkerImageProgress(
+            ReportTaskRuntimeImageProgress(
                 progress,
                 "Worker Dockerfile could not be resolved for automatic image build.",
                 state: BackgroundWorkState.Running,
@@ -1365,23 +1365,23 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             return false;
         }
 
-        foreach (var buildContext in ResolveWorkerGatewayBuildContextCandidates(dockerfilePath, runtime).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var buildContext in ResolveTaskRuntimeGatewayBuildContextCandidates(dockerfilePath, runtime).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (!Directory.Exists(buildContext))
             {
                 continue;
             }
 
-            if (!IsValidWorkerGatewayBuildContext(buildContext, dockerfilePath))
+            if (!IsValidTaskRuntimeGatewayBuildContext(buildContext, dockerfilePath))
             {
                 logger.ZLogDebug("Skipping invalid worker build context {Context} for dockerfile {Dockerfile}", buildContext, dockerfilePath);
                 continue;
             }
 
-            logger.ZLogInformation("Building worker image {Image} from {Dockerfile} in context {Context}", imageReference, dockerfilePath, buildContext);
-            ReportWorkerImageProgress(
+            logger.ZLogInformation("Building task runtime image {Image} from {Dockerfile} in context {Context}", imageReference, dockerfilePath, buildContext);
+            ReportTaskRuntimeImageProgress(
                 progress,
-                $"Building worker image {imageReference} from context {buildContext}.",
+                $"Building task runtime image {imageReference} from context {buildContext}.",
                 percentComplete: 35);
 
             try
@@ -1393,16 +1393,16 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
                 await BuildImageWithCliAsync(imageReference, buildContext, dockerfilePath, progress, timeoutCts.Token);
 
-                logger.ZLogInformation("Built worker image {Image}", imageReference);
-                ReportWorkerImageProgress(progress, $"Built worker image {imageReference}.", percentComplete: 90);
+                logger.ZLogInformation("Built task runtime image {Image}", imageReference);
+                ReportTaskRuntimeImageProgress(progress, $"Built task runtime image {imageReference}.", percentComplete: 90);
                 return true;
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Failed to build worker image {Image} from context {Context}", imageReference, buildContext);
-                ReportWorkerImageProgress(
+                logger.ZLogWarning(ex, "Failed to build task runtime image {Image} from context {Context}", imageReference, buildContext);
+                ReportTaskRuntimeImageProgress(
                     progress,
-                    $"Failed to build worker image {imageReference} from context {buildContext}.",
+                    $"Failed to build task runtime image {imageReference} from context {buildContext}.",
                     state: BackgroundWorkState.Running,
                     errorCode: "build_failed",
                     errorMessage: ex.Message);
@@ -1484,7 +1484,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
                 logger.ZLogDebug("Docker build output ({Image}): {Message}", imageReference, args.Data);
-                ReportWorkerImageProgress(
+                ReportTaskRuntimeImageProgress(
                     progress,
                     $"Building {imageReference}: {args.Data}",
                     percentComplete: TryParseBuildPercent(args.Data));
@@ -1495,7 +1495,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
                 logger.ZLogDebug("Docker build error ({Image}): {Message}", imageReference, args.Data);
-                ReportWorkerImageProgress(
+                ReportTaskRuntimeImageProgress(
                     progress,
                     $"Building {imageReference}: {args.Data}",
                     percentComplete: TryParseBuildPercent(args.Data));
@@ -1504,7 +1504,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
         if (!process.Start())
         {
-            throw new InvalidOperationException("Failed to launch docker CLI for worker image build");
+            throw new InvalidOperationException("Failed to launch docker CLI for task runtime image build");
         }
 
         process.BeginOutputReadLine();
@@ -1517,7 +1517,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
     }
 
-    private static void ReportWorkerImageProgress(
+    private static void ReportTaskRuntimeImageProgress(
         IProgress<BackgroundWorkSnapshot>? progress,
         string message,
         int? percentComplete = null,
@@ -1534,7 +1534,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             new BackgroundWorkSnapshot(
                 WorkId: string.Empty,
                 OperationKey: string.Empty,
-                Kind: BackgroundWorkKind.WorkerImageResolution,
+                Kind: BackgroundWorkKind.TaskRuntimeImageResolution,
                 State: state,
                 PercentComplete: percentComplete,
                 Message: message,
@@ -1616,7 +1616,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         };
     }
 
-    private static string? ResolveWorkerGatewayDockerfilePath(OrchestratorRuntimeSettings runtime)
+    private static string? ResolveTaskRuntimeGatewayDockerfilePath(OrchestratorRuntimeSettings runtime)
     {
         if (!string.IsNullOrWhiteSpace(runtime.WorkerDockerfilePath))
         {
@@ -1676,7 +1676,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         return null;
     }
 
-    private static IEnumerable<string> ResolveWorkerGatewayBuildContextCandidates(string dockerfilePath, OrchestratorRuntimeSettings runtime)
+    private static IEnumerable<string> ResolveTaskRuntimeGatewayBuildContextCandidates(string dockerfilePath, OrchestratorRuntimeSettings runtime)
     {
         if (!string.IsNullOrWhiteSpace(runtime.WorkerDockerBuildContextPath))
         {
@@ -1704,7 +1704,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
     }
 
-    private static bool IsValidWorkerGatewayBuildContext(string buildContext, string dockerfilePath)
+    private static bool IsValidTaskRuntimeGatewayBuildContext(string buildContext, string dockerfilePath)
     {
         var dockerfileDirectory = Path.GetDirectoryName(dockerfilePath);
         if (string.IsNullOrWhiteSpace(dockerfileDirectory))
@@ -1725,7 +1725,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             return true;
         }
 
-        foreach (var requiredPath in WorkerGatewayBuildContextRequirements)
+        foreach (var requiredPath in TaskRuntimeGatewayBuildContextRequirements)
         {
             if (!Path.Exists(Path.Combine(absoluteContext, requiredPath)))
             {
@@ -2076,7 +2076,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         return defaultValue;
     }
 
-    private static string BuildTaskRuntimeTaskRuntimeId(string prefix, string taskId)
+    private static string BuildTaskRuntimeId(string prefix, string taskId)
     {
         var normalizedPrefix = string.IsNullOrWhiteSpace(prefix) ? "task-runtime" : prefix.Trim();
         var token = NormalizeWorkerToken(taskId);
@@ -2162,17 +2162,6 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
 
         return $"{SharedWorkspacesVolumeName}:/workspaces";
-    }
-
-    private string ResolveControlPlaneUrl()
-    {
-        var inDockerUrl = Environment.GetEnvironmentVariable("TASK_RUNTIME_CONTROL_PLANE_URL");
-        if (!string.IsNullOrWhiteSpace(inDockerUrl))
-        {
-            return inDockerUrl;
-        }
-
-        return "http://control-plane:8080";
     }
 
     private async Task<(double CpuPercent, double MemoryPercent)> TryGetPressureMetricsAsync(string containerId, CancellationToken cancellationToken)

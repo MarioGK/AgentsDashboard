@@ -175,14 +175,14 @@ public class BackgroundWorkSchedulerTests
         try
         {
             var succeededWorkId = scheduler.Enqueue(
-                BackgroundWorkKind.WorkerImageResolution,
+                BackgroundWorkKind.TaskRuntimeImageResolution,
                 "test:relay-succeeded",
                 async (ct, progress) =>
                 {
                     progress.Report(new BackgroundWorkSnapshot(
                         WorkId: string.Empty,
                         OperationKey: string.Empty,
-                        Kind: BackgroundWorkKind.WorkerImageResolution,
+                        Kind: BackgroundWorkKind.TaskRuntimeImageResolution,
                         State: BackgroundWorkState.Running,
                         PercentComplete: 50,
                         Message: "midway",
@@ -197,7 +197,7 @@ public class BackgroundWorkSchedulerTests
             await WaitForStateAsync(scheduler, succeededWorkId, BackgroundWorkState.Succeeded);
 
             var failedWorkId = scheduler.Enqueue(
-                BackgroundWorkKind.WorkerImageResolution,
+                BackgroundWorkKind.TaskRuntimeImageResolution,
                 "test:relay-failed",
                 (_, _) => throw new InvalidOperationException("cannot pull"),
                 dedupeByOperationKey: true);

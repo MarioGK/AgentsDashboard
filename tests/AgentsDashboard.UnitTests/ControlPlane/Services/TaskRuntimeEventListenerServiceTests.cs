@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
-public class WorkerEventListenerServiceTests
+public class TaskRuntimeEventListenerServiceTests
 {
     [Test]
     public async Task HandleJobEventAsync_WhenStructuredDiffEvent_PersistsDiffSnapshotAndPublishesStructuredEvents()

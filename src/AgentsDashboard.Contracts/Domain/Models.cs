@@ -67,7 +67,7 @@ public enum RunSessionProfileScope
     Repository = 1
 }
 
-public enum WorkerImagePolicy
+public enum TaskRuntimeImagePolicy
 {
     PullOnly = 0,
     BuildOnly = 1,
@@ -206,9 +206,9 @@ public sealed class RunDocument
     public string ResultEnvelopeRef { get; set; } = string.Empty;
     public string FailureClass { get; set; } = string.Empty;
     public string PrUrl { get; set; } = string.Empty;
-    public string WorkerImageRef { get; set; } = string.Empty;
-    public string WorkerImageDigest { get; set; } = string.Empty;
-    public string WorkerImageSource { get; set; } = string.Empty;
+    public string TaskRuntimeImageRef { get; set; } = string.Empty;
+    public string TaskRuntimeImageDigest { get; set; } = string.Empty;
+    public string TaskRuntimeImageSource { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAtUtc { get; set; }
     public DateTime? EndedAtUtc { get; set; }
@@ -573,16 +573,16 @@ public sealed class OrchestratorSettings
     public string GlobalRunRules { get; set; } = string.Empty;
     public string McpConfigJson { get; set; } = string.Empty;
 
-    public WorkerImagePolicy WorkerImagePolicy { get; set; } = WorkerImagePolicy.PreferLocal;
-    public string WorkerImageRegistry { get; set; } = string.Empty;
-    public string WorkerCanaryImage { get; set; } = string.Empty;
+    public TaskRuntimeImagePolicy TaskRuntimeImagePolicy { get; set; } = TaskRuntimeImagePolicy.PreferLocal;
+    public string TaskRuntimeImageRegistry { get; set; } = string.Empty;
+    public string TaskRuntimeCanaryImage { get; set; } = string.Empty;
     public string WorkerDockerBuildContextPath { get; set; } = string.Empty;
     public string WorkerDockerfilePath { get; set; } = string.Empty;
     public int MaxConcurrentPulls { get; set; } = 2;
     public int MaxConcurrentBuilds { get; set; } = 1;
     public int ImagePullTimeoutSeconds { get; set; } = 120;
     public int ImageBuildTimeoutSeconds { get; set; } = 600;
-    public int WorkerImageCacheTtlMinutes { get; set; } = 240;
+    public int TaskRuntimeImageCacheTtlMinutes { get; set; } = 240;
     public int ImageFailureCooldownMinutes { get; set; } = 15;
     public int CanaryPercent { get; set; } = 10;
 

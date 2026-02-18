@@ -1855,17 +1855,17 @@ public sealed class OrchestratorStore(
         run.Summary = "Running";
         if (!string.IsNullOrWhiteSpace(workerImageRef))
         {
-            run.WorkerImageRef = workerImageRef;
+            run.TaskRuntimeImageRef = workerImageRef;
         }
 
         if (!string.IsNullOrWhiteSpace(workerImageDigest))
         {
-            run.WorkerImageDigest = workerImageDigest;
+            run.TaskRuntimeImageDigest = workerImageDigest;
         }
 
         if (!string.IsNullOrWhiteSpace(workerImageSource))
         {
-            run.WorkerImageSource = workerImageSource;
+            run.TaskRuntimeImageSource = workerImageSource;
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -2754,7 +2754,10 @@ public sealed class OrchestratorStore(
         runtime.ContainerId = string.IsNullOrWhiteSpace(update.ContainerId) ? runtime.ContainerId : update.ContainerId;
         runtime.WorkspacePath = string.IsNullOrWhiteSpace(update.WorkspacePath) ? runtime.WorkspacePath : update.WorkspacePath;
         runtime.RuntimeHomePath = string.IsNullOrWhiteSpace(update.RuntimeHomePath) ? runtime.RuntimeHomePath : update.RuntimeHomePath;
-        runtime.LastStateChangeUtc = now;
+        if (previousState != runtime.State || runtime.LastStateChangeUtc is null)
+        {
+            runtime.LastStateChangeUtc = now;
+        }
 
         if (update.UpdateLastActivityUtc)
         {

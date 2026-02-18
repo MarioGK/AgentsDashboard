@@ -4,7 +4,7 @@ using MessagePack;
 namespace AgentsDashboard.Contracts.TaskRuntime;
 
 /// <summary>
-/// Receiver interface for events pushed FROM worker TO control plane.
+/// Receiver interface for events pushed FROM task runtime TO control plane.
 /// The control plane implements this to receive callbacks.
 /// </summary>
 public interface ITaskRuntimeEventReceiver
@@ -22,7 +22,7 @@ public interface ITaskRuntimeEventReceiver
 
 /// <summary>
 /// StreamingHub interface for bidirectional real-time communication.
-/// Workers connect and push events; control plane subscribes to specific runs.
+/// Task Runtimes connect and push events; control plane subscribes to specific runs.
 /// Replaces the server-streaming SubscribeEvents gRPC method.
 /// </summary>
 public interface ITaskRuntimeEventHub : IStreamingHub<ITaskRuntimeEventHub, ITaskRuntimeEventReceiver>

@@ -2,7 +2,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public enum BackgroundWorkKind
 {
-    WorkerImageResolution = 0,
+    TaskRuntimeImageResolution = 0,
     SqliteVecBootstrap = 1,
     RepositoryGitRefresh = 2,
     Recovery = 3,
