@@ -760,6 +760,17 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         catch (Exception ex)
         {
             RegisterScaleOutFailure(runtime);
+            if (_workers.Values.FirstOrDefault(x => x.LifecycleState == TaskRuntimeLifecycleState.Starting) is { } startingState)
+            {
+                startingState.LifecycleState = TaskRuntimeLifecycleState.FailedStart;
+                await PersistTaskRuntimeStateAsync(
+                    startingState,
+                    cancellationToken,
+                    explicitState: TaskRuntimeState.Failed,
+                    updateLastActivityUtc: false,
+                    lastError: ex.Message);
+            }
+
             logger.ZLogWarning(ex, "Failed to spawn worker");
             return null;
         }
