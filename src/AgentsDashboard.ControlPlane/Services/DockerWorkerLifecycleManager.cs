@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Configuration;
@@ -29,6 +31,20 @@ public sealed class DockerWorkerLifecycleManager(
     private const int WorkerGrpcPort = 5201;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ScaleOutAttemptWindow = TimeSpan.FromMinutes(10);
+    private static readonly string[] WorkerGatewayBuildContextRequirements =
+    [
+        "global.json",
+        "Directory.Build.props",
+        "Directory.Packages.props",
+        Path.Combine("src", "AgentsDashboard.slnx"),
+        Path.Combine("src", "AgentsDashboard.WorkerGateway"),
+        Path.Combine("src", "AgentsDashboard.Contracts")
+    ];
+    private static readonly Regex PullProgressRegex = new(
+        @"(?<current>\d+(?:\.\d+)?)\s*(?<currentUnit>[KMGTP]?B)\s*/\s*(?<total>\d+(?:\.\d+)?)\s*(?<totalUnit>[KMGTP]?B)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex BuildStepRegex = new(@"\[(?<current>\d+)\/(?<total>\d+)\]", RegexOptions.Compiled);
+    private static readonly Regex BuildPercentRegex = new(@"(?<percent>\d{1,3})%", RegexOptions.Compiled);
 
     private readonly OrchestratorOptions _options = options.Value;
     private readonly DockerClient _dockerClient = new DockerClientConfiguration().CreateClient();
@@ -50,35 +66,53 @@ public sealed class DockerWorkerLifecycleManager(
     private int _activePulls;
     private int _activeBuilds;
 
-    public async Task EnsureWorkerImageAvailableAsync(CancellationToken cancellationToken)
+    public async Task EnsureWorkerImageAvailableAsync(
+        CancellationToken cancellationToken,
+        IProgress<BackgroundWorkSnapshot>? progress = null)
     {
+        ReportWorkerImageProgress(progress, "Resolving worker image policy.");
         var runtime = await runtimeSettingsProvider.GetAsync(cancellationToken);
         var baseImage = ResolveEffectiveImageReference(runtime.ContainerImage, runtime.WorkerImageRegistry);
         if (string.IsNullOrWhiteSpace(baseImage))
         {
+            ReportWorkerImageProgress(
+                progress,
+                "Worker image configuration is empty; skipping startup image resolution.",
+                percentComplete: 100,
+                state: BackgroundWorkState.Succeeded);
             return;
         }
 
+        ReportWorkerImageProgress(progress, $"Resolving base worker image {baseImage}.", percentComplete: 5);
         var baseResolution = await EnsureWorkerImageResolvedWithSourceAsync(
             baseImage,
             runtime,
-            cancellationToken,
+            cancellationToken: cancellationToken,
+            progress: progress,
             forceRefresh: true);
         if (!baseResolution.Available)
         {
             logger.ZLogWarning(
                 "Worker image {Image} is unavailable after image policy execution. Dispatch will fail until the image is available.",
                 baseImage);
+            ReportWorkerImageProgress(
+                progress,
+                $"Worker image {baseImage} is unavailable after policy execution.",
+                state: BackgroundWorkState.Failed,
+                errorCode: "image_unavailable",
+                errorMessage: $"Worker image {baseImage} is unavailable.");
             return;
         }
 
         if (!string.IsNullOrWhiteSpace(runtime.WorkerCanaryImage) && runtime.CanaryPercent > 0)
         {
             var canaryImage = ResolveEffectiveImageReference(runtime.WorkerCanaryImage, runtime.WorkerImageRegistry);
+            ReportWorkerImageProgress(progress, $"Resolving canary worker image {canaryImage}.", percentComplete: 65);
             var canaryResolution = await EnsureWorkerImageResolvedWithSourceAsync(
                 canaryImage,
                 runtime,
-                cancellationToken,
+                cancellationToken: cancellationToken,
+                progress: progress,
                 forceRefresh: true);
             if (!canaryResolution.Available)
             {
@@ -86,10 +120,19 @@ public sealed class DockerWorkerLifecycleManager(
                     "Worker canary image {Image} is unavailable; continuing with base image {BaseImage}.",
                     canaryImage,
                     baseImage);
+                ReportWorkerImageProgress(
+                    progress,
+                    $"Canary image {canaryImage} is unavailable; continuing with base image {baseImage}.",
+                    percentComplete: 85);
             }
         }
 
         logger.ZLogInformation("Worker image {Image} is available", baseImage);
+        ReportWorkerImageProgress(
+            progress,
+            $"Worker image {baseImage} is available.",
+            percentComplete: 100,
+            state: BackgroundWorkState.Succeeded);
     }
 
     private sealed record ImageResolutionResult(bool Available, string Source);
@@ -887,11 +930,16 @@ public sealed class DockerWorkerLifecycleManager(
         string imageReference,
         OrchestratorRuntimeSettings runtime,
         CancellationToken cancellationToken,
+        IProgress<BackgroundWorkSnapshot>? progress = null,
         bool forceRefresh = false)
     {
         var localImageExists = await ImageExistsLocallyAsync(imageReference, cancellationToken);
         if (localImageExists && !forceRefresh)
         {
+            ReportWorkerImageProgress(
+                progress,
+                $"Worker image {imageReference} is already present locally.",
+                percentComplete: 100);
             return new ImageResolutionResult(true, "local");
         }
 
@@ -900,10 +948,15 @@ public sealed class DockerWorkerLifecycleManager(
             cooldownUntil > DateTime.UtcNow)
         {
             logger.ZLogWarning("Skipping worker image resolution for {Image}; cooldown active until {CooldownUntil}", imageReference, cooldownUntil);
+            ReportWorkerImageProgress(
+                progress,
+                $"Skipped worker image resolution for {imageReference}; cooldown active until {cooldownUntil:O}.",
+                state: BackgroundWorkState.Failed,
+                errorCode: "cooldown_active");
             return UnavailableImageResolution;
         }
 
-        var imageLock = _imageAcquireLocks.GetOrAdd(imageReference, _ => new SemaphoreSlim(1, 1));
+        var imageLock = await GetOrCreateImageStateAsync(imageReference, cancellationToken);
         await imageLock.WaitAsync(cancellationToken);
         try
         {
@@ -912,10 +965,15 @@ public sealed class DockerWorkerLifecycleManager(
                 localImageExists = true;
                 if (!forceRefresh)
                 {
+                    ReportWorkerImageProgress(
+                        progress,
+                        $"Worker image {imageReference} became available locally.",
+                        percentComplete: 100);
                     return new ImageResolutionResult(true, "local");
                 }
             }
 
+            ReportWorkerImageProgress(progress, $"Acquiring distributed lease for image {imageReference}.");
             await using var lease = await leaseCoordinator.TryAcquireAsync(
                 $"image-resolve:{imageReference}",
                 TimeSpan.FromSeconds(runtime.ImageBuildTimeoutSeconds + runtime.ImagePullTimeoutSeconds + 120),
@@ -923,10 +981,11 @@ public sealed class DockerWorkerLifecycleManager(
 
             if (lease is null)
             {
-                return await WaitForPeerImageResolutionAsync(imageReference, runtime, cancellationToken);
+                ReportWorkerImageProgress(progress, $"Waiting for peer to resolve image {imageReference}.");
+                return await WaitForPeerImageResolutionAsync(imageReference, runtime, cancellationToken, progress);
             }
 
-            var resolved = await ResolveImageByPolicyAsync(imageReference, runtime, cancellationToken);
+            var resolved = await BuildOrPullWithProgressAsync(imageReference, runtime, progress, cancellationToken);
             if (!resolved.Available)
             {
                 if (localImageExists)
@@ -934,14 +993,29 @@ public sealed class DockerWorkerLifecycleManager(
                     logger.ZLogWarning(
                         "Worker image resolution failed for {Image}; keeping existing local image.",
                         imageReference);
+                    ReportWorkerImageProgress(
+                        progress,
+                        $"Worker image resolution failed for {imageReference}; using existing local image.",
+                        percentComplete: 100,
+                        state: BackgroundWorkState.Succeeded);
                     return new ImageResolutionResult(true, "local-fallback");
                 }
 
                 _imageFailureCooldownUntilUtc[imageReference] = DateTime.UtcNow.AddMinutes(runtime.ImageFailureCooldownMinutes);
+                ReportWorkerImageProgress(
+                    progress,
+                    $"Worker image resolution failed for {imageReference}.",
+                    state: BackgroundWorkState.Failed,
+                    errorCode: "image_resolution_failed",
+                    errorMessage: $"Worker image resolution failed for {imageReference}.");
                 return resolved;
             }
 
             _imageFailureCooldownUntilUtc.TryRemove(imageReference, out _);
+            ReportWorkerImageProgress(
+                progress,
+                $"Worker image {imageReference} resolved from {resolved.Source}.",
+                percentComplete: 100);
             return resolved;
         }
         finally
@@ -953,7 +1027,8 @@ public sealed class DockerWorkerLifecycleManager(
     private async Task<ImageResolutionResult> WaitForPeerImageResolutionAsync(
         string imageReference,
         OrchestratorRuntimeSettings runtime,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IProgress<BackgroundWorkSnapshot>? progress = null)
     {
         var timeout = TimeSpan.FromSeconds(Math.Max(15, runtime.ImagePullTimeoutSeconds));
         var started = DateTime.UtcNow;
@@ -962,66 +1037,104 @@ public sealed class DockerWorkerLifecycleManager(
         {
             if (await ImageExistsLocallyAsync(imageReference, cancellationToken))
             {
+                ReportWorkerImageProgress(
+                    progress,
+                    $"Peer resolved worker image {imageReference}.",
+                    percentComplete: 100);
                 return new ImageResolutionResult(true, "peer");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
 
+        ReportWorkerImageProgress(
+            progress,
+            $"Timed out waiting for peer image resolution for {imageReference}.",
+            state: BackgroundWorkState.Failed,
+            errorCode: "peer_timeout");
         return UnavailableImageResolution;
+    }
+
+    private ValueTask<WorkerImagePolicy> ResolvePolicyAsync(
+        OrchestratorRuntimeSettings runtime,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(runtime.WorkerImagePolicy);
+    }
+
+    private ValueTask<SemaphoreSlim> GetOrCreateImageStateAsync(
+        string imageReference,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(_imageAcquireLocks.GetOrAdd(imageReference, _ => new SemaphoreSlim(1, 1)));
+    }
+
+    private async Task<ImageResolutionResult> BuildOrPullWithProgressAsync(
+        string imageReference,
+        OrchestratorRuntimeSettings runtime,
+        IProgress<BackgroundWorkSnapshot>? progress,
+        CancellationToken cancellationToken)
+    {
+        var policy = await ResolvePolicyAsync(runtime, cancellationToken);
+        return await ResolveImageByPolicyAsync(imageReference, runtime, policy, progress, cancellationToken);
     }
 
     private async Task<ImageResolutionResult> ResolveImageByPolicyAsync(
         string imageReference,
         OrchestratorRuntimeSettings runtime,
+        WorkerImagePolicy workerImagePolicy,
+        IProgress<BackgroundWorkSnapshot>? progress,
         CancellationToken cancellationToken)
     {
-        logger.ZLogInformation("Resolving worker image {Image} with policy {Policy}", imageReference, runtime.WorkerImagePolicy);
+        logger.ZLogInformation("Resolving worker image {Image} with policy {Policy}", imageReference, workerImagePolicy);
+        ReportWorkerImageProgress(progress, $"Resolving worker image {imageReference} with policy {workerImagePolicy}.", percentComplete: 10);
 
-        if (runtime.WorkerImagePolicy == WorkerImagePolicy.PullOnly)
+        if (workerImagePolicy == WorkerImagePolicy.PullOnly)
         {
-            return await PullWorkerContainerImageAsync(imageReference, runtime, cancellationToken)
+            return await PullWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
                 ? new ImageResolutionResult(true, "pull")
                 : UnavailableImageResolution;
         }
 
-        if (runtime.WorkerImagePolicy == WorkerImagePolicy.BuildOnly)
+        if (workerImagePolicy == WorkerImagePolicy.BuildOnly)
         {
-            return await BuildWorkerContainerImageAsync(imageReference, runtime, cancellationToken)
+            return await BuildWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
                 ? new ImageResolutionResult(true, "build")
                 : UnavailableImageResolution;
         }
 
-        if (runtime.WorkerImagePolicy == WorkerImagePolicy.PullThenBuild)
+        if (workerImagePolicy == WorkerImagePolicy.PullThenBuild)
         {
-            if (await PullWorkerContainerImageAsync(imageReference, runtime, cancellationToken))
+            if (await PullWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken))
             {
                 return new ImageResolutionResult(true, "pull");
             }
 
-            return await BuildWorkerContainerImageAsync(imageReference, runtime, cancellationToken)
+            return await BuildWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
                 ? new ImageResolutionResult(true, "build")
                 : UnavailableImageResolution;
         }
 
-        if (runtime.WorkerImagePolicy == WorkerImagePolicy.BuildThenPull)
+        if (workerImagePolicy == WorkerImagePolicy.BuildThenPull)
         {
-            if (await BuildWorkerContainerImageAsync(imageReference, runtime, cancellationToken))
+            if (await BuildWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken))
             {
                 return new ImageResolutionResult(true, "build");
             }
 
-            return await PullWorkerContainerImageAsync(imageReference, runtime, cancellationToken)
+            return await PullWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
                 ? new ImageResolutionResult(true, "pull")
                 : UnavailableImageResolution;
         }
 
-        if (await PullWorkerContainerImageAsync(imageReference, runtime, cancellationToken))
+        if (await PullWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken))
         {
             return new ImageResolutionResult(true, "pull");
         }
 
-        return await BuildWorkerContainerImageAsync(imageReference, runtime, cancellationToken)
+        return await BuildWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
             ? new ImageResolutionResult(true, "build")
             : UnavailableImageResolution;
     }
@@ -1044,7 +1157,11 @@ public sealed class DockerWorkerLifecycleManager(
         }
     }
 
-    private async Task<bool> PullWorkerContainerImageAsync(string imageReference, OrchestratorRuntimeSettings runtime, CancellationToken cancellationToken)
+    private async Task<bool> PullWorkerContainerImageAsync(
+        string imageReference,
+        OrchestratorRuntimeSettings runtime,
+        IProgress<BackgroundWorkSnapshot>? progress,
+        CancellationToken cancellationToken)
     {
         await using var slot = await AcquireConcurrencySlotAsync(isBuild: false, runtime.MaxConcurrentPulls, cancellationToken);
 
@@ -1056,11 +1173,16 @@ public sealed class DockerWorkerLifecycleManager(
             var imageSplit = SplitImageReference(imageReference);
 
             logger.ZLogInformation("Pulling worker image {Image}", imageReference);
-            var progress = new Progress<JSONMessage>(message =>
+            ReportWorkerImageProgress(progress, $"Pulling worker image {imageReference}.", percentComplete: 20);
+            var pullProgress = new Progress<JSONMessage>(message =>
             {
                 if (!string.IsNullOrWhiteSpace(message.ProgressMessage))
                 {
                     logger.ZLogDebug("Pull progress for {Image}: {Progress}", imageReference, message.ProgressMessage);
+                    ReportWorkerImageProgress(
+                        progress,
+                        $"Pulling {imageReference}: {message.ProgressMessage}",
+                        percentComplete: TryParsePullPercent(message.ProgressMessage));
                 }
             });
 
@@ -1071,25 +1193,41 @@ public sealed class DockerWorkerLifecycleManager(
                     Tag = imageSplit.Tag
                 },
                 null,
-                progress,
+                pullProgress,
                 timeoutCts.Token);
 
             logger.ZLogInformation("Successfully pulled worker image {Image}", imageReference);
+            ReportWorkerImageProgress(progress, $"Pulled worker image {imageReference}.", percentComplete: 75);
             return true;
         }
         catch (Exception ex)
         {
             logger.ZLogWarning(ex, "Failed to pull worker image {Image}", imageReference);
+            ReportWorkerImageProgress(
+                progress,
+                $"Failed to pull worker image {imageReference}.",
+                state: BackgroundWorkState.Running,
+                errorCode: "pull_failed",
+                errorMessage: ex.Message);
             return false;
         }
     }
 
-    private async Task<bool> BuildWorkerContainerImageAsync(string imageReference, OrchestratorRuntimeSettings runtime, CancellationToken cancellationToken)
+    private async Task<bool> BuildWorkerContainerImageAsync(
+        string imageReference,
+        OrchestratorRuntimeSettings runtime,
+        IProgress<BackgroundWorkSnapshot>? progress,
+        CancellationToken cancellationToken)
     {
         var dockerfilePath = ResolveWorkerGatewayDockerfilePath(runtime);
         if (string.IsNullOrWhiteSpace(dockerfilePath))
         {
             logger.ZLogWarning("Worker Dockerfile could not be resolved for automatic image build");
+            ReportWorkerImageProgress(
+                progress,
+                "Worker Dockerfile could not be resolved for automatic image build.",
+                state: BackgroundWorkState.Running,
+                errorCode: "dockerfile_missing");
             return false;
         }
 
@@ -1100,7 +1238,17 @@ public sealed class DockerWorkerLifecycleManager(
                 continue;
             }
 
+            if (!IsValidWorkerGatewayBuildContext(buildContext, dockerfilePath))
+            {
+                logger.ZLogDebug("Skipping invalid worker build context {Context} for dockerfile {Dockerfile}", buildContext, dockerfilePath);
+                continue;
+            }
+
             logger.ZLogInformation("Building worker image {Image} from {Dockerfile} in context {Context}", imageReference, dockerfilePath, buildContext);
+            ReportWorkerImageProgress(
+                progress,
+                $"Building worker image {imageReference} from context {buildContext}.",
+                percentComplete: 35);
 
             try
             {
@@ -1109,14 +1257,21 @@ public sealed class DockerWorkerLifecycleManager(
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(runtime.ImageBuildTimeoutSeconds));
 
-                await BuildImageWithCliAsync(imageReference, buildContext, dockerfilePath, timeoutCts.Token);
+                await BuildImageWithCliAsync(imageReference, buildContext, dockerfilePath, progress, timeoutCts.Token);
 
                 logger.ZLogInformation("Built worker image {Image}", imageReference);
+                ReportWorkerImageProgress(progress, $"Built worker image {imageReference}.", percentComplete: 90);
                 return true;
             }
             catch (Exception ex)
             {
                 logger.ZLogWarning(ex, "Failed to build worker image {Image} from context {Context}", imageReference, buildContext);
+                ReportWorkerImageProgress(
+                    progress,
+                    $"Failed to build worker image {imageReference} from context {buildContext}.",
+                    state: BackgroundWorkState.Running,
+                    errorCode: "build_failed",
+                    errorMessage: ex.Message);
             }
         }
 
@@ -1167,7 +1322,12 @@ public sealed class DockerWorkerLifecycleManager(
         }
     }
 
-    private async Task BuildImageWithCliAsync(string imageReference, string contextPath, string dockerfilePath, CancellationToken cancellationToken)
+    private async Task BuildImageWithCliAsync(
+        string imageReference,
+        string contextPath,
+        string dockerfilePath,
+        IProgress<BackgroundWorkSnapshot>? progress,
+        CancellationToken cancellationToken)
     {
         var info = new ProcessStartInfo
         {
@@ -1190,6 +1350,10 @@ public sealed class DockerWorkerLifecycleManager(
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
                 logger.ZLogDebug("Docker build output ({Image}): {Message}", imageReference, args.Data);
+                ReportWorkerImageProgress(
+                    progress,
+                    $"Building {imageReference}: {args.Data}",
+                    percentComplete: TryParseBuildPercent(args.Data));
             }
         };
         process.ErrorDataReceived += (_, args) =>
@@ -1197,6 +1361,10 @@ public sealed class DockerWorkerLifecycleManager(
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
                 logger.ZLogDebug("Docker build error ({Image}): {Message}", imageReference, args.Data);
+                ReportWorkerImageProgress(
+                    progress,
+                    $"Building {imageReference}: {args.Data}",
+                    percentComplete: TryParseBuildPercent(args.Data));
             }
         };
 
@@ -1213,6 +1381,105 @@ public sealed class DockerWorkerLifecycleManager(
         {
             throw new InvalidOperationException($"docker build for {imageReference} failed with exit code {process.ExitCode}");
         }
+    }
+
+    private static void ReportWorkerImageProgress(
+        IProgress<BackgroundWorkSnapshot>? progress,
+        string message,
+        int? percentComplete = null,
+        BackgroundWorkState state = BackgroundWorkState.Running,
+        string? errorCode = null,
+        string? errorMessage = null)
+    {
+        if (progress is null)
+        {
+            return;
+        }
+
+        progress.Report(
+            new BackgroundWorkSnapshot(
+                WorkId: string.Empty,
+                OperationKey: string.Empty,
+                Kind: BackgroundWorkKind.WorkerImageResolution,
+                State: state,
+                PercentComplete: percentComplete,
+                Message: message,
+                StartedAt: null,
+                UpdatedAt: DateTimeOffset.UtcNow,
+                ErrorCode: errorCode,
+                ErrorMessage: errorMessage));
+    }
+
+    private static int? TryParsePullPercent(string? progressMessage)
+    {
+        if (string.IsNullOrWhiteSpace(progressMessage))
+        {
+            return null;
+        }
+
+        var match = PullProgressRegex.Match(progressMessage);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        if (!double.TryParse(match.Groups["current"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var current))
+        {
+            return null;
+        }
+
+        if (!double.TryParse(match.Groups["total"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var total))
+        {
+            return null;
+        }
+
+        var currentBytes = ConvertSizeToBytes(current, match.Groups["currentUnit"].Value);
+        var totalBytes = ConvertSizeToBytes(total, match.Groups["totalUnit"].Value);
+        if (totalBytes <= 0)
+        {
+            return null;
+        }
+
+        return Math.Clamp((int)Math.Round((currentBytes / totalBytes) * 100), 0, 99);
+    }
+
+    private static int? TryParseBuildPercent(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return null;
+        }
+
+        var stepMatch = BuildStepRegex.Match(line);
+        if (stepMatch.Success &&
+            int.TryParse(stepMatch.Groups["current"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var currentStep) &&
+            int.TryParse(stepMatch.Groups["total"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var totalSteps) &&
+            totalSteps > 0)
+        {
+            return Math.Clamp((int)Math.Round((double)currentStep / totalSteps * 100), 0, 95);
+        }
+
+        var percentMatch = BuildPercentRegex.Match(line);
+        if (percentMatch.Success &&
+            int.TryParse(percentMatch.Groups["percent"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedPercent))
+        {
+            return Math.Clamp(parsedPercent, 0, 95);
+        }
+
+        return null;
+    }
+
+    private static double ConvertSizeToBytes(double value, string unit)
+    {
+        return unit.Trim().ToUpperInvariant() switch
+        {
+            "KB" => value * 1024d,
+            "MB" => value * 1024d * 1024d,
+            "GB" => value * 1024d * 1024d * 1024d,
+            "TB" => value * 1024d * 1024d * 1024d * 1024d,
+            "PB" => value * 1024d * 1024d * 1024d * 1024d * 1024d,
+            _ => value,
+        };
     }
 
     private static string? ResolveWorkerGatewayDockerfilePath(OrchestratorRuntimeSettings runtime)
@@ -1293,9 +1560,46 @@ public sealed class DockerWorkerLifecycleManager(
         var dockerfileDirectory = Path.GetDirectoryName(dockerfilePath);
         if (!string.IsNullOrWhiteSpace(dockerfileDirectory))
         {
+            foreach (var repositoryRoot in FindRepositoryRootCandidates(dockerfileDirectory))
+            {
+                yield return repositoryRoot;
+            }
+
             yield return Path.GetFullPath(Path.Combine(dockerfileDirectory, ".."));
             yield return dockerfileDirectory;
         }
+    }
+
+    private static bool IsValidWorkerGatewayBuildContext(string buildContext, string dockerfilePath)
+    {
+        var dockerfileDirectory = Path.GetDirectoryName(dockerfilePath);
+        if (string.IsNullOrWhiteSpace(dockerfileDirectory))
+        {
+            return false;
+        }
+
+        var absoluteContext = Path.GetFullPath(buildContext);
+        var absoluteDockerfile = Path.GetFullPath(dockerfilePath);
+        var dockerfileRelativeToContext = Path.GetRelativePath(absoluteContext, absoluteDockerfile);
+        if (dockerfileRelativeToContext.StartsWith("..", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!string.Equals(Path.GetFileName(dockerfileDirectory), "AgentsDashboard.WorkerGateway", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        foreach (var requiredPath in WorkerGatewayBuildContextRequirements)
+        {
+            if (!Path.Exists(Path.Combine(absoluteContext, requiredPath)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static IEnumerable<string> FindWorkspaceRoots(string startDirectory)
@@ -1305,6 +1609,27 @@ public sealed class DockerWorkerLifecycleManager(
         {
             var candidate = Path.Combine(current.FullName, "src", "AgentsDashboard.WorkerGateway", "Dockerfile");
             if (File.Exists(candidate))
+            {
+                yield return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+    }
+
+    private static IEnumerable<string> FindRepositoryRootCandidates(string? startDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(startDirectory))
+        {
+            yield break;
+        }
+
+        var current = new DirectoryInfo(startDirectory);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "AgentsDashboard.slnx"))
+                || File.Exists(Path.Combine(current.FullName, "Directory.Build.props"))
+                || File.Exists(Path.Combine(current.FullName, "Directory.Packages.props")))
             {
                 yield return current.FullName;
             }

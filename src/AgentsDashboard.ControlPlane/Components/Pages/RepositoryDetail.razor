@@ -331,13 +331,22 @@ else
                             <MudTextField @bind-Value="_claudeToken" Label="Claude Code API Key" InputType="InputType.Password" />
                         </MudItem>
                         <MudItem xs="12" md="6">
-                            <MudTextField @bind-Value="_zaiToken" Label="Z.ai API Key (Z_AI_API_KEY)" InputType="InputType.Password" />
+                            <MudTextField @bind-Value="_zaiToken"
+                                          Label="Z.ai API Key (Z_AI_API_KEY)"
+                                          InputType="InputType.Password"
+                                          data-testid="repository-secrets-zai-api-key" />
                         </MudItem>
                         <MudItem xs="12" md="6">
                             <MudTextField @bind-Value="_llmTornadoToken" Label="LlmTornado Key (ANTHROPIC_AUTH_TOKEN)" InputType="InputType.Password" />
                         </MudItem>
                     </MudGrid>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSecretsAsync" Class="mt-3">Save Secrets</MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="SaveSecretsAsync"
+                               Class="mt-3"
+                               data-testid="repository-secrets-save">
+                        Save Secrets
+                    </MudButton>
 
                     @if (!string.IsNullOrWhiteSpace(_saveMessage))
                     {

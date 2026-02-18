@@ -47,6 +47,7 @@ public class RecoveryServiceTests
             reaper.Object,
             options,
             Mock.Of<IHostApplicationLifetime>(),
+            Mock.Of<IBackgroundWorkCoordinator>(),
             NullLogger<RecoveryService>.Instance,
             new StaticTimeProvider(now));
 
@@ -88,6 +89,7 @@ public class RecoveryServiceTests
             Mock.Of<IContainerReaper>(),
             options,
             Mock.Of<IHostApplicationLifetime>(),
+            Mock.Of<IBackgroundWorkCoordinator>(),
             NullLogger<RecoveryService>.Instance,
             new StaticTimeProvider(now));
 
@@ -141,6 +143,7 @@ public class RecoveryServiceTests
             reaper.Object,
             options,
             Mock.Of<IHostApplicationLifetime>(),
+            Mock.Of<IBackgroundWorkCoordinator>(),
             NullLogger<RecoveryService>.Instance,
             new StaticTimeProvider(now));
 

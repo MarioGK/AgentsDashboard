@@ -7,7 +7,9 @@
 @inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 @inject AgentsDashboard.ControlPlane.Services.IWorkerLifecycleManager WorkerLifecycle
 @inject AgentsDashboard.ControlPlane.Services.IOrchestratorRuntimeSettingsProvider RuntimeSettingsProvider
+@inject AgentsDashboard.ControlPlane.Services.IBackgroundWorkCoordinator BackgroundWorkCoordinator
 @inject ISnackbar Snackbar
+@implements IDisposable
 
 <PageTitle>Orchestrator Settings - AgentsDashboard</PageTitle>
 
@@ -147,6 +149,38 @@ else
                         <MudItem xs="6" md="2"><MudChip T="string" Color="Color.Default">Fails/10m: @_health.FailedStartsInWindow</MudChip></MudItem>
                     </MudGrid>
                 }
+
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Image Resolution Activity</MudText>
+                @if (_imageBackgroundWork.Count == 0)
+                {
+                    <MudText Typo="Typo.body2">No image resolution work has been queued.</MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        @foreach (var snapshot in _imageBackgroundWork)
+                        {
+                            <MudPaper Class="pa-2" Elevation="0">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudChip T="string" Size="Size.Small" Color="@MapBackgroundWorkColor(snapshot.State)">
+                                        @MapBackgroundWorkState(snapshot.State)
+                                    </MudChip>
+                                    <MudText Typo="Typo.caption">@snapshot.UpdatedAt?.LocalDateTime.ToString("g")</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.caption">@snapshot.Message</MudText>
+                                @if (snapshot.PercentComplete.HasValue)
+                                {
+                                    <MudProgressLinear Value="@snapshot.PercentComplete.Value" Class="mt-1" />
+                                }
+                                else if (snapshot.State == BackgroundWorkState.Running)
+                                {
+                                    <MudProgressLinear Indeterminate="true" Class="mt-1" />
+                                }
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
             </MudPaper>
         </MudItem>
     </MudGrid>
@@ -170,9 +204,13 @@ else
     private OrchestratorConfig _settings = new();
     private OrchestratorHealthSnapshot? _health;
     private string _workerActionId = string.Empty;
+    private IReadOnlyList<BackgroundWorkSnapshot> _imageBackgroundWork = [];
+    private Action<BackgroundWorkSnapshot>? _backgroundWorkHandler;
 
     protected override async Task OnInitializedAsync()
     {
+        _backgroundWorkHandler = OnBackgroundWorkUpdated;
+        BackgroundWorkCoordinator.Updated += _backgroundWorkHandler;
         await RefreshAllAsync();
     }
 
@@ -184,6 +222,7 @@ else
             _document = await Store.GetSettingsAsync(CancellationToken.None);
             _settings = CloneOrchestratorSettings(_document.Orchestrator);
             _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
+            RefreshImageBackgroundWork();
         }
         catch (Exception ex)
         {
@@ -243,8 +282,19 @@ else
 
     private async Task EnsureImageAsync()
     {
-        await WorkerLifecycle.EnsureWorkerImageAvailableAsync(CancellationToken.None);
-        Snackbar.Add("Worker image ensure completed", Severity.Success);
+        const string operationKey = "manual:worker-image-resolution";
+        var workId = BackgroundWorkCoordinator.Enqueue(
+            BackgroundWorkKind.WorkerImageResolution,
+            operationKey,
+            async (cancellationToken, progress) =>
+            {
+                await WorkerLifecycle.EnsureWorkerImageAvailableAsync(cancellationToken, progress);
+            },
+            dedupeByOperationKey: true,
+            isCritical: false);
+
+        RefreshImageBackgroundWork();
+        Snackbar.Add($"Worker image ensure queued ({workId[..8]})", Severity.Info);
     }
 
     private async Task RecyclePoolAsync()
@@ -283,6 +333,55 @@ else
         await WorkerLifecycle.RecycleWorkerAsync(_workerActionId.Trim(), CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
         Snackbar.Add($"Worker {_workerActionId.Trim()} recycle requested", Severity.Info);
+    }
+
+    private void OnBackgroundWorkUpdated(BackgroundWorkSnapshot snapshot)
+    {
+        if (snapshot.Kind != BackgroundWorkKind.WorkerImageResolution)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(() =>
+        {
+            RefreshImageBackgroundWork();
+            StateHasChanged();
+        });
+    }
+
+    private void RefreshImageBackgroundWork()
+    {
+        _imageBackgroundWork = BackgroundWorkCoordinator.Snapshot()
+            .Where(snapshot => snapshot.Kind == BackgroundWorkKind.WorkerImageResolution)
+            .OrderByDescending(snapshot => snapshot.UpdatedAt ?? snapshot.StartedAt ?? DateTimeOffset.MinValue)
+            .Take(8)
+            .ToArray();
+    }
+
+    private static string MapBackgroundWorkState(BackgroundWorkState state)
+    {
+        return state switch
+        {
+            BackgroundWorkState.Pending => "Pending",
+            BackgroundWorkState.Running => "Running",
+            BackgroundWorkState.Succeeded => "Succeeded",
+            BackgroundWorkState.Failed => "Failed",
+            BackgroundWorkState.Cancelled => "Cancelled",
+            _ => state.ToString(),
+        };
+    }
+
+    private static Color MapBackgroundWorkColor(BackgroundWorkState state)
+    {
+        return state switch
+        {
+            BackgroundWorkState.Pending => Color.Info,
+            BackgroundWorkState.Running => Color.Primary,
+            BackgroundWorkState.Succeeded => Color.Success,
+            BackgroundWorkState.Failed => Color.Error,
+            BackgroundWorkState.Cancelled => Color.Warning,
+            _ => Color.Default,
+        };
     }
 
     private static OrchestratorConfig CloneOrchestratorSettings(OrchestratorConfig source)
@@ -419,6 +518,15 @@ else
         if (settings.VacuumMinDeletedRows < 1)
         {
             throw new InvalidOperationException("VacuumMinDeletedRows must be at least 1");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_backgroundWorkHandler is not null)
+        {
+            BackgroundWorkCoordinator.Updated -= _backgroundWorkHandler;
+            _backgroundWorkHandler = null;
         }
     }
 }

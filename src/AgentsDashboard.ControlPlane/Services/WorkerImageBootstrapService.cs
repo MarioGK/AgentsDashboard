@@ -2,19 +2,22 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class WorkerImageBootstrapService(
     IWorkerLifecycleManager lifecycleManager,
+    IBackgroundWorkCoordinator backgroundWorkCoordinator,
     ILogger<WorkerImageBootstrapService> logger) : IHostedService
 {
-    public async Task StartAsync(CancellationToken cancellationToken)
+    private const string StartupOperationKey = "startup:worker-image-resolution";
+
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await lifecycleManager.EnsureWorkerImageAvailableAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.ZLogCritical(ex, "Worker image bootstrap failed");
-            throw;
-        }
+        var workId = backgroundWorkCoordinator.Enqueue(
+            BackgroundWorkKind.WorkerImageResolution,
+            StartupOperationKey,
+            async (workCancellationToken, progress) => await lifecycleManager.EnsureWorkerImageAvailableAsync(workCancellationToken, progress),
+            dedupeByOperationKey: true,
+            isCritical: false);
+
+        logger.ZLogInformation("Queued startup worker image bootstrap as background work {WorkId}", workId);
+        return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

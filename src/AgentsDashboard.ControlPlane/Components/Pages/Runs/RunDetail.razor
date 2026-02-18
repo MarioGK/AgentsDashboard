@@ -207,6 +207,7 @@ else
                         <MudStack Row Spacing="1" Class="mb-2">
                             <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyRunJsonAsync">Copy JSON</MudButton>
                             <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyPatchAsync">Copy Patch</MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Share" OnClick="ExportRunShareBundleAsync">Export Share Bundle</MudButton>
                         </MudStack>
 
                         <MudText Typo="Typo.caption">Run Output JSON</MudText>
@@ -803,6 +804,49 @@ else
     private async Task CopyPatchAsync()
     {
         await CopyTextAsync(GetResolvedDiffPatch(), "Patch copied.");
+    }
+
+    private async Task ExportRunShareBundleAsync()
+    {
+        if (_run is null)
+        {
+            return;
+        }
+
+        var artifacts = await Store.ListArtifactsAsync(_run.Id, CancellationToken.None);
+        var instructionStack = await Store.GetRunInstructionStackAsync(_run.Id, CancellationToken.None);
+        var payload = new
+        {
+            exportedAtUtc = DateTime.UtcNow,
+            run = _run,
+            summary = _run.Summary,
+            outputJson = _run.OutputJson,
+            structuredEvents = _structuredEvents,
+            toolProjections = _toolProjections,
+            diff = new
+            {
+                stat = GetResolvedDiffStat(),
+                patch = GetResolvedDiffPatch()
+            },
+            artifacts,
+            instructionStack
+        };
+
+        var bundleJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+
+        await Store.UpsertRunShareBundleAsync(new RunShareBundleDocument
+        {
+            RunId = _run.Id,
+            RepositoryId = _run.RepositoryId,
+            TaskId = _run.TaskId,
+            BundleJson = bundleJson,
+            CreatedAtUtc = DateTime.UtcNow
+        }, CancellationToken.None);
+
+        await CopyTextAsync(bundleJson, "Run share bundle copied.");
     }
 
     private async Task CopyWorkflowPatchAsync(string patch)

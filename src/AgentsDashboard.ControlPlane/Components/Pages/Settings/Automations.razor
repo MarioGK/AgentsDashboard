@@ -1,0 +1,307 @@
+@page "/settings/automations"
+@layout SettingsLayout
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
+@inject AgentsDashboard.ControlPlane.Services.RunDispatcher Dispatcher
+@inject ISnackbar Snackbar
+@using AgentsDashboard.Contracts.Api
+@using AgentsDashboard.Contracts.Domain
+
+<PageTitle>Automations - AgentsDashboard</PageTitle>
+
+<MudStack Spacing="2">
+    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.h4">Automations</MudText>
+        <MudButton Variant="Variant.Outlined" OnClick="LoadAsync">Refresh</MudButton>
+    </MudStack>
+
+    <MudPaper Class="pa-4">
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" @bind-Value="_selectedRepositoryId" @bind-Value:after="OnRepositoryChangedAsync" Label="Repository" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var repository in _repositories)
+                    {
+                        <MudSelectItem T="string" Value="@repository.Id">@repository.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" @bind-Value="_taskId" Label="Task" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var task in _tasks)
+                    {
+                        <MudSelectItem T="string" Value="@task.Id">@task.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField T="string" @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudTextField T="string" @bind-Value="_cronExpression" Label="Cron Expression" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudSelect T="string" @bind-Value="_triggerKind" Label="Trigger" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="string" Value='@("cron")'>Cron</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("webhook")'>Webhook</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudSelect T="string" @bind-Value="_replayPolicy" Label="Replay Policy" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="string" Value='@("skip")'>Skip</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("queue")'>Queue</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="3" Class="d-flex align-center">
+                <MudSwitch T="bool" @bind-Value="_enabled" Label="Enabled" Color="Color.Primary" />
+            </MudItem>
+        </MudGrid>
+
+        <MudStack Row Spacing="1" Class="mt-2">
+            @if (!string.IsNullOrWhiteSpace(_editingId))
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="SaveAsync">Update</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="CancelEdit">Cancel</MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Create</MudButton>
+            }
+        </MudStack>
+    </MudPaper>
+
+    <MudTable Items="_automations" Dense Hover>
+        <HeaderContent>
+            <MudTh>Name</MudTh>
+            <MudTh>Task</MudTh>
+            <MudTh>Trigger</MudTh>
+            <MudTh>Cron</MudTh>
+            <MudTh>Next Run</MudTh>
+            <MudTh>Enabled</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Name</MudTd>
+            <MudTd>@ResolveTaskName(context.TaskId)</MudTd>
+            <MudTd>@context.TriggerKind</MudTd>
+            <MudTd>@context.CronExpression</MudTd>
+            <MudTd>@(context.NextRunAtUtc?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+            <MudTd>@context.Enabled</MudTd>
+            <MudTd>
+                <MudStack Row Spacing="1">
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Info" OnClick="() => RunNowAsync(context)">Run Now</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Secondary" OnClick="() => StartEdit(context)">Edit</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(context)">Delete</MudButton>
+                </MudStack>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6">Recent Executions</MudText>
+        <MudSimpleTable Dense Hover>
+            <thead>
+                <tr>
+                    <th>Started</th>
+                    <th>Status</th>
+                    <th>Task</th>
+                    <th>Run</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var execution in _executions)
+                {
+                    <tr>
+                        <td>@execution.StartedAtUtc.ToLocalTime().ToString("g")</td>
+                        <td>@execution.Status</td>
+                        <td>@ResolveTaskName(execution.TaskId)</td>
+                        <td>@(string.IsNullOrWhiteSpace(execution.RunId) ? "-" : execution.RunId[..Math.Min(8, execution.RunId.Length)])</td>
+                        <td>@execution.Message</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private readonly List<RepositoryDocument> _repositories = [];
+    private readonly List<TaskDocument> _tasks = [];
+    private readonly List<AutomationDefinitionDocument> _automations = [];
+    private readonly List<AutomationExecutionDocument> _executions = [];
+
+    private string _selectedRepositoryId = string.Empty;
+    private string _editingId = string.Empty;
+    private string _taskId = string.Empty;
+    private string _name = string.Empty;
+    private string _cronExpression = "*/15 * * * *";
+    private string _triggerKind = "cron";
+    private string _replayPolicy = "skip";
+    private bool _enabled = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _repositories.Clear();
+        _repositories.AddRange(await Store.ListRepositoriesAsync(CancellationToken.None));
+
+        if (string.IsNullOrWhiteSpace(_selectedRepositoryId))
+        {
+            _selectedRepositoryId = _repositories.FirstOrDefault()?.Id ?? string.Empty;
+        }
+
+        await LoadRepositoryDataAsync();
+    }
+
+    private async Task LoadRepositoryDataAsync()
+    {
+        _tasks.Clear();
+        _automations.Clear();
+        _executions.Clear();
+
+        if (string.IsNullOrWhiteSpace(_selectedRepositoryId))
+        {
+            return;
+        }
+
+        _tasks.AddRange(await Store.ListTasksAsync(_selectedRepositoryId, CancellationToken.None));
+        _automations.AddRange(await Store.ListAutomationDefinitionsAsync(_selectedRepositoryId, CancellationToken.None));
+        _executions.AddRange(await Store.ListAutomationExecutionsAsync(_selectedRepositoryId, 100, CancellationToken.None));
+
+        if (string.IsNullOrWhiteSpace(_taskId))
+        {
+            _taskId = _tasks.FirstOrDefault()?.Id ?? string.Empty;
+        }
+    }
+
+    private async Task OnRepositoryChangedAsync()
+    {
+        _taskId = string.Empty;
+        CancelEdit();
+        await LoadRepositoryDataAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedRepositoryId) || string.IsNullOrWhiteSpace(_taskId))
+        {
+            Snackbar.Add("Repository and task are required.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            var request = new UpsertAutomationDefinitionRequest(
+                _selectedRepositoryId,
+                _taskId,
+                _name,
+                _cronExpression,
+                _triggerKind,
+                _replayPolicy,
+                _enabled);
+
+            await Store.UpsertAutomationDefinitionAsync(string.IsNullOrWhiteSpace(_editingId) ? null : _editingId, request, CancellationToken.None);
+            CancelEdit();
+            await LoadRepositoryDataAsync();
+            Snackbar.Add("Automation saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private void StartEdit(AutomationDefinitionDocument automation)
+    {
+        _editingId = automation.Id;
+        _taskId = automation.TaskId;
+        _name = automation.Name;
+        _cronExpression = automation.CronExpression;
+        _triggerKind = automation.TriggerKind;
+        _replayPolicy = automation.ReplayPolicy;
+        _enabled = automation.Enabled;
+    }
+
+    private void CancelEdit()
+    {
+        _editingId = string.Empty;
+        _taskId = _tasks.FirstOrDefault()?.Id ?? string.Empty;
+        _name = string.Empty;
+        _cronExpression = "*/15 * * * *";
+        _triggerKind = "cron";
+        _replayPolicy = "skip";
+        _enabled = true;
+    }
+
+    private async Task DeleteAsync(AutomationDefinitionDocument automation)
+    {
+        var deleted = await Store.DeleteAutomationDefinitionAsync(automation.Id, CancellationToken.None);
+        if (!deleted)
+        {
+            Snackbar.Add("Automation definition not found.", Severity.Warning);
+            return;
+        }
+
+        if (string.Equals(_editingId, automation.Id, StringComparison.Ordinal))
+        {
+            CancelEdit();
+        }
+
+        await LoadRepositoryDataAsync();
+        Snackbar.Add("Automation deleted.", Severity.Success);
+    }
+
+    private async Task RunNowAsync(AutomationDefinitionDocument automation)
+    {
+        var repository = await Store.GetRepositoryAsync(automation.RepositoryId, CancellationToken.None);
+        var task = await Store.GetTaskAsync(automation.TaskId, CancellationToken.None);
+        if (repository is null || task is null)
+        {
+            Snackbar.Add("Repository or task not found.", Severity.Warning);
+            return;
+        }
+
+        var run = await Store.CreateRunAsync(
+            task,
+            CancellationToken.None,
+            executionModeOverride: task.ExecutionModeDefault,
+            sessionProfileId: task.SessionProfileId,
+            automationRunId: automation.Id);
+
+        var dispatchAccepted = await Dispatcher.DispatchAsync(
+            repository,
+            task,
+            run,
+            CancellationToken.None,
+            sessionProfileId: run.SessionProfileId,
+            automationRunId: automation.Id);
+
+        await Store.CreateAutomationExecutionAsync(new AutomationExecutionDocument
+        {
+            AutomationDefinitionId = automation.Id,
+            RepositoryId = automation.RepositoryId,
+            TaskId = automation.TaskId,
+            RunId = run.Id,
+            Status = dispatchAccepted ? "queued" : "rejected",
+            Message = dispatchAccepted ? "Run dispatched." : "Run queued/rejected by dispatcher.",
+            TriggeredBy = "manual",
+            StartedAtUtc = DateTime.UtcNow,
+            CompletedAtUtc = DateTime.UtcNow,
+        }, CancellationToken.None);
+
+        await LoadRepositoryDataAsync();
+        Snackbar.Add(dispatchAccepted ? "Automation run dispatched." : "Automation run created but not dispatched.", dispatchAccepted ? Severity.Success : Severity.Info);
+    }
+
+    private string ResolveTaskName(string taskId)
+    {
+        return _tasks.FirstOrDefault(x => x.Id == taskId)?.Name ?? taskId;
+    }
+}

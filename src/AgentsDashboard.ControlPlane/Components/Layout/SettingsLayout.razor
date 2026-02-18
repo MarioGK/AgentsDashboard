@@ -6,10 +6,11 @@
         <MudText Typo="Typo.subtitle2" Class="settings-nav-title">Settings</MudText>
         <MudNavMenu Dense="true" Class="settings-nav-menu">
             <MudNavGroup Title="Core" Icon="@Icons.Material.Filled.Dashboard" Expanded="true">
-                <MudNavLink Href="/settings/projects" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">Repositories</MudNavLink>
+                <MudNavLink Href="/settings/repositories" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">Repositories</MudNavLink>
                 <MudNavLink Href="/settings/runs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PlayCircle">Runs</MudNavLink>
                 <MudNavLink Href="/settings/findings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.FactCheck">Findings</MudNavLink>
                 <MudNavLink Href="/settings/schedules" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">Schedules</MudNavLink>
+                <MudNavLink Href="/settings/automations" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AutoMode">Automations</MudNavLink>
             </MudNavGroup>
             <MudNavGroup Title="Workflows" Icon="@Icons.Material.Filled.AccountTree" Expanded="true">
                 <MudNavLink Href="/settings/workflows/stages" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Layers">Stages</MudNavLink>
@@ -17,12 +18,14 @@
             <MudNavGroup Title="Platform" Icon="@Icons.Material.Filled.SettingsApplications" Expanded="true">
                 <MudNavLink Href="/settings/templates" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Description">Templates</MudNavLink>
                 <MudNavLink Href="/settings/skills" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Bolt">Skills</MudNavLink>
+                <MudNavLink Href="/settings/session-profiles" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Person">Session Profiles</MudNavLink>
                 <MudNavLink Href="/settings/sounds" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.VolumeUp">Sounds</MudNavLink>
                 <MudNavLink Href="/settings/workers" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Engineering">Workers</MudNavLink>
                 <MudNavLink Href="/settings/alerts" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Notifications">Alerts</MudNavLink>
             </MudNavGroup>
             <MudNavGroup Title="Infrastructure" Icon="@Icons.Material.Filled.Dns" Expanded="true">
                 <MudNavLink Href="/settings/image-builder" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Build">Image Builder</MudNavLink>
+                <MudNavLink Href="/settings/mcp" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Extension">MCP</MudNavLink>
                 <MudNavLink Href="/settings/orchestrator" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Memory">Orchestrator</MudNavLink>
                 <MudNavLink Href="/settings/proxy-audits" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Policy">Proxy Audits</MudNavLink>
                 <MudNavLink Href="/settings/system" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">System</MudNavLink>

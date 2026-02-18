@@ -2,7 +2,9 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public interface IWorkerLifecycleManager
 {
-    Task EnsureWorkerImageAvailableAsync(CancellationToken cancellationToken);
+    Task EnsureWorkerImageAvailableAsync(
+        CancellationToken cancellationToken,
+        IProgress<BackgroundWorkSnapshot>? progress = null);
     Task EnsureMinimumWorkersAsync(CancellationToken cancellationToken);
     Task<WorkerLease?> AcquireWorkerForDispatchAsync(CancellationToken cancellationToken);
     Task<WorkerRuntime?> GetWorkerAsync(string workerId, CancellationToken cancellationToken);

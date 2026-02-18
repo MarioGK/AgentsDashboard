@@ -1,6 +1,7 @@
 using System.Globalization;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.ControlPlane;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using AgentsDashboard.ControlPlane.Proxy;
@@ -25,8 +26,29 @@ public sealed class RunDispatcher(
         RepositoryDocument repository,
         TaskDocument task,
         RunDocument run,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<DispatchInputPart>? inputParts = null,
+        IReadOnlyList<DispatchImageAttachment>? imageAttachments = null,
+        bool preferNativeMultimodal = true,
+        string multimodalFallbackPolicy = "auto-text-reference",
+        string? sessionProfileId = null,
+        string? instructionStackHash = null,
+        string? mcpConfigSnapshotJson = null,
+        string? automationRunId = null)
     {
+        logger.ZLogInformation(
+            "Dispatch request repo={RepositoryId} task={TaskId} run={RunId} harness={Harness} mode={Mode} protocol={Protocol} sessionProfile={SessionProfileId} requireApproval={RequireApproval} linkedFailures={LinkedFailureRuns} artifactPatterns={ArtifactPatterns}",
+            repository.Id,
+            task.Id,
+            run.Id,
+            task.Harness,
+            run.ExecutionMode,
+            run.StructuredProtocol,
+            run.SessionProfileId ?? "none",
+            task.ApprovalProfile.RequireApproval,
+            task.LinkedFailureRuns.Count,
+            task.ArtifactPatterns.Count);
+
         var taskQueueHead = await GetTaskQueueHeadAsync(task.Id, cancellationToken);
         if (taskQueueHead is not null &&
             !string.Equals(taskQueueHead.Id, run.Id, StringComparison.Ordinal))
@@ -244,6 +266,16 @@ public sealed class RunDispatcher(
             ArtifactPolicyMaxTotalSizeBytes = task.ArtifactPolicy.MaxTotalSizeBytes,
             Mode = run.ExecutionMode,
             StructuredProtocolVersion = run.StructuredProtocol,
+            InputParts = inputParts is { Count: > 0 } ? [.. inputParts] : null,
+            ImageAttachments = imageAttachments is { Count: > 0 } ? [.. imageAttachments] : null,
+            PreferNativeMultimodal = preferNativeMultimodal,
+            MultimodalFallbackPolicy = string.IsNullOrWhiteSpace(multimodalFallbackPolicy)
+                ? "auto-text-reference"
+                : multimodalFallbackPolicy.Trim(),
+            SessionProfileId = sessionProfileId?.Trim() ?? run.SessionProfileId ?? string.Empty,
+            InstructionStackHash = instructionStackHash?.Trim() ?? run.InstructionStackHash ?? string.Empty,
+            McpConfigSnapshotJson = mcpConfigSnapshotJson?.Trim() ?? run.McpConfigSnapshotJson ?? string.Empty,
+            AutomationRunId = automationRunId?.Trim() ?? run.AutomationRunId ?? string.Empty,
         };
 
         var workerClient = clientFactory.CreateWorkerGatewayService(workerLease.WorkerId, workerLease.GrpcEndpoint);

@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.Contracts.Worker;
 using AgentsDashboard.ControlPlane.Data;
 
 namespace AgentsDashboard.ControlPlane.Services;
@@ -55,7 +57,10 @@ public sealed record WorkspacePromptSubmissionRequest(
     bool ForceNewRun = false,
     string? UserMessage = null,
     HarnessExecutionMode? ModeOverride = null,
-    WorkspaceAgentTeamRequest? AgentTeam = null);
+    WorkspaceAgentTeamRequest? AgentTeam = null,
+    IReadOnlyList<WorkspaceImageInput>? Images = null,
+    bool PreferNativeMultimodal = true,
+    string? SessionProfileId = null);
 
 public sealed record WorkspaceAgentTeamRequest(
     IReadOnlyList<WorkspaceAgentTeamMemberRequest> Members,
@@ -103,6 +108,7 @@ public sealed class WorkspaceService(
     IWorkflowExecutor workflowExecutor,
     IHarnessOutputParserService parserService,
     IWorkspaceAiService workspaceAiService,
+    IWorkspaceImageStorageService workspaceImageStorageService,
     ITaskSemanticEmbeddingService taskSemanticEmbeddingService,
     ILogger<WorkspaceService> logger) : IWorkspaceService
 {
@@ -213,10 +219,36 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
+        var requestedSessionProfileId = string.IsNullOrWhiteSpace(request.SessionProfileId)
+            ? task.SessionProfileId
+            : request.SessionProfileId.Trim();
+        RunSessionProfileDocument? sessionProfile = null;
+        if (!string.IsNullOrWhiteSpace(requestedSessionProfileId))
+        {
+            sessionProfile = await store.GetRunSessionProfileAsync(requestedSessionProfileId, cancellationToken);
+            if (sessionProfile is null ||
+                !sessionProfile.Enabled ||
+                !(string.Equals(sessionProfile.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(sessionProfile.RepositoryId, "global", StringComparison.OrdinalIgnoreCase)))
+            {
+                return new WorkspacePromptSubmissionResult(
+                    Success: false,
+                    CreatedRun: false,
+                    DispatchAccepted: false,
+                    Message: "Session profile is missing, disabled, or not in scope for this repository.",
+                    Task: task,
+                    Run: null);
+            }
+        }
+
         if (request.AgentTeam is { Members.Count: > 0 })
         {
             return await SubmitAgentTeamRunAsync(repository, task, request, cancellationToken);
         }
+
+        var requestedImages = request.Images?
+            .Where(image => !string.IsNullOrWhiteSpace(image.DataUrl))
+            .ToList() ?? [];
 
         var runs = await store.ListRunsByRepositoryAsync(repositoryId, cancellationToken);
         var activeRun = runs
@@ -224,7 +256,10 @@ public sealed class WorkspaceService(
             .OrderByDescending(run => run.CreatedAtUtc)
             .FirstOrDefault();
 
-        if (activeRun is not null && !request.ForceNewRun && request.ModeOverride is null)
+        if (activeRun is not null &&
+            !request.ForceNewRun &&
+            request.ModeOverride is null &&
+            requestedImages.Count == 0)
         {
             if (!string.IsNullOrWhiteSpace(request.UserMessage))
             {
@@ -233,6 +268,7 @@ public sealed class WorkspaceService(
                     task.Id,
                     activeRun.Id,
                     request.UserMessage,
+                    [],
                     cancellationToken);
                 taskSemanticEmbeddingService.QueueTaskEmbedding(
                     repositoryId,
@@ -266,6 +302,10 @@ public sealed class WorkspaceService(
         {
             dispatchTask.Harness = request.Harness.Trim().ToLowerInvariant();
         }
+        else if (!string.IsNullOrWhiteSpace(sessionProfile?.Harness))
+        {
+            dispatchTask.Harness = sessionProfile.Harness.Trim().ToLowerInvariant();
+        }
 
         if (string.IsNullOrWhiteSpace(dispatchTask.Command))
         {
@@ -289,21 +329,87 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
+        var effectiveModeOverride = request.ModeOverride ?? sessionProfile?.ExecutionModeDefault;
         var run = await store.CreateRunAsync(
             task,
             cancellationToken,
-            executionModeOverride: request.ModeOverride);
-        var dispatchAccepted = await dispatcher.DispatchAsync(repository, dispatchTask, run, cancellationToken);
+            executionModeOverride: effectiveModeOverride,
+            sessionProfileId: sessionProfile?.Id);
+
+        var storedImages = new List<WorkspaceStoredImage>();
+        if (requestedImages.Count > 0)
+        {
+            var stored = await workspaceImageStorageService.StoreAsync(
+                run.Id,
+                repositoryId,
+                task.Id,
+                requestedImages,
+                cancellationToken);
+            if (!stored.Success)
+            {
+                var failedRun = await store.MarkRunCompletedAsync(
+                    run.Id,
+                    succeeded: false,
+                    summary: "Workspace image validation failed",
+                    outputJson: "{}",
+                    cancellationToken,
+                    failureClass: "InvalidInput");
+
+                return new WorkspacePromptSubmissionResult(
+                    Success: false,
+                    CreatedRun: true,
+                    DispatchAccepted: false,
+                    Message: stored.Message,
+                    Task: task,
+                    Run: failedRun ?? run);
+            }
+
+            storedImages = stored.Images.ToList();
+            var fallbackBlock = workspaceImageStorageService.BuildFallbackReferenceBlock(stored.Images);
+            if (!string.IsNullOrWhiteSpace(fallbackBlock))
+            {
+                dispatchTask.Prompt = AppendPromptSuffix(dispatchTask.Prompt, fallbackBlock);
+            }
+        }
+
+        var instructionStack = await BuildRunInstructionStackAsync(
+            repository,
+            dispatchTask,
+            run,
+            sessionProfile,
+            request.UserMessage,
+            cancellationToken);
+        instructionStack = await store.UpsertRunInstructionStackAsync(instructionStack, cancellationToken);
+
+        var settings = await store.GetSettingsAsync(cancellationToken);
+        var mcpConfigSnapshotJson = !string.IsNullOrWhiteSpace(sessionProfile?.McpConfigJson)
+            ? sessionProfile.McpConfigJson
+            : settings.Orchestrator.McpConfigJson;
+
+        var dispatchAccepted = await dispatcher.DispatchAsync(
+            repository,
+            dispatchTask,
+            run,
+            cancellationToken,
+            BuildDispatchInputParts(dispatchTask.Prompt, storedImages),
+            BuildDispatchImageAttachments(storedImages),
+            request.PreferNativeMultimodal,
+            "auto-text-reference",
+            sessionProfile?.Id,
+            instructionStack.Hash,
+            mcpConfigSnapshotJson,
+            run.AutomationRunId);
 
         NotifyRunEvent(run.Id, "created", DateTime.UtcNow);
 
-        if (!string.IsNullOrWhiteSpace(request.UserMessage))
+        if (!string.IsNullOrWhiteSpace(request.UserMessage) || storedImages.Count > 0)
         {
             var promptEntry = await AppendUserPromptEntryAsync(
                 repositoryId,
                 task.Id,
                 run.Id,
-                request.UserMessage,
+                request.UserMessage ?? string.Empty,
+                storedImages,
                 cancellationToken);
             taskSemanticEmbeddingService.QueueTaskEmbedding(
                 repositoryId,
@@ -376,6 +482,17 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
+        if (request.Images is { Count: > 0 })
+        {
+            return new WorkspacePromptSubmissionResult(
+                Success: false,
+                CreatedRun: false,
+                DispatchAccepted: false,
+                Message: "Image attachments are not supported for Agent Team runs yet.",
+                Task: task,
+                Run: null);
+        }
+
         var members = teamRequest.Members
             .Select((member, index) => new WorkflowAgentTeamMemberConfig
             {
@@ -437,6 +554,7 @@ public sealed class WorkspaceService(
                 task.Id,
                 execution.Id,
                 request.UserMessage,
+                [],
                 cancellationToken);
         }
 
@@ -673,9 +791,132 @@ public sealed class WorkspaceService(
             AutoCreatePullRequest: false,
             CronExpression: string.Empty,
             Enabled: true,
-            ExecutionModeDefault: request.ModeOverride);
+            ExecutionModeDefault: request.ModeOverride,
+            SessionProfileId: request.SessionProfileId);
 
         return await store.CreateTaskAsync(createRequest, cancellationToken);
+    }
+
+    private async Task<RunInstructionStackDocument> BuildRunInstructionStackAsync(
+        RepositoryDocument repository,
+        TaskDocument task,
+        RunDocument run,
+        RunSessionProfileDocument? sessionProfile,
+        string? runOverrideMessage,
+        CancellationToken cancellationToken)
+    {
+        var settings = await store.GetSettingsAsync(cancellationToken);
+        var globalRules = BuildGlobalRules(settings);
+
+        var repositoryRuleParts = new List<string>();
+        var repositoryInstructions = await store.GetInstructionsAsync(repository.Id, cancellationToken);
+        foreach (var instruction in repositoryInstructions.Where(x => x.Enabled).OrderBy(x => x.Priority))
+        {
+            if (!string.IsNullOrWhiteSpace(instruction.Content))
+            {
+                repositoryRuleParts.Add(instruction.Content.Trim());
+            }
+        }
+
+        foreach (var instructionFile in repository.InstructionFiles.OrderBy(x => x.Order))
+        {
+            if (!string.IsNullOrWhiteSpace(instructionFile.Content))
+            {
+                repositoryRuleParts.Add(instructionFile.Content.Trim());
+            }
+        }
+
+        var taskRuleParts = task.InstructionFiles
+            .OrderBy(x => x.Order)
+            .Where(x => !string.IsNullOrWhiteSpace(x.Content))
+            .Select(x => x.Content.Trim())
+            .ToList();
+
+        var repositoryRules = string.Join("\n\n", repositoryRuleParts);
+        var taskRules = string.Join("\n\n", taskRuleParts);
+        var runOverrides = runOverrideMessage?.Trim() ?? string.Empty;
+
+        var resolvedBuilder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(globalRules))
+        {
+            resolvedBuilder.AppendLine("--- [Global Rules] ---");
+            resolvedBuilder.AppendLine(globalRules);
+            resolvedBuilder.AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(repositoryRules))
+        {
+            resolvedBuilder.AppendLine("--- [Repository Rules] ---");
+            resolvedBuilder.AppendLine(repositoryRules);
+            resolvedBuilder.AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(taskRules))
+        {
+            resolvedBuilder.AppendLine("--- [Task Rules] ---");
+            resolvedBuilder.AppendLine(taskRules);
+            resolvedBuilder.AppendLine();
+        }
+
+        resolvedBuilder.AppendLine("--- [Prompt] ---");
+        resolvedBuilder.AppendLine(task.Prompt);
+
+        if (!string.IsNullOrWhiteSpace(runOverrides))
+        {
+            resolvedBuilder.AppendLine();
+            resolvedBuilder.AppendLine("--- [Run Overrides] ---");
+            resolvedBuilder.AppendLine(runOverrides);
+        }
+
+        var resolvedText = resolvedBuilder.ToString().Trim();
+        var hash = ComputeInstructionStackHash(resolvedText);
+
+        return new RunInstructionStackDocument
+        {
+            RunId = run.Id,
+            RepositoryId = repository.Id,
+            TaskId = task.Id,
+            SessionProfileId = sessionProfile?.Id ?? string.Empty,
+            GlobalRules = globalRules,
+            RepositoryRules = repositoryRules,
+            TaskRules = taskRules,
+            RunOverrides = runOverrides,
+            ResolvedText = resolvedText,
+            Hash = hash,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    private static string BuildGlobalRules(SystemSettingsDocument settings)
+    {
+        if (!string.IsNullOrWhiteSpace(settings.Orchestrator.GlobalRunRules))
+        {
+            return settings.Orchestrator.GlobalRunRules.Trim();
+        }
+
+        var builder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(settings.Orchestrator.TaskPromptPrefix))
+        {
+            builder.AppendLine(settings.Orchestrator.TaskPromptPrefix.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.Orchestrator.TaskPromptSuffix))
+        {
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            builder.AppendLine(settings.Orchestrator.TaskPromptSuffix.Trim());
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string ComputeInstructionStackHash(string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value ?? string.Empty);
+        return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
     private WorkspaceSummaryRefreshStateView EvaluateSummaryRefresh(
@@ -869,6 +1110,7 @@ public sealed class WorkspaceService(
             Kind = source.Kind,
             Harness = source.Harness,
             ExecutionModeDefault = source.ExecutionModeDefault,
+            SessionProfileId = source.SessionProfileId,
             Prompt = source.Prompt,
             Command = source.Command,
             AutoCreatePullRequest = source.AutoCreatePullRequest,
@@ -893,13 +1135,34 @@ public sealed class WorkspaceService(
         string taskId,
         string runId,
         string userMessage,
+        IReadOnlyList<WorkspaceStoredImage> images,
         CancellationToken cancellationToken)
     {
         var normalizedMessage = userMessage.Trim();
+        if (normalizedMessage.Length == 0 && images.Count > 0)
+        {
+            normalizedMessage = workspaceImageStorageService.BuildFallbackReferenceBlock(images);
+        }
+
         if (normalizedMessage.Length == 0)
         {
             return null;
         }
+
+        var imageMetadataJson = images.Count == 0
+            ? string.Empty
+            : JsonSerializer.Serialize(images.Select(image => new
+            {
+                image.Id,
+                image.FileName,
+                image.MimeType,
+                image.SizeBytes,
+                image.ArtifactName,
+                image.ArtifactPath,
+                image.Sha256,
+                image.Width,
+                image.Height
+            }));
 
         return await store.AppendWorkspacePromptEntryAsync(
             new WorkspacePromptEntryDocument
@@ -909,9 +1172,83 @@ public sealed class WorkspaceService(
                 RunId = runId,
                 Role = "user",
                 Content = normalizedMessage,
+                HasImages = images.Count > 0,
+                ImageMetadataJson = imageMetadataJson,
                 CreatedAtUtc = DateTime.UtcNow,
             },
             cancellationToken);
+    }
+
+    private static List<DispatchInputPart>? BuildDispatchInputParts(
+        string prompt,
+        IReadOnlyList<WorkspaceStoredImage> images)
+    {
+        if (images.Count == 0)
+        {
+            return null;
+        }
+
+        var parts = new List<DispatchInputPart>(images.Count + 1)
+        {
+            new DispatchInputPart
+            {
+                Type = "text",
+                Text = prompt,
+            }
+        };
+
+        foreach (var image in images)
+        {
+            parts.Add(new DispatchInputPart
+            {
+                Type = "image",
+                ImageRef = string.IsNullOrWhiteSpace(image.DataUrl) ? image.ArtifactPath : image.DataUrl,
+                MimeType = image.MimeType,
+                Width = image.Width,
+                Height = image.Height,
+                SizeBytes = image.SizeBytes,
+                Alt = image.FileName,
+            });
+        }
+
+        return parts;
+    }
+
+    private static List<DispatchImageAttachment>? BuildDispatchImageAttachments(IReadOnlyList<WorkspaceStoredImage> images)
+    {
+        if (images.Count == 0)
+        {
+            return null;
+        }
+
+        return images
+            .Select(image => new DispatchImageAttachment
+            {
+                Id = image.Id,
+                FileName = image.FileName,
+                MimeType = image.MimeType,
+                SizeBytes = image.SizeBytes,
+                StoragePath = image.ArtifactPath,
+                Sha256 = image.Sha256,
+                Width = image.Width,
+                Height = image.Height,
+            })
+            .ToList();
+    }
+
+    private static string AppendPromptSuffix(string prompt, string suffix)
+    {
+        if (string.IsNullOrWhiteSpace(suffix))
+        {
+            return prompt;
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return suffix.Trim();
+        }
+
+        return $"{prompt.TrimEnd()}\n\n{suffix.Trim()}";
     }
 
     private sealed class SummaryRefreshState

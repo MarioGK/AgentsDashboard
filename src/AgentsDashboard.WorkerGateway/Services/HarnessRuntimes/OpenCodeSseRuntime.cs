@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.Contracts.Worker;
 
 namespace AgentsDashboard.WorkerGateway.Services.HarnessRuntimes;
 
@@ -68,8 +69,23 @@ public sealed class OpenCodeSseRuntime(
                 request.Environment,
                 runtimeCt);
 
-            var promptPayload = BuildPromptPayload(request, policy, model);
-            await server.Client.PromptAsync(sessionId, directory, promptPayload, runtimeCt);
+            var useNativeInput = request.PreferNativeMultimodal && HasImageInputParts(request.InputParts);
+            var promptPayload = BuildPromptPayload(request, policy, model, useNativeInput);
+            try
+            {
+                await server.Client.PromptAsync(sessionId, directory, promptPayload, runtimeCt);
+            }
+            catch (Exception ex) when (useNativeInput)
+            {
+                await sink.PublishAsync(
+                    new HarnessRuntimeEvent(
+                        HarnessRuntimeEventType.Diagnostic,
+                        $"OpenCode native multimodal payload failed; retrying with text fallback. {ex.Message}"),
+                    runtimeCt);
+
+                promptPayload = BuildPromptPayload(request, policy, model, useNativeInput: false);
+                await server.Client.PromptAsync(sessionId, directory, promptPayload, runtimeCt);
+            }
 
             var terminalStatus = await WaitForSessionIdleAsync(
                 server.Client,
@@ -747,19 +763,15 @@ public sealed class OpenCodeSseRuntime(
     private static Dictionary<string, object?> BuildPromptPayload(
         HarnessRunRequest request,
         OpenCodeRuntimePolicy policy,
-        (string ProviderId, string ModelId)? model)
+        (string ProviderId, string ModelId)? model,
+        bool useNativeInput)
     {
+        var parts = BuildPromptParts(request, useNativeInput);
+
         var payload = new Dictionary<string, object?>
         {
             ["agent"] = policy.Agent,
-            ["parts"] = new[]
-            {
-                new Dictionary<string, object?>
-                {
-                    ["type"] = "text",
-                    ["text"] = request.Prompt,
-                }
-            }
+            ["parts"] = parts,
         };
 
         if (model.HasValue)
@@ -777,6 +789,89 @@ public sealed class OpenCodeSseRuntime(
         }
 
         return payload;
+    }
+
+    private static bool HasImageInputParts(IReadOnlyList<DispatchInputPart> inputParts)
+    {
+        for (var index = 0; index < inputParts.Count; index++)
+        {
+            if (string.Equals(inputParts[index].Type, "image", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static List<Dictionary<string, object?>> BuildPromptParts(HarnessRunRequest request, bool useNativeInput)
+    {
+        if (!useNativeInput || request.InputParts.Count == 0)
+        {
+            return
+            [
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "text",
+                    ["text"] = request.Prompt,
+                }
+            ];
+        }
+
+        var parts = new List<Dictionary<string, object?>>();
+        var hasTextPart = false;
+
+        for (var index = 0; index < request.InputParts.Count; index++)
+        {
+            var part = request.InputParts[index];
+            if (string.Equals(part.Type, "text", StringComparison.OrdinalIgnoreCase))
+            {
+                var text = part.Text?.Trim();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    hasTextPart = true;
+                    parts.Add(new Dictionary<string, object?>
+                    {
+                        ["type"] = "text",
+                        ["text"] = text,
+                    });
+                }
+
+                continue;
+            }
+
+            if (string.Equals(part.Type, "image", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(part.ImageRef))
+            {
+                parts.Add(new Dictionary<string, object?>
+                {
+                    ["type"] = "image",
+                    ["imageUrl"] = part.ImageRef,
+                    ["mimeType"] = part.MimeType,
+                    ["alt"] = part.Alt,
+                });
+            }
+        }
+
+        if (!hasTextPart && !string.IsNullOrWhiteSpace(request.Prompt))
+        {
+            parts.Insert(0, new Dictionary<string, object?>
+            {
+                ["type"] = "text",
+                ["text"] = request.Prompt,
+            });
+        }
+
+        if (parts.Count == 0)
+        {
+            parts.Add(new Dictionary<string, object?>
+            {
+                ["type"] = "text",
+                ["text"] = request.Prompt,
+            });
+        }
+
+        return parts;
     }
 
     private static (string ProviderId, string ModelId)? ResolveModel(IReadOnlyDictionary<string, string>? env)

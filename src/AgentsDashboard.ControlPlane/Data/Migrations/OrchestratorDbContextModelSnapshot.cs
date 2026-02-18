@@ -90,6 +90,102 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.ToTable("AlertRules");
                 });
 
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.AutomationDefinitionDocument", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CronExpression")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("NextRunAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReplayPolicy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggerKind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepositoryId", "Enabled", "NextRunAtUtc");
+
+                    b.ToTable("AutomationDefinitions");
+                });
+
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.AutomationExecutionDocument", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AutomationDefinitionId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggeredBy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutomationDefinitionId", "StartedAtUtc");
+
+                    b.HasIndex("RepositoryId", "TaskId", "StartedAtUtc");
+
+                    b.ToTable("AutomationExecutions");
+                });
+
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.FindingDocument", b =>
                 {
                     b.Property<string>("Id")
@@ -526,6 +622,10 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.Property<int>("Attempt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("AutomationRunId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -536,6 +636,14 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("FailureClass")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstructionStackHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("McpConfigSnapshotJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -552,6 +660,10 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ResultEnvelopeRef")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionProfileId")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -602,6 +714,63 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.ToTable("Runs");
                 });
 
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.RunInstructionStackDocument", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GlobalRules")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryRules")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResolvedText")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunOverrides")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionProfileId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskRules")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "Hash");
+
+                    b.HasIndex("RepositoryId", "TaskId", "CreatedAtUtc");
+
+                    b.ToTable("RunInstructionStacks");
+                });
+
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.RunLogEvent", b =>
                 {
                     b.Property<string>("Id")
@@ -627,6 +796,96 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.HasIndex("RunId", "TimestampUtc");
 
                     b.ToTable("RunEvents");
+                });
+
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.RunSessionProfileDocument", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApprovalMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DiffViewDefault")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ExecutionModeDefault")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Harness")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("McpConfigJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ToolTimelineMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepositoryId", "Name");
+
+                    b.HasIndex("Scope", "Enabled");
+
+                    b.ToTable("RunSessionProfiles");
+                });
+
+            modelBuilder.Entity("AgentsDashboard.Contracts.Domain.RunShareBundleDocument", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BundleJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RunId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("RepositoryId", "TaskId", "CreatedAtUtc");
+
+                    b.ToTable("RunShareBundles");
                 });
 
             modelBuilder.Entity("AgentsDashboard.Contracts.Domain.RunStructuredEventDocument", b =>
@@ -943,6 +1202,10 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SessionProfileId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Timeouts")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1207,6 +1470,13 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("HasImages")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ImageMetadataJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("RepositoryId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1228,6 +1498,8 @@ namespace AgentsDashboard.ControlPlane.Data.Migrations
                     b.HasIndex("RunId", "CreatedAtUtc");
 
                     b.HasIndex("TaskId", "CreatedAtUtc");
+
+                    b.HasIndex("TaskId", "HasImages", "CreatedAtUtc");
 
                     b.ToTable("WorkspacePromptEntries");
                 });

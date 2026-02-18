@@ -18,8 +18,11 @@ public sealed record SqliteVecAvailability(
 
 public sealed class SqliteVecBootstrapService(
     IOptions<OrchestratorOptions> orchestratorOptions,
+    IBackgroundWorkCoordinator backgroundWorkCoordinator,
     ILogger<SqliteVecBootstrapService> logger) : IHostedService, ISqliteVecBootstrapService
 {
+    private const string StartupOperationKey = "startup:sqlite-vec-bootstrap";
+
     private volatile SqliteVecAvailability _status = new(
         IsAvailable: false,
         ExtensionPath: null,
@@ -30,24 +33,71 @@ public sealed class SqliteVecBootstrapService(
 
     public SqliteVecAvailability Status => _status;
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        var status = await ProbeAsync(cancellationToken);
-        _status = status;
+        var workId = backgroundWorkCoordinator.Enqueue(
+            BackgroundWorkKind.SqliteVecBootstrap,
+            StartupOperationKey,
+            async (workCancellationToken, progress) =>
+            {
+                progress.Report(new BackgroundWorkSnapshot(
+                    WorkId: string.Empty,
+                    OperationKey: string.Empty,
+                    Kind: BackgroundWorkKind.SqliteVecBootstrap,
+                    State: BackgroundWorkState.Running,
+                    PercentComplete: 5,
+                    Message: "Probing sqlite-vec availability.",
+                    StartedAt: null,
+                    UpdatedAt: DateTimeOffset.UtcNow,
+                    ErrorCode: null,
+                    ErrorMessage: null));
 
-        if (status.IsAvailable)
-        {
-            logger.ZLogInformation(
-                "sqlite-vec available (path: {Path}, detail: {Detail})",
-                status.ExtensionPath ?? "built-in",
-                status.Detail ?? string.Empty);
-        }
-        else
-        {
-            logger.ZLogInformation(
-                "sqlite-vec unavailable; fallback mode enabled ({Detail})",
-                status.Detail ?? "unknown reason");
-        }
+                var status = await ProbeAsync(workCancellationToken);
+                _status = status;
+
+                if (status.IsAvailable)
+                {
+                    logger.ZLogInformation(
+                        "sqlite-vec available (path: {Path}, detail: {Detail})",
+                        status.ExtensionPath ?? "built-in",
+                        status.Detail ?? string.Empty);
+
+                    progress.Report(new BackgroundWorkSnapshot(
+                        WorkId: string.Empty,
+                        OperationKey: string.Empty,
+                        Kind: BackgroundWorkKind.SqliteVecBootstrap,
+                        State: BackgroundWorkState.Succeeded,
+                        PercentComplete: 100,
+                        Message: "sqlite-vec probe completed and is available.",
+                        StartedAt: null,
+                        UpdatedAt: DateTimeOffset.UtcNow,
+                        ErrorCode: null,
+                        ErrorMessage: null));
+                }
+                else
+                {
+                    logger.ZLogInformation(
+                        "sqlite-vec unavailable; fallback mode enabled ({Detail})",
+                        status.Detail ?? "unknown reason");
+
+                    progress.Report(new BackgroundWorkSnapshot(
+                        WorkId: string.Empty,
+                        OperationKey: string.Empty,
+                        Kind: BackgroundWorkKind.SqliteVecBootstrap,
+                        State: BackgroundWorkState.Succeeded,
+                        PercentComplete: 100,
+                        Message: $"sqlite-vec unavailable; fallback mode enabled ({status.Detail ?? "unknown reason"}).",
+                        StartedAt: null,
+                        UpdatedAt: DateTimeOffset.UtcNow,
+                        ErrorCode: null,
+                        ErrorMessage: null));
+                }
+            },
+            dedupeByOperationKey: true,
+            isCritical: false);
+
+        logger.ZLogInformation("Queued sqlite-vec bootstrap background work {WorkId}", workId);
+        return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

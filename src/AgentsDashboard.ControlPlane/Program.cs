@@ -1,6 +1,8 @@
+using System.IO;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.ControlPlane;
 using AgentsDashboard.ControlPlane.Components;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
@@ -13,6 +15,7 @@ using MessagePack;
 using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
@@ -23,9 +26,7 @@ using ZLogger;
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Logging
-    .ClearProviders()
-    .AddZLoggerConsole(options => options.UsePlainTextFormatter());
+builder.Logging.AddStructuredContainerLogging("ControlPlane");
 
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
@@ -33,6 +34,14 @@ builder.Services.AddHealthChecks()
 builder.Services.AddOptions<OrchestratorOptions>()
     .Bind(builder.Configuration.GetSection(OrchestratorOptions.SectionName))
     .ValidateOnStart();
+
+var startupOptions = builder.Configuration.GetSection(OrchestratorOptions.SectionName).Get<OrchestratorOptions>();
+
+if (startupOptions is not null)
+{
+    EnsureSqliteDirectoryExists(startupOptions.SqliteConnectionString);
+    EnsureArtifactsDirectoryExists(startupOptions.ArtifactsRootPath);
+}
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -118,9 +127,18 @@ builder.Services.AddDbContextFactory<OrchestratorDbContext>((sp, options) =>
 });
 
 builder.Services.AddHostedService<DbMigrationHostedService>();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<DevelopmentSelfRepositoryBootstrapService>();
+}
 builder.Services.AddSingleton<OrchestratorStore>();
 builder.Services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<OrchestratorStore>());
 builder.Services.AddSingleton<RunDispatcher>();
+builder.Services.AddSingleton<IBackgroundWorkCoordinator, BackgroundWorkScheduler>();
+builder.Services.AddHostedService(sp => (BackgroundWorkScheduler)sp.GetRequiredService<IBackgroundWorkCoordinator>());
+builder.Services.AddSingleton<INotificationService, NotificationService>();
+builder.Services.AddSingleton<INotificationSink>(sp => sp.GetRequiredService<INotificationService>());
+builder.Services.AddHostedService<BackgroundWorkNotificationRelay>();
 builder.Services.AddSingleton<IOrchestratorRuntimeSettingsProvider, OrchestratorRuntimeSettingsProvider>();
 builder.Services.AddSingleton<ILeaseCoordinator, LeaseCoordinator>();
 builder.Services.AddSingleton<IWorkerLifecycleManager, DockerWorkerLifecycleManager>();
@@ -134,6 +152,7 @@ builder.Services.AddSingleton<IRunStructuredViewService, RunStructuredViewServic
 builder.Services.AddSingleton<IOrchestratorMetrics, OrchestratorMetrics>();
 builder.Services.AddHostedService<RecoveryService>();
 builder.Services.AddHostedService<CronSchedulerService>();
+builder.Services.AddHostedService<AutomationSchedulerService>();
 builder.Services.AddHostedService<TaskRetentionCleanupService>();
 builder.Services.AddHostedService<WorkerEventListenerService>();
 builder.Services.AddHostedService<WorkerIdleShutdownService>();
@@ -145,7 +164,7 @@ builder.Services.AddSingleton<WorkflowExecutor>(sp => (WorkflowExecutor)sp.GetRe
 builder.Services.AddSingleton<LlmTornadoGatewayService>();
 builder.Services.AddSingleton<IHarnessOutputParserService, HarnessOutputParserService>();
 builder.Services.AddSingleton<IWorkspaceAiService, WorkspaceAiService>();
-builder.Services.AddSingleton<IWorkspaceSearchService, WorkspaceSearchService>();
+builder.Services.AddSingleton<IWorkspaceImageStorageService, WorkspaceImageStorageService>();
 builder.Services.AddSingleton<IGlobalSearchService, GlobalSearchService>();
 builder.Services.AddSingleton<ITaskSemanticEmbeddingService, TaskSemanticEmbeddingService>();
 builder.Services.AddHostedService(sp => (TaskSemanticEmbeddingService)sp.GetRequiredService<ITaskSemanticEmbeddingService>());
@@ -190,7 +209,10 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+if (app.Urls.Any(url => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+{
+    app.UseHttpsRedirection();
+}
 app.UseRateLimiter();
 app.UseMiddleware<RateLimitHeadersMiddleware>();
 app.UseAntiforgery();
@@ -217,6 +239,38 @@ app.MapHealthChecks("/ready", readyHealthCheckOptions);
 app.MapHealthChecks("/alive", liveHealthCheckOptions);
 
 app.Run();
+
+static void EnsureArtifactsDirectoryExists(string? artifactsRootPath)
+{
+    EnsureDirectory(artifactsRootPath);
+}
+
+static void EnsureSqliteDirectoryExists(string? sqliteConnectionString)
+{
+    if (string.IsNullOrWhiteSpace(sqliteConnectionString))
+        return;
+
+    try
+    {
+        var connectionBuilder = new SqliteConnectionStringBuilder(sqliteConnectionString);
+        EnsureDirectory(connectionBuilder.DataSource);
+    }
+    catch
+    {
+    }
+}
+
+static void EnsureDirectory(string? path)
+{
+    if (string.IsNullOrWhiteSpace(path) || path == ":memory:")
+        return;
+
+    var directory = Path.GetDirectoryName(path);
+    if (string.IsNullOrWhiteSpace(directory))
+        return;
+
+    Directory.CreateDirectory(directory);
+}
 
 static Task WriteHealthResponseAsync(HttpContext context, HealthReport report)
 {

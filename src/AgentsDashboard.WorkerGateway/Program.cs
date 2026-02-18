@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgentsDashboard.WorkerGateway;
 using AgentsDashboard.WorkerGateway.Adapters;
 using AgentsDashboard.WorkerGateway.Configuration;
 using AgentsDashboard.WorkerGateway.Services;
@@ -14,9 +15,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using ZLogger;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Logging
-    .ClearProviders()
-    .AddZLoggerConsole(options => options.UsePlainTextFormatter());
+builder.Logging.AddStructuredContainerLogging("WorkerGateway");
 
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
@@ -68,8 +67,10 @@ builder.Services.AddSingleton<IArtifactExtractor, ArtifactExtractor>();
 builder.Services.AddSingleton<IHarnessExecutor, HarnessExecutor>();
 builder.Services.AddSingleton<IContainerOrphanReconciler, ContainerOrphanReconciler>();
 builder.Services.AddSingleton<IJobProcessorService, JobProcessorService>();
+builder.Services.AddSingleton<IImageBootstrapWorkScheduler, ImageBootstrapWorkScheduler>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<IJobProcessorService>());
 builder.Services.AddHostedService<WorkerHeartbeatService>();
+builder.Services.AddHostedService(sp => (ImageBootstrapWorkScheduler)sp.GetRequiredService<IImageBootstrapWorkScheduler>());
 builder.Services.AddHostedService<ImagePrePullService>();
 builder.Services.AddSingleton<DockerHealthCheckService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DockerHealthCheckService>());

@@ -1,0 +1,62 @@
+@page "/settings/mcp"
+@layout SettingsLayout
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
+@inject ISnackbar Snackbar
+
+<PageTitle>MCP Settings - AgentsDashboard</PageTitle>
+
+<MudStack Spacing="2">
+    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.h4">MCP Settings</MudText>
+        <MudButton Variant="Variant.Outlined" OnClick="LoadAsync">Reload</MudButton>
+    </MudStack>
+
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.body2" Class="mb-2">System-level MCP config snapshot JSON used for run dispatch when no session profile override is set.</MudText>
+        <MudTextField T="string"
+                      @bind-Value="_mcpConfigJson"
+                      Label="MCP Config JSON"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Lines="14" />
+
+        <MudStack Row Spacing="1" Class="mt-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Save</MudButton>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private SystemSettingsDocument? _settings;
+    private string _mcpConfigJson = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _settings = await Store.GetSettingsAsync(CancellationToken.None);
+        _mcpConfigJson = _settings.Orchestrator.McpConfigJson ?? string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_settings is null)
+        {
+            await LoadAsync();
+        }
+
+        if (_settings is null)
+        {
+            Snackbar.Add("Unable to load settings.", Severity.Error);
+            return;
+        }
+
+        _settings.Orchestrator.McpConfigJson = _mcpConfigJson?.Trim() ?? string.Empty;
+        _settings = await Store.UpdateSettingsAsync(_settings, CancellationToken.None);
+        Snackbar.Add("MCP settings saved.", Severity.Success);
+    }
+}

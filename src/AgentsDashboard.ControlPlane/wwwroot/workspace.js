@@ -1,8 +1,10 @@
 const viewportListeners = new Map();
 const composerBridges = new Map();
+const composerImagePasteBridges = new Map();
 
 let viewportCounter = 0;
 let composerCounter = 0;
+let composerImagePasteCounter = 0;
 
 export function getViewportHeight() {
     return window.innerHeight || document.documentElement.clientHeight || 0;
@@ -110,4 +112,116 @@ export function unregisterComposerKeyBridge(id) {
 
     entry.element.removeEventListener("keydown", entry.handler);
     composerBridges.delete(id);
+}
+
+export function registerComposerImagePasteBridge(elementId, dotNetRef, bridgeKey) {
+    if (!elementId || !dotNetRef) {
+        return null;
+    }
+
+    const element = document.getElementById(elementId);
+    if (!element) {
+        return null;
+    }
+
+    const id = `composer-image-paste-${++composerImagePasteCounter}`;
+    const handler = async event => {
+        const clipboard = event.clipboardData;
+        if (!clipboard?.items) {
+            return;
+        }
+
+        const files = [];
+        for (const item of clipboard.items) {
+            if (item.kind !== "file") {
+                continue;
+            }
+
+            if (!item.type || !item.type.startsWith("image/")) {
+                continue;
+            }
+
+            const file = item.getAsFile();
+            if (file) {
+                files.push(file);
+            }
+        }
+
+        if (files.length === 0) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const images = [];
+        for (const file of files) {
+            try {
+                images.push(await readClipboardImage(file));
+            } catch {
+            }
+        }
+
+        if (images.length === 0) {
+            return;
+        }
+
+        await dotNetRef.invokeMethodAsync("OnComposerImagesPastedFromJs", bridgeKey || "", images);
+    };
+
+    element.addEventListener("paste", handler);
+    composerImagePasteBridges.set(id, { element, handler });
+    return id;
+}
+
+export function unregisterComposerImagePasteBridge(id) {
+    const entry = composerImagePasteBridges.get(id);
+    if (!entry) {
+        return;
+    }
+
+    entry.element.removeEventListener("paste", entry.handler);
+    composerImagePasteBridges.delete(id);
+}
+
+async function readClipboardImage(file) {
+    const dataUrl = await readFileAsDataUrl(file);
+    const dimensions = await readImageDimensions(dataUrl);
+    return {
+        id: createImageId(),
+        fileName: file.name || "pasted-image",
+        mimeType: file.type || "image/png",
+        sizeBytes: file.size || 0,
+        dataUrl,
+        width: dimensions.width,
+        height: dimensions.height
+    };
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result?.toString() || "");
+        reader.onerror = () => reject(reader.error || new Error("Failed to read clipboard image"));
+        reader.readAsDataURL(file);
+    });
+}
+
+function readImageDimensions(dataUrl) {
+    return new Promise(resolve => {
+        const image = new Image();
+        image.onload = () => resolve({
+            width: image.naturalWidth || null,
+            height: image.naturalHeight || null
+        });
+        image.onerror = () => resolve({ width: null, height: null });
+        image.src = dataUrl;
+    });
+}
+
+function createImageId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 }

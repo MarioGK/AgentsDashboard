@@ -8,11 +8,20 @@ using MagicOnion.Server;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed class ControlPlaneStoreGatewayService(
-    OrchestratorStore store,
-    ILogger<ControlPlaneStoreGatewayService> logger)
+public sealed class ControlPlaneStoreGatewayService
     : ServiceBase<IControlPlaneStoreGateway>, IControlPlaneStoreGateway
 {
+    private readonly OrchestratorStore _store;
+    private readonly ILogger<ControlPlaneStoreGatewayService> _logger;
+
+    public ControlPlaneStoreGatewayService(
+        OrchestratorStore store,
+        ILogger<ControlPlaneStoreGatewayService> logger)
+    {
+        _store = store;
+        _logger = logger;
+    }
+
     private static readonly IReadOnlyDictionary<string, MethodInfo[]> StoreMethodsByName = typeof(OrchestratorStore)
         .GetMethods(BindingFlags.Instance | BindingFlags.Public)
         .GroupBy(method => method.Name)
@@ -49,13 +58,13 @@ public sealed class ControlPlaneStoreGatewayService(
         try
         {
             var invocationArguments = await DeserializeArgumentsAsync(parameters, request).ConfigureAwait(false);
-            var result = method.Invoke(store, invocationArguments);
+            var result = method.Invoke(_store, invocationArguments);
             var returnValue = await UnwrapTaskAsync(result, cancellationToken).ConfigureAwait(false);
             return await BuildResponseAsync(returnValue, cancellationToken).ConfigureAwait(false);
         }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
         {
-            logger.ZLogError(ex.InnerException, "Store gateway invocation failed for {Method}", request.MethodName);
+            _logger.ZLogError(ex.InnerException, "Store gateway invocation failed for {Method}", request.MethodName);
             return new ControlPlaneInvocationResponse(
                 Success: false,
                 IsBinary: false,
@@ -65,7 +74,7 @@ public sealed class ControlPlaneStoreGatewayService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Store gateway invocation failed for {Method}", request.MethodName);
+            _logger.ZLogError(ex, "Store gateway invocation failed for {Method}", request.MethodName);
             return new ControlPlaneInvocationResponse(
                 Success: false,
                 IsBinary: false,

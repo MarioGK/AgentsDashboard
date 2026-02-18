@@ -426,15 +426,3 @@ Save the report to /workspace/regression-report.json
         ];
     }
 }
-
-public class TaskTemplateInitializationService(TaskTemplateService templateService, ILogger<TaskTemplateInitializationService> logger) : IHostedService
-{
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
-        logger.ZLogInformation("Initializing task templates...");
-        await templateService.InitializeAsync(cancellationToken);
-        logger.ZLogInformation("Task templates initialized");
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}

@@ -39,7 +39,8 @@ docs/
 - `src/AgentsDashboard.slnx`: 3 production projects (`AgentsDashboard.ControlPlane`, `AgentsDashboard.WorkerGateway`, `AgentsDashboard.Contracts`).
 - Active harness runtimes: `CodexAppServerRuntime`, `OpenCodeSseRuntime`, `ClaudeStreamRuntime`, `ZaiClaudeCompatibleRuntime` with `command` fallback.
 - Harness adapters: `CodexAdapter`, `OpenCodeAdapter`, `ClaudeCodeAdapter`, `ZaiAdapter`.
-- Blazor components: 39 `.razor` files under `src/AgentsDashboard.ControlPlane/Components`.
+- Blazor components: 44 `.razor` files under `src/AgentsDashboard.ControlPlane/Components`.
+- Playwright test suite includes smoke checks plus full repository→task→run workflow validation using `zai` harness.
 
 ## Architecture Rules
 
@@ -70,6 +71,8 @@ docs/
 - Primary constructors where appropriate.
 - Required properties for DTOs.
 - Async methods use `Async` suffix.
+- Keep extension methods and helper types in separate files.
+- Keep models and classes in their own files (one primary type per file).
 - No comments unless explicitly requested.
 - Warnings are errors by default: `TreatWarningsAsErrors=true` in `Directory.Build.props`; never set `TreatWarningsAsErrors` to false.
 - Never add `<NoWarn>` in `.csproj`, `.cdproj`, or `.props` files to bypass warning-as-error enforcement.
@@ -119,11 +122,14 @@ DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_
 ## Logging
 
 - Logging runs through `ZLogger` for both ControlPlane and WorkerGateway.
-- Default format is plain text with friendly, human-readable output and no JSON.
-- Logging uses ZLogger plain-text formatter defaults in both host `Program.cs`.
-- Use interpolation variables (or equivalent template pairs) in `ZLog*` calls to keep logs structured (`... {RunId}`, `{WorkerId}`, `{QueueDepth}`, `{DurationMs}`).
+- Default format is UTC timestamp + status token + service name using ZLogger plain-text formatter.
+- `dotnet watch`/container-friendly logging is routed through `stdout`, with optional ANSI colors and short level tokens (`INF`, `WRN`, `ERR`, etc.).
+- Add log context via object payload helpers (`ZLog*Object`) to include structured execution metadata in a single line while keeping logs readable.
 - Prefer fewer log lines with richer context over repetitive one-off lines in hot paths.
 - Do not log secrets, credentials, or full tokens; include only IDs and derived metadata.
+- Logging extension is configured by host helper extensions:
+  - `src/AgentsDashboard.ControlPlane/Logging/HostLoggingExtensions.cs`
+  - `src/AgentsDashboard.WorkerGateway/Logging/HostLoggingExtensions.cs`
 
 ## Build & Test Quick Commands
 
@@ -136,6 +142,14 @@ dotnet test --solution src/AgentsDashboard.slnx
 
 # CI format gate
 dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error
+
+# Playwright full workflow gate (real Z.ai harness)
+cd tests/AgentsDashboard.Playwright
+BASE_URL=http://127.0.0.1:5266 \
+PLAYWRIGHT_E2E_ZAI_API_KEY=... \
+PLAYWRIGHT_E2E_REPO_REMOTE_PATH=/abs/path/to/seeded-remote.git \
+PLAYWRIGHT_E2E_REPO_CLONE_ROOT=/abs/path/to/clones \
+npm test
 ```
 
 - GitHub Actions workflows are temporarily disabled in this repository and will be fixed/re-enabled later.
@@ -164,8 +178,15 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 - Run detail UX includes structured panes and Monaco diff rendering (`RunDiffViewer` / `RunDiffFileList`) with side-by-side diff defaults and patch export actions.
 - Diff viewer layout is session-toggleable between side-by-side and inline while keeping side-by-side as default.
 - Workspace prompt submission supports mode override and agent-team execution (`WorkspaceAgentTeamRequest`) with parallel member lanes and optional synthesis.
+- Workspace prompt inputs now support image paste/upload in both task creation and workspace composer UX; workspace run submission persists run-scoped image artifacts, emits structured multimodal input parts/attachments to workers, and auto-falls back to textual image references when runtimes reject native image payloads.
+- Session profiles are first-class run presets: `RunSessionProfileDocument` supports `global` + repository scopes with optional harness/mode defaults, and tasks can pin a default via `TaskDocument.SessionProfileId`.
+- Run dispatch persists normalized instruction stacks and hashes (`RunInstructionStackDocument`, `RunDocument.InstructionStackHash`) so worker execution metadata is reproducible across retries and audits.
+- MCP configuration is managed centrally (`SystemSettingsDocument.Orchestrator.McpConfigJson`) and snapshotted onto runs (`RunDocument.McpConfigSnapshotJson`) before worker dispatch.
+- Automations are first-class domain data (`AutomationDefinitionDocument`, `AutomationExecutionDocument`) with scheduler-driven cron dispatch plus manual Run-Now execution from `/settings/automations`.
+- Run detail supports share/export bundles persisted as `RunShareBundleDocument` including run metadata, projections, and artifacts for external review.
 - Agent-team parallel stages persist lane diff telemetry, merged non-conflicting patch, and conflict metadata in `WorkflowStageResult.AgentTeamDiff`; synthesis prompts include this conflict context.
 - Repository creation is git-bound and folder-bound: a repo must include `GitUrl` + absolute `LocalPath`, and create flow validates/links/clones before persistence.
+- In `Development`, ControlPlane startup auto-detects the current git workspace, upserts it as a repository by `LocalPath`, and refreshes local git status.
 - ControlPlane exposes host folder browsing + create-folder in repository creation UI and stores git status (`CurrentBranch`, ahead/behind, staged/modified/untracked, scan/fetch timestamps, sync error).
 - Git metrics refresh is hybrid: on repository detail open, explicit refresh action, and background refresh for recently viewed repositories.
 - Git auth paths are system git-native: URL credentials, repository GitHub token (when configured), and host SSH keys/agent.
@@ -207,5 +228,5 @@ MTP note: always pass `--project`, `--solution`, or a direct `.csproj/.slnx`; `d
 
 ## Last Verified
 
-- Date: 2026-02-17
+- Date: 2026-02-18
 - Purpose: Date-only freshness marker for this document; do not use this section as a changelog/history log.

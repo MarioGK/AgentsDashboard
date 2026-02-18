@@ -50,6 +50,12 @@ public enum HarnessExecutionMode
     Review = 2
 }
 
+public enum RunSessionProfileScope
+{
+    Global = 0,
+    Repository = 1
+}
+
 public enum WorkerImagePolicy
 {
     PullOnly = 0,
@@ -149,6 +155,7 @@ public sealed class TaskDocument
     public TaskKind Kind { get; set; }
     public string Harness { get; set; } = "codex";
     public HarnessExecutionMode? ExecutionModeDefault { get; set; }
+    public string SessionProfileId { get; set; } = string.Empty;
     public string Prompt { get; set; } = string.Empty;
     public string Command { get; set; } = string.Empty;
     public bool AutoCreatePullRequest { get; set; }
@@ -178,6 +185,10 @@ public sealed class RunDocument
     public RunState State { get; set; } = RunState.Queued;
     public HarnessExecutionMode ExecutionMode { get; set; } = HarnessExecutionMode.Default;
     public string StructuredProtocol { get; set; } = string.Empty;
+    public string SessionProfileId { get; set; } = string.Empty;
+    public string InstructionStackHash { get; set; } = string.Empty;
+    public string McpConfigSnapshotJson { get; set; } = string.Empty;
+    public string AutomationRunId { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
     public string OutputJson { get; set; } = string.Empty;
     public int Attempt { get; set; } = 1;
@@ -243,6 +254,78 @@ public sealed class RunToolProjectionDocument
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+public sealed class RunSessionProfileDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public RunSessionProfileScope Scope { get; set; } = RunSessionProfileScope.Repository;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Harness { get; set; } = string.Empty;
+    public HarnessExecutionMode ExecutionModeDefault { get; set; } = HarnessExecutionMode.Default;
+    public string ApprovalMode { get; set; } = "auto";
+    public string DiffViewDefault { get; set; } = "side-by-side";
+    public string ToolTimelineMode { get; set; } = "table";
+    public string McpConfigJson { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class RunInstructionStackDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RunId { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public string SessionProfileId { get; set; } = string.Empty;
+    public string GlobalRules { get; set; } = string.Empty;
+    public string RepositoryRules { get; set; } = string.Empty;
+    public string TaskRules { get; set; } = string.Empty;
+    public string RunOverrides { get; set; } = string.Empty;
+    public string ResolvedText { get; set; } = string.Empty;
+    public string Hash { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class RunShareBundleDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RunId { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public string BundleJson { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class AutomationDefinitionDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string CronExpression { get; set; } = string.Empty;
+    public string TriggerKind { get; set; } = "cron";
+    public string ReplayPolicy { get; set; } = "skip";
+    public bool Enabled { get; set; } = true;
+    public DateTime? NextRunAtUtc { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class AutomationExecutionDocument
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string AutomationDefinitionId { get; set; } = string.Empty;
+    public string RepositoryId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public string RunId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string TriggeredBy { get; set; } = "scheduler";
+    public DateTime StartedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAtUtc { get; set; }
+}
+
 public sealed class WorkspacePromptEntryDocument
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -251,6 +334,8 @@ public sealed class WorkspacePromptEntryDocument
     public string RunId { get; set; } = string.Empty;
     public string Role { get; set; } = "user";
     public string Content { get; set; } = string.Empty;
+    public bool HasImages { get; set; }
+    public string ImageMetadataJson { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
@@ -411,6 +496,8 @@ public sealed class OrchestratorSettings
     public int QueueWaitTimeoutSeconds { get; set; } = 300;
     public string TaskPromptPrefix { get; set; } = string.Empty;
     public string TaskPromptSuffix { get; set; } = string.Empty;
+    public string GlobalRunRules { get; set; } = string.Empty;
+    public string McpConfigJson { get; set; } = string.Empty;
 
     public WorkerImagePolicy WorkerImagePolicy { get; set; } = WorkerImagePolicy.PreferLocal;
     public string WorkerImageRegistry { get; set; } = string.Empty;

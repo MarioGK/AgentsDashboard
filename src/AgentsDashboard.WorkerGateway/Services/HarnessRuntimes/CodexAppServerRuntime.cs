@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using AgentsDashboard.Contracts.Domain;
+using AgentsDashboard.Contracts.Worker;
 
 namespace AgentsDashboard.WorkerGateway.Services.HarnessRuntimes;
 
@@ -345,28 +346,47 @@ public sealed class CodexAppServerRuntime(
             }
 
             var prompt = ApplyModePrompt(request.Prompt, executionMode);
-            var input = new[]
-            {
-                new
-                {
-                    type = "text",
-                    text = prompt,
-                    text_elements = Array.Empty<object>(),
-                }
-            };
+            var useNativeInput = request.PreferNativeMultimodal && HasImageInputParts(request.InputParts);
+            var input = BuildTurnInput(request, prompt, useNativeInput);
 
-            var turnStartResponse = await SendRequestAsync(
-                process,
-                pendingResponses,
-                Interlocked.Increment(ref requestId),
-                "turn/start",
-                new
-                {
-                    threadId,
-                    input,
-                    cwd = workingDirectory,
-                },
-                runtimeCt);
+            JsonElement turnStartResponse;
+            try
+            {
+                turnStartResponse = await SendRequestAsync(
+                    process,
+                    pendingResponses,
+                    Interlocked.Increment(ref requestId),
+                    "turn/start",
+                    new
+                    {
+                        threadId,
+                        input,
+                        cwd = workingDirectory,
+                    },
+                    runtimeCt);
+            }
+            catch (Exception ex) when (useNativeInput)
+            {
+                await sink.PublishAsync(
+                    new HarnessRuntimeEvent(
+                        HarnessRuntimeEventType.Diagnostic,
+                        $"Codex native multimodal input failed; retrying with text fallback. {ex.Message}"),
+                    runtimeCt);
+
+                input = BuildTurnInput(request, prompt, useNativeInput: false);
+                turnStartResponse = await SendRequestAsync(
+                    process,
+                    pendingResponses,
+                    Interlocked.Increment(ref requestId),
+                    "turn/start",
+                    new
+                    {
+                        threadId,
+                        input,
+                        cwd = workingDirectory,
+                    },
+                    runtimeCt);
+            }
 
             if (TryGetNestedString(turnStartResponse, ["turn", "id"], out var startedTurnId) &&
                 !string.IsNullOrWhiteSpace(startedTurnId))
@@ -629,6 +649,93 @@ public sealed class CodexAppServerRuntime(
         }
 
         return string.Concat(header, "\n\n", trimmedPrompt);
+    }
+
+    private static bool HasImageInputParts(IReadOnlyList<DispatchInputPart> inputParts)
+    {
+        for (var index = 0; index < inputParts.Count; index++)
+        {
+            if (string.Equals(inputParts[index].Type, "image", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static object[] BuildTurnInput(HarnessRunRequest request, string prompt, bool useNativeInput)
+    {
+        if (!useNativeInput || request.InputParts.Count == 0)
+        {
+            return
+            [
+                new
+                {
+                    type = "text",
+                    text = prompt,
+                    text_elements = Array.Empty<object>(),
+                }
+            ];
+        }
+
+        var items = new List<object>();
+        var hasTextPart = false;
+
+        for (var index = 0; index < request.InputParts.Count; index++)
+        {
+            var part = request.InputParts[index];
+            if (string.Equals(part.Type, "text", StringComparison.OrdinalIgnoreCase))
+            {
+                var text = part.Text?.Trim();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    hasTextPart = true;
+                    items.Add(new
+                    {
+                        type = "text",
+                        text,
+                        text_elements = Array.Empty<object>(),
+                    });
+                }
+
+                continue;
+            }
+
+            if (string.Equals(part.Type, "image", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(part.ImageRef))
+            {
+                items.Add(new
+                {
+                    type = "image",
+                    image_url = part.ImageRef,
+                    mime_type = part.MimeType,
+                    alt = part.Alt,
+                });
+            }
+        }
+
+        if (!hasTextPart && !string.IsNullOrWhiteSpace(prompt))
+        {
+            items.Insert(0, new
+            {
+                type = "text",
+                text = prompt,
+                text_elements = Array.Empty<object>(),
+            });
+        }
+
+        if (items.Count == 0)
+        {
+            items.Add(new
+            {
+                type = "text",
+                text = prompt,
+                text_elements = Array.Empty<object>(),
+            });
+        }
+
+        return [.. items];
     }
 
     private static bool TryParseJsonLine(string line, out JsonElement root)

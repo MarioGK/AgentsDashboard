@@ -27,6 +27,17 @@ public interface IOrchestratorStore
     Task<PromptSkillDocument?> GetPromptSkillAsync(string skillId, CancellationToken cancellationToken);
     Task<PromptSkillDocument?> UpdatePromptSkillAsync(string skillId, UpdatePromptSkillRequest request, CancellationToken cancellationToken);
     Task<bool> DeletePromptSkillAsync(string skillId, CancellationToken cancellationToken);
+    Task<RunSessionProfileDocument> CreateRunSessionProfileAsync(CreateRunSessionProfileRequest request, CancellationToken cancellationToken);
+    Task<List<RunSessionProfileDocument>> ListRunSessionProfilesAsync(string repositoryId, bool includeGlobal, CancellationToken cancellationToken);
+    Task<RunSessionProfileDocument?> GetRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken);
+    Task<RunSessionProfileDocument?> UpdateRunSessionProfileAsync(string sessionProfileId, UpdateRunSessionProfileRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken);
+    Task<AutomationDefinitionDocument> UpsertAutomationDefinitionAsync(string? automationId, UpsertAutomationDefinitionRequest request, CancellationToken cancellationToken);
+    Task<List<AutomationDefinitionDocument>> ListAutomationDefinitionsAsync(string repositoryId, CancellationToken cancellationToken);
+    Task<AutomationDefinitionDocument?> GetAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken);
+    Task<bool> DeleteAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken);
+    Task<AutomationExecutionDocument> CreateAutomationExecutionAsync(AutomationExecutionDocument execution, CancellationToken cancellationToken);
+    Task<List<AutomationExecutionDocument>> ListAutomationExecutionsAsync(string repositoryId, int limit, CancellationToken cancellationToken);
 
     Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken);
     Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken);
@@ -53,7 +64,9 @@ public interface IOrchestratorStore
         TaskDocument task,
         CancellationToken cancellationToken,
         int attempt = 1,
-        HarnessExecutionMode? executionModeOverride = null);
+        HarnessExecutionMode? executionModeOverride = null,
+        string? sessionProfileId = null,
+        string? automationRunId = null);
     Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken);
     Task<List<RepositoryDocument>> ListRepositoriesWithRecentTasksAsync(int limit, CancellationToken cancellationToken);
@@ -102,6 +115,10 @@ public interface IOrchestratorStore
     Task<RunDiffSnapshotDocument> UpsertRunDiffSnapshotAsync(RunDiffSnapshotDocument snapshot, CancellationToken cancellationToken);
     Task<RunDiffSnapshotDocument?> GetLatestRunDiffSnapshotAsync(string runId, CancellationToken cancellationToken);
     Task<List<RunToolProjectionDocument>> ListRunToolProjectionsAsync(string runId, CancellationToken cancellationToken);
+    Task<RunInstructionStackDocument> UpsertRunInstructionStackAsync(RunInstructionStackDocument stack, CancellationToken cancellationToken);
+    Task<RunInstructionStackDocument?> GetRunInstructionStackAsync(string runId, CancellationToken cancellationToken);
+    Task<RunShareBundleDocument> UpsertRunShareBundleAsync(RunShareBundleDocument bundle, CancellationToken cancellationToken);
+    Task<RunShareBundleDocument?> GetRunShareBundleAsync(string runId, CancellationToken cancellationToken);
     Task<StructuredRunDataPruneResult> PruneStructuredRunDataAsync(
         DateTime olderThanUtc,
         int maxRuns,

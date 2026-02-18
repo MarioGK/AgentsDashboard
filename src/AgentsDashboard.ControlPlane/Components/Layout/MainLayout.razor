@@ -3,6 +3,10 @@
 @inject Services.IGlobalSelectionService SelectionService
 @inject IJSRuntime JS
 @inject Services.IUiRealtimeBroker UiRealtimeBroker
+@inject Services.INotificationService NotificationService
+@inject Services.IBackgroundWorkCoordinator BackgroundWorkCoordinator
+@inject ISnackbar Snackbar
+@using AgentsDashboard.ControlPlane.Services
 @implements IAsyncDisposable
 
 <MudThemeProvider IsDarkMode="true" Theme="_theme" />
@@ -16,8 +20,8 @@
 
         <div class="codex-appbar-nav" role="navigation" aria-label="Primary">
             <MudNavLink Href="/workspace" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard" Class="codex-appbar-nav-link codex-parent-workspace-link">Workspace</MudNavLink>
+            <MudNavLink Href="/overview" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Chat" Class="codex-appbar-nav-link">Overview</MudNavLink>
             <MudNavLink Href="/search" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.TravelExplore" Class="codex-appbar-nav-link codex-parent-search-link">Search</MudNavLink>
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Chat" Class="codex-appbar-nav-link">Overview</MudNavLink>
             <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Tune" Class="codex-appbar-nav-link codex-parent-settings-link">Settings</MudNavLink>
         </div>
 
@@ -61,7 +65,108 @@
                 </MudChip>
             </div>
         }
+
+        <MudTooltip Text="System Activity" Placement="Placement.Bottom">
+            @if (_unreadNotificationCount > 0)
+            {
+                <MudBadge Content="@_unreadNotificationCount"
+                          Color="Color.Error"
+                          Overlap="true"
+                          Bordered="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Notifications"
+                                   Color="Color.Inherit"
+                                   OnClick="ToggleActivityDrawer" />
+                </MudBadge>
+            }
+            else
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Notifications"
+                               Color="Color.Inherit"
+                               OnClick="ToggleActivityDrawer" />
+            }
+        </MudTooltip>
     </MudAppBar>
+
+    <MudDrawer Anchor="Anchor.End"
+               Variant="DrawerVariant.Temporary"
+               Open="@_activityDrawerOpen"
+               OpenChanged="OnActivityDrawerOpenChanged"
+               Elevation="2"
+               Width="420px"
+               Class="codex-activity-drawer">
+        <MudStack Spacing="2" Class="pa-3">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.h6">System Activity</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               Color="Color.Inherit"
+                               OnClick="@(() => _activityDrawerOpen = false)" />
+            </MudStack>
+
+            <MudPaper Elevation="0" Class="pa-2">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Active Background Work</MudText>
+                @if (_activeBackgroundWork.Count == 0)
+                {
+                    <MudText Typo="Typo.caption">No active background tasks.</MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        @foreach (var snapshot in _activeBackgroundWork)
+                        {
+                            <MudPaper Elevation="0" Class="pa-2">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.caption">@snapshot.Kind</MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="@MapBackgroundWorkColor(snapshot.State)">
+                                        @snapshot.State
+                                    </MudChip>
+                                </MudStack>
+                                <MudText Typo="Typo.caption">@snapshot.Message</MudText>
+                                @if (snapshot.PercentComplete.HasValue)
+                                {
+                                    <MudProgressLinear Value="@snapshot.PercentComplete.Value" Class="mt-1" />
+                                }
+                                else
+                                {
+                                    <MudProgressLinear Indeterminate="true" Class="mt-1" />
+                                }
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
+
+            <MudPaper Elevation="0" Class="pa-2">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Notifications</MudText>
+                @if (_notificationFeed.Count == 0)
+                {
+                    <MudText Typo="Typo.caption">No notifications yet.</MudText>
+                }
+                else
+                {
+                    <MudList T="NotificationMessage" Dense="true">
+                        @foreach (var notification in _notificationFeed)
+                        {
+                            <MudListItem>
+                                <MudStack Spacing="0" Style="width: 100%;">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                        <MudText Typo="Typo.caption">@notification.Title</MudText>
+                                        <MudChip T="string" Size="Size.Small" Color="@MapNotificationColor(notification.Severity)">
+                                            @notification.Severity
+                                        </MudChip>
+                                    </MudStack>
+                                    @if (!string.IsNullOrWhiteSpace(notification.Body))
+                                    {
+                                        <MudText Typo="Typo.caption">@notification.Body</MudText>
+                                    }
+                                    <MudText Typo="Typo.caption">@notification.Timestamp.LocalDateTime.ToString("g")</MudText>
+                                </MudStack>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudPaper>
+        </MudStack>
+    </MudDrawer>
 
     <MudMainContent Class="codex-main">
         <MudContainer MaxWidth="MaxWidth.False" Class="codex-main-container">
@@ -80,6 +185,12 @@
     private CancellationTokenSource? _cts;
     private IDisposable? _runStatusSubscription;
     private IDisposable? _selectionSubscription;
+    private Task? _notificationPumpTask;
+    private Action<BackgroundWorkSnapshot>? _backgroundWorkUpdatedHandler;
+    private bool _activityDrawerOpen;
+    private int _unreadNotificationCount;
+    private IReadOnlyList<NotificationMessage> _notificationFeed = [];
+    private IReadOnlyList<BackgroundWorkSnapshot> _backgroundWorkSnapshots = [];
 
     private readonly MudTheme _theme = new()
     {
@@ -116,6 +227,10 @@
     protected override async Task OnInitializedAsync()
     {
         _cts = new CancellationTokenSource();
+        _notificationFeed = NotificationService.Snapshot().Take(40).ToArray();
+        _backgroundWorkSnapshots = BuildBackgroundWorkSnapshotCache(BackgroundWorkCoordinator.Snapshot());
+        _backgroundWorkUpdatedHandler = OnBackgroundWorkUpdated;
+        BackgroundWorkCoordinator.Updated += _backgroundWorkUpdatedHandler;
 
         _selectionSubscription = SelectionService.Subscribe(_ => InvokeAsync(StateHasChanged));
         _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(async runStatus =>
@@ -164,6 +279,39 @@
                 await Task.Delay(TimeSpan.FromSeconds(30), _cts.Token);
             }
         }, _cts.Token);
+
+        _notificationPumpTask = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    await foreach (var notification in NotificationService.StreamAsync(_cts.Token))
+                    {
+                        await InvokeAsync(() =>
+                        {
+                            _notificationFeed = PrependNotification(notification, _notificationFeed);
+                            if (!_activityDrawerOpen)
+                            {
+                                _unreadNotificationCount++;
+                            }
+
+                            if (!notification.Title.Contains(": running", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var message = string.IsNullOrWhiteSpace(notification.Body)
+                                    ? notification.Title
+                                    : $"{notification.Title}: {notification.Body}";
+                                Snackbar.Add(message, MapSnackbarSeverity(notification.Severity));
+                            }
+
+                            StateHasChanged();
+                        });
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            },
+            _cts.Token);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -224,11 +372,134 @@
         };
     }
 
+    private IReadOnlyList<BackgroundWorkSnapshot> _activeBackgroundWork => _backgroundWorkSnapshots
+        .Where(snapshot => snapshot.State is BackgroundWorkState.Pending or BackgroundWorkState.Running)
+        .OrderByDescending(snapshot => snapshot.UpdatedAt ?? snapshot.StartedAt ?? DateTimeOffset.MinValue)
+        .Take(12)
+        .ToArray();
+
+    private void ToggleActivityDrawer()
+    {
+        _activityDrawerOpen = !_activityDrawerOpen;
+        if (_activityDrawerOpen)
+        {
+            _unreadNotificationCount = 0;
+        }
+    }
+
+    private Task OnActivityDrawerOpenChanged(bool isOpen)
+    {
+        _activityDrawerOpen = isOpen;
+        if (isOpen)
+        {
+            _unreadNotificationCount = 0;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void OnBackgroundWorkUpdated(BackgroundWorkSnapshot snapshot)
+    {
+        _ = InvokeAsync(() =>
+        {
+            var snapshots = _backgroundWorkSnapshots
+                .Where(existing => !string.Equals(existing.WorkId, snapshot.WorkId, StringComparison.OrdinalIgnoreCase))
+                .Append(snapshot);
+            _backgroundWorkSnapshots = BuildBackgroundWorkSnapshotCache(snapshots);
+            StateHasChanged();
+        });
+    }
+
+    private static IReadOnlyList<BackgroundWorkSnapshot> BuildBackgroundWorkSnapshotCache(IEnumerable<BackgroundWorkSnapshot> snapshots)
+    {
+        return snapshots
+            .OrderByDescending(snapshot => snapshot.UpdatedAt ?? snapshot.StartedAt ?? DateTimeOffset.MinValue)
+            .Take(80)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<NotificationMessage> PrependNotification(
+        NotificationMessage message,
+        IReadOnlyList<NotificationMessage> existing)
+    {
+        var list = new List<NotificationMessage>(capacity: Math.Min(existing.Count + 1, 60))
+        {
+            message
+        };
+
+        foreach (var item in existing)
+        {
+            if (list.Count >= 60)
+            {
+                break;
+            }
+
+            list.Add(item);
+        }
+
+        return list;
+    }
+
+    private static Severity MapSnackbarSeverity(NotificationSeverity severity)
+    {
+        return severity switch
+        {
+            NotificationSeverity.Info => Severity.Info,
+            NotificationSeverity.Success => Severity.Success,
+            NotificationSeverity.Warning => Severity.Warning,
+            NotificationSeverity.Error => Severity.Error,
+            _ => Severity.Info,
+        };
+    }
+
+    private static Color MapNotificationColor(NotificationSeverity severity)
+    {
+        return severity switch
+        {
+            NotificationSeverity.Info => Color.Info,
+            NotificationSeverity.Success => Color.Success,
+            NotificationSeverity.Warning => Color.Warning,
+            NotificationSeverity.Error => Color.Error,
+            _ => Color.Default,
+        };
+    }
+
+    private static Color MapBackgroundWorkColor(BackgroundWorkState state)
+    {
+        return state switch
+        {
+            BackgroundWorkState.Pending => Color.Info,
+            BackgroundWorkState.Running => Color.Primary,
+            BackgroundWorkState.Succeeded => Color.Success,
+            BackgroundWorkState.Failed => Color.Error,
+            BackgroundWorkState.Cancelled => Color.Warning,
+            _ => Color.Default,
+        };
+    }
+
     public async ValueTask DisposeAsync()
     {
+        if (_backgroundWorkUpdatedHandler is not null)
+        {
+            BackgroundWorkCoordinator.Updated -= _backgroundWorkUpdatedHandler;
+            _backgroundWorkUpdatedHandler = null;
+        }
+
         _selectionSubscription?.Dispose();
         _runStatusSubscription?.Dispose();
         _cts?.Cancel();
+
+        if (_notificationPumpTask is not null)
+        {
+            try
+            {
+                await _notificationPumpTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
         _cts?.Dispose();
     }
 }

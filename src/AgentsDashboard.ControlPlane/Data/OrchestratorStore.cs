@@ -354,6 +354,225 @@ public sealed class OrchestratorStore(
         return true;
     }
 
+    public async Task<RunSessionProfileDocument> CreateRunSessionProfileAsync(CreateRunSessionProfileRequest request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var repositoryId = NormalizeSessionProfileScope(request.RepositoryId, request.Scope);
+        var name = NormalizeRequiredValue(request.Name, nameof(request.Name));
+        var harness = NormalizeHarnessValue(request.Harness);
+
+        var exists = await db.RunSessionProfiles.AnyAsync(
+            x => x.RepositoryId == repositoryId && x.Name == name,
+            cancellationToken);
+        if (exists)
+        {
+            throw new InvalidOperationException($"A session profile named '{name}' already exists in this scope.");
+        }
+
+        var now = DateTime.UtcNow;
+        var profile = new RunSessionProfileDocument
+        {
+            RepositoryId = repositoryId,
+            Scope = request.Scope,
+            Name = name,
+            Harness = harness,
+            ExecutionModeDefault = request.ExecutionModeDefault,
+            ApprovalMode = request.ApprovalMode?.Trim() ?? "auto",
+            DiffViewDefault = request.DiffViewDefault?.Trim() ?? "side-by-side",
+            ToolTimelineMode = request.ToolTimelineMode?.Trim() ?? "table",
+            McpConfigJson = request.McpConfigJson?.Trim() ?? string.Empty,
+            Enabled = true,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        };
+
+        db.RunSessionProfiles.Add(profile);
+        await db.SaveChangesAsync(cancellationToken);
+        return profile;
+    }
+
+    public async Task<List<RunSessionProfileDocument>> ListRunSessionProfilesAsync(string repositoryId, bool includeGlobal, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var scope = NormalizePromptSkillScope(repositoryId);
+        IQueryable<RunSessionProfileDocument> query = db.RunSessionProfiles.AsNoTracking();
+
+        if (includeGlobal && !string.Equals(scope, GlobalRepositoryScope, StringComparison.Ordinal))
+        {
+            query = query.Where(x => x.RepositoryId == scope || x.RepositoryId == GlobalRepositoryScope);
+            return await query
+                .OrderBy(x => x.RepositoryId == scope ? 0 : 1)
+                .ThenBy(x => x.Name)
+                .ToListAsync(cancellationToken);
+        }
+
+        return await query
+            .Where(x => x.RepositoryId == scope)
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RunSessionProfileDocument?> GetRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RunSessionProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == sessionProfileId, cancellationToken);
+    }
+
+    public async Task<RunSessionProfileDocument?> UpdateRunSessionProfileAsync(string sessionProfileId, UpdateRunSessionProfileRequest request, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.RunSessionProfiles.FirstOrDefaultAsync(x => x.Id == sessionProfileId, cancellationToken);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var name = NormalizeRequiredValue(request.Name, nameof(request.Name));
+        var harness = NormalizeHarnessValue(request.Harness);
+
+        var duplicate = await db.RunSessionProfiles.AnyAsync(
+            x => x.Id != sessionProfileId && x.RepositoryId == existing.RepositoryId && x.Name == name,
+            cancellationToken);
+        if (duplicate)
+        {
+            throw new InvalidOperationException($"A session profile named '{name}' already exists in this scope.");
+        }
+
+        existing.Name = name;
+        existing.Harness = harness;
+        existing.ExecutionModeDefault = request.ExecutionModeDefault;
+        existing.ApprovalMode = request.ApprovalMode?.Trim() ?? "auto";
+        existing.DiffViewDefault = request.DiffViewDefault?.Trim() ?? "side-by-side";
+        existing.ToolTimelineMode = request.ToolTimelineMode?.Trim() ?? "table";
+        existing.McpConfigJson = request.McpConfigJson?.Trim() ?? string.Empty;
+        existing.Enabled = request.Enabled;
+        existing.UpdatedAtUtc = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<bool> DeleteRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.RunSessionProfiles.FirstOrDefaultAsync(x => x.Id == sessionProfileId, cancellationToken);
+        if (existing is null)
+        {
+            return false;
+        }
+
+        db.RunSessionProfiles.Remove(existing);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<AutomationDefinitionDocument> UpsertAutomationDefinitionAsync(
+        string? automationId,
+        UpsertAutomationDefinitionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var repositoryId = NormalizePromptSkillScope(request.RepositoryId);
+        var taskId = NormalizeRequiredValue(request.TaskId, nameof(request.TaskId));
+        var name = NormalizeRequiredValue(request.Name, nameof(request.Name));
+        var triggerKind = NormalizeRequiredValue(request.TriggerKind, nameof(request.TriggerKind)).ToLowerInvariant();
+        var replayPolicy = NormalizeRequiredValue(request.ReplayPolicy, nameof(request.ReplayPolicy)).ToLowerInvariant();
+        var cronExpression = request.CronExpression?.Trim() ?? string.Empty;
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        AutomationDefinitionDocument automation;
+
+        if (string.IsNullOrWhiteSpace(automationId))
+        {
+            automation = new AutomationDefinitionDocument
+            {
+                RepositoryId = repositoryId,
+                TaskId = taskId,
+                Name = name,
+                TriggerKind = triggerKind,
+                ReplayPolicy = replayPolicy,
+                CronExpression = cronExpression,
+                Enabled = request.Enabled,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow,
+                NextRunAtUtc = ComputeNextAutomationRun(triggerKind, cronExpression, request.Enabled, DateTime.UtcNow),
+            };
+            db.AutomationDefinitions.Add(automation);
+        }
+        else
+        {
+            automation = await db.AutomationDefinitions.FirstOrDefaultAsync(x => x.Id == automationId, cancellationToken)
+                ?? throw new InvalidOperationException("Automation definition not found.");
+            automation.RepositoryId = repositoryId;
+            automation.TaskId = taskId;
+            automation.Name = name;
+            automation.TriggerKind = triggerKind;
+            automation.ReplayPolicy = replayPolicy;
+            automation.CronExpression = cronExpression;
+            automation.Enabled = request.Enabled;
+            automation.NextRunAtUtc = ComputeNextAutomationRun(triggerKind, cronExpression, request.Enabled, DateTime.UtcNow);
+            automation.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return automation;
+    }
+
+    public async Task<List<AutomationDefinitionDocument>> ListAutomationDefinitionsAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var normalizedRepositoryId = NormalizePromptSkillScope(repositoryId);
+        return await db.AutomationDefinitions.AsNoTracking()
+            .Where(x => x.RepositoryId == normalizedRepositoryId)
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<AutomationDefinitionDocument?> GetAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.AutomationDefinitions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == automationId, cancellationToken);
+    }
+
+    public async Task<bool> DeleteAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.AutomationDefinitions.FirstOrDefaultAsync(x => x.Id == automationId, cancellationToken);
+        if (existing is null)
+        {
+            return false;
+        }
+
+        db.AutomationDefinitions.Remove(existing);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<AutomationExecutionDocument> CreateAutomationExecutionAsync(AutomationExecutionDocument execution, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(execution.Id))
+        {
+            execution.Id = Guid.NewGuid().ToString("N");
+        }
+
+        execution.StartedAtUtc = execution.StartedAtUtc == default ? DateTime.UtcNow : execution.StartedAtUtc;
+        db.AutomationExecutions.Add(execution);
+        await db.SaveChangesAsync(cancellationToken);
+        return execution;
+    }
+
+    public async Task<List<AutomationExecutionDocument>> ListAutomationExecutionsAsync(string repositoryId, int limit, CancellationToken cancellationToken)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var normalizedRepositoryId = NormalizePromptSkillScope(repositoryId);
+        var normalizedLimit = limit <= 0 ? 100 : Math.Clamp(limit, 1, 1000);
+        return await db.AutomationExecutions.AsNoTracking()
+            .Where(x => x.RepositoryId == normalizedRepositoryId)
+            .OrderByDescending(x => x.StartedAtUtc)
+            .Take(normalizedLimit)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -364,6 +583,7 @@ public sealed class OrchestratorStore(
             Kind = request.Kind,
             Harness = request.Harness.Trim().ToLowerInvariant(),
             ExecutionModeDefault = request.ExecutionModeDefault,
+            SessionProfileId = request.SessionProfileId?.Trim() ?? string.Empty,
             Prompt = request.Prompt,
             Command = request.Command,
             AutoCreatePullRequest = request.AutoCreatePullRequest,
@@ -490,6 +710,7 @@ public sealed class OrchestratorStore(
         task.Kind = request.Kind;
         task.Harness = request.Harness.Trim().ToLowerInvariant();
         task.ExecutionModeDefault = request.ExecutionModeDefault;
+        task.SessionProfileId = request.SessionProfileId?.Trim() ?? string.Empty;
         task.Prompt = request.Prompt;
         task.Command = request.Command;
         task.AutoCreatePullRequest = request.AutoCreatePullRequest;
@@ -1053,7 +1274,9 @@ public sealed class OrchestratorStore(
         TaskDocument task,
         CancellationToken cancellationToken,
         int attempt = 1,
-        HarnessExecutionMode? executionModeOverride = null)
+        HarnessExecutionMode? executionModeOverride = null,
+        string? sessionProfileId = null,
+        string? automationRunId = null)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var run = new RunDocument
@@ -1063,6 +1286,8 @@ public sealed class OrchestratorStore(
             State = RunState.Queued,
             ExecutionMode = executionModeOverride ?? task.ExecutionModeDefault ?? HarnessExecutionMode.Default,
             StructuredProtocol = "harness-structured-event-v2",
+            SessionProfileId = sessionProfileId?.Trim() ?? task.SessionProfileId,
+            AutomationRunId = automationRunId?.Trim() ?? string.Empty,
             Summary = "Queued",
             Attempt = attempt,
         };
@@ -2074,6 +2299,118 @@ public sealed class OrchestratorStore(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<RunInstructionStackDocument> UpsertRunInstructionStackAsync(RunInstructionStackDocument stack, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(stack.RunId))
+        {
+            throw new ArgumentException("RunId is required.", nameof(stack));
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        stack.Hash = stack.Hash?.Trim() ?? string.Empty;
+        stack.ResolvedText = stack.ResolvedText?.Trim() ?? string.Empty;
+        stack.GlobalRules = stack.GlobalRules?.Trim() ?? string.Empty;
+        stack.RepositoryRules = stack.RepositoryRules?.Trim() ?? string.Empty;
+        stack.TaskRules = stack.TaskRules?.Trim() ?? string.Empty;
+        stack.RunOverrides = stack.RunOverrides?.Trim() ?? string.Empty;
+
+        if (stack.CreatedAtUtc == default)
+        {
+            stack.CreatedAtUtc = now;
+        }
+
+        var existing = await db.RunInstructionStacks.FirstOrDefaultAsync(x => x.RunId == stack.RunId, cancellationToken);
+        if (existing is null)
+        {
+            if (string.IsNullOrWhiteSpace(stack.Id))
+            {
+                stack.Id = Guid.NewGuid().ToString("N");
+            }
+
+            db.RunInstructionStacks.Add(stack);
+            await db.SaveChangesAsync(cancellationToken);
+            return stack;
+        }
+
+        existing.RepositoryId = stack.RepositoryId;
+        existing.TaskId = stack.TaskId;
+        existing.SessionProfileId = stack.SessionProfileId;
+        existing.GlobalRules = stack.GlobalRules;
+        existing.RepositoryRules = stack.RepositoryRules;
+        existing.TaskRules = stack.TaskRules;
+        existing.RunOverrides = stack.RunOverrides;
+        existing.ResolvedText = stack.ResolvedText;
+        existing.Hash = stack.Hash;
+        existing.CreatedAtUtc = stack.CreatedAtUtc;
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<RunInstructionStackDocument?> GetRunInstructionStackAsync(string runId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return null;
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RunInstructionStacks.AsNoTracking()
+            .Where(x => x.RunId == runId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<RunShareBundleDocument> UpsertRunShareBundleAsync(RunShareBundleDocument bundle, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(bundle.RunId))
+        {
+            throw new ArgumentException("RunId is required.", nameof(bundle));
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        bundle.BundleJson = bundle.BundleJson?.Trim() ?? string.Empty;
+        if (bundle.CreatedAtUtc == default)
+        {
+            bundle.CreatedAtUtc = DateTime.UtcNow;
+        }
+
+        var existing = await db.RunShareBundles.FirstOrDefaultAsync(x => x.RunId == bundle.RunId, cancellationToken);
+        if (existing is null)
+        {
+            if (string.IsNullOrWhiteSpace(bundle.Id))
+            {
+                bundle.Id = Guid.NewGuid().ToString("N");
+            }
+
+            db.RunShareBundles.Add(bundle);
+            await db.SaveChangesAsync(cancellationToken);
+            return bundle;
+        }
+
+        existing.RepositoryId = bundle.RepositoryId;
+        existing.TaskId = bundle.TaskId;
+        existing.BundleJson = bundle.BundleJson;
+        existing.CreatedAtUtc = bundle.CreatedAtUtc;
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<RunShareBundleDocument?> GetRunShareBundleAsync(string runId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return null;
+        }
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.RunShareBundles.AsNoTracking()
+            .Where(x => x.RunId == runId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<StructuredRunDataPruneResult> PruneStructuredRunDataAsync(
         DateTime olderThanUtc,
         int maxRuns,
@@ -3041,6 +3378,60 @@ public sealed class OrchestratorStore(
         return string.Equals(normalized, GlobalRepositoryScope, StringComparison.OrdinalIgnoreCase)
             ? GlobalRepositoryScope
             : normalized;
+    }
+
+    private static string NormalizeSessionProfileScope(string repositoryId, RunSessionProfileScope scope)
+    {
+        if (scope == RunSessionProfileScope.Global)
+        {
+            return GlobalRepositoryScope;
+        }
+
+        var normalized = repositoryId.Trim();
+        if (normalized.Length == 0)
+        {
+            throw new ArgumentException("Repository scope is required.", nameof(repositoryId));
+        }
+
+        if (string.Equals(normalized, GlobalRepositoryScope, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Repository profiles cannot use global repository scope.", nameof(repositoryId));
+        }
+
+        return normalized;
+    }
+
+    private static string NormalizeHarnessValue(string harness)
+    {
+        return NormalizeRequiredValue(harness, nameof(harness)).ToLowerInvariant();
+    }
+
+    private static DateTime? ComputeNextAutomationRun(string triggerKind, string cronExpression, bool enabled, DateTime nowUtc)
+    {
+        if (!enabled)
+        {
+            return null;
+        }
+
+        if (!string.Equals(triggerKind, "cron", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(cronExpression))
+        {
+            return null;
+        }
+
+        try
+        {
+            var expression = CronExpression.Parse(cronExpression, CronFormat.Standard);
+            return expression.GetNextOccurrence(nowUtc, TimeZoneInfo.Utc);
+        }
+        catch (Exception ex)
+        {
+            throw new ArgumentException($"Invalid cron expression '{cronExpression}': {ex.Message}", nameof(cronExpression), ex);
+        }
     }
 
     private static string NormalizePromptSkillTrigger(string trigger)

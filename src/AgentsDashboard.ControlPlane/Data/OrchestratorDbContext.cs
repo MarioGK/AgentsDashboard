@@ -18,6 +18,11 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
     public DbSet<RunStructuredEventDocument> RunStructuredEvents => Set<RunStructuredEventDocument>();
     public DbSet<RunDiffSnapshotDocument> RunDiffSnapshots => Set<RunDiffSnapshotDocument>();
     public DbSet<RunToolProjectionDocument> RunToolProjections => Set<RunToolProjectionDocument>();
+    public DbSet<RunSessionProfileDocument> RunSessionProfiles => Set<RunSessionProfileDocument>();
+    public DbSet<RunInstructionStackDocument> RunInstructionStacks => Set<RunInstructionStackDocument>();
+    public DbSet<RunShareBundleDocument> RunShareBundles => Set<RunShareBundleDocument>();
+    public DbSet<AutomationDefinitionDocument> AutomationDefinitions => Set<AutomationDefinitionDocument>();
+    public DbSet<AutomationExecutionDocument> AutomationExecutions => Set<AutomationExecutionDocument>();
     public DbSet<FindingDocument> Findings => Set<FindingDocument>();
     public DbSet<ProviderSecretDocument> ProviderSecrets => Set<ProviderSecretDocument>();
     public DbSet<WorkerRegistration> Workers => Set<WorkerRegistration>();
@@ -48,6 +53,11 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<RunStructuredEventDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<RunDiffSnapshotDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<RunToolProjectionDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<RunSessionProfileDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<RunInstructionStackDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<RunShareBundleDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<AutomationDefinitionDocument>().HasKey(x => x.Id);
+        modelBuilder.Entity<AutomationExecutionDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<FindingDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<ProviderSecretDocument>().HasKey(x => x.Id);
         modelBuilder.Entity<WorkerRegistration>().HasKey(x => x.Id);
@@ -169,6 +179,8 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
         modelBuilder.Entity<WorkspacePromptEntryDocument>()
             .HasIndex(x => new { x.TaskId, x.CreatedAtUtc });
         modelBuilder.Entity<WorkspacePromptEntryDocument>()
+            .HasIndex(x => new { x.TaskId, x.HasImages, x.CreatedAtUtc });
+        modelBuilder.Entity<WorkspacePromptEntryDocument>()
             .HasIndex(x => new { x.RunId, x.CreatedAtUtc });
         modelBuilder.Entity<SemanticChunkDocument>()
             .HasIndex(x => new { x.TaskId, x.ChunkKey })
@@ -200,6 +212,24 @@ public sealed class OrchestratorDbContext(DbContextOptions<OrchestratorDbContext
             .HasIndex(x => new { x.RunId, x.SequenceStart });
         modelBuilder.Entity<RunToolProjectionDocument>()
             .HasIndex(x => new { x.RunId, x.CreatedAtUtc });
+        modelBuilder.Entity<RunSessionProfileDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.Name });
+        modelBuilder.Entity<RunSessionProfileDocument>()
+            .HasIndex(x => new { x.Scope, x.Enabled });
+        modelBuilder.Entity<RunInstructionStackDocument>()
+            .HasIndex(x => new { x.RunId, x.Hash });
+        modelBuilder.Entity<RunInstructionStackDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.TaskId, x.CreatedAtUtc });
+        modelBuilder.Entity<RunShareBundleDocument>()
+            .HasIndex(x => x.RunId);
+        modelBuilder.Entity<RunShareBundleDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.TaskId, x.CreatedAtUtc });
+        modelBuilder.Entity<AutomationDefinitionDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.Enabled, x.NextRunAtUtc });
+        modelBuilder.Entity<AutomationExecutionDocument>()
+            .HasIndex(x => new { x.AutomationDefinitionId, x.StartedAtUtc });
+        modelBuilder.Entity<AutomationExecutionDocument>()
+            .HasIndex(x => new { x.RepositoryId, x.TaskId, x.StartedAtUtc });
         modelBuilder.Entity<ProviderSecretDocument>()
             .HasIndex(x => new { x.RepositoryId, x.Provider })
             .IsUnique();

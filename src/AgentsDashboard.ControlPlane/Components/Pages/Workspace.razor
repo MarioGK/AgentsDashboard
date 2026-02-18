@@ -1,12 +1,13 @@
 @page "/workspace"
+@page "/"
 @rendermode InteractiveServer
+@using System.Text
 @using System.Text.Json
 @using AgentsDashboard.ControlPlane.Components.Shared
 @using AgentsDashboard.ControlPlane.Services
 @inject Data.IOrchestratorStore Store
 @inject Services.IGlobalSelectionService SelectionService
 @inject Services.IWorkspaceService WorkspaceService
-@inject Services.IWorkspaceSearchService WorkspaceSearchService
 @inject Services.IWorkspaceAiService WorkspaceAiService
 @inject Services.IRunStructuredViewService RunStructuredViewService
 @inject Services.IHarnessOutputParserService HarnessOutputParser
@@ -37,29 +38,9 @@
                                    StartIcon="@Icons.Material.Filled.Add"
                                    Size="Size.Small"
                                    OnClick="OpenCreateTaskFormAsync"
-                                   Disabled="_selectedRepository is null">
+                                   Disabled="_selectedRepository is null"
+                                   data-testid="workspace-new-task">
                             New Task
-                        </MudButton>
-                    </MudStack>
-
-                    <MudTextField T="string"
-                                  Value="_searchText"
-                                  ValueChanged="OnSearchTextChangedAsync"
-                                  Placeholder="Search task or message"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Immediate="true"
-                                  Adornment="Adornment.Start"
-                                  AdornmentIcon="@Icons.Material.Filled.Search" />
-
-                    <MudStack Row AlignItems="AlignItems.Center">
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Need cross-repository search?</MudText>
-                        <MudSpacer />
-                        <MudButton Variant="Variant.Text"
-                                   Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.TravelExplore"
-                                   Href="@BuildGlobalSearchHref()">
-                            Open Global Search
                         </MudButton>
                     </MudStack>
 
@@ -88,55 +69,6 @@
                             <MudSelectItem T="string" Value="@TaskFilterEnabled">Enabled Only</MudSelectItem>
                         </MudSelect>
                     </MudStack>
-
-                    @if (_searchInFlight)
-                    {
-                        <MudProgressLinear Indeterminate="true" Color="Color.Info" />
-                    }
-
-                    @if (!string.IsNullOrWhiteSpace(_searchError))
-                    {
-                        <MudAlert Severity="Severity.Warning">@_searchError</MudAlert>
-                    }
-
-                    @if (!string.IsNullOrWhiteSpace(_searchText))
-                    {
-                        <MudPaper Class="workspace-search-results" Elevation="0">
-                            <MudStack Row AlignItems="AlignItems.Center" Class="mb-1">
-                                <MudText Typo="Typo.subtitle2">Search Results</MudText>
-                                <MudSpacer />
-                                @if (_searchResult is not null)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_searchResult.Hits.Count hits</MudChip>
-                                    <MudChip T="string"
-                                             Size="Size.Small"
-                                             Color="@(_searchResult.SqliteVecAvailable ? Color.Success : Color.Warning)">
-                                        @(_searchResult.SqliteVecAvailable ? "sqlite-vec" : "Text fallback")
-                                    </MudChip>
-                                }
-                            </MudStack>
-
-                            @if (_searchHits.Count == 0 && !_searchInFlight)
-                            {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">No task/message hits found.</MudText>
-                            }
-                            else
-                            {
-                                @foreach (var hit in _searchHits.Take(10))
-                                {
-                                    <MudPaper Class="workspace-search-hit" Elevation="0" @onclick="() => JumpToSearchHitAsync(hit)">
-                                        <MudStack Row AlignItems="AlignItems.Center">
-                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@FormatHitKind(hit.Kind)</MudChip>
-                                            <MudText Typo="Typo.caption">@hit.Title</MudText>
-                                            <MudSpacer />
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">S @hit.Score.ToString("0.##")</MudText>
-                                        </MudStack>
-                                        <MudText Typo="Typo.body2">@hit.Snippet</MudText>
-                                    </MudPaper>
-                                }
-                            }
-                        </MudPaper>
-                    }
                 </MudStack>
 
                 <MudDivider Class="my-2" />
@@ -158,10 +90,11 @@
                             {
                                 <MudPaper Class="@GetRepositoryCardClass(repository)"
                                           Elevation="0"
-                                          @onclick="() => SelectRepositoryAsync(repository.Id, true)">
+                                          @onclick="() => SelectRepositoryAsync(repository.Id, true)"
+                                          data-testid="@($"workspace-repository-card-{repository.Id}")">
                                     <MudStack Spacing="1">
                                         <MudStack Row AlignItems="AlignItems.Center">
-                                            <MudText Typo="Typo.subtitle2">@repository.Name</MudText>
+                                            <MudText Typo="Typo.subtitle2" data-testid="@($"workspace-repository-name-{repository.Id}")">@repository.Name</MudText>
                                             <MudSpacer />
                                             <MudChip T="string" Size="Size.Small" Color="@GetRepositoryHealthColor(repository)">
                                                 @GetRepositoryHealthLabel(repository)
@@ -203,10 +136,11 @@
                             var latestRun = GetLatestRun(task.Id);
                             <MudPaper Class="@GetTaskCardClass(task)"
                                       Elevation="0"
-                                      @onclick="() => SelectTaskAsync(task.Id)">
+                                      @onclick="() => SelectTaskAsync(task.Id)"
+                                      data-testid="@($"workspace-task-card-{task.Id}")">
                                     <MudStack Spacing="1">
                                         <MudStack Row AlignItems="AlignItems.Center">
-                                            <MudText Typo="Typo.subtitle2">@task.Name</MudText>
+                                            <MudText Typo="Typo.subtitle2" data-testid="@($"workspace-task-name-{task.Id}")">@task.Name</MudText>
                                             <MudSpacer />
                                             <TaskStatusChip Task="task" LatestRun="@latestRun" IsLoading="_taskStatusLoading" />
                                         </MudStack>
@@ -257,7 +191,8 @@
                                               Label="Task Name"
                                               Variant="Variant.Outlined"
                                               Margin="Margin.Dense"
-                                              Immediate="true" />
+                                              Immediate="true"
+                                              data-testid="workspace-create-task-name" />
                             </MudItem>
 
                             <MudItem xs="12" md="3">
@@ -265,7 +200,8 @@
                                            @bind-Value="_createTaskHarness"
                                            Label="Harness"
                                            Variant="Variant.Outlined"
-                                           Margin="Margin.Dense">
+                                           Margin="Margin.Dense"
+                                           data-testid="workspace-create-task-harness">
                                     <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
                                     <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
                                     <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
@@ -278,7 +214,8 @@
                                            @bind-Value="_createTaskKind"
                                            Label="Kind"
                                            Variant="Variant.Outlined"
-                                           Margin="Margin.Dense">
+                                           Margin="Margin.Dense"
+                                           data-testid="workspace-create-task-kind">
                                     <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
                                     <MudSelectItem T="TaskKind" Value="@TaskKind.Cron">Cron</MudSelectItem>
                                     <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
@@ -290,10 +227,25 @@
                                            @bind-Value="_createTaskModeDefault"
                                            Label="Default Mode"
                                            Variant="Variant.Outlined"
-                                           Margin="Margin.Dense">
+                                           Margin="Margin.Dense"
+                                           data-testid="workspace-create-task-default-mode">
                                     <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
                                     <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
                                     <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" md="3">
+                                <MudSelect T="string"
+                                           @bind-Value="_createTaskSessionProfileId"
+                                           Label="Session Profile"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense">
+                                    <MudSelectItem T="string" Value="@string.Empty">None</MudSelectItem>
+                                    @foreach (var profile in _sessionProfiles.Where(x => x.Enabled))
+                                    {
+                                        <MudSelectItem T="string" Value="@profile.Id">@profile.Name</MudSelectItem>
+                                    }
                                 </MudSelect>
                             </MudItem>
 
@@ -303,7 +255,8 @@
                                               Label="Shell Command"
                                               Variant="Variant.Outlined"
                                               Margin="Margin.Dense"
-                                              Immediate="true" />
+                                              Immediate="true"
+                                              data-testid="workspace-create-task-command" />
                             </MudItem>
 
                             <MudItem xs="12" md="4">
@@ -312,17 +265,22 @@
                                               Label="Cron Expression"
                                               Variant="Variant.Outlined"
                                               Margin="Margin.Dense"
-                                              Immediate="true" />
+                                              Immediate="true"
+                                              data-testid="workspace-create-task-cron" />
                             </MudItem>
 
                             <MudItem xs="12">
-                                <MudTextField T="string"
-                                              @bind-Value="_createTaskPrompt"
-                                              Label="Prompt"
-                                              Variant="Variant.Outlined"
-                                              Margin="Margin.Dense"
-                                              Immediate="true"
-                                              Lines="16" />
+                                <MudText Typo="Typo.caption" Class="mb-1">Prompt</MudText>
+                                <TaskPromptComposer InputId="@_createTaskPromptInputId"
+                                                    Value="@_createTaskPrompt"
+                                                    ValueChanged="OnCreateTaskPromptChangedAsync"
+                                                    Images="@_createTaskPromptImages"
+                                                    ImagesChanged="OnCreateTaskPromptImagesChangedAsync"
+                                                    Placeholder="Describe the goal, constraints, validation, and output format."
+                                                    HelperText="Paste image with Ctrl/Cmd+V or upload. Insert image references into prompt text when needed."
+                                                    Rows="16"
+                                                    PasteBridgeKey="create-task"
+                                                    OnValidationError="ShowComposerValidationAsync" />
                             </MudItem>
                         </MudGrid>
 
@@ -335,13 +293,15 @@
                             <MudButton Variant="Variant.Outlined"
                                        Color="Color.Default"
                                        OnClick="CloseCreateTaskForm"
-                                       Disabled="_isCreatingTask">
+                                       Disabled="_isCreatingTask"
+                                       data-testid="workspace-create-task-cancel">
                                 Cancel
                             </MudButton>
                             <MudButton Variant="Variant.Filled"
                                        Color="Color.Primary"
                                        OnClick="CreateTaskAsync"
-                                       Disabled="@_isCreatingTask">
+                                       Disabled="@_isCreatingTask"
+                                       data-testid="workspace-create-task-submit">
                                 @if (_isCreatingTask)
                                 {
                                     <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
@@ -374,7 +334,7 @@
                                 @if (_selectedRun is not null)
                                 {
                                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Run @_selectedRun.Id[..Math.Min(8, _selectedRun.Id.Length)]</MudChip>
-                                    <MudChip T="string" Size="Size.Small" Color="@GetStateColor(_selectedRun.State)">@_selectedRun.State</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Color="@GetStateColor(_selectedRun.State)" data-testid="workspace-selected-run-state">@_selectedRun.State</MudChip>
                                     <MudChip T="string" Size="Size.Small" Color="@GetRunStepColor(_selectedRun, RunStep.Queued)">Queued</MudChip>
                                     <MudChip T="string" Size="Size.Small" Color="@GetRunStepColor(_selectedRun, RunStep.Running)">Running</MudChip>
                                     <MudChip T="string" Size="Size.Small" Color="@GetRunStepColor(_selectedRun, RunStep.Done)">Done</MudChip>
@@ -395,7 +355,8 @@
                                 <MudTooltip Text="Refresh runs and logs">
                                     <MudIconButton Icon="@Icons.Material.Filled.Refresh"
                                                    Color="Color.Inherit"
-                                                   OnClick="RefreshSelectedRepositoryAsync" />
+                                                   OnClick="RefreshSelectedRepositoryAsync"
+                                                   data-testid="workspace-refresh-runs" />
                                 </MudTooltip>
                                 <MudTooltip Text="Toggle history panel">
                                     <MudIconButton Icon="@(_historyPanelOpen ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
@@ -651,18 +612,20 @@
                             <MudStack Spacing="1">
                                 <MudText Typo="Typo.subtitle2">Prompt Composer</MudText>
 
-                                <div class="workspace-composer-wrap">
-                                    <div class="workspace-composer-ghost-layer" aria-hidden="true">
-                                        <span class="workspace-composer-ghost-typed">@_composerValue</span><span class="workspace-composer-ghost-suggestion">@_composerGhostSuffix</span>
-                                    </div>
-                                    <textarea id="@_composerInputId"
-                                              class="workspace-composer-input"
-                                              rows="6"
-                                              value="@_composerValue"
-                                              @oninput="OnComposerInputChangedAsync"
-                                              @onkeydown="OnComposerKeyDown"
-                                              placeholder="Add run guidance, press Tab or ArrowRight to accept suggestion"></textarea>
-                                </div>
+                                <TaskPromptComposer InputId="@_composerInputId"
+                                                    Value="@_composerValue"
+                                                    ValueChanged="OnComposerValueChangedAsync"
+                                                    Images="@_composerImages"
+                                                    ImagesChanged="OnComposerImagesChangedAsync"
+                                                    Placeholder="Add run guidance, press Tab or ArrowRight to accept suggestion"
+                                                    HelperText="Composer guidance is submitted as follow-up context. Paste/upload images and insert references."
+                                                    Rows="6"
+                                                    ShowGhostSuggestion="true"
+                                                    GhostSuffix="@_composerGhostSuffix"
+                                                    PasteBridgeKey="workspace-composer"
+                                                    Disabled="@_isSubmittingComposer"
+                                                    OnKeyDown="OnComposerKeyDown"
+                                                    OnValidationError="ShowComposerValidationAsync" />
 
                                 <MudExpansionPanels Elevation="0">
                                     <MudExpansionPanel Text="Agent Team Configuration" Dense>
@@ -736,6 +699,19 @@
 
                                 <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">Composer guidance is submitted as follow-up prompt context.</MudText>
+                                    <MudSelect T="string"
+                                               @bind-Value="_selectedSessionProfileId"
+                                               Label="Session Profile"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense"
+                                               Dense="true"
+                                               Class="workspace-filter-select">
+                                        <MudSelectItem T="string" Value="@string.Empty">Task/None</MudSelectItem>
+                                        @foreach (var profile in _sessionProfiles.Where(x => x.Enabled))
+                                        {
+                                            <MudSelectItem T="string" Value="@profile.Id">@profile.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
                                     <MudSelect T="HarnessExecutionMode?"
                                                @bind-Value="_composerModeOverride"
                                                Label="Run Mode"
@@ -752,7 +728,8 @@
                                     <MudButton Variant="Variant.Filled"
                                                Color="Color.Primary"
                                                OnClick="SubmitComposerAsync"
-                                               Disabled="@_isSubmittingComposer">
+                                               Disabled="@_isSubmittingComposer"
+                                               data-testid="workspace-composer-submit">
                                         @if (_isSubmittingComposer)
                                         {
                                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
@@ -792,7 +769,7 @@
                             </MudStack>
                         </MudPaper>
 
-                        <MudPaper Class="@GetHistoryPanelClass()" Elevation="0">
+                        <MudPaper Class="@GetHistoryPanelClass()" Elevation="0" data-testid="workspace-history-panel">
                             <MudStack Row AlignItems="AlignItems.Center" Class="mb-2">
                                 <MudText Typo="Typo.subtitle1">History</MudText>
                                 <MudSpacer />
@@ -888,6 +865,12 @@
                                                 @if (!string.IsNullOrWhiteSpace(entry.RunId))
                                                 {
                                                     <MudChip T="string" Size="Size.Small" Color="Color.Info">@entry.RunId[..Math.Min(8, entry.RunId.Length)]</MudChip>
+                                                }
+                                                @if (entry.HasImages || !string.IsNullOrWhiteSpace(entry.ImageMetadataJson))
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
+                                                        Images @GetPromptHistoryImageCount(entry)
+                                                    </MudChip>
                                                 }
                                             </MudStack>
                                             <MudText Typo="Typo.caption">@TruncateForDisplay(entry.Content, 180)</MudText>
@@ -995,16 +978,11 @@
     private RunStructuredViewSnapshot _selectedRunStructuredView = new(string.Empty, 0, [], [], [], null, DateTime.UtcNow);
     private RunAiSummaryDocument? _selectedRunAiSummary;
     private List<WorkspacePromptEntryDocument> _selectedTaskPromptHistory = [];
-
-    private string _searchText = string.Empty;
+    private List<RunSessionProfileDocument> _sessionProfiles = [];
+    private string _selectedSessionProfileId = string.Empty;
     private string _repositoryFilter = RepositoryFilterAll;
     private string _taskFilter = TaskFilterAll;
     private int _recentTaskTargetCount = 5;
-    private bool _searchInFlight;
-    private string _searchError = string.Empty;
-    private WorkspaceSearchResult? _searchResult;
-    private List<WorkspaceSearchHit> _searchHits = [];
-    private CancellationTokenSource? _searchDebounceCts;
 
     private bool _isCreateTaskMode;
     private bool _isCreatingTask;
@@ -1015,14 +993,18 @@
     private TaskKind _createTaskKind = TaskKind.OneShot;
     private string _createTaskHarness = "codex";
     private string _createTaskPrompt = "Describe the goal, constraints, validation, and output format.";
+    private IReadOnlyList<WorkspaceImageInput> _createTaskPromptImages = [];
+    private readonly string _createTaskPromptInputId = $"workspace-create-task-prompt-{Guid.NewGuid():N}";
     private string _createTaskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Workspace run\",\"artifacts\":[]}'";
     private string _createTaskCron = string.Empty;
     private bool _createTaskAutoPr;
     private HarnessExecutionMode _createTaskModeDefault = HarnessExecutionMode.Default;
+    private string _createTaskSessionProfileId = string.Empty;
 
     private bool _isSubmittingComposer;
     private HarnessExecutionMode? _composerModeOverride;
     private string _composerValue = string.Empty;
+    private IReadOnlyList<WorkspaceImageInput> _composerImages = [];
     private string _composerGhostSuggestion = string.Empty;
     private string _composerGhostSuffix = string.Empty;
     private readonly string _composerInputId = $"workspace-composer-{Guid.NewGuid():N}";
@@ -1087,7 +1069,6 @@
         get
         {
             var filtered = _repositories
-                .Where(MatchesRepositorySearch)
                 .OrderBy(repo => repo.Name)
                 .ToList();
 
@@ -1114,7 +1095,6 @@
         get
         {
             return _selectedRepositoryTasks
-                .Where(MatchesTaskSearch)
                 .Where(MatchesTaskFilter)
                 .OrderByDescending(task => GetLatestRun(task.Id)?.CreatedAtUtc ?? task.CreatedAtUtc)
                 .Take(_recentTaskTargetCount)
@@ -1238,6 +1218,10 @@
                 ClearSelectedRunStructuredState();
                 _selectedRunAiSummary = null;
                 _selectedTaskPromptHistory = [];
+                _sessionProfiles = [];
+                _selectedSessionProfileId = string.Empty;
+                _createTaskSessionProfileId = string.Empty;
+                _composerImages = [];
             }
         }
         catch (Exception ex)
@@ -1284,6 +1268,9 @@
         ClearSelectedRunStructuredState();
         _selectedRunAiSummary = null;
         _selectedTaskPromptHistory = [];
+        _selectedSessionProfileId = string.Empty;
+        _createTaskSessionProfileId = string.Empty;
+        _composerImages = [];
 
         if (syncSelection && SelectionService.SelectedRepositoryId != repositoryId)
         {
@@ -1291,10 +1278,6 @@
         }
 
         await LoadSelectedRepositoryDataAsync(repositoryId, preserveTaskSelection: false);
-        if (!string.IsNullOrWhiteSpace(_searchText))
-        {
-            await QueueSearchAsync();
-        }
     }
 
     private async Task LoadSelectedRepositoryDataAsync(string repositoryId, bool preserveTaskSelection)
@@ -1306,6 +1289,7 @@
         {
             _selectedRepositoryTasks = await Store.ListTasksAsync(repositoryId, CancellationToken.None);
             _selectedRepositoryRuns = await Store.ListRunsByRepositoryAsync(repositoryId, CancellationToken.None);
+            _sessionProfiles = await Store.ListRunSessionProfilesAsync(repositoryId, includeGlobal: true, CancellationToken.None);
             _selectedRepositoryRuns = _selectedRepositoryRuns.OrderByDescending(run => run.CreatedAtUtc).ToList();
 
             RebuildLatestRunsIndex();
@@ -1329,6 +1313,7 @@
                 ClearSelectedRunStructuredState();
                 _selectedRunAiSummary = null;
                 _selectedTaskPromptHistory = [];
+                _composerImages = [];
                 return;
             }
 
@@ -1356,6 +1341,8 @@
         _isCreateTaskMode = false;
         _selectedTask = task;
         _composerModeOverride = null;
+        _selectedSessionProfileId = ResolveSessionProfileForTask(task);
+        _composerImages = [];
         foreach (var member in _agentTeamMembers)
         {
             member.Harness = task.Harness;
@@ -1582,10 +1569,6 @@
         }
 
         await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
-        if (!string.IsNullOrWhiteSpace(_searchText))
-        {
-            await QueueSearchAsync();
-        }
     }
 
     private async Task OpenCreateTaskFormAsync()
@@ -1609,6 +1592,7 @@
     private void CloseCreateTaskForm()
     {
         _isCreateTaskMode = false;
+        _createTaskPromptImages = [];
     }
 
     private void ResetCreateTaskForm()
@@ -1617,10 +1601,12 @@
         _createTaskKind = TaskKind.OneShot;
         _createTaskHarness = "codex";
         _createTaskPrompt = "Describe the goal, constraints, validation, and output format.";
+        _createTaskPromptImages = [];
         _createTaskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Workspace run\",\"artifacts\":[]}'";
         _createTaskCron = string.Empty;
         _createTaskAutoPr = false;
         _createTaskModeDefault = HarnessExecutionMode.Default;
+        _createTaskSessionProfileId = string.Empty;
     }
 
     private async Task CreateTaskAsync()
@@ -1640,17 +1626,19 @@
 
         try
         {
+            var taskPrompt = AppendCreateTaskPromptImageReferences(_createTaskPrompt, _createTaskPromptImages);
             var request = new CreateTaskRequest(
                 RepositoryId: _selectedRepository.Id,
                 Name: _createTaskName.Trim(),
                 Kind: _createTaskKind,
                 Harness: _createTaskHarness,
-                Prompt: _createTaskPrompt,
+                Prompt: taskPrompt,
                 Command: _createTaskCommand,
                 AutoCreatePullRequest: _createTaskAutoPr,
                 CronExpression: _createTaskCron,
                 Enabled: true,
-                ExecutionModeDefault: _createTaskModeDefault);
+                ExecutionModeDefault: _createTaskModeDefault,
+                SessionProfileId: string.IsNullOrWhiteSpace(_createTaskSessionProfileId) ? null : _createTaskSessionProfileId);
 
             var created = await Store.CreateTaskAsync(request, CancellationToken.None);
             _isCreateTaskMode = false;
@@ -1681,7 +1669,8 @@
         }
 
         var composerText = _composerValue.Trim();
-        if (string.IsNullOrWhiteSpace(composerText))
+        var hasImages = _composerImages.Count > 0;
+        if (string.IsNullOrWhiteSpace(composerText) && !hasImages)
         {
             Snackbar.Add("Enter prompt guidance first.", Severity.Info);
             return;
@@ -1700,7 +1689,9 @@
                     Command: _selectedTask.Command,
                     ForceNewRun: forceNewRun,
                     UserMessage: composerText,
-                    ModeOverride: _composerModeOverride),
+                    ModeOverride: _composerModeOverride,
+                    Images: _composerImages,
+                    SessionProfileId: string.IsNullOrWhiteSpace(_selectedSessionProfileId) ? null : _selectedSessionProfileId),
                 CancellationToken.None);
 
             if (!submission.Success)
@@ -1715,6 +1706,7 @@
             }
 
             _composerValue = string.Empty;
+            _composerImages = [];
             _ = QueueComposerSuggestionAsync();
 
             await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
@@ -1744,7 +1736,7 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_composerValue))
+        if (string.IsNullOrWhiteSpace(_composerValue) && _composerImages.Count == 0)
         {
             _composerValue = $"Follow-up based on run {_selectedRun.Id[..Math.Min(8, _selectedRun.Id.Length)]}: ";
             _ = QueueComposerSuggestionAsync();
@@ -1759,6 +1751,12 @@
     {
         if (_selectedRepository is null || _selectedTask is null)
         {
+            return;
+        }
+
+        if (_composerImages.Count > 0)
+        {
+            Snackbar.Add("Agent Team run does not support image attachments yet.", Severity.Warning);
             return;
         }
 
@@ -1815,6 +1813,7 @@
                     ForceNewRun: true,
                     UserMessage: composerText,
                     ModeOverride: _composerModeOverride,
+                    SessionProfileId: string.IsNullOrWhiteSpace(_selectedSessionProfileId) ? null : _selectedSessionProfileId,
                     AgentTeam: teamRequest),
                 CancellationToken.None);
 
@@ -1830,6 +1829,7 @@
             }
 
             _composerValue = string.Empty;
+            _composerImages = [];
             _ = QueueComposerSuggestionAsync();
             await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
 
@@ -1997,127 +1997,38 @@ Composer Focus:
         Value = _promptDraftValue,
     };
 
-    private async Task OnSearchTextChangedAsync(string value)
+    private Task OnCreateTaskPromptChangedAsync(string value)
     {
-        _searchText = value ?? string.Empty;
-        await QueueSearchAsync();
+        _createTaskPrompt = value;
+        return Task.CompletedTask;
     }
 
-    private async Task QueueSearchAsync()
+    private Task OnCreateTaskPromptImagesChangedAsync(IReadOnlyList<WorkspaceImageInput> images)
     {
-        _searchDebounceCts?.Cancel();
-        _searchDebounceCts?.Dispose();
-
-        if (string.IsNullOrWhiteSpace(_searchText) || _selectedRepository is null)
-        {
-            _searchResult = null;
-            _searchHits.Clear();
-            _searchError = string.Empty;
-            _searchInFlight = false;
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
-
-        var cts = new CancellationTokenSource();
-        _searchDebounceCts = cts;
-
-        try
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(350), cts.Token);
-
-            _searchInFlight = true;
-            _searchError = string.Empty;
-            await InvokeAsync(StateHasChanged);
-
-            var result = await WorkspaceSearchService.SearchAsync(
-                new WorkspaceSearchRequest(_selectedRepository.Id, _searchText, Limit: 20, IncludeRunLogs: true),
-                cts.Token);
-
-            _searchResult = result;
-            _searchHits = result.Hits.ToList();
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            _searchError = ex.Message;
-            _searchHits.Clear();
-        }
-        finally
-        {
-            if (ReferenceEquals(_searchDebounceCts, cts))
-            {
-                _searchInFlight = false;
-                await InvokeAsync(StateHasChanged);
-            }
-        }
+        _createTaskPromptImages = images;
+        return Task.CompletedTask;
     }
 
-    private async Task JumpToSearchHitAsync(WorkspaceSearchHit hit)
+    private async Task OnComposerValueChangedAsync(string value)
     {
-        if (_selectedRepository is null)
-        {
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(hit.TaskId))
-        {
-            await SelectTaskAsync(hit.TaskId, preserveRunSelection: true, preferredRunId: hit.RunId);
-        }
-
-        if (!string.IsNullOrWhiteSpace(hit.RunId))
-        {
-            await SelectRunAsync(hit.RunId);
-        }
-
-        _historyPanelOpen = true;
-    }
-
-    private string BuildGlobalSearchHref()
-    {
-        var repoPart = _selectedRepository is null
-            ? string.Empty
-            : $"repo={Uri.EscapeDataString(_selectedRepository.Id)}";
-        var queryPart = string.IsNullOrWhiteSpace(_searchText)
-            ? string.Empty
-            : $"q={Uri.EscapeDataString(_searchText.Trim())}";
-
-        if (repoPart.Length == 0 && queryPart.Length == 0)
-        {
-            return "/search";
-        }
-
-        if (repoPart.Length == 0)
-        {
-            return $"/search?{queryPart}";
-        }
-
-        if (queryPart.Length == 0)
-        {
-            return $"/search?{repoPart}";
-        }
-
-        return $"/search?{repoPart}&{queryPart}";
-    }
-
-    private string FormatHitKind(string kind)
-    {
-        return kind switch
-        {
-            "task" => "Task",
-            "run-log" => "Run Msg",
-            "run-message" => "Run Msg",
-            "run" => "Run",
-            "finding" => "Finding",
-            _ => "Result"
-        };
-    }
-
-    private async Task OnComposerInputChangedAsync(ChangeEventArgs args)
-    {
-        _composerValue = args.Value?.ToString() ?? string.Empty;
+        _composerValue = value;
         await QueueComposerSuggestionAsync();
+    }
+
+    private Task OnComposerImagesChangedAsync(IReadOnlyList<WorkspaceImageInput> images)
+    {
+        _composerImages = images;
+        return Task.CompletedTask;
+    }
+
+    private Task ShowComposerValidationAsync(string message)
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            Snackbar.Add(message, Severity.Warning);
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task QueueComposerSuggestionAsync()
@@ -2286,30 +2197,6 @@ Composer Focus:
             .Where(run => run.TaskId == taskId)
             .OrderByDescending(run => run.CreatedAtUtc)
             .ToList();
-    }
-
-    private bool MatchesRepositorySearch(RepositoryDocument repository)
-    {
-        if (string.IsNullOrWhiteSpace(_searchText))
-        {
-            return true;
-        }
-
-        return repository.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-               || repository.GitUrl.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-               || repository.LocalPath.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private bool MatchesTaskSearch(TaskDocument task)
-    {
-        if (string.IsNullOrWhiteSpace(_searchText))
-        {
-            return true;
-        }
-
-        return task.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-               || task.Harness.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-               || task.Prompt.Contains(_searchText, StringComparison.OrdinalIgnoreCase);
     }
 
     private bool MatchesTaskFilter(TaskDocument task)
@@ -2610,6 +2497,11 @@ Composer Focus:
 
     private static string MergePrompt(string currentPrompt, string composerText)
     {
+        if (string.IsNullOrWhiteSpace(composerText))
+        {
+            return currentPrompt;
+        }
+
         var suffix = $"Workspace instruction:\n{composerText}";
         if (string.IsNullOrWhiteSpace(currentPrompt))
         {
@@ -2617,6 +2509,101 @@ Composer Focus:
         }
 
         return $"{currentPrompt.TrimEnd()}\n\n{suffix}";
+    }
+
+    private string ResolveSessionProfileForTask(TaskDocument task)
+    {
+        if (!string.IsNullOrWhiteSpace(task.SessionProfileId) &&
+            _sessionProfiles.Any(x => x.Enabled && string.Equals(x.Id, task.SessionProfileId, StringComparison.Ordinal)))
+        {
+            return task.SessionProfileId;
+        }
+
+        var byHarness = _sessionProfiles.FirstOrDefault(x =>
+            x.Enabled &&
+            (string.IsNullOrWhiteSpace(x.Harness) ||
+             string.Equals(x.Harness, "any", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(x.Harness, task.Harness, StringComparison.OrdinalIgnoreCase)));
+
+        return byHarness?.Id ?? string.Empty;
+    }
+
+    private static string AppendCreateTaskPromptImageReferences(string prompt, IReadOnlyList<WorkspaceImageInput> images)
+    {
+        if (images.Count == 0)
+        {
+            return prompt;
+        }
+
+        var referenceBlock = BuildCreateTaskImageReferenceBlock(images);
+        if (string.IsNullOrWhiteSpace(referenceBlock))
+        {
+            return prompt;
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return referenceBlock;
+        }
+
+        return $"{prompt.TrimEnd()}\n\n{referenceBlock}";
+    }
+
+    private static string BuildCreateTaskImageReferenceBlock(IReadOnlyList<WorkspaceImageInput> images)
+    {
+        if (images.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("Attached images for context:");
+
+        for (var index = 0; index < images.Count; index++)
+        {
+            var image = images[index];
+            var dimensions = image.Width is > 0 && image.Height is > 0
+                ? $", {image.Width}x{image.Height}"
+                : string.Empty;
+            var sizeKb = Math.Max(1, (int)Math.Round(image.SizeBytes / 1024d));
+
+            builder.Append("- Image ")
+                .Append(index + 1)
+                .Append(": ")
+                .Append(image.FileName)
+                .Append(" (")
+                .Append(image.MimeType)
+                .Append(dimensions)
+                .Append(", ")
+                .Append(sizeKb)
+                .Append(" KB)")
+                .AppendLine();
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static int GetPromptHistoryImageCount(WorkspacePromptEntryDocument entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.ImageMetadataJson))
+        {
+            return entry.HasImages ? 1 : 0;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(entry.ImageMetadataJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return entry.HasImages ? 1 : 0;
+            }
+
+            return document.RootElement.GetArrayLength();
+        }
+        catch
+        {
+            return entry.HasImages ? 1 : 0;
+        }
     }
 
     private static UpdateTaskRequest ToUpdateRequest(TaskDocument task, string prompt)
@@ -2676,8 +2663,6 @@ Composer Focus:
         _structuredSubscription?.Dispose();
         _diffSubscription?.Dispose();
         _toolSubscription?.Dispose();
-        _searchDebounceCts?.Cancel();
-        _searchDebounceCts?.Dispose();
         _composerSuggestionCts?.Cancel();
         _composerSuggestionCts?.Dispose();
 

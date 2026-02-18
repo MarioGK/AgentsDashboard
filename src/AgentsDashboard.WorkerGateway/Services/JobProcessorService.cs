@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgentsDashboard.Contracts.Worker;
+using AgentsDashboard.WorkerGateway;
 using AgentsDashboard.WorkerGateway.Models;
 
 namespace AgentsDashboard.WorkerGateway.Services;
@@ -73,21 +74,48 @@ public class JobProcessorService(
     {
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(serviceToken, queuedJob.CancellationSource.Token);
         var cancellationToken = linkedCts.Token;
+        var request = queuedJob.Request;
+        var parsedChunks = 0;
+        long maxSequence = 0;
+        var fallbackChunks = 0;
+
+        logger.ZLogInformationObject(
+            "Starting job execution",
+            new
+            {
+                request.RunId,
+                request.TaskId,
+                request.HarnessType,
+                request.Mode,
+                request.ArtifactPolicyMaxArtifacts,
+                request.ArtifactPolicyMaxTotalSizeBytes,
+                request.TimeoutSeconds,
+                request.PreferNativeMultimodal,
+                InputParts = request.InputParts?.Count ?? 0,
+                ImageAttachments = request.ImageAttachments?.Count ?? 0,
+                Schema = ResolveStructuredSchemaVersion(request),
+            });
 
         try
         {
-            await eventBus.PublishAsync(CreateEvent(queuedJob.Request.RunId, "log", "Job started", string.Empty), cancellationToken);
+            await eventBus.PublishAsync(CreateEvent(request.RunId, "log", "Job started", string.Empty), cancellationToken);
 
             async Task OnLogChunk(string chunk, CancellationToken ct)
             {
                 if (TryParseRuntimeEventChunk(chunk, out var runtimeEvent))
                 {
+                    parsedChunks++;
+                    if (runtimeEvent.Sequence > maxSequence)
+                    {
+                        maxSequence = runtimeEvent.Sequence;
+                    }
+
                     var structuredProjection = BuildStructuredProjection(
                         runtimeEvent,
-                        ResolveStructuredSchemaVersion(queuedJob.Request));
+                        ResolveStructuredSchemaVersion(request));
 
                     var logEvent = CreateEvent(
-                        queuedJob.Request.RunId,
+                        request.RunId,
                         "log_chunk",
                         BuildLogSummary(runtimeEvent),
                         string.Empty,
@@ -100,7 +128,8 @@ public class JobProcessorService(
                     return;
                 }
 
-                var fallbackLog = CreateEvent(queuedJob.Request.RunId, "log_chunk", chunk, string.Empty);
+                fallbackChunks++;
+                var fallbackLog = CreateEvent(request.RunId, "log_chunk", chunk, string.Empty);
                 await eventBus.PublishAsync(fallbackLog, ct);
                 return;
             }
@@ -109,25 +138,63 @@ public class JobProcessorService(
             var payload = JsonSerializer.Serialize(envelope);
 
             await eventBus.PublishAsync(
-                CreateEvent(queuedJob.Request.RunId, "completed", envelope.Summary, payload),
+                CreateEvent(request.RunId, "completed", envelope.Summary, payload),
                 cancellationToken);
+
+            logger.ZLogInformationObject(
+                "Job processing completed",
+                new
+                {
+                    request.RunId,
+                    request.TaskId,
+                    envelope.Status,
+                    envelope.Summary,
+                    HasError = !string.IsNullOrWhiteSpace(envelope.Error),
+                    ParsedChunks = parsedChunks,
+                    FallbackChunks = fallbackChunks,
+                    MaxSequence = maxSequence,
+                    ArtifactCount = envelope.Artifacts?.Count ?? 0,
+                    MetadataCount = envelope.Metadata.Count,
+                });
         }
         catch (OperationCanceledException)
         {
             await eventBus.PublishAsync(
-                CreateEvent(queuedJob.Request.RunId, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
+                CreateEvent(request.RunId, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
                 CancellationToken.None);
+
+            logger.ZLogWarningObject(
+                "Job processing cancelled",
+                new
+                {
+                    request.RunId,
+                    request.TaskId,
+                    request.HarnessType,
+                    ParsedChunks = parsedChunks,
+                    FallbackChunks = fallbackChunks,
+                });
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Job processing crashed for run {RunId}", queuedJob.Request.RunId);
+            logger.ZLogErrorObject(
+                ex,
+                "Job processing crashed",
+                new
+                {
+                    request.RunId,
+                    request.TaskId,
+                    request.HarnessType,
+                    ParsedChunks = parsedChunks,
+                    FallbackChunks = fallbackChunks,
+                    MaxSequence = maxSequence,
+                });
             await eventBus.PublishAsync(
-                CreateEvent(queuedJob.Request.RunId, "completed", "Job crashed", "{\"status\":\"failed\",\"summary\":\"Crash\",\"error\":\"Worker crashed\"}"),
+                CreateEvent(request.RunId, "completed", "Job crashed", "{\"status\":\"failed\",\"summary\":\"Crash\",\"error\":\"Worker crashed\"}"),
                 CancellationToken.None);
         }
         finally
         {
-            queue.MarkCompleted(queuedJob.Request.RunId);
+            queue.MarkCompleted(request.RunId);
             linkedCts.Dispose();
             queuedJob.CancellationSource.Dispose();
         }

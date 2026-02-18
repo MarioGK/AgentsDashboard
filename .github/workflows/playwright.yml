@@ -11,6 +11,8 @@ env:
   NODE_VERSION: '20'
   SOLUTION_PATH: 'src/AgentsDashboard.slnx'
   CONTROLPLANE_URL: 'http://127.0.0.1:5266'
+  PLAYWRIGHT_E2E_REPO_REMOTE_PATH: '${{ github.workspace }}/.artifacts/playwright/repos/e2e-remote.git'
+  PLAYWRIGHT_E2E_REPO_CLONE_ROOT: '${{ github.workspace }}/.artifacts/playwright/repos/clones'
 
 jobs:
   playwright:
@@ -46,8 +48,38 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      - name: Validate workflow secrets
+        run: |
+          if [ -z "${{ secrets.PLAYWRIGHT_E2E_ZAI_API_KEY }}" ]; then
+            echo "Missing required secret: PLAYWRIGHT_E2E_ZAI_API_KEY"
+            exit 1
+          fi
+
+      - name: Prepare local git remote fixture
+        run: |
+          mkdir -p .artifacts/playwright/repos
+          rm -rf "${PLAYWRIGHT_E2E_REPO_REMOTE_PATH}" "${PLAYWRIGHT_E2E_REPO_CLONE_ROOT}" .artifacts/playwright/repos/seed-work
+          mkdir -p "${PLAYWRIGHT_E2E_REPO_CLONE_ROOT}"
+
+          git init --bare "${PLAYWRIGHT_E2E_REPO_REMOTE_PATH}"
+          git init .artifacts/playwright/repos/seed-work
+          cd .artifacts/playwright/repos/seed-work
+          git config user.name "Playwright E2E"
+          git config user.email "playwright-e2e@example.com"
+          echo "# Playwright E2E Seed" > README.md
+          git add README.md
+          git commit -m "Seed repository for Playwright workflow"
+          git branch -M main
+          git remote add origin "${PLAYWRIGHT_E2E_REPO_REMOTE_PATH}"
+          git push --set-upstream origin main
+
       - name: Build WorkerGateway image
         run: docker build --tag agentsdashboard-worker-gateway:latest --file src/AgentsDashboard.WorkerGateway/Dockerfile .
+
+      - name: Build harness images for Zai workflow
+        run: |
+          docker build --tag ai-harness-base:latest --file deploy/harness-images/Dockerfile.harness-base deploy/harness-images
+          docker build --tag harness-zai:latest --build-arg BASE_IMAGE=ai-harness-base:latest --file deploy/harness-images/Dockerfile.harness-zai deploy/harness-images
 
       - name: Start ControlPlane
         env:
@@ -79,6 +111,9 @@ jobs:
         working-directory: tests/AgentsDashboard.Playwright
         env:
           BASE_URL: ${{ env.CONTROLPLANE_URL }}
+          PLAYWRIGHT_E2E_ZAI_API_KEY: ${{ secrets.PLAYWRIGHT_E2E_ZAI_API_KEY }}
+          PLAYWRIGHT_E2E_REPO_REMOTE_PATH: ${{ env.PLAYWRIGHT_E2E_REPO_REMOTE_PATH }}
+          PLAYWRIGHT_E2E_REPO_CLONE_ROOT: ${{ env.PLAYWRIGHT_E2E_REPO_CLONE_ROOT }}
         run: npm test
 
       - name: Stop ControlPlane

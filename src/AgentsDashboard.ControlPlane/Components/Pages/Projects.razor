@@ -24,16 +24,32 @@
 
         <MudGrid>
             <MudItem xs="12" md="3">
-                <MudTextField @bind-Value="_newRepositoryName" Label="Repository Name" Placeholder="Repository Name" Required="true" />
+                <MudTextField @bind-Value="_newRepositoryName"
+                              Label="Repository Name"
+                              Placeholder="Repository Name"
+                              Required="true"
+                              data-testid="repo-create-name" />
             </MudItem>
             <MudItem xs="12" md="5">
-                <MudTextField @bind-Value="_newRepositoryGitUrl" Label="Git URL" Placeholder="https://github.com/org/repo.git" Required="true" />
+                <MudTextField @bind-Value="_newRepositoryGitUrl"
+                              Label="Git URL"
+                              Placeholder="https://github.com/org/repo.git"
+                              Required="true"
+                              data-testid="repo-create-git-url" />
             </MudItem>
             <MudItem xs="12" md="2">
-                <MudTextField @bind-Value="_newRepositoryDefaultBranch" Label="Default Branch" Placeholder="main" Required="true" />
+                <MudTextField @bind-Value="_newRepositoryDefaultBranch"
+                              Label="Default Branch"
+                              Placeholder="main"
+                              Required="true"
+                              data-testid="repo-create-default-branch" />
             </MudItem>
             <MudItem xs="12" md="2" Class="d-flex align-center">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isCreating" OnClick="CreateRepositoryAsync">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@_isCreating"
+                           OnClick="CreateRepositoryAsync"
+                           data-testid="repo-create-submit">
                     @if (_isCreating)
                     {
                         <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
@@ -49,53 +65,24 @@
 
         <MudGrid Class="mt-2">
             <MudItem xs="12" md="8">
-                <MudTextField @bind-Value="_newRepositoryLocalPath" Label="Local Folder" Placeholder="/absolute/path" Required="true" />
+                <MudTextField @bind-Value="_newRepositoryLocalPath"
+                              Label="Local Folder"
+                              Placeholder="/absolute/path"
+                              Required="true"
+                              data-testid="repo-create-local-path" />
             </MudItem>
             <MudItem xs="12" md="4" Class="d-flex align-center">
-                <MudButton Variant="Variant.Outlined" Color="Color.Info" OnClick="LoadDirectoriesAsync" Class="mr-2">Browse</MudButton>
-                <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="UseBrowserPath">Use Current Browser Path</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Info" OnClick="OpenFolderDialogAsync" Class="mr-2">Browse</MudButton>
             </MudItem>
         </MudGrid>
         <MudGrid Class="mt-2">
             <MudItem xs="12" md="8">
-                <MudTextField @bind-Value="_newRepositoryGithubToken" Label="GitHub Token (optional)" InputType="InputType.Password" />
+                <MudTextField @bind-Value="_newRepositoryGithubToken"
+                              Label="GitHub Token (optional)"
+                              InputType="InputType.Password"
+                              data-testid="repo-create-github-token" />
             </MudItem>
         </MudGrid>
-
-        <MudPaper Class="pa-3 mt-3" Outlined>
-            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                <MudText Typo="Typo.subtitle2">Folder Explorer</MudText>
-                <MudText Typo="Typo.caption">@_browserPath</MudText>
-            </MudStack>
-
-            <MudStack Row Spacing="1" Class="mt-2">
-                <MudButton Variant="Variant.Text" OnClick="NavigateUpAsync">Up</MudButton>
-                <MudButton Variant="Variant.Text" OnClick="LoadDirectoriesAsync">Refresh</MudButton>
-            </MudStack>
-
-            <MudGrid Class="mt-2">
-                <MudItem xs="12" md="8">
-                    <MudTextField @bind-Value="_newFolderName" Label="Create Folder" Placeholder="folder-name" />
-                </MudItem>
-                <MudItem xs="12" md="4" Class="d-flex align-center">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="CreateFolderAsync">Create Folder</MudButton>
-                </MudItem>
-            </MudGrid>
-
-            @if (_directories.Count == 0)
-            {
-                <MudText Typo="Typo.caption" Class="mt-2">No subfolders in current path.</MudText>
-            }
-            else
-            {
-                <MudChipSet T="string" Class="mt-2">
-                    @foreach (var dir in _directories)
-                    {
-                        <MudChip T="string" OnClick="() => EnterDirectoryAsync(dir.FullPath)">@dir.Name</MudChip>
-                    }
-                </MudChipSet>
-            }
-        </MudPaper>
     </MudPaper>
 
     <MudTable Items="_repositories" Dense Hover>
@@ -117,7 +104,9 @@
             <MudTd>@context.StagedCount/@context.ModifiedCount/@context.UntrackedCount</MudTd>
             <MudTd>
                 <MudButtonGroup Variant="Variant.Outlined">
-                    <MudButton Color="Color.Primary" OnClick='@(() => Nav.NavigateTo($"/settings/repositories/{context.Id}"))'>
+                    <MudButton Color="Color.Primary"
+                               OnClick='@(() => Nav.NavigateTo($"/settings/repositories/{context.Id}"))'
+                               data-testid="@($"repo-open-{context.Id}")">
                         Open
                     </MudButton>
                     <MudButton Color="Color.Info" OnClick="() => RefreshRepositoryAsync(context, true)">
@@ -132,6 +121,49 @@
     </MudTable>
 </MudStack>
 
+<MudDialog @bind-Visible="_folderDialogOpen" Options="_folderDialogOptions">
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.h6">Folder Explorer</MudText>
+                <MudText Typo="Typo.caption">@_browserPath</MudText>
+            </MudStack>
+
+            <MudStack Row Spacing="1">
+                <MudButton Variant="Variant.Text" OnClick="NavigateUpAsync">Up</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="LoadDirectoriesAsync">Refresh</MudButton>
+            </MudStack>
+
+            <MudGrid>
+                <MudItem xs="12" md="8">
+                    <MudTextField @bind-Value="_newFolderName" Label="Create Folder" Placeholder="folder-name" />
+                </MudItem>
+                <MudItem xs="12" md="4" Class="d-flex align-center">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="CreateFolderAsync">Create Folder</MudButton>
+                </MudItem>
+            </MudGrid>
+
+            @if (_directories.Count == 0)
+            {
+                <MudText Typo="Typo.caption">No subfolders in current path.</MudText>
+            }
+            else
+            {
+                <MudChipSet T="string">
+                    @foreach (var dir in _directories)
+                    {
+                        <MudChip T="string" OnClick="() => EnterDirectoryAsync(dir.FullPath)">@dir.Name</MudChip>
+                    }
+                </MudChipSet>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="CloseFolderDialog">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="UseCurrentFolderAndClose">Use This Folder</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     private readonly List<RepositoryDocument> _repositories = [];
 
@@ -145,11 +177,12 @@
     private string _browserPath = Path.GetPathRoot(System.Environment.CurrentDirectory) ?? "/";
     private readonly List<HostDirectoryEntry> _directories = [];
     private string _newFolderName = string.Empty;
+    private bool _folderDialogOpen;
+    private readonly DialogOptions _folderDialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
-        await LoadDirectoriesAsync();
     }
 
     private async Task CreateRepositoryAsync()
@@ -279,6 +312,31 @@
         }
     }
 
+    private async Task OpenFolderDialogAsync()
+    {
+        var localPath = _newRepositoryLocalPath.Trim();
+        if (!string.IsNullOrWhiteSpace(localPath) && Path.IsPathRooted(localPath))
+        {
+            var resolved = Path.GetFullPath(localPath);
+            if (Directory.Exists(resolved))
+            {
+                _browserPath = resolved;
+            }
+            else
+            {
+                var parent = Directory.GetParent(resolved)?.FullName;
+                if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
+                {
+                    _browserPath = parent;
+                }
+            }
+        }
+
+        _newFolderName = string.Empty;
+        await LoadDirectoriesAsync();
+        _folderDialogOpen = true;
+    }
+
     private async Task NavigateUpAsync()
     {
         try
@@ -303,9 +361,15 @@
         await LoadDirectoriesAsync();
     }
 
-    private void UseBrowserPath()
+    private void UseCurrentFolderAndClose()
     {
         _newRepositoryLocalPath = _browserPath;
+        _folderDialogOpen = false;
+    }
+
+    private void CloseFolderDialog()
+    {
+        _folderDialogOpen = false;
     }
 
     private async Task CreateFolderAsync()
@@ -321,7 +385,6 @@
             _browserPath = created;
             _newFolderName = string.Empty;
             await LoadDirectoriesAsync();
-            UseBrowserPath();
         }
         catch (Exception ex)
         {

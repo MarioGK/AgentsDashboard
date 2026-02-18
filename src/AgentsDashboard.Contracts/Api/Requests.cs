@@ -26,7 +26,8 @@ public sealed record CreateTaskRequest(
     List<InstructionFile>? InstructionFiles = null,
     List<string>? ArtifactPatterns = null,
     List<string>? LinkedFailureRuns = null,
-    HarnessExecutionMode? ExecutionModeDefault = null);
+    HarnessExecutionMode? ExecutionModeDefault = null,
+    string? SessionProfileId = null);
 public sealed record UpdateTaskRequest(
     string Name,
     TaskKind Kind,
@@ -45,7 +46,8 @@ public sealed record UpdateTaskRequest(
     List<InstructionFile>? InstructionFiles = null,
     List<string>? ArtifactPatterns = null,
     List<string>? LinkedFailureRuns = null,
-    HarnessExecutionMode? ExecutionModeDefault = null);
+    HarnessExecutionMode? ExecutionModeDefault = null,
+    string? SessionProfileId = null);
 public sealed record CreateRunRequest(string TaskId);
 public sealed record RetryRunRequest(string RunId);
 public sealed record CancelRunRequest(string RunId);
@@ -191,3 +193,33 @@ public sealed record UpdatePromptSkillRequest(
     string Content,
     string Description,
     bool Enabled = true);
+
+public sealed record CreateRunSessionProfileRequest(
+    string RepositoryId,
+    string Name,
+    string Harness,
+    HarnessExecutionMode ExecutionModeDefault,
+    string ApprovalMode,
+    string DiffViewDefault,
+    string ToolTimelineMode,
+    string McpConfigJson,
+    RunSessionProfileScope Scope = RunSessionProfileScope.Repository);
+
+public sealed record UpdateRunSessionProfileRequest(
+    string Name,
+    string Harness,
+    HarnessExecutionMode ExecutionModeDefault,
+    string ApprovalMode,
+    string DiffViewDefault,
+    string ToolTimelineMode,
+    string McpConfigJson,
+    bool Enabled = true);
+
+public sealed record UpsertAutomationDefinitionRequest(
+    string RepositoryId,
+    string TaskId,
+    string Name,
+    string CronExpression,
+    string TriggerKind,
+    string ReplayPolicy,
+    bool Enabled);

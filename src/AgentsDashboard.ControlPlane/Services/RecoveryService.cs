@@ -20,6 +20,7 @@ public sealed class RecoveryService(
     IContainerReaper containerReaper,
     IOptions<OrchestratorOptions> options,
     IHostApplicationLifetime applicationLifetime,
+    IBackgroundWorkCoordinator backgroundWorkCoordinator,
     ILogger<RecoveryService> logger,
     TimeProvider? timeProvider = null) : IHostedService, IDisposable
 {
@@ -32,45 +33,103 @@ public sealed class RecoveryService(
     private Timer? _monitoringTimer;
     private readonly object _lock = new();
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private const string StartupOperationKey = "startup:recovery";
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.ZLogInformation("Recovery service starting — checking for orphaned runs, workflows, and containers");
+        logger.ZLogInformation("Recovery service starting; queuing startup recovery background work.");
 
         if (!applicationLifetime.ApplicationStarted.IsCancellationRequested)
         {
             applicationLifetime.ApplicationStarted.Register(() =>
             {
-                _ = Task.Run(() => RunStartupRecoveryAsync(CancellationToken.None));
+                QueueStartupRecoveryWork();
             });
         }
         else
         {
-            _ = Task.Run(() => RunStartupRecoveryAsync(cancellationToken));
+            QueueStartupRecoveryWork();
         }
 
         return Task.CompletedTask;
     }
 
-    private async Task RunStartupRecoveryAsync(CancellationToken cancellationToken)
+    private void QueueStartupRecoveryWork()
+    {
+        var workId = backgroundWorkCoordinator.Enqueue(
+            BackgroundWorkKind.Recovery,
+            StartupOperationKey,
+            RunStartupRecoveryAsync,
+            dedupeByOperationKey: true,
+            isCritical: false);
+        logger.ZLogInformation("Queued startup recovery background work {WorkId}", workId);
+    }
+
+    private async Task RunStartupRecoveryAsync(
+        CancellationToken cancellationToken,
+        IProgress<BackgroundWorkSnapshot> progress)
     {
         try
         {
+            progress.Report(CreateProgress("Recovering orphaned runs.", 10));
             await RecoverOrphanedRunsAsync(cancellationToken);
+            progress.Report(CreateProgress("Recovering orphaned workflow executions.", 35));
             await RecoverOrphanedWorkflowExecutionsAsync(cancellationToken);
+            progress.Report(CreateProgress("Inspecting pending approval runs.", 55));
             await LogPendingApprovalRunsAsync(cancellationToken);
+            progress.Report(CreateProgress("Inspecting queued runs.", 70));
             await LogQueuedRunsAsync(cancellationToken);
+            progress.Report(CreateProgress("Reconciling orphaned containers.", 85));
             await ReconcileOrphanedContainersAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             logger.ZLogError(ex, "Recovery startup pass failed");
+            progress.Report(new BackgroundWorkSnapshot(
+                WorkId: string.Empty,
+                OperationKey: string.Empty,
+                Kind: BackgroundWorkKind.Recovery,
+                State: BackgroundWorkState.Failed,
+                PercentComplete: null,
+                Message: "Recovery startup pass failed.",
+                StartedAt: null,
+                UpdatedAt: DateTimeOffset.UtcNow,
+                ErrorCode: "recovery_startup_failed",
+                ErrorMessage: ex.Message));
+            return;
         }
 
         if (_config.EnableAutoTermination)
         {
             StartDeadRunMonitoring();
         }
+
+        progress.Report(new BackgroundWorkSnapshot(
+            WorkId: string.Empty,
+            OperationKey: string.Empty,
+            Kind: BackgroundWorkKind.Recovery,
+            State: BackgroundWorkState.Succeeded,
+            PercentComplete: 100,
+            Message: "Recovery startup pass completed.",
+            StartedAt: null,
+            UpdatedAt: DateTimeOffset.UtcNow,
+            ErrorCode: null,
+            ErrorMessage: null));
+    }
+
+    private static BackgroundWorkSnapshot CreateProgress(string message, int? percentComplete)
+    {
+        return new BackgroundWorkSnapshot(
+            WorkId: string.Empty,
+            OperationKey: string.Empty,
+            Kind: BackgroundWorkKind.Recovery,
+            State: BackgroundWorkState.Running,
+            PercentComplete: percentComplete,
+            Message: message,
+            StartedAt: null,
+            UpdatedAt: DateTimeOffset.UtcNow,
+            ErrorCode: null,
+            ErrorMessage: null);
     }
 
     private async Task ReconcileOrphanedContainersAsync(CancellationToken cancellationToken)
