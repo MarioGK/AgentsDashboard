@@ -52,6 +52,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
     private readonly OrchestratorOptions _options = options.Value;
     private readonly DockerClient _dockerClient = new DockerClientConfiguration().CreateClient();
     private readonly ConcurrentDictionary<string, WorkerState> _workers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, string> _taskRepositoryCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _imageAcquireLocks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTime> _imageFailureCooldownUntilUtc = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
@@ -339,6 +340,22 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 worker.GrpcEndpoint,
                 worker.ActiveSlots,
                 worker.MaxSlots,
+                cancellationToken);
+
+            await store.UpsertTaskRuntimeStateAsync(
+                new TaskRuntimeStateUpdate
+                {
+                    RuntimeId = worker.TaskRuntimeId,
+                    TaskId = worker.TaskId,
+                    State = MapLifecycleState(worker.LifecycleState),
+                    ActiveRuns = worker.ActiveSlots,
+                    MaxParallelRuns = worker.MaxSlots,
+                    Endpoint = worker.GrpcEndpoint,
+                    ContainerId = worker.ContainerId,
+                    ObservedAtUtc = DateTime.UtcNow,
+                    UpdateLastActivityUtc = worker.ActiveSlots > 0,
+                    ClearInactiveAfterUtc = worker.IsRunning,
+                },
                 cancellationToken);
         }
 
@@ -1784,6 +1801,12 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         if (_workers.TryGetValue(workerId, out var stateBeforeReady))
         {
             stateBeforeReady.LifecycleState = TaskRuntimeLifecycleState.Starting;
+            await PersistTaskRuntimeStateAsync(
+                stateBeforeReady,
+                cancellationToken,
+                explicitState: TaskRuntimeState.Starting,
+                updateLastActivityUtc: false,
+                clearInactiveAfterUtc: true);
         }
 
         while (DateTime.UtcNow - started < timeout && !cancellationToken.IsCancellationRequested)
@@ -1805,6 +1828,12 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                     });
 
                     state.LifecycleState = TaskRuntimeLifecycleState.Ready;
+                    await PersistTaskRuntimeStateAsync(
+                        state,
+                        cancellationToken,
+                        explicitState: TaskRuntimeState.Ready,
+                        updateLastActivityUtc: false,
+                        clearInactiveAfterUtc: true);
                     return state.ToRuntime();
                 }
                 catch
