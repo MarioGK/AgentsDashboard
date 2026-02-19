@@ -101,8 +101,6 @@ else
         <MudSelect @bind-Value="_taskHarness" Label="Harness" Class="mb-3">
             <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
             <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
-            <MudSelectItem T="string" Value='@("claude-code")'>Claude Code</MudSelectItem>
-            <MudSelectItem T="string" Value='@("zai")'>Zai (GLM-5)</MudSelectItem>
         </MudSelect>
         <MudTextField @bind-Value="_taskCommand" Label="Command" Class="mb-3" />
         <MudTextField @bind-Value="_taskPrompt" Label="Prompt" Lines="4" />

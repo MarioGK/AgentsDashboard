@@ -125,7 +125,7 @@ public sealed class AgentTeamDiffMergeServiceTests
                            """),
             new AgentTeamLaneDiffInput(
                 LaneLabel: "lane-b",
-                Harness: "claude-code",
+                Harness: "opencode",
                 RunId: "run-2",
                 Succeeded: true,
                 Summary: "lane 2",

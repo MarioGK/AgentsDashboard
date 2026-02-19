@@ -1,6 +1,6 @@
 namespace AgentsDashboard.ControlPlane.Data;
 
-public sealed class LiteDbScopeTransaction : IAsyncDisposable
+public sealed class LiteDbExecutionTransaction : IAsyncDisposable
 {
     public Task CommitAsync(CancellationToken cancellationToken)
     {

@@ -146,14 +146,6 @@
             <MudTabPanel Text="OpenCode" Icon="@Icons.Material.Filled.OpenInNew">
                 @RenderHarnessSettings("opencode", "OpenCode", _openCodeModels)
             </MudTabPanel>
-
-            <MudTabPanel Text="Claude Code" Icon="@Icons.Material.Filled.Psychology">
-                @RenderHarnessSettings("claude-code", "Claude Code", _claudeModels)
-            </MudTabPanel>
-
-            <MudTabPanel Text="Z.ai" Icon="@Icons.Material.Filled.SmartToy">
-                @RenderHarnessSettings("zai", "Z.ai (GLM-5)", _zaiModels)
-            </MudTabPanel>
         </MudTabs>
     }
 
@@ -254,15 +246,11 @@
     private readonly Dictionary<string, HarnessSettingsState> _harnessSettings = new()
     {
         ["codex"] = new HarnessSettingsState { Harness = "codex" },
-        ["opencode"] = new HarnessSettingsState { Harness = "opencode" },
-        ["claude-code"] = new HarnessSettingsState { Harness = "claude-code" },
-        ["zai"] = new HarnessSettingsState { Harness = "zai" }
+        ["opencode"] = new HarnessSettingsState { Harness = "opencode" }
     };
 
     private readonly List<string> _codexModels = ["gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo", "o1", "o1-mini", "o1-preview"];
     private readonly List<string> _openCodeModels = ["gpt-4o", "claude-3-5-sonnet-20241022", "gemini-2.0-flash", "llama-3.1-70b"];
-    private readonly List<string> _claudeModels = ["glm-5"];
-    private readonly List<string> _zaiModels = ["glm-5"];
 
     private const string GlobalSecretsRepositoryId = "global";
     private string _globalLlmTornadoValue = string.Empty;
@@ -427,20 +415,6 @@
             },
             new ProviderConfig
             {
-                Provider = "claude-code",
-                DisplayName = "Claude Code",
-                EnvVar = "ANTHROPIC_API_KEY",
-                Description = "API key for Claude Code harness"
-            },
-            new ProviderConfig
-            {
-                Provider = "zai",
-                DisplayName = "Z.ai",
-                EnvVar = "Z_AI_API_KEY",
-                Description = "Z.ai API key for GLM-5 harness runs"
-            },
-            new ProviderConfig
-            {
                 Provider = "llmtornado",
                 DisplayName = "LlmTornado",
                 EnvVar = "ANTHROPIC_AUTH_TOKEN",
@@ -503,14 +477,9 @@
             }
             else
             {
-                state.Model = harness is "zai" or "claude-code" ? "glm-5" : string.Empty;
+                state.Model = string.Empty;
                 state.Temperature = 0.7;
                 state.MaxTokens = 4096;
-            }
-
-            if (harness is "zai" or "claude-code")
-            {
-                state.Model = "glm-5";
             }
         }
         catch (Exception ex)
@@ -530,11 +499,6 @@
 
         try
         {
-            if (harness is "zai" or "claude-code")
-            {
-                state.Model = "glm-5";
-            }
-
             if (state.Temperature < 0 || state.Temperature > 2)
             {
                 Snackbar.Add("Temperature must be between 0 and 2", Severity.Error);
@@ -571,7 +535,7 @@
     private RenderFragment RenderHarnessSettings(string harness, string displayName, List<string> models) => __builder =>
     {
         var state = _harnessSettings[harness];
-        var lockModel = harness is "zai" or "claude-code";
+        var lockModel = false;
 
         __builder.OpenElement(0, "div");
         __builder.AddAttribute(1, "class", "mud-width-full");

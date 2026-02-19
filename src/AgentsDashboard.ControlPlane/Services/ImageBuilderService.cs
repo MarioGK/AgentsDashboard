@@ -152,13 +152,6 @@ public class ImageBuilderService(
             sb.AppendLine();
         }
 
-        if (request.Harnesses.Contains("claude-code"))
-        {
-            sb.AppendLine("RUN npm install -g @anthropic-ai/claude-code 2>/dev/null || echo 'Claude Code installation attempted'");
-            sb.AppendLine("ENV ANTHROPIC_API_KEY=\"\" CLAUDE_OUTPUT_ENVELOPE=true");
-            sb.AppendLine();
-        }
-
         if (request.Harnesses.Contains("codex"))
         {
             sb.AppendLine("RUN npm install -g openai 2>/dev/null || echo 'OpenAI installation attempted'");
@@ -170,13 +163,6 @@ public class ImageBuilderService(
         {
             sb.AppendLine("RUN go install github.com/opencode-ai/opencode@latest 2>/dev/null || echo 'OpenCode installation attempted'");
             sb.AppendLine("ENV OPENCODE_OUTPUT_ENVELOPE=true");
-            sb.AppendLine();
-        }
-
-        if (request.Harnesses.Contains("zai"))
-        {
-            sb.AppendLine("RUN npm install -g cc-mirror 2>/dev/null || echo 'cc-mirror installation attempted'");
-            sb.AppendLine("ENV Z_AI_API_KEY=\"\" ZAI_OUTPUT_ENVELOPE=true ZAI_MODEL=glm-5");
             sb.AppendLine();
         }
 
@@ -281,16 +267,6 @@ public class ImageBuilderService(
             if (line.Contains("openai", StringComparison.OrdinalIgnoreCase) && line.Contains("npm install -g", StringComparison.OrdinalIgnoreCase))
             {
                 harnesses.Add("codex");
-            }
-
-            if (line.Contains("claude-code", StringComparison.OrdinalIgnoreCase) || line.Contains("claude-wrapper", StringComparison.OrdinalIgnoreCase))
-            {
-                harnesses.Add("claude-code");
-            }
-
-            if (line.Contains("cc-mirror", StringComparison.OrdinalIgnoreCase))
-            {
-                harnesses.Add("zai");
             }
 
             if (line.Contains("opencode", StringComparison.OrdinalIgnoreCase))
@@ -417,15 +393,15 @@ public class ImageBuilderService(
 
     public async Task<AiDockerfileResult> GenerateDockerfileWithAiAsync(
         string description,
-        string? zaiApiKey,
+        string? apiKey,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(zaiApiKey))
+        if (string.IsNullOrWhiteSpace(apiKey))
         {
-            return new AiDockerfileResult(false, string.Empty, "Z.ai API key not configured. Please set up Z.ai credentials in Provider Settings.");
+            return new AiDockerfileResult(false, string.Empty, "LlmTornado API key not configured. Please set up LlmTornado credentials in Provider Settings.");
         }
 
-        return await llmTornadoGatewayService.GenerateDockerfileAsync(description, zaiApiKey, cancellationToken);
+        return await llmTornadoGatewayService.GenerateDockerfileAsync(description, apiKey, cancellationToken);
     }
 
     public async Task<ImageBuildResult> BuildImageAsync(

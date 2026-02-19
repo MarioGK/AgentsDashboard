@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
-public sealed class LiteDbSet<T>(IRepository<T> repository) : IEnumerable<T>, ILiteDbSet
+public sealed class TrackedRepositorySet<T>(IRepository<T> repository) : IEnumerable<T>, ITrackedRepositorySet
     where T : class
 {
     private readonly object _sync = new();

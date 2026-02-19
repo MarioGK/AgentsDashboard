@@ -19,8 +19,8 @@
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_result.Hits.Count shown</MudChip>
                     <MudChip T="string"
                              Size="Size.Small"
-                             Color="@(_result.SqliteVecAvailable ? Color.Success : Color.Warning)">
-                        @(_result.SqliteVecAvailable ? "lite-vector" : "fallback")
+                             Color="@(_result.LiteDbVectorAvailable ? Color.Success : Color.Warning)">
+                        @(_result.LiteDbVectorAvailable ? "litedb-vector" : "lexical-fallback")
                     </MudChip>
                 }
             </MudStack>
@@ -175,9 +175,9 @@
                 <MudAlert Severity="Severity.Error">@_error</MudAlert>
             }
 
-            @if (!string.IsNullOrWhiteSpace(_result?.SqliteVecDetail))
+            @if (!string.IsNullOrWhiteSpace(_result?.LiteDbVectorDetail))
             {
-                <MudAlert Severity="Severity.Info">@_result.SqliteVecDetail</MudAlert>
+                <MudAlert Severity="Severity.Info">@_result.LiteDbVectorDetail</MudAlert>
             }
         </MudStack>
     </MudPaper>

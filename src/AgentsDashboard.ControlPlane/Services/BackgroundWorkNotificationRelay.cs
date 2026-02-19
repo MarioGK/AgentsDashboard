@@ -149,7 +149,7 @@ public sealed class BackgroundWorkNotificationRelay(
             var remediation = snapshot.Kind switch
             {
                 BackgroundWorkKind.TaskRuntimeImageResolution => "Retry from /settings/task-runtimes using Ensure Task Runtime Image.",
-                BackgroundWorkKind.SqliteVecBootstrap => "Check LiteDB vector search configuration and restart the probe.",
+                BackgroundWorkKind.LiteDbVectorBootstrap => "Check LiteDB vector search configuration and restart the probe.",
                 BackgroundWorkKind.RepositoryGitRefresh => "Verify repository paths and credentials, then retry refresh.",
                 BackgroundWorkKind.Recovery => "Inspect recovery logs and run reconciliation from orchestrator settings.",
                 BackgroundWorkKind.TaskTemplateInit => "Review task template definitions and retry initialization.",

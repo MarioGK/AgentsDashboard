@@ -337,9 +337,7 @@ public sealed class WorkspaceAiService(
         var candidates = new[]
         {
             (RepositoryId: repositoryId, Provider: "llmtornado"),
-            (RepositoryId: repositoryId, Provider: "zai"),
             (RepositoryId: "global", Provider: "llmtornado"),
-            (RepositoryId: "global", Provider: "zai"),
         };
 
         foreach (var candidate in candidates)

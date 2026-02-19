@@ -1,15 +1,15 @@
 namespace AgentsDashboard.ControlPlane.Data;
 
-public sealed class LiteDbScopeDatabase(
+public sealed class LiteDbExecutionDatabase(
     LiteDbExecutor executor,
     LiteDbDatabase database)
 {
     public string DatabasePath => database.DatabasePath;
 
-    public Task<LiteDbScopeTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
+    public Task<LiteDbExecutionTransaction> BeginTransactionAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(new LiteDbScopeTransaction());
+        return Task.FromResult(new LiteDbExecutionTransaction());
     }
 
     public async Task ExecuteSqlRawAsync(string sql, CancellationToken cancellationToken)

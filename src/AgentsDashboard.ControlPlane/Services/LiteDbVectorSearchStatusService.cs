@@ -1,42 +1,42 @@
 namespace AgentsDashboard.ControlPlane.Services;
 
-public interface ISqliteVecBootstrapService
+public interface ILiteDbVectorSearchStatusService
 {
     bool IsAvailable { get; }
-    SqliteVecAvailability Status { get; }
+    LiteDbVectorSearchAvailability Status { get; }
 }
 
-public sealed record SqliteVecAvailability(
+public sealed record LiteDbVectorSearchAvailability(
     bool IsAvailable,
     string? ExtensionPath,
     string? Detail,
     DateTime CheckedAtUtc);
 
-public sealed class SqliteVecBootstrapService(
+public sealed class LiteDbVectorSearchStatusService(
     IBackgroundWorkCoordinator backgroundWorkCoordinator,
-    ILogger<SqliteVecBootstrapService> logger) : IHostedService, ISqliteVecBootstrapService
+    ILogger<LiteDbVectorSearchStatusService> logger) : IHostedService, ILiteDbVectorSearchStatusService
 {
     private const string StartupOperationKey = "startup:litedb-vector-bootstrap";
 
-    private volatile SqliteVecAvailability _status = new(
-        IsAvailable: false,
+    private volatile LiteDbVectorSearchAvailability _status = new(
+        IsAvailable: true,
         ExtensionPath: null,
         Detail: "LiteDB vector mode active",
         CheckedAtUtc: DateTime.UtcNow);
 
     public bool IsAvailable => _status.IsAvailable;
 
-    public SqliteVecAvailability Status => _status;
+    public LiteDbVectorSearchAvailability Status => _status;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
         var workId = backgroundWorkCoordinator.Enqueue(
-            BackgroundWorkKind.SqliteVecBootstrap,
+            BackgroundWorkKind.LiteDbVectorBootstrap,
             StartupOperationKey,
             async (_, progress) =>
             {
-                _status = new SqliteVecAvailability(
-                    IsAvailable: false,
+                _status = new LiteDbVectorSearchAvailability(
+                    IsAvailable: true,
                     ExtensionPath: null,
                     Detail: "LiteDB vector mode active",
                     CheckedAtUtc: DateTime.UtcNow);
@@ -44,7 +44,7 @@ public sealed class SqliteVecBootstrapService(
                 progress.Report(new BackgroundWorkSnapshot(
                     WorkId: string.Empty,
                     OperationKey: string.Empty,
-                    Kind: BackgroundWorkKind.SqliteVecBootstrap,
+                    Kind: BackgroundWorkKind.LiteDbVectorBootstrap,
                     State: BackgroundWorkState.Succeeded,
                     PercentComplete: 100,
                     Message: "LiteDB vector bootstrap completed.",

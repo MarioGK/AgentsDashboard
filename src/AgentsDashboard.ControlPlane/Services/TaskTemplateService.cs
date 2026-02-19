@@ -24,7 +24,7 @@ public sealed class TaskTemplateService
             "qa-browser-sweep",
             "QA Browser Sweep",
             "Automated browser testing with Playwright including stress testing and visual regression",
-            "claude-code",
+            "codex",
             TaskKind.OneShot,
             "Run Playwright tests with comprehensive coverage and stress testing.",
             "npx playwright test --reporter=html,json --trace=on --video=on --screenshot=on"
@@ -51,7 +51,7 @@ public sealed class TaskTemplateService
             "regression-replay",
             "Regression Replay",
             "Replay recent failure scenarios to verify fixes and prevent regressions",
-            "claude-code",
+            "opencode",
             TaskKind.OneShot,
             "Replay recent failure scenarios to verify that fixes are working correctly.",
             "cat /workspace/failures.json 2>/dev/null || echo 'No failure context'"

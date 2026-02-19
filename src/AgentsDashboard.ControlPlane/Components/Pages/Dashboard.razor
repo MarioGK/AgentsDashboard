@@ -1368,7 +1368,7 @@ else
         return snapshots
             .Where(snapshot =>
                 snapshot.OperationKey.StartsWith("startup:", StringComparison.OrdinalIgnoreCase) ||
-                snapshot.Kind is BackgroundWorkKind.TaskRuntimeImageResolution or BackgroundWorkKind.SqliteVecBootstrap or BackgroundWorkKind.Recovery or BackgroundWorkKind.TaskTemplateInit)
+                snapshot.Kind is BackgroundWorkKind.TaskRuntimeImageResolution or BackgroundWorkKind.LiteDbVectorBootstrap or BackgroundWorkKind.Recovery or BackgroundWorkKind.TaskTemplateInit)
             .OrderByDescending(snapshot => snapshot.UpdatedAt ?? snapshot.StartedAt ?? DateTimeOffset.MinValue)
             .Take(12)
             .ToArray();

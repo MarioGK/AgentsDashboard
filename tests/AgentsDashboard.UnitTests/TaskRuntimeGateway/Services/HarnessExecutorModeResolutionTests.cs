@@ -58,7 +58,7 @@ public sealed class HarnessExecutorModeResolutionTests
     public void ResolveRuntimeMode_WhenExecutionModeRequested_UsesRequestedModeWhenNoOverrides()
     {
         var mode = InvokeResolveRuntimeMode(
-            "claude-code",
+            "opencode",
             HarnessExecutionMode.Review,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 

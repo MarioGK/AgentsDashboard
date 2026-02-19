@@ -13,9 +13,6 @@ public sealed class HarnessAdapterFactory(
     {
         ["codex"] = () => new CodexAdapter(options, secretRedactor, serviceProvider.GetRequiredService<ILogger<CodexAdapter>>()),
         ["opencode"] = () => new OpenCodeAdapter(options, secretRedactor, serviceProvider.GetRequiredService<ILogger<OpenCodeAdapter>>()),
-        ["claude-code"] = () => new ClaudeCodeAdapter(options, secretRedactor, serviceProvider.GetRequiredService<ILogger<ClaudeCodeAdapter>>()),
-        ["claude code"] = () => new ClaudeCodeAdapter(options, secretRedactor, serviceProvider.GetRequiredService<ILogger<ClaudeCodeAdapter>>()),
-        ["zai"] = () => new ZaiAdapter(options, secretRedactor, serviceProvider.GetRequiredService<ILogger<ZaiAdapter>>()),
     };
 
     public IHarnessAdapter Create(string harnessName)

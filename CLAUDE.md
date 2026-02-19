@@ -24,13 +24,11 @@ docs/
 ```
 ## Architecture Rules
 
-- Service boundary is MagicOnion service boundaries and application services; route-based HTTP APIs are not the target architecture.
-- All `ControlPlane` ↔ `TaskRuntimeGateway` communication MUST use MagicOnion.
-- Repository is the top-level orchestration boundary.
-- Enforce layered dependencies: `Domain -> Application -> Infrastructure -> UI`.
+- All intra communication MUST use MagicOnion.
 - Use command/query handlers + domain services/events for orchestration.
 - Keep transport DTOs at integration boundaries only.
 - Backward compatibility is not required; keep only intended current behavior.
+- We dont have to care about database lost of data and etc.
 
 ## Engineering Conventions
 
@@ -91,10 +89,9 @@ dotnet test --solution src/AgentsDashboard.slnx
 # Format gate
 dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error
 
-# Playwright full workflow gate (real Z.ai harness)
+# Playwright full workflow gate (real Codex/OpenCode harness flow)
 cd tests/AgentsDashboard.Playwright
 BASE_URL=http://127.0.0.1:5266 \
-PLAYWRIGHT_E2E_ZAI_API_KEY=... \
 PLAYWRIGHT_E2E_REPO_REMOTE_PATH=/abs/path/to/seeded-remote.git \
 PLAYWRIGHT_E2E_REPO_CLONE_ROOT=/abs/path/to/clones \
 npm test
@@ -124,12 +121,12 @@ MTP note: always pass `--project`, `--solution`, or direct `.csproj/.slnx`.
 - Runtime operations/policy UI lives at `/settings/task-runtimes`.
 - Runtime allocation is task-scoped; runtimes are reused per active task and stopped after inactivity timeout.
 - Runtime lifecycle transitions are persisted into `TaskRuntimeDocument` (`Ready`, `Busy`, `Inactive`, `Failed`) with cold-start/inactivity aggregates shown on `/overview`.
-- Semantic chunk search uses LiteDB-backed storage with in-process cosine fallback scoring instead of sqlite-vec.
+- Semantic chunk search uses LiteDB-backed storage with in-process cosine fallback scoring.
 - Task dispatch is singleton per task (one active/pending run; additional triggers queue).
 - Successful changed runs auto-commit and push default branch; successful no-diff runs end `Obsolete`.
 - Health probes are split: `/alive` (liveness), `/ready` (readiness), `/health` (readiness alias + payload).
 
-## Container Notes
+## Last Verified
 
-- Service Dockerfiles must copy root build metadata (`global.json`, `Directory.Build.props`, `Directory.Packages.props`) before `dotnet restore`.
-- ControlPlane runtime image includes `curl` and pre-creates `/app/data`; compose binds host `./data` to `/app/data`.
+- Date: 2026-02-19
+- Purpose: date-only freshness marker for this document.

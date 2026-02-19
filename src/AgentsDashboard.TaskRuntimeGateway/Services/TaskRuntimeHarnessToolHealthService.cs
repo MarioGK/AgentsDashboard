@@ -8,9 +8,7 @@ public sealed class TaskRuntimeHarnessToolHealthService
     private static readonly ToolDefinition[] Tools =
     [
         new("codex", "Codex"),
-        new("opencode", "OpenCode"),
-        new("claude-code", "Claude Code"),
-        new("zai", "Z.ai")
+        new("opencode", "OpenCode")
     ];
 
     public async Task<IReadOnlyList<TaskRuntimeHarnessToolHealth>> GetHarnessToolsAsync(CancellationToken cancellationToken)

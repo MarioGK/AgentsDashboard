@@ -334,9 +334,7 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
             "ai-harness" => ("deploy/harness-image/Dockerfile", "deploy/harness-image"),
             "ai-harness-base" => ("deploy/harness-images/Dockerfile.harness-base", "deploy/harness-images"),
             "harness-codex" => ("deploy/harness-images/Dockerfile.harness-codex", "deploy/harness-images"),
-            "harness-opencode" => ("deploy/harness-images/Dockerfile.harness-opencode", "deploy/harness-images"),
-            "harness-claudecode" => ("deploy/harness-images/Dockerfile.harness-claudecode", "deploy/harness-images"),
-            "harness-zai" => ("deploy/harness-images/Dockerfile.harness-zai", "deploy/harness-images"),
+        "harness-opencode" => ("deploy/harness-images/Dockerfile.harness-opencode", "deploy/harness-images"),
             _ => null
         };
     }

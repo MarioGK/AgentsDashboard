@@ -131,7 +131,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<LiteDbDatabase>())
 builder.Services.AddSingleton<LiteDbExecutor>();
 builder.Services.AddSingleton<ILiteDbCollectionNameResolver, LiteDbCollectionNameResolver>();
 builder.Services.AddSingleton(typeof(IRepository<>), typeof(LiteDbRepository<>));
-builder.Services.AddSingleton<ILiteDbScopeFactory, LiteDbScopeFactory>();
+builder.Services.AddSingleton<IRunArtifactStorage, RunArtifactStorageRepository>();
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddHostedService<DevelopmentSelfRepositoryBootstrapService>();
@@ -141,8 +141,8 @@ builder.Services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<Or
 builder.Services.AddSingleton<RunDispatcher>();
 builder.Services.AddSingleton<IBackgroundWorkCoordinator, BackgroundWorkScheduler>();
 builder.Services.AddHostedService(sp => (BackgroundWorkScheduler)sp.GetRequiredService<IBackgroundWorkCoordinator>());
-builder.Services.AddSingleton<ISqliteVecBootstrapService, SqliteVecBootstrapService>();
-builder.Services.AddHostedService(sp => (SqliteVecBootstrapService)sp.GetRequiredService<ISqliteVecBootstrapService>());
+builder.Services.AddSingleton<ILiteDbVectorSearchStatusService, LiteDbVectorSearchStatusService>();
+builder.Services.AddHostedService(sp => (LiteDbVectorSearchStatusService)sp.GetRequiredService<ILiteDbVectorSearchStatusService>());
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<INotificationSink>(sp => sp.GetRequiredService<INotificationService>());
 builder.Services.AddHostedService<BackgroundWorkNotificationRelay>();

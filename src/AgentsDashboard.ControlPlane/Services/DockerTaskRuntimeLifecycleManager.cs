@@ -665,8 +665,6 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                     $"CODEX_API_KEY={codexApiKey ?? string.Empty}",
                     $"OPENAI_API_KEY={openAiApiKey ?? string.Empty}",
                     $"OPENCODE_API_KEY={Environment.GetEnvironmentVariable("OPENCODE_API_KEY") ?? string.Empty}",
-                    $"ANTHROPIC_API_KEY={Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? string.Empty}",
-                    $"Z_AI_API_KEY={Environment.GetEnvironmentVariable("Z_AI_API_KEY") ?? string.Empty}",
                 ],
                 ExposedPorts = useHostPort
                     ? new Dictionary<string, EmptyStruct> { ["5201/tcp"] = default }

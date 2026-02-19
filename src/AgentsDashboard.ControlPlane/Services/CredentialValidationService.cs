@@ -11,10 +11,8 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         return provider.ToLowerInvariant() switch
         {
             "github" => await ValidateGitHubAsync(secretValue, ct),
-            "claude-code" => await ValidateAnthropicAsync(secretValue, ct),
             "codex" => await ValidateOpenAiAsync(secretValue, ct),
             "opencode" => await ValidateOpenAiAsync(secretValue, ct),
-            "zai" => await ValidateZaiAsync(secretValue, ct),
             "llmtornado" => await ValidateLlmTornadoAsync(secretValue, ct),
             _ => (false, $"Unknown provider: {provider}")
         };
@@ -46,37 +44,6 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         }
     }
 
-    private async Task<(bool Success, string Message)> ValidateAnthropicAsync(string apiKey, CancellationToken ct)
-    {
-        try
-        {
-            using var client = httpClientFactory.CreateClient();
-            client.DefaultRequestHeaders.Add("x-api-key", apiKey);
-            client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-
-            var body = new
-            {
-                model = "claude-sonnet-4-20250514",
-                max_tokens = 1,
-                messages = new[] { new { role = "user", content = "hi" } }
-            };
-
-            var response = await client.PostAsJsonAsync("https://api.anthropic.com/v1/messages", body, ct);
-            if (response.IsSuccessStatusCode || (int)response.StatusCode == 429)
-                return (true, "Anthropic API key is valid");
-
-            if ((int)response.StatusCode == 401)
-                return (false, "Invalid Anthropic API key");
-
-            return (false, $"Anthropic API returned {(int)response.StatusCode}: {response.ReasonPhrase}");
-        }
-        catch (Exception ex)
-        {
-            logger.ZLogWarning(ex, "Anthropic credential validation failed");
-            return (false, $"Connection failed: {ex.Message}");
-        }
-    }
-
     private async Task<(bool Success, string Message)> ValidateOpenAiAsync(string apiKey, CancellationToken ct)
     {
         try
@@ -96,29 +63,6 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         catch (Exception ex)
         {
             logger.ZLogWarning(ex, "OpenAI credential validation failed");
-            return (false, $"Connection failed: {ex.Message}");
-        }
-    }
-
-    private async Task<(bool Success, string Message)> ValidateZaiAsync(string apiKey, CancellationToken ct)
-    {
-        try
-        {
-            using var client = httpClientFactory.CreateClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-            var response = await client.GetAsync("https://api.z.ai/api/paas/v4/models", ct);
-            if (response.IsSuccessStatusCode || (int)response.StatusCode == 429)
-                return (true, "Z.ai API key is valid");
-
-            if ((int)response.StatusCode == 401)
-                return (false, "Invalid Z.ai API key");
-
-            return (false, $"Z.ai API returned {(int)response.StatusCode}: {response.ReasonPhrase}");
-        }
-        catch (Exception ex)
-        {
-            logger.ZLogWarning(ex, "Z.ai credential validation failed");
             return (false, $"Connection failed: {ex.Message}");
         }
     }

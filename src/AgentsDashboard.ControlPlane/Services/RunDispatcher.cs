@@ -173,25 +173,6 @@ public sealed class RunDispatcher(
             }
         }
 
-        if (!envVars.ContainsKey("ANTHROPIC_AUTH_TOKEN") &&
-            !envVars.ContainsKey("ANTHROPIC_API_KEY") &&
-            !envVars.ContainsKey("Z_AI_API_KEY"))
-        {
-            var globalLlmTornadoSecret = await store.GetProviderSecretAsync("global", "llmtornado", cancellationToken);
-            if (globalLlmTornadoSecret is not null)
-            {
-                try
-                {
-                    var value = secretCrypto.Decrypt(globalLlmTornadoSecret.EncryptedValue);
-                    AddMappedProviderEnvironmentVariables(envVars, secretsDict, "llmtornado", value);
-                }
-                catch (Exception ex)
-                {
-                    logger.ZLogWarning(ex, "Failed to decrypt global provider secret for llmtornado");
-                }
-            }
-        }
-
         var isCodexTask = string.Equals(task.Harness, "codex", StringComparison.OrdinalIgnoreCase);
         var hasCodexCredentials = envVars.ContainsKey("CODEX_API_KEY") || envVars.ContainsKey("OPENAI_API_KEY");
         if (isCodexTask && !hasCodexCredentials)
@@ -208,21 +189,6 @@ public sealed class RunDispatcher(
         if (harnessSettings is not null)
         {
             AddHarnessSettingsEnvironmentVariables(envVars, task.Harness, harnessSettings);
-        }
-
-        if (string.Equals(task.Harness, "zai", StringComparison.OrdinalIgnoreCase))
-        {
-            envVars["HARNESS_MODEL"] = "glm-5";
-            envVars["ZAI_MODEL"] = "glm-5";
-        }
-
-        if (string.Equals(task.Harness, "claude-code", StringComparison.OrdinalIgnoreCase) &&
-            envVars.TryGetValue("ANTHROPIC_BASE_URL", out var anthropicBaseUrl) &&
-            anthropicBaseUrl.Contains("api.z.ai/api/anthropic", StringComparison.OrdinalIgnoreCase))
-        {
-            envVars["HARNESS_MODEL"] = "glm-5";
-            envVars["CLAUDE_MODEL"] = "glm-5";
-            envVars["ANTHROPIC_MODEL"] = "glm-5";
         }
 
         var modelOverride = ResolveTaskModelOverride(task);
@@ -681,22 +647,6 @@ public sealed class RunDispatcher(
             case "opencode":
                 SetSecret(envVars, secrets, "OPENCODE_API_KEY", value);
                 break;
-            case "claude-code":
-            case "claude code":
-                SetSecret(envVars, secrets, "ANTHROPIC_API_KEY", value);
-                break;
-            case "zai":
-                SetSecret(envVars, secrets, "Z_AI_API_KEY", value);
-                SetSecret(envVars, secrets, "ANTHROPIC_AUTH_TOKEN", value);
-                SetSecret(envVars, secrets, "ANTHROPIC_API_KEY", value);
-                envVars["ANTHROPIC_BASE_URL"] = "https://api.z.ai/api/anthropic";
-                break;
-            case "llmtornado":
-                SetSecret(envVars, secrets, "Z_AI_API_KEY", value);
-                SetSecret(envVars, secrets, "ANTHROPIC_AUTH_TOKEN", value);
-                SetSecret(envVars, secrets, "ANTHROPIC_API_KEY", value);
-                envVars["ANTHROPIC_BASE_URL"] = "https://api.z.ai/api/anthropic";
-                break;
             default:
                 SetSecret(envVars, secrets, $"SECRET_{normalized.ToUpperInvariant().Replace('-', '_')}", value);
                 break;
@@ -721,17 +671,6 @@ public sealed class RunDispatcher(
         var normalized = harness.Trim().ToLowerInvariant();
         var effectiveModel = settings.Model;
 
-        if (normalized == "zai")
-        {
-            effectiveModel = "glm-5";
-        }
-        else if (normalized == "claude-code" &&
-                 envVars.TryGetValue("ANTHROPIC_BASE_URL", out var anthropicBaseUrl) &&
-                 anthropicBaseUrl.Contains("api.z.ai/api/anthropic", StringComparison.OrdinalIgnoreCase))
-        {
-            effectiveModel = "glm-5";
-        }
-
         if (!string.IsNullOrWhiteSpace(effectiveModel))
         {
             envVars["HARNESS_MODEL"] = effectiveModel;
@@ -751,17 +690,6 @@ public sealed class RunDispatcher(
                 if (!string.IsNullOrWhiteSpace(effectiveModel))
                     envVars["OPENCODE_MODEL"] = effectiveModel;
                 envVars["OPENCODE_TEMPERATURE"] = settings.Temperature.ToString("F2");
-                break;
-            case "claude-code":
-                if (!string.IsNullOrWhiteSpace(effectiveModel))
-                {
-                    envVars["CLAUDE_MODEL"] = effectiveModel;
-                    envVars["ANTHROPIC_MODEL"] = effectiveModel;
-                }
-                break;
-            case "zai":
-                envVars["HARNESS_MODEL"] = "glm-5";
-                envVars["ZAI_MODEL"] = "glm-5";
                 break;
         }
 
@@ -815,13 +743,6 @@ public sealed class RunDispatcher(
             case "opencode":
                 envVars["OPENCODE_MODEL"] = model;
                 break;
-            case "claude-code":
-                envVars["CLAUDE_MODEL"] = model;
-                envVars["ANTHROPIC_MODEL"] = model;
-                break;
-            case "zai":
-                envVars["ZAI_MODEL"] = model;
-                break;
         }
     }
 
@@ -849,12 +770,6 @@ public sealed class RunDispatcher(
             return;
         }
 
-        if (string.Equals(harness, "zai", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(harness, "claude-code", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(harness, "claude", StringComparison.OrdinalIgnoreCase))
-        {
-            SetIfMissing(envVars, "CLAUDE_PERMISSION_MODE", mode is HarnessExecutionMode.Default ? "default" : "plan");
-        }
     }
 
     private static void SetIfMissing(IDictionary<string, string> envVars, string key, string value)

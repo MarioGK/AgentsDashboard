@@ -42,22 +42,6 @@ public sealed class HarnessRuntimeFactoryTests
         selection.Fallback.Should().BeNull();
     }
 
-    [Test]
-    public void Select_WhenClaudeAndZai_UseStreamJsonRuntimes()
-    {
-        var factory = CreateFactory();
-        var claudeSelection = factory.Select(CreateRequest("claude-code", "review"));
-        var zaiSelection = factory.Select(CreateRequest("zai", "review"));
-
-        claudeSelection.RuntimeMode.Should().Be("stream-json");
-        claudeSelection.Primary.Name.Should().Be("claude-stream-json");
-        claudeSelection.Fallback.Should().NotBeNull();
-
-        zaiSelection.RuntimeMode.Should().Be("stream-json");
-        zaiSelection.Primary.Name.Should().Be("zai-claude-compatible-stream-json");
-        zaiSelection.Fallback.Should().NotBeNull();
-    }
-
     private static DefaultHarnessRuntimeFactory CreateFactory()
     {
         var workerOptions = Options.Create(new TaskRuntimeOptions());
@@ -69,14 +53,10 @@ public sealed class HarnessRuntimeFactoryTests
             NullLogger<CommandHarnessRuntime>.Instance);
         var codexRuntime = new CodexAppServerRuntime(redactor, NullLogger<CodexAppServerRuntime>.Instance);
         var openCodeRuntime = new OpenCodeSseRuntime(redactor, NullLogger<OpenCodeSseRuntime>.Instance);
-        var claudeRuntime = new ClaudeStreamRuntime(redactor, NullLogger<ClaudeStreamRuntime>.Instance);
-        var zaiRuntime = new ZaiClaudeCompatibleRuntime(redactor, NullLogger<ZaiClaudeCompatibleRuntime>.Instance);
 
         return new DefaultHarnessRuntimeFactory(
             codexRuntime,
             openCodeRuntime,
-            claudeRuntime,
-            zaiRuntime,
             commandRuntime);
     }
 

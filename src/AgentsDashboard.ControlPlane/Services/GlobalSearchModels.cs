@@ -24,8 +24,8 @@ public sealed record GlobalSearchRequest(
 
 public sealed record GlobalSearchResult(
     string Query,
-    bool SqliteVecAvailable,
-    string? SqliteVecDetail,
+    bool LiteDbVectorAvailable,
+    string? LiteDbVectorDetail,
     int TotalMatches,
     IReadOnlyList<GlobalSearchKindCount> CountsByKind,
     IReadOnlyList<GlobalSearchHit> Hits);

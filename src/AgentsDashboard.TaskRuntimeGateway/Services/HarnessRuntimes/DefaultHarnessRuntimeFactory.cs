@@ -3,24 +3,12 @@ namespace AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 public sealed class DefaultHarnessRuntimeFactory(
     CodexAppServerRuntime codexAppServerRuntime,
     OpenCodeSseRuntime openCodeSseRuntime,
-    ClaudeStreamRuntime claudeStreamRuntime,
-    ZaiClaudeCompatibleRuntime zaiClaudeCompatibleRuntime,
     CommandHarnessRuntime commandHarnessRuntime) : IHarnessRuntimeFactory
 {
     public HarnessRuntimeSelection Select(HarnessRunRequest request)
     {
         var harness = request.Harness?.Trim() ?? string.Empty;
         var mode = request.Mode?.Trim() ?? string.Empty;
-
-        if (IsZaiHarness(harness))
-        {
-            return new HarnessRuntimeSelection(zaiClaudeCompatibleRuntime, commandHarnessRuntime, "stream-json");
-        }
-
-        if (IsClaudeHarness(harness))
-        {
-            return new HarnessRuntimeSelection(claudeStreamRuntime, commandHarnessRuntime, "stream-json");
-        }
 
         if (IsOpenCodeHarness(harness))
         {
@@ -42,27 +30,6 @@ public sealed class DefaultHarnessRuntimeFactory(
         }
 
         return new HarnessRuntimeSelection(commandHarnessRuntime, null, "command");
-    }
-
-    private static bool IsClaudeHarness(string harness)
-    {
-        if (string.IsNullOrWhiteSpace(harness))
-        {
-            return false;
-        }
-
-        return harness.Trim().ToLowerInvariant() switch
-        {
-            "claude-code" => true,
-            "claude code" => true,
-            "claude" => true,
-            _ => false,
-        };
-    }
-
-    private static bool IsZaiHarness(string harness)
-    {
-        return string.Equals(harness?.Trim(), "zai", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsOpenCodeHarness(string harness)

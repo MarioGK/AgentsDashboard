@@ -1,6 +1,6 @@
 namespace AgentsDashboard.ControlPlane.Data;
 
-public interface ILiteDbSet
+public interface ITrackedRepositorySet
 {
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }

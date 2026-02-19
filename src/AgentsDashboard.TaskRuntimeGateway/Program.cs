@@ -67,10 +67,6 @@ builder.Services.AddSingleton<HarnessAdapterFactory>();
 builder.Services.AddSingleton<CommandHarnessRuntime>();
 builder.Services.AddSingleton<CodexAppServerRuntime>();
 builder.Services.AddSingleton<OpenCodeSseRuntime>();
-builder.Services.AddSingleton<ClaudeStreamRuntime>(sp => new ClaudeStreamRuntime(
-    sp.GetRequiredService<SecretRedactor>(),
-    sp.GetRequiredService<ILoggerFactory>().CreateLogger<ClaudeStreamRuntime>()));
-builder.Services.AddSingleton<ZaiClaudeCompatibleRuntime>();
 builder.Services.AddSingleton<IHarnessRuntimeFactory, DefaultHarnessRuntimeFactory>();
 builder.Services.AddSingleton<TaskRuntimeHarnessToolHealthService>();
 builder.Services.AddSingleton<DockerContainerService>();

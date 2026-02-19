@@ -49,9 +49,7 @@ public enum FindingState
 public enum HarnessType
 {
     Codex = 0,
-    OpenCode = 1,
-    ClaudeCode = 2,
-    Zai = 3
+    OpenCode = 1
 }
 
 public enum HarnessExecutionMode

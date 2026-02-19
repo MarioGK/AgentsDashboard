@@ -14,7 +14,7 @@ public sealed class GlobalSearchService(
     IOrchestratorStore store,
     IWorkspaceAiService workspaceAiService,
     IHarnessOutputParserService parserService,
-    ISqliteVecBootstrapService sqliteVecBootstrapService,
+    ILiteDbVectorSearchStatusService vectorSearchStatusService,
     ILogger<GlobalSearchService> logger) : IGlobalSearchService
 {
     private static readonly Regex s_tokenRegex = new("[a-z0-9_]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -178,7 +178,7 @@ public sealed class GlobalSearchService(
             candidates,
             normalizedQuery,
             semanticSignals,
-            sqliteVecBootstrapService.IsAvailable);
+            vectorSearchStatusService.IsAvailable);
 
         var orderedHits = scoredHits
             .OrderByDescending(hit => hit.Score)
@@ -205,8 +205,8 @@ public sealed class GlobalSearchService(
 
         return new GlobalSearchResult(
             Query: normalizedQuery,
-            SqliteVecAvailable: sqliteVecBootstrapService.IsAvailable,
-            SqliteVecDetail: BuildSearchDetail(queryEmbedding),
+            LiteDbVectorAvailable: vectorSearchStatusService.IsAvailable,
+            LiteDbVectorDetail: BuildSearchDetail(queryEmbedding),
             TotalMatches: orderedHits.Count,
             CountsByKind: countsByKind,
             Hits: hits);
@@ -553,7 +553,7 @@ public sealed class GlobalSearchService(
         IReadOnlyList<SearchCandidate> candidates,
         string queryText,
         IReadOnlyDictionary<string, double> semanticSignals,
-        bool sqliteVecAvailable)
+        bool liteDbVectorAvailable)
     {
         var normalizedQuery = NormalizeForSearch(queryText);
         var queryTokens = Tokenize(normalizedQuery).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -596,7 +596,7 @@ public sealed class GlobalSearchService(
             }
 
             var recencyBonus = CalculateRecencyBonus(candidate.TimestampUtc);
-            var vectorWeight = sqliteVecAvailable ? 5.6 : 3.6;
+            var vectorWeight = liteDbVectorAvailable ? 5.6 : 3.6;
             var score = (keywordScore * 0.74) + (lexicalSemanticScore * 2.2) + (vectorSemanticScore * vectorWeight) + recencyBonus;
 
             if (score <= 0)
@@ -626,36 +626,36 @@ public sealed class GlobalSearchService(
 
     private string? BuildSearchDetail(WorkspaceEmbeddingResult queryEmbedding)
     {
-        var sqliteDetail = sqliteVecBootstrapService.Status.Detail;
+        var vectorDetail = vectorSearchStatusService.Status.Detail;
         if (!queryEmbedding.Success)
         {
-            return sqliteDetail;
+            return vectorDetail;
         }
 
         if (!queryEmbedding.UsedFallback)
         {
-            return sqliteDetail;
+            return vectorDetail;
         }
 
-        if (string.IsNullOrWhiteSpace(sqliteDetail))
+        if (string.IsNullOrWhiteSpace(vectorDetail))
         {
             return queryEmbedding.Message;
         }
 
         if (string.IsNullOrWhiteSpace(queryEmbedding.Message))
         {
-            return sqliteDetail;
+            return vectorDetail;
         }
 
-        return $"{sqliteDetail} | {queryEmbedding.Message}";
+        return $"{vectorDetail} | {queryEmbedding.Message}";
     }
 
     private GlobalSearchResult BuildEmptyResult(string query)
     {
         return new GlobalSearchResult(
             Query: query,
-            SqliteVecAvailable: sqliteVecBootstrapService.IsAvailable,
-            SqliteVecDetail: sqliteVecBootstrapService.Status.Detail,
+            LiteDbVectorAvailable: vectorSearchStatusService.IsAvailable,
+            LiteDbVectorDetail: vectorSearchStatusService.Status.Detail,
             TotalMatches: 0,
             CountsByKind: [],
             Hits: []);
