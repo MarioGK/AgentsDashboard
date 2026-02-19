@@ -3,7 +3,7 @@ using Docker.DotNet.Models;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContainerReaper
+public sealed partial class ContainerReaper(ILogger<ContainerReaper> logger) : IContainerReaper
 {
     private readonly DockerClient _dockerClient = new DockerClientConfiguration().CreateClient();
 
@@ -111,5 +111,4 @@ public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContaine
         return result;
     }
 
-    private sealed record RunContainer(string ContainerId, string RunId);
 }

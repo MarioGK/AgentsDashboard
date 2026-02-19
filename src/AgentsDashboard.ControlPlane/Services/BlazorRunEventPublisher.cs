@@ -118,13 +118,4 @@ public sealed class BlazorRunEventPublisher(IUiRealtimeBroker broker) : IRunEven
             cancellationToken);
     }
 
-    public Task PublishRouteAvailableAsync(string runId, string routePath, CancellationToken cancellationToken)
-    {
-        return broker.PublishAsync(
-            new RouteAvailableEvent(
-                runId,
-                routePath,
-                DateTime.UtcNow),
-            cancellationToken);
-    }
 }

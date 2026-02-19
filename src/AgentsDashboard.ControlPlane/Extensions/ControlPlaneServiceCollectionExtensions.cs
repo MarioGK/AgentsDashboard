@@ -7,7 +7,6 @@ using MagicOnion.Server;
 using MessagePack;
 using MessagePack.Resolvers;
 using MudBlazor.Services;
-using Yarp.ReverseProxy.Configuration;
 
 namespace AgentsDashboard.ControlPlane;
 
@@ -98,7 +97,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddHostedService<TaskTemplateInitializationService>();
         services.AddHostedService<RepositoryGitRefreshService>();
         services.AddSingleton<IContainerReaper, ContainerReaper>();
-    
+
         services.AddScoped<ILocalStorageService, LocalStorageService>();
         services.AddScoped<IGlobalSelectionService, GlobalSelectionService>();
         return services;
@@ -112,9 +111,6 @@ internal static class ControlPlaneServiceCollectionExtensions
         });
 
         services.AddRazorComponents().AddInteractiveServerComponents();
-        services.AddSingleton<InMemoryYarpConfigProvider>();
-        services.AddSingleton<IProxyConfigProvider>(sp => sp.GetRequiredService<InMemoryYarpConfigProvider>());
-        services.AddReverseProxy();
         return services;
     }
 

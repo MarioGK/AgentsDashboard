@@ -43,5 +43,4 @@ public enum TaskRuntimeLifecycleState
 public sealed record TaskRuntimeLease(
     string TaskRuntimeId,
     string ContainerId,
-    string GrpcEndpoint,
-    string ProxyEndpoint);
+    string GrpcEndpoint);

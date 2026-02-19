@@ -6,7 +6,7 @@ using CliWrap.Buffered;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed class DevelopmentSelfRepositoryBootstrapService(
+public sealed partial class DevelopmentSelfRepositoryBootstrapService(
     IHostEnvironment hostEnvironment,
     IBackgroundWorkCoordinator backgroundWorkCoordinator,
     IOrchestratorStore store,
@@ -266,5 +266,4 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
         return string.IsNullOrWhiteSpace(output) ? null : output;
     }
 
-    private sealed record RepositorySeed(string Name, string GitUrl, string LocalPath, string DefaultBranch);
 }

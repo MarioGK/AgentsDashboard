@@ -15,7 +15,6 @@
     <PackageReference Include="MudBlazor" />
     <PackageReference Include="SharpZipLib" />
     <PackageReference Include="SixLabors.ImageSharp" />
-    <PackageReference Include="Yarp.ReverseProxy" />
     <PackageReference Include="MagicOnion.Client" />
     <PackageReference Include="MessagePack" />
     <PackageReference Include="MagicOnion.Server" />

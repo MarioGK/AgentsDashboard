@@ -2,7 +2,7 @@ using AgentsDashboard.ControlPlane.Components.Shared;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Components;
 
-public sealed class RunDiffParserTests
+public sealed partial class RunDiffParserTests
 {
     [Test]
     public async Task Parse_WhenPatchContainsMultipleFiles_ReturnsFileAndHunkMetadata()
@@ -13,10 +13,6 @@ index 1111111..2222222 100644
 --- a/src/Foo.cs
 +++ b/src/Foo.cs
 @@ -1,2 +1,3 @@
- public class Foo
- {
-+    public string Name { get; set; } = "foo";
- }
 diff --git a/src/Bar.cs b/src/Bar.cs
 index 3333333..4444444 100644
 --- a/src/Bar.cs

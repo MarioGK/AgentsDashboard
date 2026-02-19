@@ -4,7 +4,6 @@ using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
-using AgentsDashboard.ControlPlane.Proxy;
 using AgentsDashboard.ControlPlane.Services;
 using MagicOnion;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -81,7 +80,7 @@ public class TaskRuntimeEventListenerServiceTests
             Mock.Of<ITaskRuntimeLifecycleManager>(),
             Mock.Of<ISecretCryptoService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             Options.Create(new OrchestratorOptions()),
             NullLogger<RunDispatcher>.Instance);
 
@@ -92,7 +91,7 @@ public class TaskRuntimeEventListenerServiceTests
             Mock.Of<ITaskSemanticEmbeddingService>(),
             Mock.Of<ITaskRuntimeRegistryService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             dispatcher,
             NullLogger<TaskRuntimeEventListenerService>.Instance,
             structuredViewService.Object);
@@ -150,7 +149,7 @@ public class TaskRuntimeEventListenerServiceTests
             Mock.Of<ITaskRuntimeLifecycleManager>(),
             Mock.Of<ISecretCryptoService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             Options.Create(new OrchestratorOptions()),
             NullLogger<RunDispatcher>.Instance);
 
@@ -161,7 +160,7 @@ public class TaskRuntimeEventListenerServiceTests
             Mock.Of<ITaskSemanticEmbeddingService>(),
             Mock.Of<ITaskRuntimeRegistryService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             dispatcher,
             NullLogger<TaskRuntimeEventListenerService>.Instance);
 
@@ -247,7 +246,7 @@ public class TaskRuntimeEventListenerServiceTests
         lifecycleManager.Setup(l => l.RecycleTaskRuntimeAsync("worker-1", It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         lifecycleManager.Setup(l => l.AcquireTaskRuntimeForDispatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TaskRuntimeLease("worker-2", "container-2", "http://worker.local:6201", "http://worker.local:9080"));
+            .ReturnsAsync(new TaskRuntimeLease("worker-2", "container-2", "http://worker.local:6201"));
         lifecycleManager.Setup(l => l.RecordDispatchActivityAsync("worker-2", It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         lifecycleManager.Setup(l => l.GetTaskRuntimeAsync("worker-2", It.IsAny<CancellationToken>()))
@@ -258,8 +257,7 @@ public class TaskRuntimeEventListenerServiceTests
             .Returns(Task.CompletedTask);
         publisher.Setup(p => p.PublishStatusAsync(It.IsAny<RunDocument>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
-        publisher.Setup(p => p.PublishRouteAvailableAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+
         var semanticEmbedding = new Mock<ITaskSemanticEmbeddingService>(MockBehavior.Loose);
 
         var dispatcher = new RunDispatcher(
@@ -268,7 +266,7 @@ public class TaskRuntimeEventListenerServiceTests
             lifecycleManager.Object,
             Mock.Of<ISecretCryptoService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             Options.Create(new OrchestratorOptions()),
             NullLogger<RunDispatcher>.Instance);
 
@@ -279,7 +277,7 @@ public class TaskRuntimeEventListenerServiceTests
             semanticEmbedding.Object,
             Mock.Of<ITaskRuntimeRegistryService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             dispatcher,
             NullLogger<TaskRuntimeEventListenerService>.Instance);
 
@@ -348,7 +346,7 @@ public class TaskRuntimeEventListenerServiceTests
             lifecycleManager.Object,
             Mock.Of<ISecretCryptoService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             Options.Create(new OrchestratorOptions()),
             NullLogger<RunDispatcher>.Instance);
 
@@ -359,7 +357,7 @@ public class TaskRuntimeEventListenerServiceTests
             semanticEmbedding.Object,
             Mock.Of<ITaskRuntimeRegistryService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             dispatcher,
             NullLogger<TaskRuntimeEventListenerService>.Instance);
 
@@ -419,7 +417,7 @@ public class TaskRuntimeEventListenerServiceTests
             lifecycleManager.Object,
             Mock.Of<ISecretCryptoService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             Options.Create(new OrchestratorOptions()),
             NullLogger<RunDispatcher>.Instance);
 
@@ -430,7 +428,7 @@ public class TaskRuntimeEventListenerServiceTests
             semanticEmbedding.Object,
             Mock.Of<ITaskRuntimeRegistryService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             dispatcher,
             NullLogger<TaskRuntimeEventListenerService>.Instance);
 
@@ -506,7 +504,7 @@ public class TaskRuntimeEventListenerServiceTests
             lifecycleManager.Object,
             Mock.Of<ISecretCryptoService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             Options.Create(new OrchestratorOptions()),
             NullLogger<RunDispatcher>.Instance);
 
@@ -517,7 +515,7 @@ public class TaskRuntimeEventListenerServiceTests
             semanticEmbedding.Object,
             Mock.Of<ITaskRuntimeRegistryService>(),
             publisher.Object,
-            new InMemoryYarpConfigProvider(),
+            
             dispatcher,
             NullLogger<TaskRuntimeEventListenerService>.Instance);
 

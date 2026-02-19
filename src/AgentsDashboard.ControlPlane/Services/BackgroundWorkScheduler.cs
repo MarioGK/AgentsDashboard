@@ -3,7 +3,7 @@ using System.Threading.Channels;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> logger)
+public sealed partial class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> logger)
     : BackgroundService, IBackgroundWorkCoordinator
 {
     private const int MaxRetainedSnapshots = 256;
@@ -361,11 +361,4 @@ public sealed class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> log
         return state is BackgroundWorkState.Pending or BackgroundWorkState.Running;
     }
 
-    private sealed record QueuedBackgroundWork(
-        string WorkId,
-        string OperationKey,
-        BackgroundWorkKind Kind,
-        Func<CancellationToken, IProgress<BackgroundWorkSnapshot>, Task> Work,
-        bool DedupeByOperationKey,
-        bool IsCritical);
 }

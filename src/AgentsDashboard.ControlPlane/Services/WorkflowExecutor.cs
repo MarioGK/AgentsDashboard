@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public class WorkflowExecutor(
+public partial class WorkflowExecutor(
     IOrchestratorStore store,
     RunDispatcher dispatcher,
     IContainerReaper containerReaper,
@@ -946,7 +946,6 @@ public class WorkflowExecutor(
         task.InstructionFiles.Add(instruction);
     }
 
-    private sealed record ParallelRunResult(bool Success, string Summary, string RunId, string LaneLabel, string Harness);
 
     public virtual async Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(
         string executionId,

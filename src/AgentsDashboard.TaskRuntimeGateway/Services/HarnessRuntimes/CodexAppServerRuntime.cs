@@ -8,7 +8,7 @@ using AgentsDashboard.Contracts.TaskRuntime;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 
-public sealed class CodexAppServerRuntime(
+public sealed partial class CodexAppServerRuntime(
     SecretRedactor secretRedactor,
     ILogger<CodexAppServerRuntime> logger) : IHarnessRuntime
 {
@@ -870,5 +870,4 @@ public sealed class CodexAppServerRuntime(
     private static string ThisAssemblyVersion =>
         typeof(CodexAppServerRuntime).Assembly.GetName().Version?.ToString() ?? "1.0.0";
 
-    private sealed record TurnCompletion(string ThreadId, string TurnId, string Status, string Error);
 }

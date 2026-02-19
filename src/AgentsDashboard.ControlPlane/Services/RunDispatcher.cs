@@ -4,7 +4,6 @@ using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
-using AgentsDashboard.ControlPlane.Proxy;
 using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Services;
@@ -15,7 +14,6 @@ public sealed class RunDispatcher(
     ITaskRuntimeLifecycleManager workerLifecycleManager,
     ISecretCryptoService secretCrypto,
     IRunEventPublisher publisher,
-    InMemoryYarpConfigProvider yarpProvider,
     IOptions<OrchestratorOptions> orchestratorOptions,
     ILogger<RunDispatcher> logger,
     IOrchestratorRuntimeSettingsProvider? runtimeSettingsProvider = null)
@@ -278,17 +276,6 @@ public sealed class RunDispatcher(
         if (started is not null)
         {
             await publisher.PublishStatusAsync(started, cancellationToken);
-
-            var routePath = $"/proxy/runs/{run.Id}/{{**catchall}}";
-            yarpProvider.UpsertRoute(
-                $"run-{run.Id}",
-                routePath,
-                workerLease.ProxyEndpoint,
-                TimeSpan.FromHours(2),
-                repository.Id,
-                task.Id,
-                run.Id);
-            await publisher.PublishRouteAvailableAsync(run.Id, routePath, cancellationToken);
         }
 
         return true;

@@ -193,12 +193,12 @@ else
                     </MudPaper>
                 </MudTabPanel>
 
-                <MudTabPanel Text="Diff" Icon="@Icons.Material.Filled.Difference">
+                        <MudTabPanel Text="Diff" Icon="@Icons.Material.Filled.Difference">
                     <MudPaper Class="pa-3">
                         <RunDiffViewer RunId="@_run.Id"
                                        Patch="@GetResolvedDiffPatch()"
                                        DiffStat="@GetResolvedDiffStat()"
-                                       OpenFileBaseUrl="@($"/proxy/runs/{_run.Id}/app")" />
+                                       OpenFileBaseUrl="@($"/runs/{_run.Id}/app")" />
                     </MudPaper>
                 </MudTabPanel>
 

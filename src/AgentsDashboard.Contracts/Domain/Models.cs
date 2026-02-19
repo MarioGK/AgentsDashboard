@@ -132,8 +132,7 @@ public enum AlertRuleType
     MissingHeartbeat = 0,
     FailureRateSpike = 1,
     QueueBacklog = 2,
-    RepeatedPrFailures = 3,
-    RouteLeakDetection = 4
+    RepeatedPrFailures = 3
 }
 
 public enum WorkflowStageType

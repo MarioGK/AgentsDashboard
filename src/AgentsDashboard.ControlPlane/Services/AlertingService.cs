@@ -62,7 +62,6 @@ public sealed class AlertingService(
                 AlertRuleType.FailureRateSpike => await CheckFailureRateSpikeAsync(rule, store, cancellationToken),
                 AlertRuleType.QueueBacklog => await CheckQueueBacklogAsync(rule, store, cancellationToken),
                 AlertRuleType.RepeatedPrFailures => await CheckRepeatedPrFailuresAsync(rule, store, cancellationToken),
-                AlertRuleType.RouteLeakDetection => await CheckRouteLeakDetectionAsync(rule, store, cancellationToken),
                 _ => (false, string.Empty)
             };
 
@@ -150,30 +149,6 @@ public sealed class AlertingService(
         {
             var repoSummary = string.Join(", ", recentFailuresWithPr.Select(x => $"{x.RepositoryId}: {x.Count} failures"));
             return (true, $"Repeated PR failures detected in {recentFailuresWithPr.Count} repository(ies): {repoSummary}");
-        }
-
-        return (false, string.Empty);
-    }
-
-    private async Task<(bool triggered, string message)> CheckRouteLeakDetectionAsync(
-        AlertRuleDocument rule,
-        IOrchestratorStore store,
-        CancellationToken cancellationToken)
-    {
-        var windowStart = DateTime.UtcNow.AddMinutes(-rule.WindowMinutes);
-        var recentRuns = await store.ListRecentRunsAsync(cancellationToken);
-
-        var suspiciousRuns = recentRuns
-            .Where(r => r.CreatedAtUtc >= windowStart &&
-                       !string.IsNullOrWhiteSpace(r.OutputJson) &&
-                       (r.OutputJson.Contains("http://", StringComparison.OrdinalIgnoreCase) ||
-                        r.OutputJson.Contains("https://", StringComparison.OrdinalIgnoreCase)))
-            .Take(rule.Threshold)
-            .ToList();
-
-        if (suspiciousRuns.Count >= rule.Threshold)
-        {
-            return (true, $"{suspiciousRuns.Count} runs with potential route leaks detected (threshold: {rule.Threshold})");
         }
 
         return (false, string.Empty);

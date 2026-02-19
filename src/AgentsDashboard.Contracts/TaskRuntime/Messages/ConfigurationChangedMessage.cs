@@ -1,22 +1,8 @@
 using MessagePack;
 
 namespace AgentsDashboard.Contracts.TaskRuntime;
-
 [MessagePackObject]
 
-[MessagePackObject]
-
-[MessagePackObject]
-
-[MessagePackObject]
-
-[MessagePackObject]
-
-[MessagePackObject]
-
-[MessagePackObject]
-
-[MessagePackObject]
 public sealed record ConfigurationChangedMessage
 {
     [Key(0)]

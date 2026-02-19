@@ -10,7 +10,6 @@
                 <MudSelectItem Value="AlertRuleType.FailureRateSpike">Failure Rate Spike</MudSelectItem>
                 <MudSelectItem Value="AlertRuleType.QueueBacklog">Queue Backlog</MudSelectItem>
                 <MudSelectItem Value="AlertRuleType.RepeatedPrFailures">Repeated PR Failures</MudSelectItem>
-                <MudSelectItem Value="AlertRuleType.RouteLeakDetection">Route Leak Detection</MudSelectItem>
             </MudSelect>
 
             <MudNumericField @bind-Value="_threshold" Label="Threshold" Required Min="1"
@@ -94,7 +93,6 @@
         AlertRuleType.FailureRateSpike => "Number of failed runs",
         AlertRuleType.QueueBacklog => "Number of active runs",
         AlertRuleType.RepeatedPrFailures => "Number of consecutive PR failures per repo",
-        AlertRuleType.RouteLeakDetection => "Number of runs with potential route leaks",
         _ => "Threshold value"
     };
 }

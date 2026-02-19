@@ -27,7 +27,6 @@ public sealed class LiteDbCollectionNameResolver : ILiteDbCollectionNameResolver
             [typeof(TaskRuntimeRegistration)] = new("task_runtime_registrations", nameof(TaskRuntimeRegistration.Id)),
             [typeof(TaskRuntimeDocument)] = new("task_runtimes", nameof(TaskRuntimeDocument.Id)),
             [typeof(WebhookRegistration)] = new("webhooks", nameof(WebhookRegistration.Id)),
-            [typeof(ProxyAuditDocument)] = new("proxy_audits", nameof(ProxyAuditDocument.Id)),
             [typeof(SystemSettingsDocument)] = new("settings", nameof(SystemSettingsDocument.Id)),
             [typeof(OrchestratorLeaseDocument)] = new("leases", nameof(OrchestratorLeaseDocument.LeaseName)),
             [typeof(WorkflowDocument)] = new("workflows", nameof(WorkflowDocument.Id)),

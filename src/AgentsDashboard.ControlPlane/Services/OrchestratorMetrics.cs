@@ -17,7 +17,6 @@ public interface IOrchestratorMetrics
     void RecordQueueWaitTime(double seconds);
     void SetWorkerSlots(string host, int activeSlots, int maxSlots);
     void RecordStatusUpdateLatency(double seconds);
-    void RecordProxyRequest(string status, double durationSeconds);
     void RecordAlertFired(string ruleId);
     void RecordWebhookDelivery(string status);
     void SetSignalRConnections(int count);
@@ -34,8 +33,6 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     private readonly Counter<long> _runsTotal;
     private readonly Counter<long> _jobsTotal;
     private readonly Counter<long> _errorsTotal;
-    private readonly Counter<long> _proxyRequestsTotal;
-    private readonly Counter<long> _proxyErrorsTotal;
     private readonly Counter<long> _alertsFiredTotal;
     private readonly Counter<long> _webhookDeliveriesTotal;
     private readonly Counter<long> _findingsTotal;
@@ -50,7 +47,6 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     private readonly Histogram<double> _runDuration;
     private readonly Histogram<double> _queueWaitTime;
     private readonly Histogram<double> _statusUpdateDuration;
-    private readonly Histogram<double> _proxyDuration;
     private readonly Histogram<double> _grpcDuration;
 
     private readonly ObservableGauge<int> _workerActiveSlots;
@@ -70,8 +66,6 @@ public class OrchestratorMetrics : IOrchestratorMetrics
         _runsTotal = s_meter.CreateCounter<long>("orchestrator_runs_total", "runs", "Total number of runs executed");
         _jobsTotal = s_meter.CreateCounter<long>("orchestrator_jobs_total", "jobs", "Total number of jobs dispatched");
         _errorsTotal = s_meter.CreateCounter<long>("orchestrator_errors_total", "errors", "Total number of errors");
-        _proxyRequestsTotal = s_meter.CreateCounter<long>("orchestrator_proxy_requests_total", "requests", "Total proxy requests");
-        _proxyErrorsTotal = s_meter.CreateCounter<long>("orchestrator_proxy_errors_total", "errors", "Total proxy errors");
         _alertsFiredTotal = s_meter.CreateCounter<long>("orchestrator_alerts_fired_total", "alerts", "Total alerts fired");
         _webhookDeliveriesTotal = s_meter.CreateCounter<long>("orchestrator_webhook_deliveries_total", "deliveries", "Total webhook deliveries");
         _findingsTotal = s_meter.CreateCounter<long>("orchestrator_findings_total", "findings", "Total findings created");
@@ -86,7 +80,6 @@ public class OrchestratorMetrics : IOrchestratorMetrics
         _runDuration = s_meter.CreateHistogram<double>("orchestrator_run_duration_seconds", "s", "Run execution duration");
         _queueWaitTime = s_meter.CreateHistogram<double>("orchestrator_queue_wait_seconds", "s", "Time jobs spend in queue");
         _statusUpdateDuration = s_meter.CreateHistogram<double>("orchestrator_status_update_duration_seconds", "s", "Status update processing duration");
-        _proxyDuration = s_meter.CreateHistogram<double>("orchestrator_proxy_duration_seconds", "s", "Proxy request duration");
         _grpcDuration = s_meter.CreateHistogram<double>("orchestrator_grpc_duration_seconds", "s", "gRPC call duration");
 
         _workerActiveSlots = s_meter.CreateObservableGauge<int>("orchestrator_worker_active_slots", () => GetWorkerSlots("active"), "slots", "Active worker slots");
@@ -179,17 +172,6 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     public void RecordStatusUpdateLatency(double seconds)
     {
         _statusUpdateDuration.Record(seconds);
-    }
-
-    public void RecordProxyRequest(string status, double durationSeconds)
-    {
-        _proxyRequestsTotal.Add(1, new KeyValuePair<string, object?>("status", status));
-        _proxyDuration.Record(durationSeconds, new KeyValuePair<string, object?>("status", status));
-
-        if (status != "success")
-        {
-            _proxyErrorsTotal.Add(1, new KeyValuePair<string, object?>("status", status));
-        }
     }
 
     public void RecordAlertFired(string ruleId)

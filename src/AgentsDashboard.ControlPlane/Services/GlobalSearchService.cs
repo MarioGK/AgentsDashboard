@@ -10,7 +10,7 @@ public interface IGlobalSearchService
     Task<GlobalSearchResult> SearchAsync(GlobalSearchRequest request, CancellationToken cancellationToken);
 }
 
-public sealed class GlobalSearchService(
+public sealed partial class GlobalSearchService(
     IRepository<RepositoryDocument> repositoryDocuments,
     IRepository<TaskDocument> taskDocuments,
     IRepository<RunDocument> runDocuments,
@@ -983,17 +983,4 @@ public sealed class GlobalSearchService(
         return token;
     }
 
-    private sealed record SearchCandidate(
-        GlobalSearchKind Kind,
-        string Id,
-        string RepositoryId,
-        string RepositoryName,
-        string? TaskId,
-        string? TaskName,
-        string? RunId,
-        string Title,
-        string Body,
-        string? State,
-        DateTime TimestampUtc,
-        string? SemanticKey);
 }

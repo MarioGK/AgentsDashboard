@@ -187,7 +187,6 @@
         AlertRuleType.FailureRateSpike => "Failure Rate Spike",
         AlertRuleType.QueueBacklog => "Queue Backlog",
         AlertRuleType.RepeatedPrFailures => "Repeated PR Failures",
-        AlertRuleType.RouteLeakDetection => "Route Leak Detection",
         _ => ruleType.ToString()
     };
 
@@ -197,7 +196,6 @@
         AlertRuleType.FailureRateSpike => Color.Error,
         AlertRuleType.QueueBacklog => Color.Info,
         AlertRuleType.RepeatedPrFailures => Color.Warning,
-        AlertRuleType.RouteLeakDetection => Color.Error,
         _ => Color.Default
     };
 }

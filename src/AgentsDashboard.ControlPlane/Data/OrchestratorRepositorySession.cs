@@ -27,7 +27,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         IRepository<TaskRuntimeRegistration> taskRuntimeRegistrations,
         IRepository<TaskRuntimeDocument> taskRuntimes,
         IRepository<WebhookRegistration> webhooks,
-        IRepository<ProxyAuditDocument> proxyAudits,
         IRepository<SystemSettingsDocument> settings,
         IRepository<OrchestratorLeaseDocument> leases,
         IRepository<WorkflowDocument> workflows,
@@ -60,7 +59,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         TaskRuntimeRegistrations = new TrackedRepositorySet<TaskRuntimeRegistration>(taskRuntimeRegistrations);
         TaskRuntimes = new TrackedRepositorySet<TaskRuntimeDocument>(taskRuntimes);
         Webhooks = new TrackedRepositorySet<WebhookRegistration>(webhooks);
-        ProxyAudits = new TrackedRepositorySet<ProxyAuditDocument>(proxyAudits);
         Settings = new TrackedRepositorySet<SystemSettingsDocument>(settings);
         Leases = new TrackedRepositorySet<OrchestratorLeaseDocument>(leases);
         Workflows = new TrackedRepositorySet<WorkflowDocument>(workflows);
@@ -94,7 +92,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
             TaskRuntimeRegistrations,
             TaskRuntimes,
             Webhooks,
-            ProxyAudits,
             Settings,
             Leases,
             Workflows,
@@ -128,7 +125,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
     public TrackedRepositorySet<TaskRuntimeRegistration> TaskRuntimeRegistrations { get; }
     public TrackedRepositorySet<TaskRuntimeDocument> TaskRuntimes { get; }
     public TrackedRepositorySet<WebhookRegistration> Webhooks { get; }
-    public TrackedRepositorySet<ProxyAuditDocument> ProxyAudits { get; }
     public TrackedRepositorySet<SystemSettingsDocument> Settings { get; }
     public TrackedRepositorySet<OrchestratorLeaseDocument> Leases { get; }
     public TrackedRepositorySet<WorkflowDocument> Workflows { get; }

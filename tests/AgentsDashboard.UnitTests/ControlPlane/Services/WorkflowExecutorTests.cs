@@ -1,7 +1,6 @@
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
-using AgentsDashboard.ControlPlane.Proxy;
 using AgentsDashboard.ControlPlane.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -9,7 +8,7 @@ using Moq;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
-public class WorkflowExecutorTests
+public partial class WorkflowExecutorTests
 {
     [Test]
     public async Task ExecuteWorkflowAsync_WithNoStages_CompletesImmediately()
@@ -35,14 +34,21 @@ public class WorkflowExecutorTests
             .Callback<string, WorkflowExecutionState, string, CancellationToken>((_, state, _, _) => completed.TrySetResult(state))
             .ReturnsAsync(execution);
 
-        var options = Options.Create(new OrchestratorOptions());
-        var executor = new WorkflowExecutor(
-            store.Object,
-            new RunDispatcher(Mock.Of<IMagicOnionClientFactory>(), store.Object, Mock.Of<ITaskRuntimeLifecycleManager>(), Mock.Of<ISecretCryptoService>(), Mock.Of<IRunEventPublisher>(), new InMemoryYarpConfigProvider(), options, NullLogger<RunDispatcher>.Instance),
-            Mock.Of<IContainerReaper>(),
-            options,
-            NullLogger<WorkflowExecutor>.Instance,
-            timeProvider: new StaticTimeProvider(now));
+            var options = Options.Create(new OrchestratorOptions());
+            var executor = new WorkflowExecutor(
+                store.Object,
+                new RunDispatcher(
+                    Mock.Of<IMagicOnionClientFactory>(),
+                    store.Object,
+                    Mock.Of<ITaskRuntimeLifecycleManager>(),
+                    Mock.Of<ISecretCryptoService>(),
+                    Mock.Of<IRunEventPublisher>(),
+                    options,
+                    NullLogger<RunDispatcher>.Instance),
+                Mock.Of<IContainerReaper>(),
+                options,
+                NullLogger<WorkflowExecutor>.Instance,
+                timeProvider: new StaticTimeProvider(now));
 
         await executor.ExecuteWorkflowAsync(workflow, CancellationToken.None);
 
@@ -95,7 +101,7 @@ public class WorkflowExecutorTests
             .ReturnsAsync(failedExecution);
 
         var options = Options.Create(new OrchestratorOptions());
-        var executor = new WorkflowExecutor(
+                var executor = new WorkflowExecutor(
             store.Object,
             new RunDispatcher(
                 Mock.Of<IMagicOnionClientFactory>(),
@@ -103,7 +109,6 @@ public class WorkflowExecutorTests
                 Mock.Of<ITaskRuntimeLifecycleManager>(),
                 Mock.Of<ISecretCryptoService>(),
                 Mock.Of<IRunEventPublisher>(),
-                new InMemoryYarpConfigProvider(),
                 options,
                 NullLogger<RunDispatcher>.Instance),
             Mock.Of<IContainerReaper>(),
@@ -126,8 +131,4 @@ public class WorkflowExecutorTests
         State = WorkflowExecutionState.Running
     };
 
-    private sealed class StaticTimeProvider(DateTimeOffset initialTime) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => initialTime;
-    }
 }

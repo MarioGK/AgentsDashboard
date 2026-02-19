@@ -49,7 +49,6 @@ public sealed record TaskRuntimeInstance(
     TaskRuntimeLifecycleState LifecycleState,
     bool IsDraining,
     string GrpcEndpoint,
-    string ProxyEndpoint,
     int ActiveSlots,
     int MaxSlots,
     double CpuPercent,

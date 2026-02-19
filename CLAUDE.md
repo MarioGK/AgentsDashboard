@@ -6,7 +6,7 @@ Self-hosted AI orchestration platform on .NET 10. Blazor Server is the control p
 
 ```text
 src/
-  AgentsDashboard.ControlPlane        # Blazor Server UI, orchestration, SignalR, YARP
+  AgentsDashboard.ControlPlane        # Blazor Server UI, orchestration, SignalR
   AgentsDashboard.TaskRuntimeGateway  # MagicOnion runtime gateway, queue, harness execution
   AgentsDashboard.Contracts           # Shared domain + MagicOnion contracts
 

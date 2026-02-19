@@ -148,10 +148,6 @@ public interface IOrchestratorStore
     Task<WebhookRegistration?> UpdateWebhookAsync(string webhookId, UpdateWebhookRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken);
 
-    Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken);
-    Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken);
-    Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken);
-
     Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken);
     Task<SystemSettingsDocument> UpdateSettingsAsync(SystemSettingsDocument settings, CancellationToken cancellationToken);
     Task<bool> TryAcquireLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken);

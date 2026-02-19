@@ -4,7 +4,7 @@ using CliWrap.Buffered;
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
 
-public sealed class TaskRuntimeHarnessToolHealthService
+public sealed partial class TaskRuntimeHarnessToolHealthService
 {
     private static readonly ToolDefinition[] Tools =
     [
@@ -70,5 +70,4 @@ public sealed class TaskRuntimeHarnessToolHealthService
         }
     }
 
-    private sealed record ToolDefinition(string Command, string DisplayName);
 }

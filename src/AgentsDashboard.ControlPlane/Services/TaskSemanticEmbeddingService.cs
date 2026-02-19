@@ -13,7 +13,7 @@ public interface ITaskSemanticEmbeddingService
     Task ReindexTaskAsync(string repositoryId, string taskId, CancellationToken cancellationToken);
 }
 
-public sealed class TaskSemanticEmbeddingService(
+public sealed partial class TaskSemanticEmbeddingService(
     IRepository<TaskDocument> tasks,
     IRepository<WorkspacePromptEntryDocument> workspacePromptEntries,
     IRepository<RunDocument> runs,
@@ -461,12 +461,4 @@ public sealed class TaskSemanticEmbeddingService(
         return text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
     }
 
-    private sealed record PendingTaskEmbedding(
-        string RepositoryId,
-        string TaskId,
-        string Reason,
-        string? RunId,
-        string? PromptEntryId,
-        DateTime LastQueuedAtUtc,
-        long Sequence);
 }

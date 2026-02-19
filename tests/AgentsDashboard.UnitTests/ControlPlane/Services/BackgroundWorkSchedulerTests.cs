@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
-public class BackgroundWorkSchedulerTests
+public partial class BackgroundWorkSchedulerTests
 {
     [Test]
     public async Task Enqueue_Dedupes_ByOperationKey_WhenWorkIsActive()
@@ -265,7 +265,7 @@ public class BackgroundWorkSchedulerTests
         throw new TimeoutException($"Timed out waiting for at least {minimumCount} notifications.");
     }
 
-    private sealed class InMemoryNotificationSink : INotificationSink
+    private sealed partial class InMemoryNotificationSink : INotificationSink
     {
         private readonly ConcurrentQueue<NotificationEnvelope> _messages = [];
 
@@ -282,11 +282,5 @@ public class BackgroundWorkSchedulerTests
             return Task.CompletedTask;
         }
 
-        public sealed record NotificationEnvelope(
-            string Title,
-            string? Message,
-            NotificationSeverity Severity,
-            NotificationSource Source,
-            string? CorrelationId);
     }
 }

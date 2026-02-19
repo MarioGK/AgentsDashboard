@@ -8,7 +8,7 @@ public interface IUiRealtimeBroker
     Task PublishAsync<TEvent>(TEvent message, CancellationToken cancellationToken = default);
 }
 
-public sealed class UiRealtimeBroker(ILogger<UiRealtimeBroker> logger) : IUiRealtimeBroker
+public sealed partial class UiRealtimeBroker(ILogger<UiRealtimeBroker> logger) : IUiRealtimeBroker
 {
     private readonly ConcurrentDictionary<Type, ConcurrentDictionary<Guid, Subscription>> _subscriptions = [];
 
@@ -65,17 +65,5 @@ public sealed class UiRealtimeBroker(ILogger<UiRealtimeBroker> logger) : IUiReal
         }
     }
 
-    private sealed record Subscription(
-        Func<object, Task> Handler,
-        Func<object, bool>? Filter);
 
-    private sealed class SubscriptionToken(Action onDispose) : IDisposable
-    {
-        private Action? _onDispose = onDispose;
-
-        public void Dispose()
-        {
-            Interlocked.Exchange(ref _onDispose, null)?.Invoke();
-        }
-    }
 }

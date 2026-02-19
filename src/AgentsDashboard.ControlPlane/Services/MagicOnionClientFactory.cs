@@ -13,7 +13,7 @@ public interface IMagicOnionClientFactory
     void RemoveTaskRuntime(string runtimeId);
 }
 
-public class MagicOnionClientFactory : IMagicOnionClientFactory
+public partial class MagicOnionClientFactory : IMagicOnionClientFactory
 {
     private readonly ConcurrentDictionary<string, ChannelEntry> _channels = new(StringComparer.OrdinalIgnoreCase);
 
@@ -78,5 +78,4 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
         return entry.Channel;
     }
 
-    private sealed record ChannelEntry(string Address, GrpcChannel Channel);
 }

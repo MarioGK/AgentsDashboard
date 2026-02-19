@@ -9,7 +9,7 @@ using Moq;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
-public class RecoveryServiceTests
+public partial class RecoveryServiceTests
 {
     [Test]
     public async Task DetectAndTerminateStaleRunsAsync_UsesDetectionWindow_FromTimeProvider()
@@ -160,10 +160,4 @@ public class RecoveryServiceTests
             null), Times.Once);
     }
 
-    private sealed class StaticTimeProvider(DateTimeOffset initialTime) : TimeProvider
-    {
-        public DateTimeOffset Current { get; set; } = initialTime;
-
-        public override DateTimeOffset GetUtcNow() => Current;
-    }
 }

@@ -8,7 +8,7 @@ using AgentsDashboard.Contracts.TaskRuntime;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 
-public sealed class OpenCodeSseRuntime(
+public sealed partial class OpenCodeSseRuntime(
     SecretRedactor secretRedactor,
     ILogger<OpenCodeSseRuntime> logger) : IHarnessRuntime
 {
@@ -1212,43 +1212,4 @@ public sealed class OpenCodeSseRuntime(
         return secretRedactor.Redact(value, environment);
     }
 
-    private sealed class OpenCodeServerHandle : IAsyncDisposable
-    {
-        private readonly Process? _process;
-        private readonly Task _stdoutPump;
-        private readonly Task _stderrPump;
-
-        public OpenCodeServerHandle(
-            OpenCodeApiClient client,
-            Process? process = null,
-            Task? stdoutPump = null,
-            Task? stderrPump = null)
-        {
-            Client = client;
-            _process = process;
-            _stdoutPump = stdoutPump ?? Task.CompletedTask;
-            _stderrPump = stderrPump ?? Task.CompletedTask;
-        }
-
-        public OpenCodeApiClient Client { get; }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_process is not null)
-            {
-                await StopProcessAsync(_process);
-            }
-
-            try
-            {
-                await Task.WhenAll(_stdoutPump, _stderrPump);
-            }
-            catch
-            {
-            }
-
-            Client.Dispose();
-            _process?.Dispose();
-        }
-    }
 }

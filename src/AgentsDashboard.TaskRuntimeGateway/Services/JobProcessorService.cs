@@ -5,7 +5,7 @@ using AgentsDashboard.TaskRuntimeGateway.Models;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
-public class JobProcessorService(
+public partial class JobProcessorService(
     ITaskRuntimeQueue queue,
     IHarnessExecutor executor,
     TaskRuntimeEventBus eventBus,
@@ -79,8 +79,9 @@ public class JobProcessorService(
         long maxSequence = 0;
         var fallbackChunks = 0;
 
-        logger.LogInformationObject(
-            "Starting job execution",
+        logger.LogInformation(
+            "Starting job execution: {Payload:json}",
+
             new
             {
                 request.RunId,
@@ -141,8 +142,9 @@ public class JobProcessorService(
                 CreateEvent(request.RunId, "completed", envelope.Summary, payload),
                 cancellationToken);
 
-            logger.LogInformationObject(
-                "Job processing completed",
+            logger.LogInformation(
+                "Job processing completed: {Payload:json}",
+
                 new
                 {
                     request.RunId,
@@ -163,8 +165,9 @@ public class JobProcessorService(
                 CreateEvent(request.RunId, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
                 CancellationToken.None);
 
-            logger.LogWarningObject(
-                "Job processing cancelled",
+            logger.LogWarning(
+                "Job processing cancelled: {Payload:json}",
+
                 new
                 {
                     request.RunId,
@@ -176,9 +179,10 @@ public class JobProcessorService(
         }
         catch (Exception ex)
         {
-            logger.LogErrorObject(
+            logger.LogError(
                 ex,
-                "Job processing crashed",
+                "Job processing crashed: {Payload:json}",
+
                 new
                 {
                     request.RunId,
@@ -406,15 +410,5 @@ public class JobProcessorService(
         };
     }
 
-    private sealed record StructuredProjection(
-        string Category,
-        string PayloadJson,
-        string SchemaVersion);
 
-    private sealed record RuntimeEventWireEnvelope(
-        string Marker,
-        long Sequence,
-        string Type,
-        string Content,
-        Dictionary<string, string>? Metadata);
 }

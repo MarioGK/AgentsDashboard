@@ -6,7 +6,7 @@ using Cronos;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
-public sealed class OrchestratorStore(
+public sealed partial class OrchestratorStore(
     IRepository<RepositoryDocument> repositories,
     IRepository<TaskDocument> tasks,
     IRepository<RunDocument> runs,
@@ -27,7 +27,6 @@ public sealed class OrchestratorStore(
     IRepository<TaskRuntimeRegistration> taskRuntimeRegistrations,
     IRepository<TaskRuntimeDocument> taskRuntimes,
     IRepository<WebhookRegistration> webhooks,
-    IRepository<ProxyAuditDocument> proxyAudits,
     IRepository<SystemSettingsDocument> settings,
     IRepository<OrchestratorLeaseDocument> leases,
     IRepository<WorkflowDocument> workflows,
@@ -2653,34 +2652,6 @@ public sealed class OrchestratorStore(
         return true;
     }
 
-    public async Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken)
-    {
-        await using var db = CreateSession();
-        db.ProxyAudits.Add(audit);
-        await db.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken)
-    {
-        await using var db = CreateSession();
-        return await db.ProxyAudits.AsNoTracking().Where(x => x.RunId == runId).OrderByDescending(x => x.TimestampUtc).Take(200).ToListAsync(cancellationToken);
-    }
-
-    public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken)
-    {
-        await using var db = CreateSession();
-        var query = db.ProxyAudits.AsNoTracking().AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(repoId))
-            query = query.Where(x => x.RepoId == repoId);
-        if (!string.IsNullOrWhiteSpace(taskId))
-            query = query.Where(x => x.TaskId == taskId);
-        if (!string.IsNullOrWhiteSpace(runId))
-            query = query.Where(x => x.RunId == runId);
-
-        return await query.OrderByDescending(x => x.TimestampUtc).Take(limit).ToListAsync(cancellationToken);
-    }
-
     public async Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken)
     {
         await using var db = CreateSession();
@@ -3451,7 +3422,6 @@ public sealed class OrchestratorStore(
             taskRuntimeRegistrations,
             taskRuntimes,
             webhooks,
-            proxyAudits,
             settings,
             leases,
             workflows,
@@ -3485,25 +3455,7 @@ public sealed class OrchestratorStore(
         return expression.GetNextOccurrence(nowUtc, TimeZoneInfo.Utc);
     }
 
-    private sealed record TaskCleanupSeed(
-        string TaskId,
-        string RepositoryId,
-        DateTime CreatedAtUtc,
-        bool Enabled);
 
-    private sealed record TaskRunAggregate(
-        string TaskId,
-        int RunCount,
-        DateTime? OldestRunAtUtc,
-        DateTime? LatestRunAtUtc,
-        bool HasActiveRuns);
 
-    private sealed record TaskTimestampAggregate(
-        string TaskId,
-        DateTime? TimestampUtc);
 
-    private sealed record RunPruneSeed(
-        string RunId,
-        string TaskId,
-        string RepositoryId);
 }

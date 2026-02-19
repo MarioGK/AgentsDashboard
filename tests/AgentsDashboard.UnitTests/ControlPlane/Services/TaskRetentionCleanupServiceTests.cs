@@ -6,7 +6,7 @@ using Moq;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
-public class TaskRetentionCleanupServiceTests
+public partial class TaskRetentionCleanupServiceTests
 {
     [Test]
     public async Task RunCleanupCycleAsync_WhenDisabled_ReturnsDisabledSummary()
@@ -289,8 +289,4 @@ public class TaskRetentionCleanupServiceTests
             Times.Once);
     }
 
-    private sealed class StaticTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }
