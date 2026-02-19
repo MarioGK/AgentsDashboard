@@ -13,7 +13,7 @@ public sealed record HarnessRunRequest
     public required Dictionary<string, string> Environment { get; init; }
     public required TimeSpan Timeout { get; init; }
     public string Command { get; init; } = string.Empty;
-    public bool UseDocker { get; init; } = true;
+    public bool UseDocker { get; init; }
     public string ArtifactsHostPath { get; init; } = string.Empty;
     public Dictionary<string, string> ContainerLabels { get; init; } = [];
     public double CpuLimit { get; init; } = 1.5;

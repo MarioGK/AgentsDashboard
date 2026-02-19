@@ -75,6 +75,7 @@ public class JobProcessorService(
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(serviceToken, queuedJob.CancellationSource.Token);
         var cancellationToken = linkedCts.Token;
         var request = queuedJob.Request;
+        var executionToken = string.IsNullOrWhiteSpace(request.AutomationRunId) ? request.RunId : request.AutomationRunId;
         var parsedChunks = 0;
         long maxSequence = 0;
         var fallbackChunks = 0;
@@ -98,7 +99,7 @@ public class JobProcessorService(
 
         try
         {
-            await eventBus.PublishAsync(CreateEvent(request.RunId, "log", "Job started", string.Empty), cancellationToken);
+            await eventBus.PublishAsync(CreateEvent(request.RunId, request.TaskId, executionToken, "log", "Job started", string.Empty), cancellationToken);
 
             async Task OnLogChunk(string chunk, CancellationToken ct)
             {
@@ -116,6 +117,8 @@ public class JobProcessorService(
 
                     var logEvent = CreateEvent(
                         request.RunId,
+                        request.TaskId,
+                        executionToken,
                         "log_chunk",
                         BuildLogSummary(runtimeEvent),
                         string.Empty,
@@ -129,7 +132,7 @@ public class JobProcessorService(
                 }
 
                 fallbackChunks++;
-                var fallbackLog = CreateEvent(request.RunId, "log_chunk", chunk, string.Empty);
+                var fallbackLog = CreateEvent(request.RunId, request.TaskId, executionToken, "log_chunk", chunk, string.Empty);
                 await eventBus.PublishAsync(fallbackLog, ct);
                 return;
             }
@@ -138,7 +141,7 @@ public class JobProcessorService(
             var payload = JsonSerializer.Serialize(envelope);
 
             await eventBus.PublishAsync(
-                CreateEvent(request.RunId, "completed", envelope.Summary, payload),
+                CreateEvent(request.RunId, request.TaskId, executionToken, "completed", envelope.Summary, payload),
                 cancellationToken);
 
             logger.LogInformation(
@@ -159,8 +162,8 @@ public class JobProcessorService(
         }
         catch (OperationCanceledException)
         {
-            await eventBus.PublishAsync(
-                CreateEvent(request.RunId, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
+                await eventBus.PublishAsync(
+                CreateEvent(request.RunId, request.TaskId, executionToken, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
                 CancellationToken.None);
 
             logger.LogWarning(
@@ -189,7 +192,7 @@ public class JobProcessorService(
                     MaxSequence = maxSequence,
                 });
             await eventBus.PublishAsync(
-                CreateEvent(request.RunId, "completed", "Job crashed", "{\"status\":\"failed\",\"summary\":\"Crash\",\"error\":\"Worker crashed\"}"),
+                CreateEvent(request.RunId, request.TaskId, executionToken, "completed", "Job crashed", "{\"status\":\"failed\",\"summary\":\"Crash\",\"error\":\"Worker crashed\"}"),
                 CancellationToken.None);
         }
         finally
@@ -202,6 +205,8 @@ public class JobProcessorService(
 
     private static JobEventMessage CreateEvent(
         string runId,
+        string taskId,
+        string executionToken,
         string eventType,
         string summary,
         string payloadJson,
@@ -212,6 +217,8 @@ public class JobProcessorService(
         => new()
         {
             RunId = runId,
+            TaskId = taskId,
+            ExecutionToken = executionToken,
             EventType = eventType,
             Summary = summary,
             Metadata = string.IsNullOrEmpty(payloadJson) ? null : new Dictionary<string, string> { ["payload"] = payloadJson },

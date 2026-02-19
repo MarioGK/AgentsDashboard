@@ -19,13 +19,11 @@ public sealed class DataAccessArchitectureTests
 
     private static readonly HashSet<string> RepositoryPatternServiceFiles =
     [
-        "src/AgentsDashboard.ControlPlane/Services/TaskSemanticEmbeddingService.cs",
-        "src/AgentsDashboard.ControlPlane/Services/GlobalSearchService.cs",
         "src/AgentsDashboard.ControlPlane/Services/WorkspaceImageStorageService.cs"
     ];
 
     [Test]
-    public void RuntimeCode_DoesNotContainSqliteIdentifiers()
+    public async Task RuntimeCode_DoesNotContainSqliteIdentifiers()
     {
         var matches = FindMatches(
             rootFolder: "src",
@@ -33,11 +31,11 @@ public sealed class DataAccessArchitectureTests
             pattern: SqlitePattern,
             pathFilter: _ => true);
 
-        Assert.That(matches).IsEmpty();
+        await Assert.That(matches).IsEmpty();
     }
 
     [Test]
-    public void RuntimeCode_UsesLiteDbNamespaceOnlyInInfrastructure()
+    public async Task RuntimeCode_UsesLiteDbNamespaceOnlyInInfrastructure()
     {
         var matches = FindMatches(
             rootFolder: "src/AgentsDashboard.ControlPlane",
@@ -45,11 +43,11 @@ public sealed class DataAccessArchitectureTests
             pattern: LiteDbUsingPattern,
             pathFilter: path => !AllowedLiteDbUsingFiles.Contains(path));
 
-        Assert.That(matches).IsEmpty();
+        await Assert.That(matches).IsEmpty();
     }
 
     [Test]
-    public void RuntimeCode_DoesNotReferenceCentralLiteDbScopeTypes()
+    public async Task RuntimeCode_DoesNotReferenceCentralLiteDbScopeTypes()
     {
         var matches = FindMatches(
             rootFolder: "src/AgentsDashboard.ControlPlane",
@@ -57,11 +55,11 @@ public sealed class DataAccessArchitectureTests
             pattern: ScopePattern,
             pathFilter: _ => true);
 
-        Assert.That(matches).IsEmpty();
+        await Assert.That(matches).IsEmpty();
     }
 
     [Test]
-    public void VectorAndWorkspaceServices_DoNotReferenceCentralOrchestratorStore()
+    public async Task VectorAndWorkspaceServices_DoNotReferenceCentralOrchestratorStore()
     {
         var matches = FindMatches(
             rootFolder: "src/AgentsDashboard.ControlPlane/Services",
@@ -69,7 +67,7 @@ public sealed class DataAccessArchitectureTests
             pattern: OrchestratorStorePattern,
             pathFilter: RepositoryPatternServiceFiles.Contains);
 
-        Assert.That(matches).IsEmpty();
+        await Assert.That(matches).IsEmpty();
     }
 
     private static List<string> FindMatches(

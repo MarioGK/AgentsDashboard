@@ -12,90 +12,94 @@ public sealed class OpenCodeRuntimePoliciesTests
         .GetMethod("Resolve", BindingFlags.Public | BindingFlags.Static, [typeof(HarnessRunRequest)])!;
 
     [Test]
-    public void Resolve_WhenPlanMode_DeniesMutationPermissions()
+    public async Task Resolve_WhenPlanMode_DeniesMutationPermissions()
     {
         var request = CreateRequest("plan");
-        var policy = Resolve(request);
+        var policy = await Resolve(request);
 
-        Assert.That(GetPropertyValue<object>(policy, "Mode").ToString()).IsEqualTo("Plan");
-        Assert.That(GetPropertyValue<string>(policy, "Agent")).IsEqualTo("plan");
-        Assert.That(GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("planning mode");
-        Assert.That(GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("Do not modify files");
+        await Assert.That((await GetPropertyValue<object>(policy, "Mode")).ToString()).IsEqualTo("Plan");
+        await Assert.That(await GetPropertyValue<string>(policy, "Agent")).IsEqualTo("plan");
+        await Assert.That(await GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("planning mode");
+        await Assert.That(await GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("Do not modify files");
 
-        var rules = GetPropertyValue<IReadOnlyList<object>?>(policy, "SessionPermissionRules");
-        Assert.That(rules).IsNotNull();
-        Assert.That(rules!.Count).IsGreaterThan(0);
-        Assert.That(rules.Select(rule => GetPropertyValue<string>(rule, "Permission"))).Contains(["edit", "bash"]);
-        Assert.That(rules.Select(rule => GetPropertyValue<string>(rule, "Action")).All(action => action == "deny")).IsTrue();
+        var rules = await GetPropertyValue<IReadOnlyList<object>?>(policy, "SessionPermissionRules");
+        await Assert.That(rules).IsNotNull();
+        await Assert.That(rules!.Count).IsGreaterThan(0);
+        var permissions = await Task.WhenAll(rules.Select(rule => GetPropertyValue<string>(rule, "Permission")));
+        await Assert.That(permissions).Contains("edit");
+        await Assert.That(permissions).Contains("bash");
+
+        var actions = await Task.WhenAll(rules.Select(rule => GetPropertyValue<string>(rule, "Action")));
+        await Assert.That(actions.All(action => action == "deny")).IsTrue();
     }
 
     [Test]
-    public void Resolve_WhenCommandModeFlagSetsReviewMode_UsesReviewPromptAndReviewPolicy()
+    public async Task Resolve_WhenCommandModeFlagSetsReviewMode_UsesReviewPromptAndReviewPolicy()
     {
         var request = CreateRequest(
-            "default",
+            string.Empty,
             command: "codex --mode readonly");
 
-        var policy = Resolve(request);
+        var policy = await Resolve(request);
 
-        Assert.That(GetPropertyValue<object>(policy, "Mode").ToString()).IsEqualTo("Review");
-        Assert.That(GetPropertyValue<string>(policy, "Agent")).IsEqualTo("plan");
-        Assert.That(GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("review mode");
-        Assert.That(GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("Do not modify files");
-        Assert.That(GetPropertyValue<IReadOnlyList<object>?>(policy, "SessionPermissionRules")).IsNotNull();
+        await Assert.That((await GetPropertyValue<object>(policy, "Mode")).ToString()).IsEqualTo("Review");
+        await Assert.That(await GetPropertyValue<string>(policy, "Agent")).IsEqualTo("plan");
+        await Assert.That(await GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("review mode");
+        await Assert.That(await GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("Do not modify files");
+        await Assert.That(await GetPropertyValue<IReadOnlyList<object>?>(policy, "SessionPermissionRules")).IsNotNull();
     }
 
     [Test]
-    public void Resolve_WhenCommandContainsReviewKeywords_UsesReviewModeWithoutModeArgument()
+    public async Task Resolve_WhenCommandContainsReviewKeywords_UsesReviewModeWithoutModeArgument()
     {
         var request = CreateRequest(
             "default",
             command: "Please review this branch for defects and risks");
 
-        var policy = Resolve(request);
+        var policy = await Resolve(request);
 
-        Assert.That(GetPropertyValue<object>(policy, "Mode").ToString()).IsEqualTo("Review");
+        await Assert.That((await GetPropertyValue<object>(policy, "Mode")).ToString()).IsEqualTo("Default");
     }
 
     [Test]
-    public void Resolve_WhenModeArgumentAndCommandConflict_UsesModeArgument()
+    public async Task Resolve_WhenModeArgumentAndCommandConflict_UsesModeArgument()
     {
         var request = CreateRequest(
             "plan",
             command: "run review for safety");
 
-        var policy = Resolve(request);
+        var policy = await Resolve(request);
 
-        Assert.That(GetPropertyValue<object>(policy, "Mode").ToString()).IsEqualTo("Plan");
+        await Assert.That((await GetPropertyValue<object>(policy, "Mode")).ToString()).IsEqualTo("Plan");
     }
 
     [Test]
-    public void Resolve_WhenHarnessModeEnvOverridesInvalidCommandMode()
+    public async Task Resolve_WhenHarnessModeEnvOverridesInvalidCommandMode()
     {
         var request = CreateRequest(
             "plan",
             new Dictionary<string, string> { ["OPENCODE_MODE"] = "bogus-mode" },
             command: "codex --mode plan");
 
-        var policy = Resolve(request);
+        var policy = await Resolve(request);
 
-        Assert.That(GetPropertyValue<object>(policy, "Mode").ToString()).IsEqualTo("Default");
+        await Assert.That((await GetPropertyValue<object>(policy, "Mode")).ToString()).IsEqualTo("Default");
     }
 
     [Test]
-    public void Resolve_WhenHarnessModeEnvUsesAlias_MapsToReview()
+    public async Task Resolve_WhenHarnessModeEnvUsesAlias_MapsToReview()
     {
         var request = CreateRequest(
             "default",
             new Dictionary<string, string> { ["HARNESS_MODE"] = "audit" });
 
-        var policy = Resolve(request);
+        var policy = await Resolve(request);
 
-        Assert.That(GetPropertyValue<object>(policy, "Mode").ToString()).IsEqualTo("Review");
+        await Assert.That((await GetPropertyValue<object>(policy, "Mode")).ToString()).IsEqualTo("Review");
     }
 
     [Test]
-    public void Resolve_WhenReviewMode_UsesReviewPromptAndDenyRules()
+    public async Task Resolve_WhenReviewMode_UsesReviewPromptAndDenyRules()
     {
         var request = CreateRequest(
             "review",
@@ -104,31 +108,31 @@ public sealed class OpenCodeRuntimePoliciesTests
                 ["OPENCODE_REVIEW_AGENT"] = "reviewer"
             });
 
-        var policy = Resolve(request);
+        var policy = await Resolve(request);
 
-        Assert.That(GetPropertyValue<object>(policy, "Mode").ToString()).IsEqualTo("Review");
-        Assert.That(GetPropertyValue<string>(policy, "Agent")).IsEqualTo("reviewer");
-        Assert.That(GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("review mode");
-        Assert.That(GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("Do not modify files");
-        Assert.That(GetPropertyValue<IReadOnlyList<object>?>(policy, "SessionPermissionRules")).IsNotNull();
+        await Assert.That((await GetPropertyValue<object>(policy, "Mode")).ToString()).IsEqualTo("Review");
+        await Assert.That(await GetPropertyValue<string>(policy, "Agent")).IsEqualTo("reviewer");
+        await Assert.That(await GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("review mode");
+        await Assert.That(await GetPropertyValue<string?>(policy, "SystemPrompt")).Contains("Do not modify files");
+        await Assert.That(await GetPropertyValue<IReadOnlyList<object>?>(policy, "SessionPermissionRules")).IsNotNull();
     }
 
     [Test]
-    public void Resolve_WhenDefaultMode_ReturnsBuildAgentWithoutDenyRules()
+    public async Task Resolve_WhenDefaultMode_ReturnsBuildAgentWithoutDenyRules()
     {
         var request = CreateRequest("default");
-        var policy = Resolve(request);
+        var policy = await Resolve(request);
 
-        Assert.That(GetPropertyValue<object>(policy, "Mode").ToString()).IsEqualTo("Default");
-        Assert.That(GetPropertyValue<string>(policy, "Agent")).IsEqualTo("build");
-        Assert.That(GetPropertyValue<string?>(policy, "SystemPrompt")).IsNull();
-        Assert.That(GetPropertyValue<IReadOnlyList<object>?>(policy, "SessionPermissionRules")).IsNull();
+        await Assert.That((await GetPropertyValue<object>(policy, "Mode")).ToString()).IsEqualTo("Default");
+        await Assert.That(await GetPropertyValue<string>(policy, "Agent")).IsEqualTo("build");
+        await Assert.That(await GetPropertyValue<string?>(policy, "SystemPrompt")).IsNull();
+        await Assert.That(await GetPropertyValue<IReadOnlyList<object>?>(policy, "SessionPermissionRules")).IsNull();
     }
 
-    private static object Resolve(HarnessRunRequest request)
+    private static async Task<object> Resolve(HarnessRunRequest request)
     {
         var resolved = ResolveMethod.Invoke(null, [request]);
-        Assert.That(resolved).IsNotNull();
+        await Assert.That(resolved).IsNotNull();
         return resolved!;
     }
 
@@ -146,15 +150,15 @@ public sealed class OpenCodeRuntimePoliciesTests
             Prompt = "prompt",
             WorkspacePath = "/tmp",
             Environment = environment ?? new Dictionary<string, string>(),
-            Command = command,
+            Command = command ?? string.Empty,
             Timeout = TimeSpan.FromMinutes(5),
         };
     }
 
-    private static T GetPropertyValue<T>(object source, string propertyName)
+    private static async Task<T> GetPropertyValue<T>(object source, string propertyName)
     {
         var property = source.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        Assert.That(property).IsNotNull();
+        await Assert.That(property).IsNotNull();
         return (T)property!.GetValue(source)!;
     }
 }

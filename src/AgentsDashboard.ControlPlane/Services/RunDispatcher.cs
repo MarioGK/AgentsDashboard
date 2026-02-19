@@ -250,7 +250,7 @@ public sealed class RunDispatcher(
         };
 
         var workerClient = clientFactory.CreateTaskRuntimeService(workerLease.TaskRuntimeId, workerLease.GrpcEndpoint);
-        var response = await workerClient.DispatchJobAsync(request);
+        var response = await workerClient.DispatchJobAsync(request, cancellationToken);
 
         if (!response.Success)
         {
@@ -334,7 +334,7 @@ public sealed class RunDispatcher(
             }
 
             var workerClient = clientFactory.CreateTaskRuntimeService(worker.TaskRuntimeId, worker.GrpcEndpoint);
-            await workerClient.StopJobAsync(new StopJobRequest { RunId = runId });
+            await workerClient.StopJobAsync(new StopJobRequest { RunId = runId }, cancellationToken);
         }
         catch (Exception ex)
         {

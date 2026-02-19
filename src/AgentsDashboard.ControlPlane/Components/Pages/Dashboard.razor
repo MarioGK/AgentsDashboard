@@ -660,7 +660,7 @@ else
     private async Task LoadServerMetricsAsync()
     {
         await LoadWorkerMetricsAsync();
-        await LoadOrchestratorHealthAsync();
+        await LoadOrchestratorCheckHealthAsync();
         await LoadStorageSnapshotAsync();
         LoadControlPlaneMetrics();
         LoadHostSystemMetrics();
@@ -669,7 +669,7 @@ else
         _lastMetricsRefreshUtc = DateTime.UtcNow;
     }
 
-    private async Task LoadOrchestratorHealthAsync()
+    private async Task LoadOrchestratorCheckHealthAsync()
     {
         _orchestratorHealth = null;
         _orchestratorHealthError = null;

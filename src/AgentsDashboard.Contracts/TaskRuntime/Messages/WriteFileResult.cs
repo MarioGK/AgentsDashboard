@@ -3,9 +3,9 @@ using MessagePack;
 namespace AgentsDashboard.Contracts.TaskRuntime;
 
 [MessagePackObject]
-public record FileDeleteResult
+public record WriteFileResult
 {
     [Key(0)] public bool Success { get; init; }
     [Key(1)] public string? ErrorMessage { get; init; }
-    [Key(2)] public bool Deleted { get; init; }
+    [Key(2)] public long BytesWritten { get; init; }
 }

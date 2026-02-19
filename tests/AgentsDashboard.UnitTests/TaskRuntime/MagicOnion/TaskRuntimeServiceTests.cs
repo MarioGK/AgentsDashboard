@@ -61,7 +61,7 @@ public class TaskRuntimeServiceTests
     }
 
     [Test]
-    public async Task CancelJobAsync_WithExistingRun_AlwaysCancelsTrackedRun()
+    public async Task StopJobAsync_WithExistingRun_AlwaysCancelsTrackedRun()
     {
         var queue = new TaskRuntimeQueue(new TaskRuntimeOptions { MaxSlots = 4 });
         await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
@@ -73,7 +73,7 @@ public class TaskRuntimeServiceTests
             new TaskRuntimeHarnessToolHealthService(),
             NullLogger<TaskRuntimeService>.Instance);
 
-        var response = await service.CancelJobAsync(new CancelJobRequest { RunId = "run-1" });
+        var response = await service.StopJobAsync(new StopJobRequest { RunId = "run-1" });
 
         response.Success.Should().BeTrue();
         response.ErrorMessage.Should().BeNull();

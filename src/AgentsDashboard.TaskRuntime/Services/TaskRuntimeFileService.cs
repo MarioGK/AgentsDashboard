@@ -1,17 +1,13 @@
 using System.Text;
 using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Services;
-using MagicOnion;
-using MagicOnion.Server;
 
-namespace AgentsDashboard.TaskRuntime.MagicOnion;
+namespace AgentsDashboard.TaskRuntime.Services;
 
 public sealed class TaskRuntimeFileService(
     WorkspacePathGuard workspacePathGuard,
     ILogger<TaskRuntimeFileService> logger)
-    : ServiceBase<ITaskRuntimeFileService>, ITaskRuntimeFileService
 {
-    public UnaryResult<DirectoryListingDto> ListDirectoryAsync(FileSystemRequest request)
+    public ValueTask<DirectoryListingDto> ListDirectoryAsync(FileSystemRequest request, CancellationToken cancellationToken)
     {
         var directoryPath = workspacePathGuard.ResolvePath(request.Path);
         if (!Directory.Exists(directoryPath))
@@ -24,6 +20,7 @@ public sealed class TaskRuntimeFileService(
 
         foreach (var directory in Directory.EnumerateDirectories(directoryPath, "*", searchOption))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var info = new DirectoryInfo(directory);
             if (!ShouldInclude(info, request.IncludeHidden))
             {
@@ -35,6 +32,7 @@ public sealed class TaskRuntimeFileService(
 
         foreach (var file in Directory.EnumerateFiles(directoryPath, "*", searchOption))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var info = new FileInfo(file);
             if (!ShouldInclude(info, request.IncludeHidden))
             {
@@ -46,14 +44,14 @@ public sealed class TaskRuntimeFileService(
 
         entries.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
 
-        return new DirectoryListingDto
+        return ValueTask.FromResult(new DirectoryListingDto
         {
             Path = workspacePathGuard.ToRelativePath(directoryPath),
             Entries = entries,
-        };
+        });
     }
 
-    public async UnaryResult<FileContentDto> ReadFileAsync(FileReadRequest request)
+    public async ValueTask<FileContentDto> ReadFileAsync(FileReadRequest request, CancellationToken cancellationToken)
     {
         var filePath = workspacePathGuard.ResolvePath(request.Path);
         if (!File.Exists(filePath))
@@ -62,7 +60,7 @@ public sealed class TaskRuntimeFileService(
         }
 
         var encoding = ResolveEncoding(request.Encoding);
-        var content = await File.ReadAllTextAsync(filePath, encoding, Context.CallContext.CancellationToken);
+        var content = await File.ReadAllTextAsync(filePath, encoding, cancellationToken);
         var fileInfo = new FileInfo(filePath);
 
         return new FileContentDto
@@ -74,7 +72,7 @@ public sealed class TaskRuntimeFileService(
         };
     }
 
-    public async UnaryResult<WriteFileResult> WriteFileAsync(WriteFileRequest request)
+    public async ValueTask<WriteFileResult> WriteFileAsync(WriteFileRequest request, CancellationToken cancellationToken)
     {
         try
         {
@@ -107,7 +105,7 @@ public sealed class TaskRuntimeFileService(
 
             var encoding = ResolveEncoding(request.Encoding);
             var content = request.Content;
-            await File.WriteAllTextAsync(filePath, content, encoding, Context.CallContext.CancellationToken);
+            await File.WriteAllTextAsync(filePath, content, encoding, cancellationToken);
 
             return new WriteFileResult
             {
@@ -128,59 +126,61 @@ public sealed class TaskRuntimeFileService(
         }
     }
 
-    public UnaryResult<DeletePathResult> DeletePathAsync(DeletePathRequest request)
+    public ValueTask<DeletePathResult> DeletePathAsync(DeletePathRequest request, CancellationToken cancellationToken)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var fullPath = workspacePathGuard.ResolvePath(request.Path);
             if (workspacePathGuard.IsWorkspaceRoot(fullPath))
             {
-                return new DeletePathResult
+                return ValueTask.FromResult(new DeletePathResult
                 {
                     Success = false,
                     ErrorMessage = "Workspace root cannot be deleted.",
                     Deleted = false,
-                };
+                });
             }
 
             if (File.Exists(fullPath))
             {
                 File.Delete(fullPath);
-                return new DeletePathResult
+                return ValueTask.FromResult(new DeletePathResult
                 {
                     Success = true,
                     ErrorMessage = null,
                     Deleted = true,
-                };
+                });
             }
 
             if (Directory.Exists(fullPath))
             {
                 Directory.Delete(fullPath, request.Recursive);
-                return new DeletePathResult
+                return ValueTask.FromResult(new DeletePathResult
                 {
                     Success = true,
                     ErrorMessage = null,
                     Deleted = true,
-                };
+                });
             }
 
-            return new DeletePathResult
+            return ValueTask.FromResult(new DeletePathResult
             {
                 Success = true,
                 ErrorMessage = null,
                 Deleted = false,
-            };
+            });
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to delete path {Path}", request.Path);
-            return new DeletePathResult
+            return ValueTask.FromResult(new DeletePathResult
             {
                 Success = false,
                 ErrorMessage = ex.Message,
                 Deleted = false,
-            };
+            });
         }
     }
 
@@ -191,7 +191,7 @@ public sealed class TaskRuntimeFileService(
             return true;
         }
 
-        if (entry.Name.StartsWith('.', StringComparison.Ordinal))
+        if (entry.Name.StartsWith(".", StringComparison.Ordinal))
         {
             return false;
         }

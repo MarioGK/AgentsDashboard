@@ -122,7 +122,7 @@ public partial class RunDispatcherTests
             .ReturnsAsync([queuedBehind, run]);
         service.WorkerClientMock
             .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
-            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+            .Returns(UnaryResult.FromResult(new DispatchJobResult { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
 
         var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
@@ -146,7 +146,7 @@ public partial class RunDispatcherTests
 
         service.WorkerClientMock
             .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
-            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+            .Returns(UnaryResult.FromResult(new DispatchJobResult { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
 
         var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
@@ -171,7 +171,7 @@ public partial class RunDispatcherTests
         service.WorkerClientMock
             .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
             .Callback<DispatchJobRequest>(request => dispatchedRequest = request)
-            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+            .Returns(UnaryResult.FromResult(new DispatchJobResult { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
 
         var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
@@ -197,7 +197,7 @@ public partial class RunDispatcherTests
         service.WorkerClientMock
             .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
             .Callback<DispatchJobRequest>(request => dispatchedRequest = request)
-            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+            .Returns(UnaryResult.FromResult(new DispatchJobResult { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
 
         var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 
@@ -210,7 +210,7 @@ public partial class RunDispatcherTests
     }
 
     [Test]
-    public void ResolveTaskModelOverride_WhenModelOverrideInstructionPresent_ReturnsTrimmedModel()
+    public async Task ResolveTaskModelOverride_WhenModelOverrideInstructionPresent_ReturnsTrimmedModel()
     {
         var task = CreateTask();
         task.InstructionFiles = [new InstructionFile("modeloverride.md", "  gpt-4o-mini ", 1)];
@@ -221,7 +221,7 @@ public partial class RunDispatcherTests
     }
 
     [Test]
-    public void ResolveTaskModelOverride_WhenHarnessModelInstructionPresent_ReturnsTrimmedModel()
+    public async Task ResolveTaskModelOverride_WhenHarnessModelInstructionPresent_ReturnsTrimmedModel()
     {
         var task = CreateTask();
         task.InstructionFiles =
@@ -236,7 +236,7 @@ public partial class RunDispatcherTests
     }
 
     [Test]
-    public void ApplyHarnessModelOverride_WhenCodex_HonorsCoreAndHarnessModelVariables()
+    public async Task ApplyHarnessModelOverride_WhenCodex_HonorsCoreAndHarnessModelVariables()
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -247,7 +247,7 @@ public partial class RunDispatcherTests
     }
 
     [Test]
-    public void ApplyHarnessModelOverride_WhenOpencode_SetsHarnessAndOpencodeModelVariables()
+    public async Task ApplyHarnessModelOverride_WhenOpencode_SetsHarnessAndOpencodeModelVariables()
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -258,7 +258,7 @@ public partial class RunDispatcherTests
     }
 
     [Test]
-    public void ApplyHarnessModeEnvironment_ForCodex_UsesStdioTransportAndKeepsExplicitCodexMode()
+    public async Task ApplyHarnessModeEnvironment_ForCodex_UsesStdioTransportAndKeepsExplicitCodexMode()
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -277,7 +277,7 @@ public partial class RunDispatcherTests
     }
 
     [Test]
-    public void ApplyHarnessModeEnvironment_ForOpencode_SetsModeOnlyWhenMissing()
+    public async Task ApplyHarnessModeEnvironment_ForOpencode_SetsModeOnlyWhenMissing()
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -311,7 +311,7 @@ public partial class RunDispatcherTests
         service.Store.Setup(s => s.GetInstructionsAsync(repo.Id, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         service.WorkerClientMock
             .Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
-            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = false, ErrorMessage = "worker unavailable" }));
+            .Returns(UnaryResult.FromResult(new DispatchJobResult { Success = false, ErrorMessage = "worker unavailable" }));
 
         var result = await service.Dispatcher.DispatchAsync(repo, task, run, CancellationToken.None);
 

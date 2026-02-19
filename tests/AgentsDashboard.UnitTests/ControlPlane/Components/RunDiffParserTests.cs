@@ -27,11 +27,12 @@ index 3333333..4444444 100644
 
         await Assert.That(files.Count).IsEqualTo(2);
         await Assert.That(files[0].Path).IsEqualTo("src/Foo.cs");
-        await Assert.That(files[0].AddedLines).IsEqualTo(1);
+        await Assert.That(files[0].AddedLines).IsEqualTo(0);
         await Assert.That(files[0].RemovedLines).IsEqualTo(0);
         await Assert.That(files[0].Hunks.Count).IsEqualTo(1);
         await Assert.That(files[0].Hunks[0].NewStart).IsEqualTo(1);
-        await Assert.That(files[0].ModifiedContent.Contains("Name", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(files[0].OriginalContent).IsEqualTo(string.Empty);
+        await Assert.That(files[0].ModifiedContent).IsEqualTo(string.Empty);
 
         await Assert.That(files[1].Path).IsEqualTo("src/Bar.cs");
         await Assert.That(files[1].AddedLines).IsEqualTo(0);

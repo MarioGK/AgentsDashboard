@@ -34,13 +34,13 @@ public class TaskRuntimeQueueTests
 
         queue.MarkCompleted("run-a");
 
-        Assert.That(snapshot.Count()).IsEqualTo(2);
-        Assert.That(snapshot.Any(id => id.Equals("run-a", StringComparison.OrdinalIgnoreCase))).IsTrue();
-        Assert.That(snapshot.Any(id => id.Equals("run-b", StringComparison.OrdinalIgnoreCase))).IsTrue();
+        await Assert.That(snapshot.Count()).IsEqualTo(2);
+        await Assert.That(snapshot.Any(id => id.Equals("run-a", StringComparison.OrdinalIgnoreCase))).IsTrue();
+        await Assert.That(snapshot.Any(id => id.Equals("run-b", StringComparison.OrdinalIgnoreCase))).IsTrue();
 
-        Assert.That(queue.ActiveRunIds.Count()).IsEqualTo(1);
-        Assert.That(queue.ActiveRunIds).Contains("Run-B");
-        Assert.That(queue.ActiveRunIds).DoesNotContain("run-a");
+        await Assert.That(queue.ActiveRunIds.Count()).IsEqualTo(1);
+        await Assert.That(queue.ActiveRunIds).Contains("Run-B");
+        await Assert.That(queue.ActiveRunIds).DoesNotContain("run-a");
     }
 
     [Test]
@@ -48,15 +48,15 @@ public class TaskRuntimeQueueTests
     {
         var queue = CreateQueue(maxSlots: 1);
 
-        Assert.That(queue.CanAcceptJob()).IsTrue();
+        await Assert.That(queue.CanAcceptJob()).IsTrue();
         await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
 
-        Assert.That(queue.CanAcceptJob()).IsFalse();
-        Assert.That(queue.ActiveSlots).IsEqualTo(1);
+        await Assert.That(queue.CanAcceptJob()).IsFalse();
+        await Assert.That(queue.ActiveSlots).IsEqualTo(1);
 
         queue.MarkCompleted("run-1");
-        Assert.That(queue.CanAcceptJob()).IsTrue();
-        Assert.That(queue.ActiveSlots).IsEqualTo(0);
+        await Assert.That(queue.CanAcceptJob()).IsTrue();
+        await Assert.That(queue.ActiveSlots).IsEqualTo(0);
     }
 
     [Test]
@@ -65,7 +65,7 @@ public class TaskRuntimeQueueTests
         var queue = CreateQueue();
         await queue.EnqueueAsync(CreateJob("Run-Case"), CancellationToken.None);
 
-        Assert.That(queue.Cancel("run-case")).IsTrue();
-        Assert.That(queue.Cancel("run-case")).IsTrue();
+        await Assert.That(queue.Cancel("run-case")).IsTrue();
+        await Assert.That(queue.Cancel("run-case")).IsTrue();
     }
 }

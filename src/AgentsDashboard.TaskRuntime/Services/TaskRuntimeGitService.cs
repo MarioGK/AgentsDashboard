@@ -1,20 +1,16 @@
 using System.Diagnostics;
 using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Services;
-using MagicOnion;
-using MagicOnion.Server;
 
-namespace AgentsDashboard.TaskRuntime.MagicOnion;
+namespace AgentsDashboard.TaskRuntime.Services;
 
 public sealed class TaskRuntimeGitService(
     WorkspacePathGuard workspacePathGuard,
     ILogger<TaskRuntimeGitService> logger)
-    : ServiceBase<ITaskRuntimeGitService>, ITaskRuntimeGitService
 {
-    public async UnaryResult<GitStatusDto> StatusAsync(GitStatusRequest request)
+    public async ValueTask<GitStatusDto> StatusAsync(GitStatusRequest request, CancellationToken cancellationToken)
     {
         var repositoryPath = ResolveRepositoryPath(request.RepositoryPath);
-        await EnsureRepositoryAsync(repositoryPath, Context.CallContext.CancellationToken);
+        await EnsureRepositoryAsync(repositoryPath, cancellationToken);
 
         var arguments = new List<string>
         {
@@ -28,7 +24,7 @@ public sealed class TaskRuntimeGitService(
             arguments.Add("--untracked-files=no");
         }
 
-        var statusResult = await RunGitAsync(repositoryPath, arguments, null, Context.CallContext.CancellationToken);
+        var statusResult = await RunGitAsync(repositoryPath, arguments, null, cancellationToken);
         EnsureCommandSucceeded("status", statusResult);
 
         var lines = SplitLines(statusResult.StandardOutput);
@@ -79,12 +75,12 @@ public sealed class TaskRuntimeGitService(
         };
     }
 
-    public async UnaryResult<GitDiffDto> DiffAsync(GitDiffRequest request)
+    public async ValueTask<GitDiffDto> DiffAsync(GitDiffRequest request, CancellationToken cancellationToken)
     {
         try
         {
             var repositoryPath = ResolveRepositoryPath(request.RepositoryPath);
-            await EnsureRepositoryAsync(repositoryPath, Context.CallContext.CancellationToken);
+            await EnsureRepositoryAsync(repositoryPath, cancellationToken);
 
             var arguments = new List<string> { "diff" };
 
@@ -109,7 +105,7 @@ public sealed class TaskRuntimeGitService(
                 arguments.Add(request.Pathspec.Trim());
             }
 
-            var diffResult = await RunGitAsync(repositoryPath, arguments, null, Context.CallContext.CancellationToken);
+            var diffResult = await RunGitAsync(repositoryPath, arguments, null, cancellationToken);
 
             return new GitDiffDto
             {
@@ -132,14 +128,14 @@ public sealed class TaskRuntimeGitService(
         }
     }
 
-    public async UnaryResult<GitCommitResult> CommitAsync(GitCommitRequest request)
+    public async ValueTask<GitCommitResult> CommitAsync(GitCommitRequest request, CancellationToken cancellationToken)
     {
         try
         {
             var repositoryPath = ResolveRepositoryPath(request.RepositoryPath);
-            await EnsureRepositoryAsync(repositoryPath, Context.CallContext.CancellationToken);
+            await EnsureRepositoryAsync(repositoryPath, cancellationToken);
 
-            var stageResult = await RunGitAsync(repositoryPath, ["add", "-A"], null, Context.CallContext.CancellationToken);
+            var stageResult = await RunGitAsync(repositoryPath, ["add", "-A"], null, cancellationToken);
             EnsureCommandSucceeded("add", stageResult);
 
             Dictionary<string, string>? environment = null;
@@ -177,7 +173,7 @@ public sealed class TaskRuntimeGitService(
                 commitArguments.Add("--allow-empty");
             }
 
-            var commitResult = await RunGitAsync(repositoryPath, commitArguments, environment, Context.CallContext.CancellationToken);
+            var commitResult = await RunGitAsync(repositoryPath, commitArguments, environment, cancellationToken);
 
             if (commitResult.ExitCode != 0 && !ContainsNothingToCommit(commitResult))
             {
@@ -189,7 +185,7 @@ public sealed class TaskRuntimeGitService(
                 };
             }
 
-            var headSha = await TryGetHeadShaAsync(repositoryPath, Context.CallContext.CancellationToken);
+            var headSha = await TryGetHeadShaAsync(repositoryPath, cancellationToken);
 
             return new GitCommitResult
             {
@@ -210,15 +206,15 @@ public sealed class TaskRuntimeGitService(
         }
     }
 
-    public async UnaryResult<GitPushResult> PushAsync(GitPushRequest request)
+    public async ValueTask<GitPushResult> PushAsync(GitPushRequest request, CancellationToken cancellationToken)
     {
         try
         {
             var repositoryPath = ResolveRepositoryPath(request.RepositoryPath);
-            await EnsureRepositoryAsync(repositoryPath, Context.CallContext.CancellationToken);
+            await EnsureRepositoryAsync(repositoryPath, cancellationToken);
 
             var branch = string.IsNullOrWhiteSpace(request.Branch)
-                ? await GetCurrentReferenceAsync(repositoryPath, Context.CallContext.CancellationToken)
+                ? await GetCurrentReferenceAsync(repositoryPath, cancellationToken)
                 : request.Branch.Trim();
 
             var arguments = new List<string> { "push" };
@@ -230,7 +226,7 @@ public sealed class TaskRuntimeGitService(
             arguments.Add(request.Remote);
             arguments.Add(branch);
 
-            var pushResult = await RunGitAsync(repositoryPath, arguments, null, Context.CallContext.CancellationToken);
+            var pushResult = await RunGitAsync(repositoryPath, arguments, null, cancellationToken);
             var summary = BuildSummary(pushResult);
 
             return new GitPushResult
@@ -252,12 +248,12 @@ public sealed class TaskRuntimeGitService(
         }
     }
 
-    public async UnaryResult<GitFetchResult> FetchAsync(GitFetchRequest request)
+    public async ValueTask<GitFetchResult> FetchAsync(GitFetchRequest request, CancellationToken cancellationToken)
     {
         try
         {
             var repositoryPath = ResolveRepositoryPath(request.RepositoryPath);
-            await EnsureRepositoryAsync(repositoryPath, Context.CallContext.CancellationToken);
+            await EnsureRepositoryAsync(repositoryPath, cancellationToken);
 
             var arguments = new List<string> { "fetch", request.Remote };
             if (request.Prune)
@@ -265,7 +261,7 @@ public sealed class TaskRuntimeGitService(
                 arguments.Add("--prune");
             }
 
-            var fetchResult = await RunGitAsync(repositoryPath, arguments, null, Context.CallContext.CancellationToken);
+            var fetchResult = await RunGitAsync(repositoryPath, arguments, null, cancellationToken);
             var summary = BuildSummary(fetchResult);
 
             return new GitFetchResult
@@ -287,12 +283,12 @@ public sealed class TaskRuntimeGitService(
         }
     }
 
-    public async UnaryResult<GitCheckoutResult> CheckoutAsync(GitCheckoutRequest request)
+    public async ValueTask<GitCheckoutResult> CheckoutAsync(GitCheckoutRequest request, CancellationToken cancellationToken)
     {
         try
         {
             var repositoryPath = ResolveRepositoryPath(request.RepositoryPath);
-            await EnsureRepositoryAsync(repositoryPath, Context.CallContext.CancellationToken);
+            await EnsureRepositoryAsync(repositoryPath, cancellationToken);
 
             var arguments = new List<string> { "checkout" };
 
@@ -307,7 +303,7 @@ public sealed class TaskRuntimeGitService(
 
             arguments.Add(request.Reference.Trim());
 
-            var checkoutResult = await RunGitAsync(repositoryPath, arguments, null, Context.CallContext.CancellationToken);
+            var checkoutResult = await RunGitAsync(repositoryPath, arguments, null, cancellationToken);
             if (checkoutResult.ExitCode != 0)
             {
                 return new GitCheckoutResult
@@ -318,7 +314,7 @@ public sealed class TaskRuntimeGitService(
                 };
             }
 
-            var currentReference = await GetCurrentReferenceAsync(repositoryPath, Context.CallContext.CancellationToken);
+            var currentReference = await GetCurrentReferenceAsync(repositoryPath, cancellationToken);
             return new GitCheckoutResult
             {
                 Success = true,
@@ -394,7 +390,7 @@ public sealed class TaskRuntimeGitService(
         var bracketStart = content.IndexOf('[', StringComparison.Ordinal);
         if (bracketStart >= 0)
         {
-            var bracketEnd = content.IndexOf(']', bracketStart + 1, StringComparison.Ordinal);
+            var bracketEnd = content.IndexOf(']', bracketStart + 1);
             var trackedState = bracketEnd > bracketStart
                 ? content[(bracketStart + 1)..bracketEnd]
                 : content[(bracketStart + 1)..];

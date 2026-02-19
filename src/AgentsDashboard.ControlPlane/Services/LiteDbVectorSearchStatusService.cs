@@ -6,7 +6,7 @@ public interface ILiteDbVectorSearchStatusService
     LiteDbVectorSearchAvailability Status { get; }
 }
 
-public interface ISqliteVecBootstrapService
+public interface ILiteDbVectorBootstrapService
 {
     bool IsAvailable { get; }
     LiteDbVectorSearchAvailability Status { get; }
@@ -22,7 +22,7 @@ public sealed record LiteDbVectorSearchAvailability(
 public sealed class LiteDbVectorSearchStatusService(
     IBackgroundWorkCoordinator backgroundWorkCoordinator,
     ILogger<LiteDbVectorSearchStatusService> logger)
-    : BackgroundService, ILiteDbVectorSearchStatusService, ISqliteVecBootstrapService
+    : BackgroundService, ILiteDbVectorSearchStatusService, ILiteDbVectorBootstrapService
 {
     private string _workId = string.Empty;
     private readonly object _sync = new();

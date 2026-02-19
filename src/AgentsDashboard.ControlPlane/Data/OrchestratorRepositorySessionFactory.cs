@@ -2,7 +2,7 @@ using AgentsDashboard.Contracts.Domain;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
-public sealed class LiteDbScopeFactory(
+public sealed class OrchestratorRepositorySessionFactory(
     IRepository<RepositoryDocument> repositories,
     IRepository<TaskDocument> tasks,
     IRepository<RunDocument> runs,
@@ -34,7 +34,7 @@ public sealed class LiteDbScopeFactory(
     IRepository<PromptSkillDocument> promptSkills,
     LiteDbExecutor liteDbExecutor,
     LiteDbDatabase liteDbDatabase)
-    : ILiteDbScopeFactory
+    : IOrchestratorRepositorySessionFactory
 {
     public ValueTask<OrchestratorRepositorySession> CreateAsync(CancellationToken cancellationToken)
     {

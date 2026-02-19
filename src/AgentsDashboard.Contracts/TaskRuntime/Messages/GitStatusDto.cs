@@ -4,7 +4,7 @@ using MessagePack;
 namespace AgentsDashboard.Contracts.TaskRuntime;
 
 [MessagePackObject]
-public record GitStatusResult
+public record GitStatusDto
 {
     [Key(0)] public string Branch { get; set; } = string.Empty;
     [Key(1)] public bool IsClean { get; init; }

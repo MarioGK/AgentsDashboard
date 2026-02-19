@@ -43,6 +43,7 @@ public sealed class OrchestratorStoreIntegrationFixture : IAsyncDisposable
         services.AddSingleton<LiteDbExecutor>();
         services.AddSingleton<ILiteDbCollectionNameResolver, LiteDbCollectionNameResolver>();
         services.AddSingleton(typeof(IRepository<>), typeof(LiteDbRepository<>));
+        services.AddSingleton<IOrchestratorRepositorySessionFactory, OrchestratorRepositorySessionFactory>();
         services.AddSingleton<IRunArtifactStorage, RunArtifactStorageRepository>();
         services.AddSingleton<OrchestratorStore>();
 

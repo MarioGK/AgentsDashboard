@@ -30,19 +30,19 @@ public sealed class OrchestratorStoreIntegrationTests
                 Description: "global scoped"),
             CancellationToken.None);
 
-        Assert.That(repositorySkill.RepositoryId).IsEqualTo(repositoryId);
-        Assert.That(globalSkill.RepositoryId).IsEqualTo("global");
-        Assert.That(globalSkill.Trigger).IsEqualTo("global-skill");
+        await Assert.That(repositorySkill.RepositoryId).IsEqualTo(repositoryId);
+        await Assert.That(globalSkill.RepositoryId).IsEqualTo("global");
+        await Assert.That(globalSkill.Trigger).IsEqualTo("global-skill");
 
         var withGlobal = await fixture.Store.ListPromptSkillsAsync(repositoryId, includeGlobal: true, CancellationToken.None);
 
-        Assert.That(withGlobal.Select(skill => skill.RepositoryId)).IsEqualTo(new[] { repositoryId, "global" });
-        Assert.That(withGlobal.Select(skill => skill.Trigger)).IsEqualTo(new[] { "repo-skill", "global-skill" });
+        await Assert.That(withGlobal.Select(skill => skill.RepositoryId).SequenceEqual(new[] { repositoryId, "global" })).IsTrue();
+        await Assert.That(withGlobal.Select(skill => skill.Trigger).SequenceEqual(new[] { "repo-skill", "global-skill" })).IsTrue();
 
         var repositoryOnly = await fixture.Store.ListPromptSkillsAsync(repositoryId, includeGlobal: false, CancellationToken.None);
 
-        Assert.That(repositoryOnly.Count()).IsEqualTo(1);
-        Assert.That(repositoryOnly[0].Trigger).IsEqualTo("repo-skill");
+        await Assert.That(repositoryOnly.Count()).IsEqualTo(1);
+        await Assert.That(repositoryOnly[0].Trigger).IsEqualTo("repo-skill");
     }
 
     [Test]
@@ -103,9 +103,9 @@ public sealed class OrchestratorStoreIntegrationTests
             .Select(task => task.Id)
             .ToList();
 
-        Assert.That(dueTaskIds).Contains(oneShotTask.Id);
-        Assert.That(dueTaskIds).Contains(cronTask.Id);
-        Assert.That(dueTaskIds).DoesNotContain(disabledTask.Id);
+        await Assert.That(dueTaskIds).Contains(oneShotTask.Id);
+        await Assert.That(dueTaskIds).Contains(cronTask.Id);
+        await Assert.That(dueTaskIds).DoesNotContain(disabledTask.Id);
 
         await fixture.Store.MarkOneShotTaskConsumedAsync(oneShotTask.Id, CancellationToken.None);
 
@@ -113,7 +113,7 @@ public sealed class OrchestratorStoreIntegrationTests
             .Select(task => task.Id)
             .ToList();
 
-        Assert.That(dueTaskIdsAfterConsume).DoesNotContain(oneShotTask.Id);
+        await Assert.That(dueTaskIdsAfterConsume).DoesNotContain(oneShotTask.Id);
 
         var firstRun = await fixture.Store.CreateRunAsync(cronTask, CancellationToken.None);
         await fixture.Store.MarkRunStartedAsync(firstRun.Id, "worker-1", CancellationToken.None);
@@ -124,12 +124,12 @@ public sealed class OrchestratorStoreIntegrationTests
 
         var latestStates = await fixture.Store.GetLatestRunStatesByTaskIdsAsync([cronTask.Id, oneShotTask.Id], CancellationToken.None);
 
-        Assert.That(latestStates.ContainsKey(cronTask.Id)).IsTrue();
-        Assert.That(latestStates[cronTask.Id]).IsEqualTo(RunState.Running);
-        Assert.That(latestStates.ContainsKey(oneShotTask.Id)).IsFalse();
+        await Assert.That(latestStates.ContainsKey(cronTask.Id)).IsTrue();
+        await Assert.That(latestStates[cronTask.Id]).IsEqualTo(RunState.Running);
+        await Assert.That(latestStates.ContainsKey(oneShotTask.Id)).IsFalse();
 
         var activeRunCount = await fixture.Store.CountActiveRunsByTaskAsync(cronTask.Id, CancellationToken.None);
-        Assert.That(activeRunCount).IsEqualTo(1);
+        await Assert.That(activeRunCount).IsEqualTo(1);
     }
 
     [Test]
@@ -209,19 +209,19 @@ public sealed class OrchestratorStoreIntegrationTests
             CancellationToken.None);
 
         var events = await fixture.Store.ListRunStructuredEventsAsync(run.Id, 50, CancellationToken.None);
-        Assert.That(events.Count()).IsEqualTo(1);
-        Assert.That(events[0].Category).IsEqualTo("tool.lifecycle");
+        await Assert.That(events.Count()).IsEqualTo(1);
+        await Assert.That(events[0].Category).IsEqualTo("tool.lifecycle");
 
         var toolProjections = await fixture.Store.ListRunToolProjectionsAsync(run.Id, CancellationToken.None);
-        Assert.That(toolProjections.Count()).IsEqualTo(1);
-        Assert.That(toolProjections[0].ToolCallId).IsEqualTo("call-1");
-        Assert.That(toolProjections[0].ToolName).IsEqualTo("bash");
+        await Assert.That(toolProjections.Count()).IsEqualTo(1);
+        await Assert.That(toolProjections[0].ToolCallId).IsEqualTo("call-1");
+        await Assert.That(toolProjections[0].ToolName).IsEqualTo("bash");
 
         var latestDiff = await fixture.Store.GetLatestRunDiffSnapshotAsync(run.Id, CancellationToken.None);
-        Assert.That(latestDiff).IsNotNull();
-        Assert.That(latestDiff!.Sequence).IsEqualTo(25);
-        Assert.That(latestDiff.Summary).IsEqualTo("latest diff");
-        Assert.That(latestDiff.DiffStat).IsEqualTo("1 file changed, 2 insertions(+)");
+        await Assert.That(latestDiff).IsNotNull();
+        await Assert.That(latestDiff!.Sequence).IsEqualTo(25);
+        await Assert.That(latestDiff.Summary).IsEqualTo("latest diff");
+        await Assert.That(latestDiff.DiffStat).IsEqualTo("1 file changed, 2 insertions(+)");
     }
 
     [Test]
@@ -251,7 +251,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 ExecutionModeDefault: HarnessExecutionMode.Plan),
             CancellationToken.None);
 
-        Assert.That(task.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
+        await Assert.That(task.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
 
         var updatedTask = await fixture.Store.UpdateTaskAsync(
             task.Id,
@@ -267,8 +267,8 @@ public sealed class OrchestratorStoreIntegrationTests
                 ExecutionModeDefault: HarnessExecutionMode.Review),
             CancellationToken.None);
 
-        Assert.That(updatedTask).IsNotNull();
-        Assert.That(updatedTask!.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Review);
+        await Assert.That(updatedTask).IsNotNull();
+        await Assert.That(updatedTask!.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Review);
     }
 
     [Test]
@@ -299,15 +299,15 @@ public sealed class OrchestratorStoreIntegrationTests
             CancellationToken.None);
 
         var defaultRun = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
-        Assert.That(defaultRun.ExecutionMode).IsEqualTo(HarnessExecutionMode.Plan);
-        Assert.That(defaultRun.StructuredProtocol).IsEqualTo("harness-structured-event-v2");
+        await Assert.That(defaultRun.ExecutionMode).IsEqualTo(HarnessExecutionMode.Plan);
+        await Assert.That(defaultRun.StructuredProtocol).IsEqualTo("harness-structured-event-v2");
 
         var overrideRun = await fixture.Store.CreateRunAsync(
             task,
             CancellationToken.None,
             executionModeOverride: HarnessExecutionMode.Review);
-        Assert.That(overrideRun.ExecutionMode).IsEqualTo(HarnessExecutionMode.Review);
-        Assert.That(overrideRun.StructuredProtocol).IsEqualTo("harness-structured-event-v2");
+        await Assert.That(overrideRun.ExecutionMode).IsEqualTo(HarnessExecutionMode.Review);
+        await Assert.That(overrideRun.StructuredProtocol).IsEqualTo("harness-structured-event-v2");
     }
 
     [Test]
@@ -412,26 +412,26 @@ public sealed class OrchestratorStoreIntegrationTests
             excludeTasksWithOpenFindings: false,
             CancellationToken.None);
 
-        Assert.That(prune.RunsScanned).IsEqualTo(1);
-        Assert.That(prune.DeletedStructuredEvents).IsGreaterThan(0);
-        Assert.That(prune.DeletedDiffSnapshots).IsGreaterThan(0);
-        Assert.That(prune.DeletedToolProjections).IsGreaterThan(0);
+        await Assert.That(prune.RunsScanned).IsEqualTo(1);
+        await Assert.That(prune.DeletedStructuredEvents).IsGreaterThan(0);
+        await Assert.That(prune.DeletedDiffSnapshots).IsGreaterThan(0);
+        await Assert.That(prune.DeletedToolProjections).IsGreaterThan(0);
 
         var terminalEvents = await fixture.Store.ListRunStructuredEventsAsync(terminalRun.Id, 50, CancellationToken.None);
         var terminalDiff = await fixture.Store.GetLatestRunDiffSnapshotAsync(terminalRun.Id, CancellationToken.None);
         var terminalTools = await fixture.Store.ListRunToolProjectionsAsync(terminalRun.Id, CancellationToken.None);
 
-        Assert.That(terminalEvents).IsEmpty();
-        Assert.That(terminalDiff).IsNull();
-        Assert.That(terminalTools).IsEmpty();
+        await Assert.That(terminalEvents).IsEmpty();
+        await Assert.That(terminalDiff).IsNull();
+        await Assert.That(terminalTools).IsEmpty();
 
         var activeEvents = await fixture.Store.ListRunStructuredEventsAsync(activeRun.Id, 50, CancellationToken.None);
         var activeDiff = await fixture.Store.GetLatestRunDiffSnapshotAsync(activeRun.Id, CancellationToken.None);
         var activeTools = await fixture.Store.ListRunToolProjectionsAsync(activeRun.Id, CancellationToken.None);
 
-        Assert.That(activeEvents.Count()).IsEqualTo(1);
-        Assert.That(activeDiff).IsNotNull();
-        Assert.That(activeTools.Count()).IsEqualTo(1);
+        await Assert.That(activeEvents.Count()).IsEqualTo(1);
+        await Assert.That(activeDiff).IsNotNull();
+        await Assert.That(activeTools.Count()).IsEqualTo(1);
     }
 
     [Test]
@@ -522,17 +522,17 @@ public sealed class OrchestratorStoreIntegrationTests
             excludeTasksWithOpenFindings: false,
             CancellationToken.None);
 
-        Assert.That(prune.RunsScanned).IsEqualTo(0);
-        Assert.That(prune.DeletedStructuredEvents).IsEqualTo(0);
-        Assert.That(prune.DeletedDiffSnapshots).IsEqualTo(0);
-        Assert.That(prune.DeletedToolProjections).IsEqualTo(0);
+        await Assert.That(prune.RunsScanned).IsEqualTo(0);
+        await Assert.That(prune.DeletedStructuredEvents).IsEqualTo(0);
+        await Assert.That(prune.DeletedDiffSnapshots).IsEqualTo(0);
+        await Assert.That(prune.DeletedToolProjections).IsEqualTo(0);
 
         var events = await fixture.Store.ListRunStructuredEventsAsync(run.Id, 50, CancellationToken.None);
         var diff = await fixture.Store.GetLatestRunDiffSnapshotAsync(run.Id, CancellationToken.None);
         var tools = await fixture.Store.ListRunToolProjectionsAsync(run.Id, CancellationToken.None);
 
-        Assert.That(events.Count()).IsEqualTo(1);
-        Assert.That(diff).IsNotNull();
-        Assert.That(tools.Count()).IsEqualTo(1);
+        await Assert.That(events.Count()).IsEqualTo(1);
+        await Assert.That(diff).IsNotNull();
+        await Assert.That(tools.Count()).IsEqualTo(1);
     }
 }

@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime;
 using AgentsDashboard.TaskRuntime.Adapters;
 using AgentsDashboard.TaskRuntime.Configuration;
 using AgentsDashboard.TaskRuntime.Models;
@@ -377,6 +376,10 @@ public sealed partial class HarnessExecutor(
             }
         }
     }
+
+    private static bool ValidateEnvelope(HarnessResultEnvelope envelope)
+        => !string.IsNullOrWhiteSpace(envelope.Status)
+            && !string.IsNullOrWhiteSpace(envelope.Summary);
 
     private HarnessRunRequest BuildRuntimeRequest(DispatchJobRequest request, string workspaceHostPath)
     {

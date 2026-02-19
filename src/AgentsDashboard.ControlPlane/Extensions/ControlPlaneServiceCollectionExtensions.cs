@@ -38,11 +38,11 @@ internal static class ControlPlaneServiceCollectionExtensions
             services.AddHostedService<DevelopmentSelfRepositoryBootstrapService>();
         }
 
-        services.AddSingleton<ILiteDbScopeFactory, LiteDbScopeFactory>();
+        services.AddSingleton<IOrchestratorRepositorySessionFactory, OrchestratorRepositorySessionFactory>();
         services.AddSingleton<OrchestratorStore>();
         services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<OrchestratorStore>());
         services.AddSingleton<ILiteDbVectorSearchStatusService, LiteDbVectorSearchStatusService>();
-        services.AddSingleton<ISqliteVecBootstrapService>(sp =>
+        services.AddSingleton<ILiteDbVectorBootstrapService>(sp =>
             (LiteDbVectorSearchStatusService)sp.GetRequiredService<ILiteDbVectorSearchStatusService>());
         services.AddHostedService(sp => (LiteDbVectorSearchStatusService)sp.GetRequiredService<ILiteDbVectorSearchStatusService>());
         return services;

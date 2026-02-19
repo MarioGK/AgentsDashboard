@@ -5,7 +5,7 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 public sealed class AgentTeamDiffMergeServiceTests
 {
     [Test]
-    public void Build_WhenLanesTouchDifferentFiles_MergesAllWithoutConflicts()
+    public async Task Build_WhenLanesTouchDifferentFiles_MergesAllWithoutConflicts()
     {
         var laneInputs = new[]
         {
@@ -43,19 +43,19 @@ public sealed class AgentTeamDiffMergeServiceTests
 
         var merged = AgentTeamDiffMergeService.Build(laneInputs);
 
-        Assert.That(merged.MergedFiles).IsEqualTo(2);
-        Assert.That(merged.ConflictCount).IsEqualTo(0);
-        Assert.That(merged.Conflicts).IsEmpty();
-        Assert.That(merged.Additions).IsEqualTo(2);
-        Assert.That(merged.Deletions).IsEqualTo(2);
-        Assert.That(merged.MergedPatch).Contains("diff --git a/a.txt b/a.txt");
-        Assert.That(merged.MergedPatch).Contains("diff --git a/b.txt b/b.txt");
-        Assert.That(merged.LaneDiffs.Count()).IsEqualTo(2);
-        Assert.That(merged.LaneDiffs.Select(x => x.Harness)).Contains("codex");
+        await Assert.That(merged.MergedFiles).IsEqualTo(2);
+        await Assert.That(merged.ConflictCount).IsEqualTo(0);
+        await Assert.That(merged.Conflicts).IsEmpty();
+        await Assert.That(merged.Additions).IsEqualTo(2);
+        await Assert.That(merged.Deletions).IsEqualTo(2);
+        await Assert.That(merged.MergedPatch).Contains("diff --git a/a.txt b/a.txt");
+        await Assert.That(merged.MergedPatch).Contains("diff --git a/b.txt b/b.txt");
+        await Assert.That(merged.LaneDiffs.Count()).IsEqualTo(2);
+        await Assert.That(merged.LaneDiffs.Select(x => x.Harness)).Contains("codex");
     }
 
     [Test]
-    public void Build_WhenSameFileHunksOverlap_ProducesConflict()
+    public async Task Build_WhenSameFileHunksOverlap_ProducesConflict()
     {
         var laneInputs = new[]
         {
@@ -93,18 +93,18 @@ public sealed class AgentTeamDiffMergeServiceTests
 
         var merged = AgentTeamDiffMergeService.Build(laneInputs);
 
-        Assert.That(merged.MergedFiles).IsEqualTo(0);
-        Assert.That(merged.ConflictCount).IsEqualTo(1);
-        Assert.That(merged.Conflicts.Count()).IsEqualTo(1);
-        Assert.That(merged.Conflicts[0].FilePath).IsEqualTo("foo.txt");
-        Assert.That(merged.Conflicts[0].Reason).Contains("overlapping");
-        Assert.That(merged.Conflicts[0].LaneLabels).Contains("planner");
-        Assert.That(merged.Conflicts[0].LaneLabels).Contains("reviewer");
-        Assert.That(merged.MergedPatch).IsEmpty();
+        await Assert.That(merged.MergedFiles).IsEqualTo(0);
+        await Assert.That(merged.ConflictCount).IsEqualTo(1);
+        await Assert.That(merged.Conflicts.Count()).IsEqualTo(1);
+        await Assert.That(merged.Conflicts[0].FilePath).IsEqualTo("foo.txt");
+        await Assert.That(merged.Conflicts[0].Reason).Contains("overlapping");
+        await Assert.That(merged.Conflicts[0].LaneLabels).Contains("planner");
+        await Assert.That(merged.Conflicts[0].LaneLabels).Contains("reviewer");
+        await Assert.That(merged.MergedPatch).IsEmpty();
     }
 
     [Test]
-    public void Build_WhenSameFileHunksDoNotOverlap_MergesIntoSinglePatch()
+    public async Task Build_WhenSameFileHunksDoNotOverlap_MergesIntoSinglePatch()
     {
         var laneInputs = new[]
         {
@@ -142,11 +142,11 @@ public sealed class AgentTeamDiffMergeServiceTests
 
         var merged = AgentTeamDiffMergeService.Build(laneInputs);
 
-        Assert.That(merged.MergedFiles).IsEqualTo(1);
-        Assert.That(merged.ConflictCount).IsEqualTo(0);
-        Assert.That(merged.Conflicts).IsEmpty();
-        Assert.That(merged.MergedPatch).Contains("diff --git a/foo.txt b/foo.txt");
-        Assert.That(merged.MergedPatch).Contains("@@ -1 +1 @@");
-        Assert.That(merged.MergedPatch).Contains("@@ -10 +10 @@");
+        await Assert.That(merged.MergedFiles).IsEqualTo(1);
+        await Assert.That(merged.ConflictCount).IsEqualTo(0);
+        await Assert.That(merged.Conflicts).IsEmpty();
+        await Assert.That(merged.MergedPatch).Contains("diff --git a/foo.txt b/foo.txt");
+        await Assert.That(merged.MergedPatch).Contains("@@ -1 +1 @@");
+        await Assert.That(merged.MergedPatch).Contains("@@ -10 +10 @@");
     }
 }

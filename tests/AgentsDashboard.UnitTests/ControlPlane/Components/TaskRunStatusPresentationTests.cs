@@ -7,27 +7,27 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Components;
 public class TaskRunStatusPresentationTests
 {
     [Test]
-    public void FromRunState_MapsWorkingStates()
+    public async Task FromRunState_MapsWorkingStates()
     {
         var queued = TaskRunStatusPresentation.FromRunState(RunState.Queued);
         var running = TaskRunStatusPresentation.FromRunState(RunState.Running);
         var pending = TaskRunStatusPresentation.FromRunState(RunState.PendingApproval);
 
-        Assert.That(queued.Label).IsEqualTo("Queued");
-        Assert.That(queued.Color).IsEqualTo(Color.Warning);
-        Assert.That(queued.IsWorking).IsTrue();
+        await Assert.That(queued.Label).IsEqualTo("Queued");
+        await Assert.That(queued.Color).IsEqualTo(Color.Warning);
+        await Assert.That(queued.IsWorking).IsTrue();
 
-        Assert.That(running.Label).IsEqualTo("Running");
-        Assert.That(running.Color).IsEqualTo(Color.Info);
-        Assert.That(running.IsWorking).IsTrue();
+        await Assert.That(running.Label).IsEqualTo("Running");
+        await Assert.That(running.Color).IsEqualTo(Color.Info);
+        await Assert.That(running.IsWorking).IsTrue();
 
-        Assert.That(pending.Label).IsEqualTo("PendingApproval");
-        Assert.That(pending.Color).IsEqualTo(Color.Secondary);
-        Assert.That(pending.IsWorking).IsTrue();
+        await Assert.That(pending.Label).IsEqualTo("PendingApproval");
+        await Assert.That(pending.Color).IsEqualTo(Color.Secondary);
+        await Assert.That(pending.IsWorking).IsTrue();
     }
 
     [Test]
-    public void FromTaskAndLatestRun_NoRunForEnabledTask_ReturnsInactive()
+    public async Task FromTaskAndLatestRun_NoRunForEnabledTask_ReturnsInactive()
     {
         var task = new TaskDocument
         {
@@ -38,14 +38,14 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, null);
 
-        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Inactive);
-        Assert.That(visual.Label).IsEqualTo("Inactive");
-        Assert.That(visual.IsWorking).IsFalse();
-        Assert.That(visual.Tooltip).IsEqualTo("No runs recorded yet.");
+        await Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Inactive);
+        await Assert.That(visual.Label).IsEqualTo("Inactive");
+        await Assert.That(visual.IsWorking).IsFalse();
+        await Assert.That(visual.Tooltip).IsEqualTo("No runs recorded yet.");
     }
 
     [Test]
-    public void FromTaskAndLatestRun_NoRunForDisabledTask_ReturnsObsolete()
+    public async Task FromTaskAndLatestRun_NoRunForDisabledTask_ReturnsObsolete()
     {
         var task = new TaskDocument
         {
@@ -56,13 +56,13 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, null);
 
-        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Obsolete);
-        Assert.That(visual.Label).IsEqualTo("Obsolete");
-        Assert.That(visual.Tooltip).Contains("Task is disabled");
+        await Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Obsolete);
+        await Assert.That(visual.Label).IsEqualTo("Obsolete");
+        await Assert.That(visual.Tooltip).Contains("Task is disabled");
     }
 
     [Test]
-    public void FromTaskAndLatestRun_UsesLatestRunSummaryInTooltip()
+    public async Task FromTaskAndLatestRun_UsesLatestRunSummaryInTooltip()
     {
         var task = new TaskDocument
         {
@@ -81,13 +81,13 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, run);
 
-        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Inactive);
-        Assert.That(visual.Tooltip).Contains("Latest run:");
-        Assert.That(visual.Tooltip).Contains("Summary: Completed successfully");
+        await Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Inactive);
+        await Assert.That(visual.Tooltip).Contains("Latest run:");
+        await Assert.That(visual.Tooltip).Contains("Summary: Completed successfully");
     }
 
     [Test]
-    public void FromTaskAndLatestRun_DisabledTaskWithTerminalLatestRun_ReturnsObsolete()
+    public async Task FromTaskAndLatestRun_DisabledTaskWithTerminalLatestRun_ReturnsObsolete()
     {
         var task = new TaskDocument
         {
@@ -104,12 +104,12 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, run);
 
-        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Obsolete);
-        Assert.That(visual.Label).IsEqualTo("Obsolete");
+        await Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Obsolete);
+        await Assert.That(visual.Label).IsEqualTo("Obsolete");
     }
 
     [Test]
-    public void FromTaskAndLatestRun_DisabledTaskWithActiveLatestRun_KeepsActiveState()
+    public async Task FromTaskAndLatestRun_DisabledTaskWithActiveLatestRun_KeepsActiveState()
     {
         var task = new TaskDocument
         {
@@ -126,7 +126,7 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, run);
 
-        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Running);
-        Assert.That(visual.IsWorking).IsTrue();
+        await Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Running);
+        await Assert.That(visual.IsWorking).IsTrue();
     }
 }

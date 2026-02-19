@@ -269,7 +269,7 @@
             {
                 try
                 {
-                    await LoadHealthAsync();
+                    await LoadCheckHealthAsync();
                     await InvokeAsync(StateHasChanged);
                 }
                 catch
@@ -334,7 +334,7 @@
         StateHasChanged();
     }
 
-    private async Task LoadHealthAsync()
+    private async Task LoadCheckHealthAsync()
     {
         var workers = await Store.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
         _totalWorkers = workers.Count;

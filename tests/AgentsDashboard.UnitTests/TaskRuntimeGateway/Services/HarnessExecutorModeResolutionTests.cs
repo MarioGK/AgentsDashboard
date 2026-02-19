@@ -10,7 +10,7 @@ public sealed class HarnessExecutorModeResolutionTests
         .GetMethod("ResolveRuntimeMode", BindingFlags.NonPublic | BindingFlags.Static)!;
 
     [Test]
-    public void ResolveRuntimeMode_WhenRuntimeModeEnvIsSet_ReturnsStdioForCodex()
+    public async Task ResolveRuntimeMode_WhenRuntimeModeEnvIsSet_ReturnsStdioForCodex()
     {
         var mode = InvokeResolveRuntimeMode(
             "codex",
@@ -21,11 +21,11 @@ public sealed class HarnessExecutorModeResolutionTests
                 ["CODEX_TRANSPORT"] = "stdio",
             });
 
-        Assert.That(mode).IsEqualTo("stdio");
+        await Assert.That(mode).IsEqualTo("stdio");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenLegacyCodexTransportIsSet_IgnoresTransport()
+    public async Task ResolveRuntimeMode_WhenLegacyCodexTransportIsSet_IgnoresTransport()
     {
         var mode = InvokeResolveRuntimeMode(
             "codex",
@@ -36,11 +36,11 @@ public sealed class HarnessExecutorModeResolutionTests
                 ["HARNESS_MODE"] = "command",
             });
 
-        Assert.That(mode).IsEqualTo("stdio");
+        await Assert.That(mode).IsEqualTo("stdio");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenCodexHasTransportAndHarnessMode_SetToStdio()
+    public async Task ResolveRuntimeMode_WhenCodexHasTransportAndHarnessMode_SetToStdio()
     {
         var mode = InvokeResolveRuntimeMode(
             "codex",
@@ -51,22 +51,22 @@ public sealed class HarnessExecutorModeResolutionTests
                 ["HARNESS_MODE"] = "plan",
             });
 
-        Assert.That(mode).IsEqualTo("stdio");
+        await Assert.That(mode).IsEqualTo("stdio");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenOpenCodeExecutionModeRequested_UsesSseMode()
+    public async Task ResolveRuntimeMode_WhenOpenCodeExecutionModeRequested_UsesSseMode()
     {
         var mode = InvokeResolveRuntimeMode(
             "opencode",
             HarnessExecutionMode.Review,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 
-        Assert.That(mode).IsEqualTo("sse");
+        await Assert.That(mode).IsEqualTo("sse");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenOpencodeRuntimeModeConfiguredAsWs_StillUsesSse()
+    public async Task ResolveRuntimeMode_WhenOpencodeRuntimeModeConfiguredAsWs_StillUsesSse()
     {
         var mode = InvokeResolveRuntimeMode(
             "opencode",
@@ -76,44 +76,44 @@ public sealed class HarnessExecutorModeResolutionTests
                 ["HARNESS_RUNTIME_MODE"] = "ws",
             });
 
-        Assert.That(mode).IsEqualTo("sse");
+        await Assert.That(mode).IsEqualTo("sse");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenCodexHasNoOverrides_DefaultsToStdio()
+    public async Task ResolveRuntimeMode_WhenCodexHasNoOverrides_DefaultsToStdio()
     {
         var mode = InvokeResolveRuntimeMode(
             "codex",
             HarnessExecutionMode.Default,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 
-        Assert.That(mode).IsEqualTo("stdio");
+        await Assert.That(mode).IsEqualTo("stdio");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenCustomHarnessNoRuntimeMode_UsesRequestedMode()
+    public async Task ResolveRuntimeMode_WhenCustomHarnessNoRuntimeMode_UsesRequestedMode()
     {
         var mode = InvokeResolveRuntimeMode(
             "thirdparty",
             HarnessExecutionMode.Review,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 
-        Assert.That(mode).IsEqualTo("review");
+        await Assert.That(mode).IsEqualTo("review");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenNothingSpecified_DefaultsToServerTransport()
+    public async Task ResolveRuntimeMode_WhenNothingSpecified_DefaultsToServerTransport()
     {
         var mode = InvokeResolveRuntimeMode(
             "opencode",
             HarnessExecutionMode.Default,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 
-        Assert.That(mode).IsEqualTo("sse");
+        await Assert.That(mode).IsEqualTo("sse");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenHarnessRuntimeModeExists_UsesHarnessRuntimeTransport()
+    public async Task ResolveRuntimeMode_WhenHarnessRuntimeModeExists_UsesHarnessRuntimeTransport()
     {
         var mode = InvokeResolveRuntimeMode(
             "opencode",
@@ -124,11 +124,11 @@ public sealed class HarnessExecutorModeResolutionTests
                 ["HARNESS_MODE"] = "review",
             });
 
-        Assert.That(mode).IsEqualTo("sse");
+        await Assert.That(mode).IsEqualTo("sse");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenNoRuntimeMode_UsesHarnessModeOverRequestedMode()
+    public async Task ResolveRuntimeMode_WhenNoRuntimeMode_UsesHarnessModeOverRequestedMode()
     {
         var mode = InvokeResolveRuntimeMode(
             "codex",
@@ -138,11 +138,11 @@ public sealed class HarnessExecutorModeResolutionTests
                 ["HARNESS_MODE"] = "plan",
             });
 
-        Assert.That(mode).IsEqualTo("stdio");
+        await Assert.That(mode).IsEqualTo("stdio");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenUnsupportedHarnessHonorsProvidedRuntimeMode()
+    public async Task ResolveRuntimeMode_WhenUnsupportedHarnessHonorsProvidedRuntimeMode()
     {
         var mode = InvokeResolveRuntimeMode(
             "custom",
@@ -153,7 +153,7 @@ public sealed class HarnessExecutorModeResolutionTests
                 ["HARNESS_MODE"] = "plan",
             });
 
-        Assert.That(mode).IsEqualTo("ws");
+        await Assert.That(mode).IsEqualTo("ws");
     }
 
     private static string InvokeResolveRuntimeMode(

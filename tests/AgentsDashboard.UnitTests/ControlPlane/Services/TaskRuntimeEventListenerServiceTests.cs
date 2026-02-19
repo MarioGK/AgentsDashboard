@@ -236,7 +236,7 @@ public class TaskRuntimeEventListenerServiceTests
 
         var workerClient = new Mock<ITaskRuntimeService>(MockBehavior.Loose);
         workerClient.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
-            .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
+            .Returns(UnaryResult.FromResult(new DispatchJobResult { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
 
         var clientFactory = new Mock<IMagicOnionClientFactory>(MockBehavior.Loose);
         clientFactory.Setup(f => f.CreateTaskRuntimeService("worker-2", It.IsAny<string>()))

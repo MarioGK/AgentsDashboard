@@ -13,7 +13,7 @@ public sealed class JobProcessorServiceTests
         .GetMethod("BuildStructuredProjection", BindingFlags.NonPublic | BindingFlags.Static)!;
 
     [Test]
-    public void TryParseRuntimeEventChunk_ParsesValidWireEvent()
+    public async Task TryParseRuntimeEventChunk_ParsesValidWireEvent()
     {
         var chunk = JsonSerializer.Serialize(new
         {
@@ -26,15 +26,15 @@ public sealed class JobProcessorServiceTests
 
         var (parsed, runtimeEvent) = InvokeTryParseRuntimeEventChunk(chunk);
 
-        Assert.That(parsed).IsTrue();
-        Assert.That(runtimeEvent).IsNotNull();
-        Assert.That(GetPropertyValue<long>(runtimeEvent!, "Sequence")).IsEqualTo(12);
-        Assert.That(GetPropertyValue<string>(runtimeEvent, "Type")).IsEqualTo("assistant_delta");
-        Assert.That(GetPropertyValue<string>(runtimeEvent, "Content")).IsEqualTo("hello");
+        await Assert.That(parsed).IsTrue();
+        await Assert.That(runtimeEvent).IsNotNull();
+        await Assert.That(await GetPropertyValue<long>(runtimeEvent!, "Sequence")).IsEqualTo(12);
+        await Assert.That(await GetPropertyValue<string>(runtimeEvent, "Type")).IsEqualTo("assistant_delta");
+        await Assert.That(await GetPropertyValue<string>(runtimeEvent, "Content")).IsEqualTo("hello");
     }
 
     [Test]
-    public void TryParseRuntimeEventChunk_RejectsInvalidMarker()
+    public async Task TryParseRuntimeEventChunk_RejectsInvalidMarker()
     {
         var chunk = JsonSerializer.Serialize(new
         {
@@ -47,47 +47,47 @@ public sealed class JobProcessorServiceTests
 
         var (parsed, runtimeEvent) = InvokeTryParseRuntimeEventChunk(chunk);
 
-        Assert.That(parsed).IsFalse();
-        Assert.That(runtimeEvent).IsNull();
+        await Assert.That(parsed).IsFalse();
+        await Assert.That(runtimeEvent).IsNull();
     }
 
     [Test]
-    public void BuildStructuredProjection_MapsReasoningDeltaPayload()
+    public async Task BuildStructuredProjection_MapsReasoningDeltaPayload()
     {
-        var runtimeEvent = ParseRuntimeEvent("reasoning_delta", "plan step");
+        var runtimeEvent = await ParseRuntimeEvent("reasoning_delta", "plan step");
 
         var projection = InvokeBuildStructuredProjection(runtimeEvent, "harness-structured-event-v2");
 
-        Assert.That(GetPropertyValue<string>(projection, "Category")).IsEqualTo("reasoning.delta");
-        Assert.That(GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("harness-structured-event-v2");
+        await Assert.That(await GetPropertyValue<string>(projection, "Category")).IsEqualTo("reasoning.delta");
+        await Assert.That(await GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("harness-structured-event-v2");
 
-        var payload = GetPropertyValue<string>(projection, "PayloadJson");
+        var payload = await GetPropertyValue<string>(projection, "PayloadJson");
         using var document = JsonDocument.Parse(payload);
-        Assert.That(document.RootElement.GetProperty("thinking").GetString()).IsEqualTo("plan step");
-        Assert.That(document.RootElement.GetProperty("reasoning").GetString()).IsEqualTo("plan step");
-        Assert.That(document.RootElement.GetProperty("content").GetString()).IsEqualTo("plan step");
+        await Assert.That(document.RootElement.GetProperty("thinking").GetString()).IsEqualTo("plan step");
+        await Assert.That(document.RootElement.GetProperty("reasoning").GetString()).IsEqualTo("plan step");
+        await Assert.That(document.RootElement.GetProperty("content").GetString()).IsEqualTo("plan step");
     }
 
     [Test]
-    public void BuildStructuredProjection_MapsCompletionToRunCompletedCategory()
+    public async Task BuildStructuredProjection_MapsCompletionToRunCompletedCategory()
     {
-        var runtimeEvent = ParseRuntimeEvent(
+        var runtimeEvent = await ParseRuntimeEvent(
             "completion",
             "completed",
             new Dictionary<string, string> { ["status"] = "succeeded" });
 
         var projection = InvokeBuildStructuredProjection(runtimeEvent, "harness-structured-event-v2");
 
-        Assert.That(GetPropertyValue<string>(projection, "Category")).IsEqualTo("run.completed");
+        await Assert.That(await GetPropertyValue<string>(projection, "Category")).IsEqualTo("run.completed");
 
-        var payload = GetPropertyValue<string>(projection, "PayloadJson");
+        var payload = await GetPropertyValue<string>(projection, "PayloadJson");
         using var document = JsonDocument.Parse(payload);
-        Assert.That(document.RootElement.GetProperty("status").GetString()).IsEqualTo("succeeded");
-        Assert.That(document.RootElement.GetProperty("content").GetString()).IsEqualTo("completed");
+        await Assert.That(document.RootElement.GetProperty("status").GetString()).IsEqualTo("succeeded");
+        await Assert.That(document.RootElement.GetProperty("content").GetString()).IsEqualTo("completed");
     }
 
     [Test]
-    public void BuildStructuredProjection_UsesEmbeddedStructuredProjectionWhenPresent()
+    public async Task BuildStructuredProjection_UsesEmbeddedStructuredProjectionWhenPresent()
     {
         var embeddedPayload = JsonSerializer.Serialize(new
         {
@@ -99,22 +99,22 @@ public sealed class JobProcessorServiceTests
                 diffStat = "1 file changed"
             }
         });
-        var runtimeEvent = ParseRuntimeEvent("log", embeddedPayload);
+        var runtimeEvent = await ParseRuntimeEvent("log", embeddedPayload);
 
         var projection = InvokeBuildStructuredProjection(runtimeEvent, "harness-structured-event-v2");
 
-        Assert.That(GetPropertyValue<string>(projection, "Category")).IsEqualTo("diff.updated");
-        Assert.That(GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("custom-v3");
+        await Assert.That(await GetPropertyValue<string>(projection, "Category")).IsEqualTo("diff.updated");
+        await Assert.That(await GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("custom-v3");
 
-        var payload = GetPropertyValue<string>(projection, "PayloadJson");
+        var payload = await GetPropertyValue<string>(projection, "PayloadJson");
         using var document = JsonDocument.Parse(payload);
-        Assert.That(document.RootElement.GetProperty("diffPatch").GetString()).IsEqualTo("diff --git a/a.txt b/a.txt");
-        Assert.That(document.RootElement.GetProperty("diffStat").GetString()).IsEqualTo("1 file changed");
-        Assert.That(document.RootElement.TryGetProperty("type", out _)).IsFalse();
+        await Assert.That(document.RootElement.GetProperty("diffPatch").GetString()).IsEqualTo("diff --git a/a.txt b/a.txt");
+        await Assert.That(document.RootElement.GetProperty("diffStat").GetString()).IsEqualTo("1 file changed");
+        await Assert.That(document.RootElement.TryGetProperty("type", out _)).IsFalse();
     }
 
     [Test]
-    public void BuildStructuredProjection_CanonicalizesEmbeddedSessionDiffCategory()
+    public async Task BuildStructuredProjection_CanonicalizesEmbeddedSessionDiffCategory()
     {
         var embeddedPayload = JsonSerializer.Serialize(new
         {
@@ -126,12 +126,12 @@ public sealed class JobProcessorServiceTests
                 diffStat = "1 file changed"
             }
         });
-        var runtimeEvent = ParseRuntimeEvent("log", embeddedPayload);
+        var runtimeEvent = await ParseRuntimeEvent("log", embeddedPayload);
 
         var projection = InvokeBuildStructuredProjection(runtimeEvent, "harness-structured-event-v2");
 
-        Assert.That(GetPropertyValue<string>(projection, "Category")).IsEqualTo("diff.updated");
-        Assert.That(GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("opencode.sse.v1");
+        await Assert.That(await GetPropertyValue<string>(projection, "Category")).IsEqualTo("diff.updated");
+        await Assert.That(await GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("opencode.sse.v1");
     }
 
     private static (bool Parsed, object? RuntimeEvent) InvokeTryParseRuntimeEventChunk(string chunk)
@@ -141,7 +141,7 @@ public sealed class JobProcessorServiceTests
         return (parsed, args[1]);
     }
 
-    private static object ParseRuntimeEvent(
+    private static async Task<object> ParseRuntimeEvent(
         string type,
         string content,
         Dictionary<string, string>? metadata = null)
@@ -156,8 +156,8 @@ public sealed class JobProcessorServiceTests
         });
 
         var (parsed, runtimeEvent) = InvokeTryParseRuntimeEventChunk(chunk);
-        Assert.That(parsed).IsTrue();
-        Assert.That(runtimeEvent).IsNotNull();
+        await Assert.That(parsed).IsTrue();
+        await Assert.That(runtimeEvent).IsNotNull();
         return runtimeEvent!;
     }
 
@@ -166,10 +166,10 @@ public sealed class JobProcessorServiceTests
         return BuildStructuredProjectionMethod.Invoke(null, [runtimeEvent, schemaVersion])!;
     }
 
-    private static T GetPropertyValue<T>(object source, string propertyName)
+    private static async Task<T> GetPropertyValue<T>(object source, string propertyName)
     {
         var property = source.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        Assert.That(property).IsNotNull();
+        await Assert.That(property).IsNotNull();
         return (T)property!.GetValue(source)!;
     }
 }

@@ -4,12 +4,11 @@ using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using Cronos;
-using LiteDB;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
 public sealed class OrchestratorStore(
-    ILiteDbScopeFactory liteDbScopeFactory,
+    IOrchestratorRepositorySessionFactory liteDbScopeFactory,
     LiteDbExecutor liteDbExecutor,
     LiteDbDatabase liteDbDatabase) : IOrchestratorStore, IAsyncDisposable
 {

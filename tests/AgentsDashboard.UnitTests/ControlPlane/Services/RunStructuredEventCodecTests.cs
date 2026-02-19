@@ -11,21 +11,20 @@ public sealed class RunStructuredEventCodecTests
         .GetType("AgentsDashboard.ControlPlane.Services.RunStructuredEventCodec", throwOnError: true)!;
 
     [Test]
-    public void NormalizePayloadJson_NormalizesValidJsonAndEscapesInvalidPayloads()
+    public async Task NormalizePayloadJson_NormalizesValidJsonAndEscapesInvalidPayloads()
     {
-        var normalizedJson = InvokeNormalizePayloadJson(" { \"thinking\" : \"step\" } ");
+        var normalizedJson = await InvokeNormalizePayloadJson(" { \"thinking\" : \"step\" } ");
         using (var document = JsonDocument.Parse(normalizedJson))
         {
-            Assert.That(document.RootElement.GetProperty("thinking").GetString()).IsEqualTo("step");
+            await Assert.That(document.RootElement.GetProperty("thinking").GetString()).IsEqualTo("step");
         }
 
-        Assert.That(InvokeNormalizePayloadJson("not-json")).IsEqualTo("\"not-json\"");
-
-        Assert.That(InvokeNormalizePayloadJson("   ")).IsEqualTo("{}");
+        await Assert.That(await InvokeNormalizePayloadJson("not-json")).IsEqualTo("\"not-json\"");
+        await Assert.That(await InvokeNormalizePayloadJson("   ")).IsEqualTo("{}");
     }
 
     [Test]
-    public void Decode_UsesFallbacksForMissingFields()
+    public async Task Decode_UsesFallbacksForMissingFields()
     {
         var createdAt = new DateTime(2026, 2, 17, 12, 0, 0, DateTimeKind.Utc);
         var source = new RunStructuredEventDocument
@@ -42,36 +41,36 @@ public sealed class RunStructuredEventCodecTests
             CreatedAtUtc = createdAt,
         };
 
-        var decoded = InvokeDecode(source);
+        var decoded = await InvokeDecode(source);
 
-        Assert.That(GetDecodedValue<string>(decoded, "EventType")).IsEqualTo("structured");
-        Assert.That(GetDecodedValue<string>(decoded, "Category")).IsEqualTo("structured");
-        Assert.That(GetDecodedValue<string>(decoded, "PayloadJson")).IsEqualTo("\"not-json\"");
-        Assert.That(GetDecodedValue<string>(decoded, "Schema")).IsEqualTo("harness-structured-event-v2");
-        Assert.That(GetDecodedValue<string>(decoded, "Summary")).IsEqualTo("summary");
-        Assert.That(GetDecodedValue<string>(decoded, "Error")).IsEqualTo("error");
-        Assert.That(GetDecodedValue<DateTime>(decoded, "TimestampUtc")).IsEqualTo(createdAt);
-        Assert.That(GetDecodedValue<long>(decoded, "Sequence")).IsEqualTo(7L);
+        await Assert.That(await GetDecodedValue<string>(decoded, "EventType")).IsEqualTo("structured");
+        await Assert.That(await GetDecodedValue<string>(decoded, "Category")).IsEqualTo("structured");
+        await Assert.That(await GetDecodedValue<string>(decoded, "PayloadJson")).IsEqualTo("\"not-json\"");
+        await Assert.That(await GetDecodedValue<string>(decoded, "Schema")).IsEqualTo("harness-structured-event-v2");
+        await Assert.That(await GetDecodedValue<string>(decoded, "Summary")).IsEqualTo("summary");
+        await Assert.That(await GetDecodedValue<string>(decoded, "Error")).IsEqualTo("error");
+        await Assert.That(await GetDecodedValue<DateTime>(decoded, "TimestampUtc")).IsEqualTo(createdAt);
+        await Assert.That(await GetDecodedValue<long>(decoded, "Sequence")).IsEqualTo(7L);
     }
 
-    private static string InvokeNormalizePayloadJson(string? payload)
+    private static async Task<string> InvokeNormalizePayloadJson(string? payload)
     {
         var method = CodecType.GetMethod("NormalizePayloadJson", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.That(method).IsNotNull();
+        await Assert.That(method).IsNotNull();
         return (string)method!.Invoke(null, [payload])!;
     }
 
-    private static object InvokeDecode(RunStructuredEventDocument source)
+    private static async Task<object> InvokeDecode(RunStructuredEventDocument source)
     {
         var method = CodecType.GetMethod("Decode", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.That(method).IsNotNull();
+        await Assert.That(method).IsNotNull();
         return method!.Invoke(null, [source])!;
     }
 
-    private static T GetDecodedValue<T>(object decoded, string propertyName)
+    private static async Task<T> GetDecodedValue<T>(object decoded, string propertyName)
     {
         var property = decoded.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.That(property).IsNotNull();
+        await Assert.That(property).IsNotNull();
         return (T)property!.GetValue(decoded)!;
     }
 }

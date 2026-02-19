@@ -18,21 +18,21 @@ public sealed class CodexAppServerRuntimeTests
         .GetMethod("ResolveModel", BindingFlags.NonPublic | BindingFlags.Static)!;
 
     [Test]
-    public void ResolveApprovalPolicy_WhenDefaultMode_UsesMutationCapableDefault()
+    public async Task ResolveApprovalPolicy_WhenDefaultMode_UsesMutationCapableDefault()
     {
         var result = (string)ResolveApprovalPolicyMethod.Invoke(null, [new Dictionary<string, string>(), "default"])!;
-        Assert.That(result).IsEqualTo("on-failure");
+        await Assert.That(result).IsEqualTo("on-failure");
     }
 
     [Test]
-    public void ResolveApprovalPolicy_WhenReadOnlyMode_UsesNeverApproval()
+    public async Task ResolveApprovalPolicy_WhenReadOnlyMode_UsesNeverApproval()
     {
         var result = (string)ResolveApprovalPolicyMethod.Invoke(null, [new Dictionary<string, string>(), "review"])!;
-        Assert.That(result).IsEqualTo("never");
+        await Assert.That(result).IsEqualTo("never");
     }
 
     [Test]
-    public void ResolveApprovalPolicy_WhenExplicitPolicySet_PrefersEnvironmentOverride()
+    public async Task ResolveApprovalPolicy_WhenExplicitPolicySet_PrefersEnvironmentOverride()
     {
         var env = new Dictionary<string, string>
         {
@@ -40,21 +40,21 @@ public sealed class CodexAppServerRuntimeTests
         };
 
         var result = (string)ResolveApprovalPolicyMethod.Invoke(null, [env, "plan"])!;
-        Assert.That(result).IsEqualTo("on-request");
+        await Assert.That(result).IsEqualTo("on-request");
     }
 
     [Test]
-    public void ApplyModePrompt_WhenPlanMode_PrefixesReadOnlyInstructions()
+    public async Task ApplyModePrompt_WhenPlanMode_PrefixesReadOnlyInstructions()
     {
         var prompt = (string)ApplyModePromptMethod.Invoke(null, ["Implement feature X", "plan"])!;
 
-        Assert.That(prompt).Contains("Execution mode: plan");
-        Assert.That(prompt).Contains("Do not modify files");
-        Assert.That(prompt).Contains("Implement feature X");
+        await Assert.That(prompt).Contains("Execution mode: plan");
+        await Assert.That(prompt).Contains("Do not modify files");
+        await Assert.That(prompt).Contains("Implement feature X");
     }
 
     [Test]
-    public void ResolveExecutionMode_PrioritizesHarnessAndTaskMode()
+    public async Task ResolveExecutionMode_PrioritizesHarnessAndTaskMode()
     {
         var mode = (string)ResolveExecutionModeMethod.Invoke(null, ["plan", new Dictionary<string, string>
         {
@@ -62,22 +62,22 @@ public sealed class CodexAppServerRuntimeTests
             ["TASK_MODE"] = "plan",
         }])!;
 
-        Assert.That(mode).IsEqualTo("review");
+        await Assert.That(mode).IsEqualTo("review");
     }
 
     [Test]
-    public void ResolveExecutionMode_RetainsNormalizedAliases()
+    public async Task ResolveExecutionMode_RetainsNormalizedAliases()
     {
         var mode = (string)ResolveExecutionModeMethod.Invoke(null, ["planning", new Dictionary<string, string>
         {
             ["RUN_MODE"] = "audit",
         }])!;
 
-        Assert.That(mode).IsEqualTo("review");
+        await Assert.That(mode).IsEqualTo("review");
     }
 
     [Test]
-    public void ResolveModel_UsesCodexModelOverHarnessModel()
+    public async Task ResolveModel_UsesCodexModelOverHarnessModel()
     {
         var model = (string?)ResolveModelMethod.Invoke(null, [new Dictionary<string, string>
         {
@@ -85,17 +85,17 @@ public sealed class CodexAppServerRuntimeTests
             ["HARNESS_MODEL"] = "harness-model",
         }])!;
 
-        Assert.That(model).IsEqualTo("codex-model");
+        await Assert.That(model).IsEqualTo("codex-model");
     }
 
     [Test]
-    public void ResolveModel_FallsBackToHarnessModel()
+    public async Task ResolveModel_FallsBackToHarnessModel()
     {
         var model = (string?)ResolveModelMethod.Invoke(null, [new Dictionary<string, string>
         {
             ["HARNESS_MODEL"] = "harness-model",
         }]);
 
-        Assert.That(model).IsEqualTo("harness-model");
+        await Assert.That(model).IsEqualTo("harness-model");
     }
 }

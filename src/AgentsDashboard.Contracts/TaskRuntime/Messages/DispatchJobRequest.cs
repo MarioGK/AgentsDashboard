@@ -5,7 +5,7 @@ using MessagePack;
 namespace AgentsDashboard.Contracts.TaskRuntime;
 [MessagePackObject]
 
-public record RuntimeDispatchRequest
+public record DispatchJobRequest
 {
     [Key(0)] public required string RunId { get; init; }
     [Key(1)] public required string RepositoryId { get; init; }

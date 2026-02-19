@@ -9,47 +9,47 @@ namespace AgentsDashboard.UnitTests.TaskRuntime.Services;
 public sealed class HarnessRuntimeFactoryTests
 {
     [Test]
-    public void Select_WhenCodexDefaultMode_UsesStdioRuntimeWithoutFallback()
+    public async Task Select_WhenCodexDefaultMode_UsesStdioRuntimeWithoutFallback()
     {
         var factory = CreateFactory();
         var selection = factory.Select(CreateRequest("codex", "default"));
 
-        Assert.That(selection.RuntimeMode).IsEqualTo("stdio");
-        Assert.That(selection.Primary.Name).IsEqualTo("codex-stdio");
-        Assert.That(selection.Fallback).IsNull();
+        await Assert.That(selection.RuntimeMode).IsEqualTo("stdio");
+        await Assert.That(selection.Primary.Name).IsEqualTo("codex-stdio");
+        await Assert.That(selection.Fallback).IsNull();
     }
 
     [Test]
-    public void Select_WhenCodexCommandMode_UsesStdioRuntimeWithoutFallback()
+    public async Task Select_WhenCodexCommandMode_UsesStdioRuntimeWithoutFallback()
     {
         var factory = CreateFactory();
         var selection = factory.Select(CreateRequest("codex", "command"));
 
-        Assert.That(selection.RuntimeMode).IsEqualTo("stdio");
-        Assert.That(selection.Primary.Name).IsEqualTo("codex-stdio");
-        Assert.That(selection.Fallback).IsNull();
+        await Assert.That(selection.RuntimeMode).IsEqualTo("stdio");
+        await Assert.That(selection.Primary.Name).IsEqualTo("codex-stdio");
+        await Assert.That(selection.Fallback).IsNull();
     }
 
     [Test]
-    public void Select_WhenOpenCode_UsesSseRuntimeWithoutFallback()
+    public async Task Select_WhenOpenCode_UsesSseRuntimeWithoutFallback()
     {
         var factory = CreateFactory();
         var selection = factory.Select(CreateRequest("opencode", "default"));
 
-        Assert.That(selection.RuntimeMode).IsEqualTo("sse");
-        Assert.That(selection.Primary.Name).IsEqualTo("opencode-sse");
-        Assert.That(selection.Fallback).IsNull();
+        await Assert.That(selection.RuntimeMode).IsEqualTo("sse");
+        await Assert.That(selection.Primary.Name).IsEqualTo("opencode-sse");
+        await Assert.That(selection.Fallback).IsNull();
     }
 
     [Test]
-    public void Select_WhenUnsupportedHarness_ThrowsNotSupportedException()
+    public async Task Select_WhenUnsupportedHarness_ThrowsNotSupportedException()
     {
         var factory = CreateFactory();
         var request = CreateRequest("other", "default");
 
         var action = () => factory.Select(request);
 
-        Assert.That(action).Throws<NotSupportedException>();
+        await Assert.That(action).Throws<NotSupportedException>();
     }
 
     private static DefaultHarnessRuntimeFactory CreateFactory()
