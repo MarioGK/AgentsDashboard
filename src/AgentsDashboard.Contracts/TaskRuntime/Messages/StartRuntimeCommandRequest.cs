@@ -12,6 +12,6 @@ public sealed record StartRuntimeCommandRequest
     [Key(4)] public List<string>? Arguments { get; init; }
     [Key(5)] public string? WorkingDirectory { get; init; }
     [Key(6)] public Dictionary<string, string>? EnvironmentVars { get; init; }
-    [Key(7)] public int TimeoutSeconds { get; init; } = 600;
-    [Key(8)] public int MaxOutputBytes { get; init; } = 2_097_152;
+    [Key(7)] public int TimeoutSeconds { get; init; }
+    [Key(8)] public int MaxOutputBytes { get; init; }
 }

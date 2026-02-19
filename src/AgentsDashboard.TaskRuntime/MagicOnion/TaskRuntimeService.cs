@@ -7,8 +7,7 @@ namespace AgentsDashboard.TaskRuntime.MagicOnion;
 
 public sealed class TaskRuntimeService(
     ITaskRuntimeQueue queue,
-    TaskRuntimeFileService fileService,
-    TaskRuntimeGitService gitService,
+    TaskRuntimeCommandService commandService,
     ILogger<TaskRuntimeService> logger)
     : ServiceBase<ITaskRuntimeService>, ITaskRuntimeService
 {
@@ -90,53 +89,18 @@ public sealed class TaskRuntimeService(
         });
     }
 
-    public ValueTask<DirectoryListingDto> ListDirectoryAsync(FileSystemRequest request, CancellationToken cancellationToken)
+    public ValueTask<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request, CancellationToken cancellationToken)
     {
-        return fileService.ListDirectoryAsync(request, cancellationToken);
+        return commandService.StartCommandAsync(request, cancellationToken);
     }
 
-    public ValueTask<FileContentDto> ReadFileAsync(FileReadRequest request, CancellationToken cancellationToken)
+    public ValueTask<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request, CancellationToken cancellationToken)
     {
-        return fileService.ReadFileAsync(request, cancellationToken);
+        return commandService.CancelCommandAsync(request, cancellationToken);
     }
 
-    public ValueTask<WriteFileResult> WriteFileAsync(WriteFileRequest request, CancellationToken cancellationToken)
+    public ValueTask<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken)
     {
-        return fileService.WriteFileAsync(request, cancellationToken);
-    }
-
-    public ValueTask<DeletePathResult> DeletePathAsync(DeletePathRequest request, CancellationToken cancellationToken)
-    {
-        return fileService.DeletePathAsync(request, cancellationToken);
-    }
-
-    public ValueTask<GitStatusDto> StatusAsync(GitStatusRequest request, CancellationToken cancellationToken)
-    {
-        return gitService.StatusAsync(request, cancellationToken);
-    }
-
-    public ValueTask<GitDiffDto> DiffAsync(GitDiffRequest request, CancellationToken cancellationToken)
-    {
-        return gitService.DiffAsync(request, cancellationToken);
-    }
-
-    public ValueTask<GitCommitResult> CommitAsync(GitCommitRequest request, CancellationToken cancellationToken)
-    {
-        return gitService.CommitAsync(request, cancellationToken);
-    }
-
-    public ValueTask<GitPushResult> PushAsync(GitPushRequest request, CancellationToken cancellationToken)
-    {
-        return gitService.PushAsync(request, cancellationToken);
-    }
-
-    public ValueTask<GitFetchResult> FetchAsync(GitFetchRequest request, CancellationToken cancellationToken)
-    {
-        return gitService.FetchAsync(request, cancellationToken);
-    }
-
-    public ValueTask<GitCheckoutResult> CheckoutAsync(GitCheckoutRequest request, CancellationToken cancellationToken)
-    {
-        return gitService.CheckoutAsync(request, cancellationToken);
+        return commandService.GetCommandStatusAsync(request, cancellationToken);
     }
 }

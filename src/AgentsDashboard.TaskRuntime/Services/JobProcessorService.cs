@@ -9,6 +9,7 @@ public class JobProcessorService(
     ITaskRuntimeQueue queue,
     IHarnessExecutor executor,
     TaskRuntimeEventBus eventBus,
+    TaskRuntimeArtifactStreamService artifactStreamService,
     ILogger<JobProcessorService> logger) : BackgroundService
 {
     private const string RuntimeEventWireMarker = "agentsdashboard.harness-runtime-event.v1";
@@ -138,6 +139,33 @@ public class JobProcessorService(
             }
 
             var envelope = await executor.ExecuteAsync(queuedJob, OnLogChunk, cancellationToken);
+            var artifactPaths = envelope.Artifacts
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (artifactPaths.Count > 0)
+            {
+                try
+                {
+                    var streamedArtifactNames = await artifactStreamService.StreamArtifactsAsync(
+                        request.RunId,
+                        request.TaskId,
+                        executionToken,
+                        artifactPaths,
+                        cancellationToken);
+
+                    envelope.Artifacts = streamedArtifactNames;
+                    envelope.Metadata["artifactStreamingMode"] = "magiconion-chunked";
+                    envelope.Metadata["artifactStreamingCount"] = streamedArtifactNames.Count.ToString();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to stream artifacts for run {RunId}", request.RunId);
+                    envelope.Metadata["artifactStreamingMode"] = "failed";
+                    envelope.Metadata["artifactStreamingError"] = ex.Message;
+                }
+            }
+
             var payload = JsonSerializer.Serialize(envelope);
 
             await eventBus.PublishAsync(

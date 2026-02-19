@@ -56,9 +56,9 @@ builder.Services.AddSingleton<ITaskRuntimeQueue>(sp =>
 });
 builder.Services.AddSingleton<TaskRuntimeEventBus>();
 builder.Services.AddHostedService<TaskRuntimeEventBroadcastService>();
+builder.Services.AddSingleton<TaskRuntimeArtifactStreamService>();
 builder.Services.AddSingleton<WorkspacePathGuard>();
-builder.Services.AddSingleton<TaskRuntimeFileService>();
-builder.Services.AddSingleton<TaskRuntimeGitService>();
+builder.Services.AddSingleton<TaskRuntimeCommandService>();
 builder.Services.AddSingleton<SecretRedactor>();
 builder.Services.AddSingleton<HarnessAdapterFactory>();
 builder.Services.AddSingleton<CodexAppServerRuntime>();

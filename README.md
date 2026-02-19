@@ -11,7 +11,7 @@ Production-oriented AI orchestration control plane built with .NET 10.
 
 ## Solution
 - `src/AgentsDashboard.ControlPlane`: UI, scheduler, SignalR
-- `src/AgentsDashboard.TaskRuntimeGateway`: gRPC worker, queue, harness execution
+- `src/AgentsDashboard.TaskRuntime`: MagicOnion runtime executor, queue, harness execution
 - `src/AgentsDashboard.Contracts`: shared domain + gRPC contracts
 
 ## Local run (recommended)

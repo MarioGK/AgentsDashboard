@@ -5,11 +5,11 @@ namespace AgentsDashboard.Contracts.TaskRuntime;
 public sealed record RuntimeCommandStatusResult
 {
     [Key(0)] public bool Found { get; init; }
-    [Key(1)] public string CommandId { get; init; } = string.Empty;
-    [Key(2)] public string RunId { get; init; } = string.Empty;
-    [Key(3)] public string TaskId { get; init; } = string.Empty;
-    [Key(4)] public string ExecutionToken { get; init; } = string.Empty;
-    [Key(5)] public RuntimeCommandStatusValue Status { get; init; } = RuntimeCommandStatusValue.Unknown;
+    [Key(1)] public string? CommandId { get; init; }
+    [Key(2)] public string? RunId { get; init; }
+    [Key(3)] public string? TaskId { get; init; }
+    [Key(4)] public string? ExecutionToken { get; init; }
+    [Key(5)] public RuntimeCommandStatusValue Status { get; init; }
     [Key(6)] public int? ExitCode { get; init; }
     [Key(7)] public DateTimeOffset StartedAt { get; init; }
     [Key(8)] public DateTimeOffset? CompletedAt { get; init; }

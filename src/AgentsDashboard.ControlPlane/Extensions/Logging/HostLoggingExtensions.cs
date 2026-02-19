@@ -15,6 +15,7 @@ internal static class HostLoggingExtensions
 
         logging.AddFilter<ZLoggerConsoleLoggerProvider>((_, level) => level >= LogLevel.Information);
         logging.AddFilter<ZLoggerRollingFileLoggerProvider>((_, level) => level >= LogLevel.Trace);
+        logging.AddFilter<WarningErrorFileLoggerProvider>((_, level) => level >= LogLevel.Warning);
 
         logging.AddZLoggerConsole(options =>
         {
@@ -45,6 +46,7 @@ internal static class HostLoggingExtensions
         logging.AddZLoggerRollingFile(
             (timestamp, sequence) => GetLogFilePath(serviceName, timestamp, sequence),
             RollingInterval.Day);
+        logging.AddProvider(new WarningErrorFileLoggerProvider(GetWarningErrorLogFilePath()));
 
         return logging;
     }
@@ -54,6 +56,13 @@ internal static class HostLoggingExtensions
         var logsDirectory = RepositoryPathResolver.GetDataPath("logs");
         Directory.CreateDirectory(logsDirectory);
         return Path.Combine(logsDirectory, $"{serviceName}-{timestamp:yyyy-MM-dd}.{sequence:D4}.log");
+    }
+
+    private static string GetWarningErrorLogFilePath()
+    {
+        var logsDirectory = RepositoryPathResolver.GetDataPath("logs");
+        Directory.CreateDirectory(logsDirectory);
+        return Path.Combine(logsDirectory, $"{serviceName}-warnings-errors.log");
     }
 
     private static bool ShouldEnableAnsi()

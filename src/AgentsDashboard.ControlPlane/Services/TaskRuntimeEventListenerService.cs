@@ -21,10 +21,14 @@ public sealed class TaskRuntimeEventListenerService(
     private static readonly TimeSpan TaskRuntimeTtl = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan DiffPublishThrottle = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan ToolPublishThrottle = TimeSpan.FromMilliseconds(125);
+    private const long MaxArtifactBytesPerArtifact = 104_857_600;
+    private const long MaxArtifactBytesPerRun = 262_144_000;
 
     private readonly ConcurrentDictionary<string, TaskRuntimeHubConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTime> _structuredPublishWatermarks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _structuredSequenceWatermarks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ArtifactAssemblyState> _artifactAssemblies = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, long> _artifactRunByteTotals = new(StringComparer.OrdinalIgnoreCase);
     private readonly IRunStructuredViewService _runStructuredViewService = runStructuredViewService ?? NullRunStructuredViewService.Instance;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -160,6 +164,12 @@ public sealed class TaskRuntimeEventListenerService(
     {
         try
         {
+            if (IsArtifactEvent(message.EventType))
+            {
+                await HandleArtifactEventAsync(message, CancellationToken.None);
+                return;
+            }
+
             var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(message.Timestamp).UtcDateTime;
             await HandleStructuredEventAsync(message, timestamp);
 
@@ -232,7 +242,7 @@ public sealed class TaskRuntimeEventListenerService(
                 }
             }
 
-            await PersistRunArtifactsAsync(completedRun.Id, envelope.Artifacts, CancellationToken.None);
+            await FinalizePendingArtifactsAsync(completedRun.Id, CancellationToken.None);
 
             var gitSyncError = ResolveGitSyncError(envelope);
             try
@@ -248,15 +258,11 @@ public sealed class TaskRuntimeEventListenerService(
                 logger.LogWarning(ex, "Failed to update task git metadata for task {TaskId}", completedRun.TaskId);
             }
 
-            if (!string.IsNullOrWhiteSpace(completedRun.OutputJson) &&
-                !string.Equals(completedRun.OutputJson, "{}", StringComparison.Ordinal))
-            {
-                taskSemanticEmbeddingService.QueueTaskEmbedding(
-                    completedRun.RepositoryId,
-                    completedRun.TaskId,
-                    "run-output",
-                    runId: completedRun.Id);
-            }
+            taskSemanticEmbeddingService.QueueTaskEmbedding(
+                completedRun.RepositoryId,
+                completedRun.TaskId,
+                "run-history",
+                runId: completedRun.Id);
 
             await publisher.PublishStatusAsync(completedRun, CancellationToken.None);
 
@@ -269,6 +275,7 @@ public sealed class TaskRuntimeEventListenerService(
             }
 
             ClearStructuredRunCaches(completedRun.Id);
+            ClearArtifactCaches(completedRun.Id);
         }
         catch (Exception ex)
         {
@@ -606,47 +613,298 @@ public sealed class TaskRuntimeEventListenerService(
         return string.Empty;
     }
 
-    private async Task PersistRunArtifactsAsync(string runId, IReadOnlyList<string>? artifactPaths, CancellationToken cancellationToken)
+    private static bool IsArtifactEvent(string? eventType)
     {
-        if (artifactPaths is null || artifactPaths.Count == 0)
+        return string.Equals(eventType, "artifact_manifest", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(eventType, "artifact_chunk", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(eventType, "artifact_commit", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task HandleArtifactEventAsync(JobEventMessage message, CancellationToken cancellationToken)
+    {
+        var artifactId = message.ArtifactId?.Trim();
+        if (string.IsNullOrWhiteSpace(artifactId))
+        {
+            artifactId = TryReadJsonString(message.PayloadJson, "artifactId");
+        }
+
+        if (string.IsNullOrWhiteSpace(artifactId))
         {
             return;
         }
 
-        foreach (var artifactPath in artifactPaths)
+        var artifactKey = BuildArtifactKey(message.RunId, artifactId);
+        if (string.Equals(message.EventType, "artifact_manifest", StringComparison.OrdinalIgnoreCase))
+        {
+            HandleArtifactManifest(message, artifactKey, artifactId);
+            return;
+        }
+
+        if (string.Equals(message.EventType, "artifact_chunk", StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleArtifactChunkAsync(message, artifactKey, artifactId, cancellationToken);
+            return;
+        }
+
+        if (string.Equals(message.EventType, "artifact_commit", StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleArtifactCommitAsync(message, artifactKey, cancellationToken);
+        }
+    }
+
+    private void HandleArtifactManifest(JobEventMessage message, string artifactKey, string artifactId)
+    {
+        var payloadFileName = TryReadJsonString(message.PayloadJson, "fileName");
+        var fileName = NormalizeArtifactFileName(
+            payloadFileName ?? message.Summary,
+            artifactId);
+        var contentType = message.ContentType?.Trim() ??
+            TryReadJsonString(message.PayloadJson, "contentType") ??
+            "application/octet-stream";
+        var declaredSizeBytes = TryReadJsonLong(message.PayloadJson, "sizeBytes");
+        var assembly = new ArtifactAssemblyState(
+            message.RunId,
+            artifactId,
+            fileName,
+            contentType,
+            declaredSizeBytes);
+
+        _artifactAssemblies.AddOrUpdate(
+            artifactKey,
+            _ => assembly,
+            (_, existing) =>
+            {
+                existing.Dispose();
+                return assembly;
+            });
+    }
+
+    private async Task HandleArtifactChunkAsync(
+        JobEventMessage message,
+        string artifactKey,
+        string artifactId,
+        CancellationToken cancellationToken)
+    {
+        var chunk = message.BinaryPayload;
+        if (chunk is null || chunk.Length == 0)
+        {
+            return;
+        }
+
+        var assembly = _artifactAssemblies.GetOrAdd(
+            artifactKey,
+            _ => new ArtifactAssemblyState(
+                message.RunId,
+                artifactId,
+                NormalizeArtifactFileName(message.Summary, artifactId),
+                message.ContentType?.Trim() ?? "application/octet-stream",
+                declaredSizeBytes: 0));
+
+        var shouldPersist = false;
+        lock (assembly.SyncRoot)
+        {
+            if (assembly.Rejected || assembly.Persisted)
+            {
+                return;
+            }
+
+            var nextArtifactSize = assembly.ReceivedBytes + chunk.Length;
+            if (nextArtifactSize > MaxArtifactBytesPerArtifact)
+            {
+                assembly.Rejected = true;
+                logger.LogWarning("Rejecting artifact {ArtifactId} for run {RunId}: artifact size cap exceeded", assembly.ArtifactId, assembly.RunId);
+                return;
+            }
+
+            var runTotal = _artifactRunByteTotals.AddOrUpdate(
+                message.RunId,
+                chunk.Length,
+                (_, existing) => existing + chunk.Length);
+            if (runTotal > MaxArtifactBytesPerRun)
+            {
+                assembly.Rejected = true;
+                logger.LogWarning("Rejecting artifact {ArtifactId} for run {RunId}: run artifact size cap exceeded", assembly.ArtifactId, assembly.RunId);
+                return;
+            }
+
+            assembly.Buffer.Write(chunk, 0, chunk.Length);
+            assembly.ReceivedBytes = nextArtifactSize;
+            if (message.IsLastChunk == true)
+            {
+                shouldPersist = true;
+            }
+        }
+
+        if (shouldPersist)
+        {
+            await PersistArtifactAssemblyAsync(artifactKey, cancellationToken);
+        }
+    }
+
+    private async Task HandleArtifactCommitAsync(JobEventMessage message, string artifactKey, CancellationToken cancellationToken)
+    {
+        if (_artifactAssemblies.TryGetValue(artifactKey, out var assembly))
+        {
+            var sha256 = TryReadJsonString(message.PayloadJson, "sha256");
+            if (!string.IsNullOrWhiteSpace(sha256))
+            {
+                lock (assembly.SyncRoot)
+                {
+                    assembly.Sha256 = sha256.Trim().ToLowerInvariant();
+                }
+            }
+        }
+
+        await PersistArtifactAssemblyAsync(artifactKey, cancellationToken);
+    }
+
+    private async Task PersistArtifactAssemblyAsync(string artifactKey, CancellationToken cancellationToken)
+    {
+        if (!_artifactAssemblies.TryRemove(artifactKey, out var assembly))
+        {
+            return;
+        }
+
+        try
+        {
+            lock (assembly.SyncRoot)
+            {
+                if (assembly.Rejected || assembly.Persisted || assembly.Buffer.Length == 0)
+                {
+                    return;
+                }
+
+                assembly.Buffer.Position = 0;
+                assembly.Persisted = true;
+            }
+
+            await store.SaveArtifactAsync(assembly.RunId, assembly.FileName, assembly.Buffer, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to persist streamed artifact {ArtifactId} for run {RunId}", assembly.ArtifactId, assembly.RunId);
+        }
+        finally
+        {
+            assembly.Dispose();
+        }
+    }
+
+    private async Task FinalizePendingArtifactsAsync(string runId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return;
+        }
+
+        var prefix = $"{runId.Trim()}:";
+        var pendingKeys = _artifactAssemblies.Keys
+            .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var pendingKey in pendingKeys)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (string.IsNullOrWhiteSpace(artifactPath))
+            await PersistArtifactAssemblyAsync(pendingKey, cancellationToken);
+        }
+    }
+
+    private void ClearArtifactCaches(string runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return;
+        }
+
+        _artifactRunByteTotals.TryRemove(runId, out _);
+        var prefix = $"{runId.Trim()}:";
+        var staleKeys = _artifactAssemblies.Keys
+            .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var staleKey in staleKeys)
+        {
+            if (_artifactAssemblies.TryRemove(staleKey, out var staleAssembly))
             {
-                continue;
+                staleAssembly.Dispose();
+            }
+        }
+    }
+
+    private static string BuildArtifactKey(string runId, string artifactId)
+    {
+        return $"{runId.Trim()}:{artifactId.Trim()}";
+    }
+
+    private static string NormalizeArtifactFileName(string? fileName, string artifactId)
+    {
+        var normalized = Path.GetFileName(fileName?.Trim() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            normalized = $"artifact-{artifactId}.bin";
+        }
+
+        return normalized;
+    }
+
+    private static string? TryReadJsonString(string? payloadJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty(propertyName, out var property))
+            {
+                return null;
             }
 
-            if (!File.Exists(artifactPath))
+            return property.ValueKind == JsonValueKind.String
+                ? property.GetString()
+                : property.ToString();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static long TryReadJsonLong(string? payloadJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson))
+        {
+            return 0;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty(propertyName, out var property))
             {
-                continue;
+                return 0;
             }
 
-            var artifactFileName = Path.GetFileName(artifactPath);
-            if (string.IsNullOrWhiteSpace(artifactFileName))
+            if (property.ValueKind == JsonValueKind.Number &&
+                property.TryGetInt64(out var number))
             {
-                continue;
+                return number;
             }
 
-            try
+            if (property.ValueKind == JsonValueKind.String &&
+                long.TryParse(property.GetString(), out var parsed))
             {
-                await using var artifactStream = new FileStream(
-                    artifactPath,
-                    FileMode.Open,
-                    FileAccess.Read,
-                    FileShare.Read,
-                    1024 * 64,
-                    useAsync: true);
-                await store.SaveArtifactAsync(runId, artifactFileName, artifactStream, cancellationToken);
+                return parsed;
             }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to persist run artifact {ArtifactPath} for run {RunId}", artifactPath, runId);
-            }
+
+            return 0;
+        }
+        catch (JsonException)
+        {
+            return 0;
         }
     }
 
@@ -658,7 +916,44 @@ public sealed class TaskRuntimeEventListenerService(
             await RemoveConnectionAsync(runtimeId);
         }
 
+        foreach (var key in _artifactAssemblies.Keys.ToList())
+        {
+            if (_artifactAssemblies.TryRemove(key, out var assembly))
+            {
+                assembly.Dispose();
+            }
+        }
+
+        _artifactRunByteTotals.Clear();
+
         await base.StopAsync(cancellationToken);
+    }
+
+    private sealed class ArtifactAssemblyState(
+        string runId,
+        string artifactId,
+        string fileName,
+        string contentType,
+        long declaredSizeBytes) : IDisposable
+    {
+        public object SyncRoot { get; } = new();
+        public string RunId { get; } = runId;
+        public string ArtifactId { get; } = artifactId;
+        public string FileName { get; } = fileName;
+        public string ContentType { get; } = contentType;
+        public long DeclaredSizeBytes { get; } = declaredSizeBytes;
+        public MemoryStream Buffer { get; } = declaredSizeBytes > 0 && declaredSizeBytes < int.MaxValue
+            ? new MemoryStream((int)declaredSizeBytes)
+            : new MemoryStream();
+        public long ReceivedBytes { get; set; }
+        public string? Sha256 { get; set; }
+        public bool Rejected { get; set; }
+        public bool Persisted { get; set; }
+
+        public void Dispose()
+        {
+            Buffer.Dispose();
+        }
     }
 
     private sealed class NullRunStructuredViewService : IRunStructuredViewService

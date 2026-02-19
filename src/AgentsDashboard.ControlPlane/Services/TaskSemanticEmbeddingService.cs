@@ -20,6 +20,7 @@ public sealed class TaskSemanticEmbeddingService(
 {
     private static readonly TimeSpan s_debounceWindow = TimeSpan.FromSeconds(3);
     private const int MaxEmbeddingSegmentLength = 5000;
+    private const int MaxArtifactTextBytes = 262_144;
 
     private readonly Channel<string> _taskQueue = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
     {
@@ -136,22 +137,110 @@ public sealed class TaskSemanticEmbeddingService(
         foreach (var run in completedRuns)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (string.IsNullOrWhiteSpace(run.OutputJson))
+            if (!string.IsNullOrWhiteSpace(run.OutputJson))
             {
-                continue;
+                var outputContent = BuildRunOutputContent(run);
+                await AddContentChunksAsync(
+                    resolvedRepositoryId,
+                    taskId,
+                    run.Id,
+                    $"run:{run.Id}:output",
+                    "run-output",
+                    run.Id,
+                    outputContent,
+                    chunks,
+                    cancellationToken);
             }
 
-            var outputContent = BuildRunOutputContent(run);
-            await AddContentChunksAsync(
-                resolvedRepositoryId,
-                taskId,
-                run.Id,
-                $"run:{run.Id}:output",
-                "run-output",
-                run.Id,
-                outputContent,
-                chunks,
-                cancellationToken);
+            var runLogsTask = store.ListRunLogsAsync(run.Id, cancellationToken);
+            var structuredEventsTask = store.ListRunStructuredEventsAsync(run.Id, 5000, cancellationToken);
+            var artifactNamesTask = store.ListArtifactsAsync(run.Id, cancellationToken);
+            await Task.WhenAll(runLogsTask, structuredEventsTask, artifactNamesTask);
+
+            var runLogs = runLogsTask.Result;
+            if (runLogs.Count > 0)
+            {
+                var logsContent = BuildRunLogsContent(run, runLogs);
+                await AddContentChunksAsync(
+                    resolvedRepositoryId,
+                    taskId,
+                    run.Id,
+                    $"run:{run.Id}:logs",
+                    "run-log",
+                    run.Id,
+                    logsContent,
+                    chunks,
+                    cancellationToken);
+            }
+
+            var structuredEvents = structuredEventsTask.Result;
+            if (structuredEvents.Count > 0)
+            {
+                var structuredContent = BuildRunStructuredEventsContent(run, structuredEvents);
+                await AddContentChunksAsync(
+                    resolvedRepositoryId,
+                    taskId,
+                    run.Id,
+                    $"run:{run.Id}:structured",
+                    "run-structured",
+                    run.Id,
+                    structuredContent,
+                    chunks,
+                    cancellationToken);
+            }
+
+            var artifactNames = artifactNamesTask.Result;
+            if (artifactNames.Count > 0)
+            {
+                foreach (var artifactName in artifactNames.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (string.IsNullOrWhiteSpace(artifactName))
+                    {
+                        continue;
+                    }
+
+                    var fileExtension = Path.GetExtension(artifactName)?.Trim().ToLowerInvariant() ?? string.Empty;
+                    var sourceRef = $"{run.Id}:{artifactName}";
+                    if (IsTextArtifact(fileExtension))
+                    {
+                        var artifactText = await ReadArtifactTextAsync(run.Id, artifactName, cancellationToken);
+                        if (artifactText.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        var artifactContent = BuildTextArtifactContent(run, artifactName, artifactText);
+                        await AddContentChunksAsync(
+                            resolvedRepositoryId,
+                            taskId,
+                            run.Id,
+                            $"run:{run.Id}:artifact:{artifactName}",
+                            "run-artifact",
+                            sourceRef,
+                            artifactContent,
+                            chunks,
+                            cancellationToken);
+                        continue;
+                    }
+
+                    if (IsImageArtifact(fileExtension))
+                    {
+                        var imageMetadataContent = BuildImageArtifactMetadataContent(run, artifactName, fileExtension);
+                        await AddContentChunksAsync(
+                            resolvedRepositoryId,
+                            taskId,
+                            run.Id,
+                            $"run:{run.Id}:image:{artifactName}",
+                            "run-image-metadata",
+                            sourceRef,
+                            imageMetadataContent,
+                            chunks,
+                            cancellationToken);
+                    }
+                }
+            }
         }
 
         if (chunks.Count == 0)
@@ -379,6 +468,120 @@ public sealed class TaskSemanticEmbeddingService(
             .AppendLine("FullOutput:")
             .AppendLine(run.OutputJson)
             .ToString();
+    }
+
+    private static string BuildRunLogsContent(RunDocument run, IReadOnlyList<RunLogEvent> runLogs)
+    {
+        var builder = new StringBuilder()
+            .AppendLine($"Run logs for {run.Id}")
+            .AppendLine($"LogEntries: {runLogs.Count}");
+
+        foreach (var runLog in runLogs)
+        {
+            builder
+                .Append(runLog.TimestampUtc.ToString("O"))
+                .Append(" [")
+                .Append(runLog.Level)
+                .Append("] ")
+                .AppendLine(runLog.Message);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string BuildRunStructuredEventsContent(RunDocument run, IReadOnlyList<RunStructuredEventDocument> structuredEvents)
+    {
+        var builder = new StringBuilder()
+            .AppendLine($"Run structured events for {run.Id}")
+            .AppendLine($"StructuredEntries: {structuredEvents.Count}");
+
+        foreach (var structuredEvent in structuredEvents)
+        {
+            builder
+                .Append(structuredEvent.TimestampUtc.ToString("O"))
+                .Append(" #")
+                .Append(structuredEvent.Sequence)
+                .Append(' ')
+                .Append(structuredEvent.Category)
+                .Append(": ")
+                .AppendLine(structuredEvent.Summary);
+
+            if (!string.IsNullOrWhiteSpace(structuredEvent.PayloadJson))
+            {
+                builder.AppendLine(structuredEvent.PayloadJson);
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static string BuildTextArtifactContent(RunDocument run, string artifactName, string artifactText)
+    {
+        return new StringBuilder()
+            .AppendLine($"Run artifact {artifactName}")
+            .AppendLine($"RunId: {run.Id}")
+            .AppendLine("Content:")
+            .AppendLine(artifactText)
+            .ToString();
+    }
+
+    private static string BuildImageArtifactMetadataContent(RunDocument run, string artifactName, string fileExtension)
+    {
+        return new StringBuilder()
+            .AppendLine($"Run image artifact {artifactName}")
+            .AppendLine($"RunId: {run.Id}")
+            .AppendLine($"Extension: {fileExtension}")
+            .AppendLine("Type: image-metadata")
+            .ToString();
+    }
+
+    private async Task<string> ReadArtifactTextAsync(string runId, string artifactName, CancellationToken cancellationToken)
+    {
+        await using var stream = await store.GetArtifactAsync(runId, artifactName, cancellationToken);
+        if (stream is null)
+        {
+            return string.Empty;
+        }
+
+        if (stream.CanSeek && stream.Length > MaxArtifactTextBytes)
+        {
+            return string.Empty;
+        }
+
+        using var memory = new MemoryStream();
+        var buffer = new byte[16 * 1024];
+        while (true)
+        {
+            var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+            if (bytesRead == 0)
+            {
+                break;
+            }
+
+            if (memory.Length + bytesRead > MaxArtifactTextBytes)
+            {
+                return string.Empty;
+            }
+
+            memory.Write(buffer, 0, bytesRead);
+        }
+
+        if (memory.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return Encoding.UTF8.GetString(memory.ToArray());
+    }
+
+    private static bool IsTextArtifact(string extension)
+    {
+        return extension is ".txt" or ".log" or ".md" or ".json" or ".xml" or ".yaml" or ".yml" or ".diff" or ".patch" or ".csv" or ".html" or ".css" or ".js" or ".ts" or ".cs" or ".py" or ".go" or ".rs" or ".java";
+    }
+
+    private static bool IsImageArtifact(string extension)
+    {
+        return extension is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".svg";
     }
 
     private static string NormalizeContent(string content)

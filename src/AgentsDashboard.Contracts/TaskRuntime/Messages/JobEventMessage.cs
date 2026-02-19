@@ -40,4 +40,22 @@ public sealed record JobEventMessage
 
     [Key(11)]
     public string SchemaVersion { get; set; } = string.Empty;
+
+    [Key(12)]
+    public string? CommandId { get; init; }
+
+    [Key(13)]
+    public string? ArtifactId { get; init; }
+
+    [Key(14)]
+    public int? ChunkIndex { get; init; }
+
+    [Key(15)]
+    public bool? IsLastChunk { get; init; }
+
+    [Key(16)]
+    public byte[]? BinaryPayload { get; init; }
+
+    [Key(17)]
+    public string? ContentType { get; init; }
 }

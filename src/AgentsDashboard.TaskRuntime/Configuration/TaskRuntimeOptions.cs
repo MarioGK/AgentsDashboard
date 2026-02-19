@@ -35,4 +35,8 @@ public sealed class TaskRuntimeOptions
     ];
     public int DefaultTimeoutSeconds { get; set; } = 600;
     public string ArtifactStoragePath { get; set; } = DefaultArtifactStoragePath;
+    public int CommandDefaultTimeoutSeconds { get; set; } = 600;
+    public int CommandMaxTimeoutSeconds { get; set; } = 3600;
+    public int CommandMaxOutputBytes { get; set; } = 4_194_304;
+    public int ArtifactChunkSizeBytes { get; set; } = 65_536;
 }

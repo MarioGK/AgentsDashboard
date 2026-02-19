@@ -75,6 +75,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddHostedService<TaskRuntimeIdleShutdownService>();
         services.AddHostedService<TaskRuntimePoolReconciliationService>();
         services.AddHostedService<AlertingService>();
+        services.AddSingleton<TaskRuntimeCommandGateway>();
         return services;
     }
 
