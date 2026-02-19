@@ -234,6 +234,8 @@ public sealed class TaskRuntimeEventListenerService(
                 }
             }
 
+            await PersistRunArtifactsAsync(completedRun.Id, envelope.Artifacts, CancellationToken.None);
+
             var gitSyncError = ResolveGitSyncError(envelope);
             try
             {
@@ -606,6 +608,50 @@ public sealed class TaskRuntimeEventListenerService(
         }
 
         return string.Empty;
+    }
+
+    private async Task PersistRunArtifactsAsync(string runId, IReadOnlyList<string>? artifactPaths, CancellationToken cancellationToken)
+    {
+        if (artifactPaths is null || artifactPaths.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var artifactPath in artifactPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(artifactPath))
+            {
+                continue;
+            }
+
+            if (!File.Exists(artifactPath))
+            {
+                continue;
+            }
+
+            var artifactFileName = Path.GetFileName(artifactPath);
+            if (string.IsNullOrWhiteSpace(artifactFileName))
+            {
+                continue;
+            }
+
+            try
+            {
+                await using var artifactStream = new FileStream(
+                    artifactPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    1024 * 64,
+                    useAsync: true);
+                await store.SaveArtifactAsync(runId, artifactFileName, artifactStream, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.ZLogWarning(ex, "Failed to persist run artifact {ArtifactPath} for run {RunId}", artifactPath, runId);
+            }
+        }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

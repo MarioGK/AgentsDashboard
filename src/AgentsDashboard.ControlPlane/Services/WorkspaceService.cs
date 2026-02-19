@@ -1199,10 +1199,16 @@ public sealed class WorkspaceService(
 
         foreach (var image in images)
         {
+            var imageRef = image.DataUrl;
+            if (string.IsNullOrWhiteSpace(imageRef))
+            {
+                imageRef = image.ArtifactPath;
+            }
+
             parts.Add(new DispatchInputPart
             {
                 Type = "image",
-                ImageRef = string.IsNullOrWhiteSpace(image.DataUrl) ? image.ArtifactPath : image.DataUrl,
+                ImageRef = imageRef,
                 MimeType = image.MimeType,
                 Width = image.Width,
                 Height = image.Height,

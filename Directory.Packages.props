@@ -3,7 +3,6 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageVersion Include="BlazorMonaco" Version="3.4.0" />
     <PackageVersion Include="Blazor-ApexCharts" Version="6.0.2" />
@@ -26,24 +25,20 @@
     <PackageVersion Include="MessagePack.Annotations" Version="3.1.4" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+    <PackageVersion Include="LiteDB" Version="6.0.0-prerelease.75" />
     <PackageVersion Include="MudBlazor" Version="8.15.0" />
     <PackageVersion Include="Multicaster" Version="2.1.1" />
     <PackageVersion Include="Multicaster.InMemory" Version="2.1.1" />
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
+    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="7.3.2" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
     <PackageVersion Include="ZLogger" Version="2.5.10" />
   </ItemGroup>
-
   <ItemGroup>
     <!-- Test Framework -->
     <PackageVersion Include="TUnit" Version="1.15.0" />
     <PackageVersion Include="TUnit.Playwright" Version="1.15.0" />
-
     <!-- Test Utilities -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageVersion Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.14.0" />

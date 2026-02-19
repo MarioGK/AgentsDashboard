@@ -3,31 +3,28 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Configuration;
 using Cronos;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+using LiteDB;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
 public sealed class OrchestratorStore(
-    IDbContextFactory<OrchestratorDbContext> dbContextFactory,
-    IOptions<OrchestratorOptions> orchestratorOptions) : IOrchestratorStore
+    ILiteDbScopeFactory liteDbScopeFactory,
+    LiteDbExecutor liteDbExecutor,
+    LiteDbDatabase liteDbDatabase) : IOrchestratorStore, IAsyncDisposable
 {
     private static readonly RunState[] ActiveStates = [RunState.Queued, RunState.Running, RunState.PendingApproval];
     private static readonly FindingState[] OpenFindingStates = [FindingState.New, FindingState.Acknowledged, FindingState.InProgress];
     private static readonly Regex PromptSkillTriggerRegex = new("^[a-z0-9-]+$", RegexOptions.Compiled);
     private const string GlobalRepositoryScope = "global";
     private const string TaskWorkspacesRootPath = "/workspaces/repos";
-    private readonly string _sqliteConnectionString = orchestratorOptions.Value.SqliteConnectionString;
-    private readonly string _artifactsRootPath = orchestratorOptions.Value.ArtifactsRootPath;
+    private const string ArtifactFileStorageRoot = "$/run-artifacts";
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public async Task<RepositoryDocument> CreateRepositoryAsync(CreateRepositoryRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repository = new RepositoryDocument
         {
             Name = request.Name,
@@ -43,19 +40,19 @@ public sealed class OrchestratorStore(
 
     public async Task<List<RepositoryDocument>> ListRepositoriesAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Repositories.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
     }
 
     public async Task<RepositoryDocument?> GetRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Repositories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
     }
 
     public async Task<RepositoryDocument?> UpdateRepositoryAsync(string repositoryId, UpdateRepositoryRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
         if (repository is null)
             return null;
@@ -71,7 +68,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RepositoryDocument?> UpdateRepositoryGitStateAsync(string repositoryId, RepositoryGitStatus gitStatus, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
         if (repository is null)
             return null;
@@ -93,7 +90,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RepositoryDocument?> TouchRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
         if (repository is null)
             return null;
@@ -105,7 +102,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeleteRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
         if (repository is null)
             return false;
@@ -117,14 +114,14 @@ public sealed class OrchestratorStore(
 
     public async Task<List<InstructionFile>> GetRepositoryInstructionFilesAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repo = await db.Repositories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
         return repo?.InstructionFiles ?? [];
     }
 
     public async Task<RepositoryDocument?> UpdateRepositoryInstructionFilesAsync(string repositoryId, List<InstructionFile> instructionFiles, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repo = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
         if (repo is null)
             return null;
@@ -136,7 +133,7 @@ public sealed class OrchestratorStore(
 
     public async Task<List<RepositoryInstructionDocument>> GetInstructionsAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RepositoryInstructions.AsNoTracking()
             .Where(x => x.RepositoryId == repositoryId)
             .OrderBy(x => x.Priority)
@@ -145,13 +142,13 @@ public sealed class OrchestratorStore(
 
     public async Task<RepositoryInstructionDocument?> GetInstructionAsync(string instructionId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RepositoryInstructions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == instructionId, cancellationToken);
     }
 
     public async Task<RepositoryInstructionDocument> UpsertInstructionAsync(string repositoryId, string? instructionId, CreateRepositoryInstructionRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
 
         if (!string.IsNullOrWhiteSpace(instructionId))
@@ -190,7 +187,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeleteInstructionAsync(string instructionId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var instruction = await db.RepositoryInstructions.FirstOrDefaultAsync(x => x.Id == instructionId, cancellationToken);
         if (instruction is null)
             return false;
@@ -202,7 +199,7 @@ public sealed class OrchestratorStore(
 
     public async Task<HarnessProviderSettingsDocument?> GetHarnessProviderSettingsAsync(string repositoryId, string harness, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.HarnessProviderSettings.AsNoTracking().FirstOrDefaultAsync(
             x => x.RepositoryId == repositoryId && x.Harness == harness,
             cancellationToken);
@@ -217,7 +214,7 @@ public sealed class OrchestratorStore(
         Dictionary<string, string>? additionalSettings,
         CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var settings = await db.HarnessProviderSettings.FirstOrDefaultAsync(
             x => x.RepositoryId == repositoryId && x.Harness == harness,
             cancellationToken);
@@ -244,7 +241,7 @@ public sealed class OrchestratorStore(
 
     public async Task<PromptSkillDocument> CreatePromptSkillAsync(CreatePromptSkillRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repositoryId = NormalizePromptSkillScope(request.RepositoryId);
         var trigger = NormalizePromptSkillTrigger(request.Trigger);
         var name = NormalizeRequiredValue(request.Name, nameof(request.Name));
@@ -280,7 +277,7 @@ public sealed class OrchestratorStore(
 
     public async Task<List<PromptSkillDocument>> ListPromptSkillsAsync(string repositoryId, bool includeGlobal, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var scope = NormalizePromptSkillScope(repositoryId);
 
         IQueryable<PromptSkillDocument> query = db.PromptSkills.AsNoTracking();
@@ -302,13 +299,13 @@ public sealed class OrchestratorStore(
 
     public async Task<PromptSkillDocument?> GetPromptSkillAsync(string skillId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.PromptSkills.AsNoTracking().FirstOrDefaultAsync(x => x.Id == skillId, cancellationToken);
     }
 
     public async Task<PromptSkillDocument?> UpdatePromptSkillAsync(string skillId, UpdatePromptSkillRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var existing = await db.PromptSkills.FirstOrDefaultAsync(x => x.Id == skillId, cancellationToken);
         if (existing is null)
         {
@@ -342,7 +339,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeletePromptSkillAsync(string skillId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var existing = await db.PromptSkills.FirstOrDefaultAsync(x => x.Id == skillId, cancellationToken);
         if (existing is null)
         {
@@ -356,7 +353,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RunSessionProfileDocument> CreateRunSessionProfileAsync(CreateRunSessionProfileRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var repositoryId = NormalizeSessionProfileScope(request.RepositoryId, request.Scope);
         var name = NormalizeRequiredValue(request.Name, nameof(request.Name));
         var harness = NormalizeHarnessValue(request.Harness);
@@ -393,7 +390,7 @@ public sealed class OrchestratorStore(
 
     public async Task<List<RunSessionProfileDocument>> ListRunSessionProfilesAsync(string repositoryId, bool includeGlobal, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var scope = NormalizePromptSkillScope(repositoryId);
         IQueryable<RunSessionProfileDocument> query = db.RunSessionProfiles.AsNoTracking();
 
@@ -414,13 +411,13 @@ public sealed class OrchestratorStore(
 
     public async Task<RunSessionProfileDocument?> GetRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RunSessionProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == sessionProfileId, cancellationToken);
     }
 
     public async Task<RunSessionProfileDocument?> UpdateRunSessionProfileAsync(string sessionProfileId, UpdateRunSessionProfileRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var existing = await db.RunSessionProfiles.FirstOrDefaultAsync(x => x.Id == sessionProfileId, cancellationToken);
         if (existing is null)
         {
@@ -454,7 +451,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeleteRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var existing = await db.RunSessionProfiles.FirstOrDefaultAsync(x => x.Id == sessionProfileId, cancellationToken);
         if (existing is null)
         {
@@ -478,7 +475,7 @@ public sealed class OrchestratorStore(
         var replayPolicy = NormalizeRequiredValue(request.ReplayPolicy, nameof(request.ReplayPolicy)).ToLowerInvariant();
         var cronExpression = request.CronExpression?.Trim() ?? string.Empty;
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         AutomationDefinitionDocument automation;
 
         if (string.IsNullOrWhiteSpace(automationId))
@@ -519,7 +516,7 @@ public sealed class OrchestratorStore(
 
     public async Task<List<AutomationDefinitionDocument>> ListAutomationDefinitionsAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var normalizedRepositoryId = NormalizePromptSkillScope(repositoryId);
         return await db.AutomationDefinitions.AsNoTracking()
             .Where(x => x.RepositoryId == normalizedRepositoryId)
@@ -529,13 +526,13 @@ public sealed class OrchestratorStore(
 
     public async Task<AutomationDefinitionDocument?> GetAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.AutomationDefinitions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == automationId, cancellationToken);
     }
 
     public async Task<bool> DeleteAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var existing = await db.AutomationDefinitions.FirstOrDefaultAsync(x => x.Id == automationId, cancellationToken);
         if (existing is null)
         {
@@ -549,7 +546,7 @@ public sealed class OrchestratorStore(
 
     public async Task<AutomationExecutionDocument> CreateAutomationExecutionAsync(AutomationExecutionDocument execution, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(execution.Id))
         {
             execution.Id = Guid.NewGuid().ToString("N");
@@ -563,7 +560,7 @@ public sealed class OrchestratorStore(
 
     public async Task<List<AutomationExecutionDocument>> ListAutomationExecutionsAsync(string repositoryId, int limit, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var normalizedRepositoryId = NormalizePromptSkillScope(repositoryId);
         var normalizedLimit = limit <= 0 ? 100 : Math.Clamp(limit, 1, 1000);
         return await db.AutomationExecutions.AsNoTracking()
@@ -575,7 +572,7 @@ public sealed class OrchestratorStore(
 
     public async Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var task = new TaskDocument
         {
             RepositoryId = request.RepositoryId,
@@ -608,13 +605,13 @@ public sealed class OrchestratorStore(
 
     public async Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Tasks.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderBy(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
     public async Task<List<TaskDocument>> ListEventDrivenTasksAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Tasks.AsNoTracking()
             .Where(x => x.RepositoryId == repositoryId && x.Enabled && x.Kind == TaskKind.EventDriven)
             .OrderBy(x => x.CreatedAtUtc)
@@ -623,13 +620,13 @@ public sealed class OrchestratorStore(
 
     public async Task<TaskDocument?> GetTaskAsync(string taskId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Tasks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
     }
 
     public async Task<List<TaskDocument>> ListScheduledTasksAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Tasks.AsNoTracking()
             .Where(x => x.Enabled && x.Kind == TaskKind.Cron)
             .OrderBy(x => x.NextRunAtUtc)
@@ -638,7 +635,7 @@ public sealed class OrchestratorStore(
 
     public async Task<List<TaskDocument>> ListDueTasksAsync(DateTime utcNow, int limit, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Tasks.AsNoTracking()
             .Where(x => x.Enabled && (x.Kind == TaskKind.OneShot || (x.Kind == TaskKind.Cron && x.NextRunAtUtc != null && x.NextRunAtUtc <= utcNow)))
             .Take(limit)
@@ -647,7 +644,7 @@ public sealed class OrchestratorStore(
 
     public async Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
         if (task is null)
             return;
@@ -658,7 +655,7 @@ public sealed class OrchestratorStore(
 
     public async Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
         if (task is null)
             return;
@@ -678,7 +675,7 @@ public sealed class OrchestratorStore(
             return null;
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
         if (task is null)
         {
@@ -701,7 +698,7 @@ public sealed class OrchestratorStore(
 
     public async Task<TaskDocument?> UpdateTaskAsync(string taskId, UpdateTaskRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
         if (task is null)
             return null;
@@ -733,7 +730,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeleteTaskAsync(string taskId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
         if (task is null)
             return false;
@@ -749,26 +746,7 @@ public sealed class OrchestratorStore(
     public async Task<DbStorageSnapshot> GetStorageSnapshotAsync(CancellationToken cancellationToken)
     {
         var measuredAtUtc = DateTime.UtcNow;
-        var databasePath = string.Empty;
-        var mainFileBytes = 0L;
-        var walFileBytes = 0L;
-
-        await using var connection = new SqliteConnection(_sqliteConnectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        await using (var command = connection.CreateCommand())
-        {
-            command.CommandText = "SELECT file FROM pragma_database_list WHERE name = 'main' LIMIT 1;";
-            var scalar = await command.ExecuteScalarAsync(cancellationToken);
-            databasePath = scalar?.ToString() ?? string.Empty;
-        }
-
-        if (string.IsNullOrWhiteSpace(databasePath))
-        {
-            var builder = new SqliteConnectionStringBuilder(_sqliteConnectionString);
-            databasePath = builder.DataSource;
-        }
-
+        var databasePath = liteDbDatabase.DatabasePath;
         if (string.IsNullOrWhiteSpace(databasePath) || string.Equals(databasePath, ":memory:", StringComparison.OrdinalIgnoreCase))
         {
             return new DbStorageSnapshot(
@@ -785,22 +763,17 @@ public sealed class OrchestratorStore(
             databasePath = Path.GetFullPath(databasePath);
         }
 
+        var mainFileBytes = 0L;
         if (File.Exists(databasePath))
         {
             mainFileBytes = new FileInfo(databasePath).Length;
         }
 
-        var walPath = $"{databasePath}-wal";
-        if (File.Exists(walPath))
-        {
-            walFileBytes = new FileInfo(walPath).Length;
-        }
-
         return new DbStorageSnapshot(
             databasePath,
             mainFileBytes,
-            walFileBytes,
-            mainFileBytes + walFileBytes,
+            0,
+            mainFileBytes,
             File.Exists(databasePath),
             measuredAtUtc);
     }
@@ -825,7 +798,7 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
 
         var taskQuery = db.Tasks.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(query.RepositoryId))
@@ -1033,7 +1006,7 @@ public sealed class OrchestratorStore(
                 TaskWorkspaceDeleteErrors: 0);
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var task = await db.Tasks.AsNoTracking()
             .Where(x => x.Id == taskId)
             .Select(x => new { x.Id, x.RepositoryId })
@@ -1074,90 +1047,46 @@ public sealed class OrchestratorStore(
         var deletedRuns = 0;
         var taskDeleted = false;
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-
         if (runIds.Count > 0)
         {
-            deletedRunLogs = await db.RunEvents
-                .Where(x => runIds.Contains(x.RunId))
-                .ExecuteDeleteAsync(cancellationToken);
-
-            _ = await db.RunStructuredEvents
-                .Where(x => runIds.Contains(x.RunId))
-                .ExecuteDeleteAsync(cancellationToken);
-
-            _ = await db.RunDiffSnapshots
-                .Where(x => runIds.Contains(x.RunId))
-                .ExecuteDeleteAsync(cancellationToken);
-
-            _ = await db.RunToolProjections
-                .Where(x => runIds.Contains(x.RunId))
-                .ExecuteDeleteAsync(cancellationToken);
-
-            deletedFindings = await db.Findings
-                .Where(x => runIds.Contains(x.RunId))
-                .ExecuteDeleteAsync(cancellationToken);
+            deletedRunLogs = await db.RunEvents.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+            _ = await db.RunStructuredEvents.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+            _ = await db.RunDiffSnapshots.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+            _ = await db.RunToolProjections.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+            deletedFindings = await db.Findings.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         }
 
-        deletedPromptEntries = await db.WorkspacePromptEntries
-            .Where(x => x.TaskId == taskId)
-            .ExecuteDeleteAsync(cancellationToken);
+        deletedPromptEntries = await db.WorkspacePromptEntries.DeleteWhereAsync(x => x.TaskId == taskId, cancellationToken);
         if (runIds.Count > 0)
         {
-            deletedPromptEntries += await db.WorkspacePromptEntries
-                .Where(x => runIds.Contains(x.RunId))
-                .ExecuteDeleteAsync(cancellationToken);
+            deletedPromptEntries += await db.WorkspacePromptEntries.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         }
 
-        deletedRunSummaries = await db.RunAiSummaries
-            .Where(x => x.TaskId == taskId)
-            .ExecuteDeleteAsync(cancellationToken);
+        deletedRunSummaries = await db.RunAiSummaries.DeleteWhereAsync(x => x.TaskId == taskId, cancellationToken);
         if (runIds.Count > 0)
         {
-            deletedRunSummaries += await db.RunAiSummaries
-                .Where(x => runIds.Contains(x.RunId))
-                .ExecuteDeleteAsync(cancellationToken);
+            deletedRunSummaries += await db.RunAiSummaries.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         }
 
-        deletedSemanticChunks = await db.SemanticChunks
-            .Where(x => x.TaskId == taskId)
-            .ExecuteDeleteAsync(cancellationToken);
+        deletedSemanticChunks = await db.SemanticChunks.DeleteWhereAsync(x => x.TaskId == taskId, cancellationToken);
         if (runIds.Count > 0)
         {
-            deletedSemanticChunks += await db.SemanticChunks
-                .Where(x => runIds.Contains(x.RunId))
-                .ExecuteDeleteAsync(cancellationToken);
+            deletedSemanticChunks += await db.SemanticChunks.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         }
 
-        deletedRuns = await db.Runs
-            .Where(x => x.TaskId == taskId)
-            .ExecuteDeleteAsync(cancellationToken);
-
-        taskDeleted = await db.Tasks
-            .Where(x => x.Id == taskId)
-            .ExecuteDeleteAsync(cancellationToken) > 0;
-
-        await transaction.CommitAsync(cancellationToken);
+        deletedRuns = await db.Runs.DeleteWhereAsync(x => x.TaskId == taskId, cancellationToken);
+        taskDeleted = await db.Tasks.DeleteWhereAsync(x => x.Id == taskId, cancellationToken) > 0;
+        await db.SaveChangesAsync(cancellationToken);
 
         var deletedArtifactDirectories = 0;
         var artifactDeleteErrors = 0;
-        foreach (var runId in runIds)
+        try
         {
-            var artifactDirectory = Path.Combine(_artifactsRootPath, runId);
-            if (!Directory.Exists(artifactDirectory))
-            {
-                continue;
-            }
-
-            try
-            {
-                Directory.Delete(artifactDirectory, true);
-                deletedArtifactDirectories++;
-            }
-            catch
-            {
-                artifactDeleteErrors++;
-            }
+            await DeleteStoredArtifactsByRunIdsAsync(runIds, cancellationToken);
+        }
+        catch
+        {
+            artifactDeleteErrors++;
         }
 
         var deletedTaskWorkspaceDirectories = 0;
@@ -1266,7 +1195,7 @@ public sealed class OrchestratorStore(
 
     public async Task VacuumAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         await db.Database.ExecuteSqlRawAsync("VACUUM;", cancellationToken);
     }
 
@@ -1278,7 +1207,7 @@ public sealed class OrchestratorStore(
         string? sessionProfileId = null,
         string? automationRunId = null)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = new RunDocument
         {
             RepositoryId = task.RepositoryId,
@@ -1299,19 +1228,19 @@ public sealed class OrchestratorStore(
 
     public async Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderByDescending(x => x.CreatedAtUtc).Take(200).ToListAsync(cancellationToken);
     }
 
     public async Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(100).ToListAsync(cancellationToken);
     }
 
     public async Task<List<RepositoryDocument>> ListRepositoriesWithRecentTasksAsync(int limit, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var normalizedLimit = Math.Clamp(limit, 1, 500);
 
         var repositoriesWithTasks = await db.Tasks.AsNoTracking()
@@ -1371,7 +1300,7 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var normalizedLimit = Math.Clamp(limit, 1, 500);
 
         return await db.Runs.AsNoTracking()
@@ -1397,7 +1326,7 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var latestRunCandidates = await (
             from run in db.Runs.AsNoTracking()
             where normalizedTaskIds.Contains(run.TaskId)
@@ -1431,7 +1360,7 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.AsNoTracking()
             .Where(x =>
                 x.TaskId == taskId &&
@@ -1459,7 +1388,7 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var normalizedLimit = Math.Clamp(limit, 1, 1000);
 
         return await db.WorkspacePromptEntries.AsNoTracking()
@@ -1476,7 +1405,7 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.WorkspacePromptEntries.AsNoTracking()
             .Where(x => x.TaskId == taskId)
             .OrderBy(x => x.CreatedAtUtc)
@@ -1490,7 +1419,7 @@ public sealed class OrchestratorStore(
             throw new ArgumentException("TaskId is required.", nameof(promptEntry));
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(promptEntry.Id))
         {
@@ -1522,7 +1451,7 @@ public sealed class OrchestratorStore(
             throw new ArgumentException("RunId is required.", nameof(summary));
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
 
         var runMetadata = await db.Runs.AsNoTracking()
@@ -1582,7 +1511,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RunAiSummaryDocument?> GetRunAiSummaryAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RunAiSummaries.AsNoTracking()
             .FirstOrDefaultAsync(x => x.RunId == runId, cancellationToken);
     }
@@ -1594,7 +1523,7 @@ public sealed class OrchestratorStore(
             return;
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var repositoryId = await db.Tasks.AsNoTracking()
             .Where(x => x.Id == taskId)
@@ -1673,97 +1602,66 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var normalizedLimit = Math.Clamp(limit, 1, 200);
-        var chunks = db.SemanticChunks.AsNoTracking().Where(x => x.TaskId == taskId);
-        if (!string.IsNullOrWhiteSpace(queryEmbeddingPayload))
+        var chunks = await db.SemanticChunks.AsNoTracking()
+            .Where(x => x.TaskId == taskId)
+            .ToListAsync(cancellationToken);
+
+        if (chunks.Count == 0)
         {
-            try
-            {
-                var semanticIds = new List<string>(normalizedLimit);
-                var connection = (SqliteConnection)db.Database.GetDbConnection();
-                if (connection.State != System.Data.ConnectionState.Open)
-                {
-                    await connection.OpenAsync(cancellationToken);
-                }
+            return [];
+        }
 
-                await using var command = connection.CreateCommand();
-                command.CommandText =
-                    """
-                    SELECT Id
-                    FROM SemanticChunks
-                    WHERE TaskId = $taskId
-                      AND EmbeddingPayload <> ''
-                    ORDER BY vec_distance_cosine(vec_f32(EmbeddingPayload), vec_f32($embedding)) ASC, UpdatedAtUtc DESC
-                    LIMIT $limit;
-                    """;
-                command.Parameters.AddWithValue("$taskId", taskId);
-                command.Parameters.AddWithValue("$embedding", queryEmbeddingPayload);
-                command.Parameters.AddWithValue("$limit", normalizedLimit);
-
-                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-                while (await reader.ReadAsync(cancellationToken))
+        var queryEmbedding = ParseEmbeddingPayload(queryEmbeddingPayload);
+        if (queryEmbedding is { Length: > 0 })
+        {
+            var semanticMatches = chunks
+                .Select(chunk => new
                 {
-                    semanticIds.Add(reader.GetString(0));
-                }
+                    Chunk = chunk,
+                    Score = ComputeCosineSimilarity(queryEmbedding, ParseEmbeddingPayload(chunk.EmbeddingPayload))
+                })
+                .Where(x => x.Score.HasValue)
+                .OrderByDescending(x => x.Score!.Value)
+                .ThenByDescending(x => x.Chunk.UpdatedAtUtc)
+                .Take(normalizedLimit)
+                .Select(x => x.Chunk)
+                .ToList();
 
-                if (semanticIds.Count > 0)
-                {
-                    var candidates = await chunks
-                        .Where(x => semanticIds.Contains(x.Id))
-                        .ToListAsync(cancellationToken);
-                    var byId = candidates.ToDictionary(x => x.Id, StringComparer.Ordinal);
-                    return semanticIds
-                        .Select(id => byId.GetValueOrDefault(id))
-                        .Where(chunk => chunk is not null)
-                        .Cast<SemanticChunkDocument>()
-                        .ToList();
-                }
-            }
-            catch (SqliteException ex)
+            if (semanticMatches.Count > 0)
             {
-                // sqlite-vec unavailable or vector function not loaded; fallback to text ranking below.
-                _ = ex;
-            }
-            catch (Exception)
-            {
-                // Any vector parsing/execution failure falls back to text ranking below.
+                return semanticMatches;
             }
         }
 
         var normalizedQuery = queryText.Trim();
-        if (normalizedQuery.Length == 0)
+        if (normalizedQuery.Length > 0)
         {
-            return await chunks
+            var textMatches = chunks
+                .Where(x =>
+                    x.Content.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
+                    x.SourceRef.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
+                    x.ChunkKey.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(x => x.UpdatedAtUtc)
                 .Take(normalizedLimit)
-                .ToListAsync(cancellationToken);
+                .ToList();
+
+            if (textMatches.Count > 0)
+            {
+                return textMatches;
+            }
         }
 
-        var likeQuery = $"%{normalizedQuery}%";
-        var textMatches = await chunks
-            .Where(x =>
-                EF.Functions.Like(x.Content, likeQuery) ||
-                EF.Functions.Like(x.SourceRef, likeQuery) ||
-                EF.Functions.Like(x.ChunkKey, likeQuery))
+        return chunks
             .OrderByDescending(x => x.UpdatedAtUtc)
             .Take(normalizedLimit)
-            .ToListAsync(cancellationToken);
-
-        if (textMatches.Count > 0)
-        {
-            return textMatches;
-        }
-
-        return await chunks
-            .OrderByDescending(x => x.UpdatedAtUtc)
-            .Take(normalizedLimit)
-            .ToListAsync(cancellationToken);
+            .ToList();
     }
 
     public async Task<ReliabilityMetrics> GetReliabilityMetricsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var sevenDaysAgo = now.AddDays(-7);
         var thirtyDaysAgo = now.AddDays(-30);
@@ -1796,43 +1694,43 @@ public sealed class OrchestratorStore(
 
     public async Task<RunDocument?> GetRunAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == runId, cancellationToken);
     }
 
     public async Task<List<RunDocument>> ListRunsByStateAsync(RunState state, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.AsNoTracking().Where(x => x.State == state).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
     public async Task<List<string>> ListAllRunIdsAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.AsNoTracking().Select(x => x.Id).ToListAsync(cancellationToken);
     }
 
     public async Task<long> CountRunsByStateAsync(RunState state, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.LongCountAsync(x => x.State == state, cancellationToken);
     }
 
     public async Task<long> CountActiveRunsAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.LongCountAsync(x => ActiveStates.Contains(x.State), cancellationToken);
     }
 
     public async Task<long> CountActiveRunsByRepoAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.LongCountAsync(x => x.RepositoryId == repositoryId && ActiveStates.Contains(x.State), cancellationToken);
     }
 
     public async Task<long> CountActiveRunsByTaskAsync(string taskId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Runs.LongCountAsync(x => x.TaskId == taskId && ActiveStates.Contains(x.State), cancellationToken);
     }
 
@@ -1844,7 +1742,7 @@ public sealed class OrchestratorStore(
         string? workerImageDigest = null,
         string? workerImageSource = null)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State != RunState.Obsolete, cancellationToken);
         if (run is null)
             return null;
@@ -1874,7 +1772,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RunDocument?> MarkRunCompletedAsync(string runId, bool succeeded, string summary, string outputJson, CancellationToken cancellationToken, string? failureClass = null, string? prUrl = null)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State != RunState.Obsolete, cancellationToken);
         if (run is null)
             return null;
@@ -1895,7 +1793,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RunDocument?> MarkRunCancelledAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && ActiveStates.Contains(x.State), cancellationToken);
         if (run is null)
             return null;
@@ -1909,7 +1807,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RunDocument?> MarkRunObsoleteAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = await db.Runs.FirstOrDefaultAsync(
             x => x.Id == runId && (ActiveStates.Contains(x.State) || x.State == RunState.Succeeded),
             cancellationToken);
@@ -1928,7 +1826,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RunDocument?> MarkRunPendingApprovalAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State != RunState.Obsolete, cancellationToken);
         if (run is null)
             return null;
@@ -1941,7 +1839,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RunDocument?> ApproveRunAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State == RunState.PendingApproval, cancellationToken);
         if (run is null)
             return null;
@@ -1954,7 +1852,7 @@ public sealed class OrchestratorStore(
 
     public async Task<RunDocument?> RejectRunAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = await db.Runs.FirstOrDefaultAsync(x => x.Id == runId && x.State == RunState.PendingApproval, cancellationToken);
         if (run is null)
             return null;
@@ -1971,7 +1869,7 @@ public sealed class OrchestratorStore(
         if (runIds.Count == 0)
             return 0;
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var runs = await db.Runs.Where(x => runIds.Contains(x.Id) && ActiveStates.Contains(x.State)).ToListAsync(cancellationToken);
         foreach (var run in runs)
         {
@@ -1985,50 +1883,97 @@ public sealed class OrchestratorStore(
 
     public async Task SaveArtifactAsync(string runId, string fileName, Stream stream, CancellationToken cancellationToken)
     {
-        var artifactDir = Path.Combine(_artifactsRootPath, runId);
-        Directory.CreateDirectory(artifactDir);
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            throw new ArgumentException("Run id is required.", nameof(runId));
+        }
 
-        var filePath = Path.Combine(artifactDir, fileName);
-        await using var fileStream = File.Create(filePath);
-        await stream.CopyToAsync(fileStream, cancellationToken);
+        var normalizedFileName = NormalizeArtifactFileName(fileName);
+        await using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory, cancellationToken);
+        memory.Position = 0;
+
+        var metadata = new RunArtifactDocument
+        {
+            Id = BuildArtifactId(runId, normalizedFileName),
+            RunId = runId,
+            FileName = normalizedFileName,
+            FileStorageId = BuildArtifactFileStorageId(runId, normalizedFileName),
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        await liteDbExecutor.ExecuteAsync(
+            db =>
+            {
+                db.FileStorage.Upload(metadata.FileStorageId, normalizedFileName, memory);
+                var collection = db.GetCollection<RunArtifactDocument>("run_artifacts");
+                collection.EnsureIndex(x => x.RunId);
+                collection.EnsureIndex(x => x.FileName);
+                collection.Upsert(metadata);
+            },
+            cancellationToken);
     }
 
     public Task<List<string>> ListArtifactsAsync(string runId, CancellationToken cancellationToken)
     {
-        var artifactDir = Path.Combine(_artifactsRootPath, runId);
-        if (!Directory.Exists(artifactDir))
-            return Task.FromResult(new List<string>());
+        return liteDbExecutor.ExecuteAsync(
+            db =>
+            {
+                if (string.IsNullOrWhiteSpace(runId))
+                {
+                    return new List<string>();
+                }
 
-        var files = Directory.GetFiles(artifactDir)
-            .Select(Path.GetFileName)
-            .Where(f => f is not null)
-            .Cast<string>()
-            .ToList();
-
-        return Task.FromResult(files);
+                var metadataCollection = db.GetCollection<RunArtifactDocument>("run_artifacts");
+                metadataCollection.EnsureIndex(x => x.RunId);
+                return metadataCollection.Find(x => x.RunId == runId)
+                    .Select(x => x.FileName)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            },
+            cancellationToken);
     }
 
-    public Task<FileStream?> GetArtifactAsync(string runId, string fileName, CancellationToken cancellationToken)
+    public async Task<Stream?> GetArtifactAsync(string runId, string fileName, CancellationToken cancellationToken)
     {
-        var artifactDir = Path.Combine(_artifactsRootPath, runId);
-        var filePath = Path.Combine(artifactDir, fileName);
+        var normalizedFileName = NormalizeArtifactFileName(fileName);
+        var payload = await liteDbExecutor.ExecuteAsync(
+            db =>
+            {
+                var metadataCollection = db.GetCollection<RunArtifactDocument>("run_artifacts");
+                var metadata = metadataCollection.FindById(BuildArtifactId(runId, normalizedFileName));
+                if (metadata is null || string.IsNullOrWhiteSpace(metadata.FileStorageId))
+                {
+                    return null;
+                }
 
-        if (!File.Exists(filePath))
-            return Task.FromResult<FileStream?>(null);
+                if (!db.FileStorage.Exists(metadata.FileStorageId))
+                {
+                    return null;
+                }
 
-        return Task.FromResult<FileStream?>(File.OpenRead(filePath));
+                using var fileStream = db.FileStorage.OpenRead(metadata.FileStorageId);
+                using var memory = new MemoryStream();
+                fileStream.CopyTo(memory);
+                return memory.ToArray();
+            },
+            cancellationToken);
+
+        return payload is null ? null : new MemoryStream(payload, writable: false);
     }
 
     public async Task AddRunLogAsync(RunLogEvent logEvent, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         db.RunEvents.Add(logEvent);
         await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<List<RunLogEvent>> ListRunLogsAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RunEvents.AsNoTracking().Where(x => x.RunId == runId).OrderBy(x => x.TimestampUtc).ToListAsync(cancellationToken);
     }
 
@@ -2039,7 +1984,7 @@ public sealed class OrchestratorStore(
             throw new ArgumentException("RunId is required.", nameof(structuredEvent));
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
 
         if (string.IsNullOrWhiteSpace(structuredEvent.Id))
@@ -2179,7 +2124,7 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var normalizedLimit = limit <= 0 ? 500 : Math.Clamp(limit, 1, 5000);
 
         return await db.RunStructuredEvents.AsNoTracking()
@@ -2197,7 +2142,7 @@ public sealed class OrchestratorStore(
             throw new ArgumentException("RunId is required.", nameof(snapshot));
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
 
         if (string.IsNullOrWhiteSpace(snapshot.Id))
@@ -2275,7 +2220,7 @@ public sealed class OrchestratorStore(
             return null;
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RunDiffSnapshots.AsNoTracking()
             .Where(x => x.RunId == runId)
             .OrderByDescending(x => x.CreatedAtUtc)
@@ -2290,7 +2235,7 @@ public sealed class OrchestratorStore(
             return [];
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RunToolProjections.AsNoTracking()
             .Where(x => x.RunId == runId)
             .OrderBy(x => x.SequenceStart)
@@ -2306,7 +2251,7 @@ public sealed class OrchestratorStore(
             throw new ArgumentException("RunId is required.", nameof(stack));
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
         stack.Hash = stack.Hash?.Trim() ?? string.Empty;
         stack.ResolvedText = stack.ResolvedText?.Trim() ?? string.Empty;
@@ -2355,7 +2300,7 @@ public sealed class OrchestratorStore(
             return null;
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RunInstructionStacks.AsNoTracking()
             .Where(x => x.RunId == runId)
             .OrderByDescending(x => x.CreatedAtUtc)
@@ -2369,7 +2314,7 @@ public sealed class OrchestratorStore(
             throw new ArgumentException("RunId is required.", nameof(bundle));
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         bundle.BundleJson = bundle.BundleJson?.Trim() ?? string.Empty;
         if (bundle.CreatedAtUtc == default)
         {
@@ -2404,7 +2349,7 @@ public sealed class OrchestratorStore(
             return null;
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.RunShareBundles.AsNoTracking()
             .Where(x => x.RunId == runId)
             .OrderByDescending(x => x.CreatedAtUtc)
@@ -2421,7 +2366,7 @@ public sealed class OrchestratorStore(
         var normalizedMaxRuns = Math.Clamp(maxRuns, 1, 5000);
         var scanLimit = Math.Clamp(normalizedMaxRuns * 5, normalizedMaxRuns, 20_000);
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var runSeeds = await db.Runs.AsNoTracking()
             .Where(x =>
                 (x.State == RunState.Succeeded ||
@@ -2531,15 +2476,10 @@ public sealed class OrchestratorStore(
                 DeletedToolProjections: 0);
         }
 
-        var deletedStructuredEvents = await db.RunStructuredEvents
-            .Where(x => runIds.Contains(x.RunId))
-            .ExecuteDeleteAsync(cancellationToken);
-        var deletedDiffSnapshots = await db.RunDiffSnapshots
-            .Where(x => runIds.Contains(x.RunId))
-            .ExecuteDeleteAsync(cancellationToken);
-        var deletedToolProjections = await db.RunToolProjections
-            .Where(x => runIds.Contains(x.RunId))
-            .ExecuteDeleteAsync(cancellationToken);
+        var deletedStructuredEvents = await db.RunStructuredEvents.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+        var deletedDiffSnapshots = await db.RunDiffSnapshots.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+        var deletedToolProjections = await db.RunToolProjections.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
 
         return new StructuredRunDataPruneResult(
             RunsScanned: runIds.Count,
@@ -2550,25 +2490,25 @@ public sealed class OrchestratorStore(
 
     public async Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Findings.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderByDescending(x => x.CreatedAtUtc).Take(200).ToListAsync(cancellationToken);
     }
 
     public async Task<List<FindingDocument>> ListAllFindingsAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Findings.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(500).ToListAsync(cancellationToken);
     }
 
     public async Task<FindingDocument?> GetFindingAsync(string findingId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Findings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
     }
 
     public async Task<FindingDocument> CreateFindingFromFailureAsync(RunDocument run, string description, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var shortRun = run.Id.Length >= 8 ? run.Id[..8] : run.Id;
         var finding = new FindingDocument
         {
@@ -2587,7 +2527,7 @@ public sealed class OrchestratorStore(
 
     public async Task<FindingDocument?> UpdateFindingStateAsync(string findingId, FindingState state, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
         if (finding is null)
             return null;
@@ -2599,7 +2539,7 @@ public sealed class OrchestratorStore(
 
     public async Task<FindingDocument?> AssignFindingAsync(string findingId, string assignedTo, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
         if (finding is null)
             return null;
@@ -2612,7 +2552,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeleteFindingAsync(string findingId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
         if (finding is null)
             return false;
@@ -2624,7 +2564,7 @@ public sealed class OrchestratorStore(
 
     public async Task UpsertProviderSecretAsync(string repositoryId, string provider, string encryptedValue, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var secret = await db.ProviderSecrets.FirstOrDefaultAsync(x => x.RepositoryId == repositoryId && x.Provider == provider, cancellationToken);
         if (secret is null)
         {
@@ -2643,19 +2583,19 @@ public sealed class OrchestratorStore(
 
     public async Task<List<ProviderSecretDocument>> ListProviderSecretsAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.ProviderSecrets.AsNoTracking().Where(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
     }
 
     public async Task<ProviderSecretDocument?> GetProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.ProviderSecrets.AsNoTracking().FirstOrDefaultAsync(x => x.RepositoryId == repositoryId && x.Provider == provider, cancellationToken);
     }
 
     public async Task<bool> DeleteProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var secret = await db.ProviderSecrets.FirstOrDefaultAsync(x => x.RepositoryId == repositoryId && x.Provider == provider, cancellationToken);
         if (secret is null)
             return false;
@@ -2667,13 +2607,13 @@ public sealed class OrchestratorStore(
 
     public async Task<List<TaskRuntimeRegistration>> ListTaskRuntimeRegistrationsAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.TaskRuntimeRegistrations.AsNoTracking().OrderBy(x => x.RuntimeId).ToListAsync(cancellationToken);
     }
 
     public async Task UpsertTaskRuntimeRegistrationHeartbeatAsync(string runtimeId, string endpoint, int activeSlots, int maxSlots, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var registration = await db.TaskRuntimeRegistrations.FirstOrDefaultAsync(x => x.RuntimeId == runtimeId, cancellationToken);
         if (registration is null)
         {
@@ -2695,7 +2635,7 @@ public sealed class OrchestratorStore(
 
     public async Task MarkStaleTaskRuntimeRegistrationsOfflineAsync(TimeSpan threshold, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var cutoff = DateTime.UtcNow - threshold;
         var stale = await db.TaskRuntimeRegistrations
             .Where(x => x.Online && x.LastHeartbeatUtc < cutoff)
@@ -2715,7 +2655,7 @@ public sealed class OrchestratorStore(
 
     public async Task<List<TaskRuntimeDocument>> ListTaskRuntimesAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.TaskRuntimes.AsNoTracking().OrderBy(x => x.RuntimeId).ToListAsync(cancellationToken);
     }
 
@@ -2726,7 +2666,7 @@ public sealed class OrchestratorStore(
             throw new InvalidOperationException("RuntimeId is required.");
         }
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = update.ObservedAtUtc == default ? DateTime.UtcNow : update.ObservedAtUtc;
         var runtime = await db.TaskRuntimes.FirstOrDefaultAsync(x => x.RuntimeId == update.RuntimeId, cancellationToken);
         if (runtime is null)
@@ -2823,7 +2763,7 @@ public sealed class OrchestratorStore(
 
     public async Task<TaskRuntimeTelemetrySnapshot> GetTaskRuntimeTelemetryAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var runtimes = await db.TaskRuntimes.AsNoTracking().ToListAsync(cancellationToken);
         if (runtimes.Count == 0)
         {
@@ -2870,7 +2810,7 @@ public sealed class OrchestratorStore(
 
     public async Task<WebhookRegistration> CreateWebhookAsync(CreateWebhookRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var webhook = new WebhookRegistration
         {
             RepositoryId = request.RepositoryId,
@@ -2886,19 +2826,19 @@ public sealed class OrchestratorStore(
 
     public async Task<WebhookRegistration?> GetWebhookAsync(string webhookId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Webhooks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == webhookId, cancellationToken);
     }
 
     public async Task<List<WebhookRegistration>> ListWebhooksAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Webhooks.AsNoTracking().Where(x => x.RepositoryId == repositoryId).ToListAsync(cancellationToken);
     }
 
     public async Task<WebhookRegistration?> UpdateWebhookAsync(string webhookId, UpdateWebhookRequest request, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var webhook = await db.Webhooks.FirstOrDefaultAsync(x => x.Id == webhookId, cancellationToken);
         if (webhook is null)
             return null;
@@ -2913,7 +2853,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var webhook = await db.Webhooks.FirstOrDefaultAsync(x => x.Id == webhookId, cancellationToken);
         if (webhook is null)
             return false;
@@ -2925,20 +2865,20 @@ public sealed class OrchestratorStore(
 
     public async Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         db.ProxyAudits.Add(audit);
         await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.ProxyAudits.AsNoTracking().Where(x => x.RunId == runId).OrderByDescending(x => x.TimestampUtc).Take(200).ToListAsync(cancellationToken);
     }
 
     public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var query = db.ProxyAudits.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(repoId))
@@ -2953,14 +2893,14 @@ public sealed class OrchestratorStore(
 
     public async Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var settings = await db.Settings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == "singleton", cancellationToken);
         return settings ?? new SystemSettingsDocument();
     }
 
     public async Task<SystemSettingsDocument> UpdateSettingsAsync(SystemSettingsDocument settings, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         settings.Id = "singleton";
         settings.UpdatedAtUtc = DateTime.UtcNow;
 
@@ -2979,7 +2919,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> TryAcquireLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var expiresAtUtc = now.Add(ttl);
 
@@ -3014,7 +2954,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> RenewLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var lease = await db.Leases.FirstOrDefaultAsync(
             x => x.LeaseName == leaseName && x.OwnerId == ownerId,
             cancellationToken);
@@ -3031,7 +2971,7 @@ public sealed class OrchestratorStore(
 
     public async Task ReleaseLeaseAsync(string leaseName, string ownerId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var lease = await db.Leases.FirstOrDefaultAsync(
             x => x.LeaseName == leaseName && x.OwnerId == ownerId,
             cancellationToken);
@@ -3047,7 +2987,7 @@ public sealed class OrchestratorStore(
 
     public async Task<WorkflowDocument> CreateWorkflowAsync(WorkflowDocument workflow, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         db.Workflows.Add(workflow);
         await db.SaveChangesAsync(cancellationToken);
         return workflow;
@@ -3055,25 +2995,25 @@ public sealed class OrchestratorStore(
 
     public async Task<List<WorkflowDocument>> ListWorkflowsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Workflows.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
     public async Task<List<WorkflowDocument>> ListAllWorkflowsAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Workflows.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
     public async Task<WorkflowDocument?> GetWorkflowAsync(string workflowId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Workflows.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
     }
 
     public async Task<WorkflowDocument?> UpdateWorkflowAsync(string workflowId, WorkflowDocument workflow, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var existing = await db.Workflows.FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
         if (existing is null)
             return null;
@@ -3086,7 +3026,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeleteWorkflowAsync(string workflowId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var workflow = await db.Workflows.FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
         if (workflow is null)
             return false;
@@ -3098,7 +3038,7 @@ public sealed class OrchestratorStore(
 
     public async Task<WorkflowExecutionDocument> CreateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         db.WorkflowExecutions.Add(execution);
         await db.SaveChangesAsync(cancellationToken);
         return execution;
@@ -3106,7 +3046,7 @@ public sealed class OrchestratorStore(
 
     public async Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsAsync(string workflowId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.WorkflowExecutions.AsNoTracking()
             .Where(x => x.WorkflowId == workflowId)
             .OrderByDescending(x => x.CreatedAtUtc)
@@ -3116,19 +3056,19 @@ public sealed class OrchestratorStore(
 
     public async Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsByStateAsync(WorkflowExecutionState state, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.WorkflowExecutions.AsNoTracking().Where(x => x.State == state).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
     public async Task<WorkflowExecutionDocument?> GetWorkflowExecutionAsync(string executionId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.WorkflowExecutions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
     }
 
     public async Task<WorkflowExecutionDocument?> UpdateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var existing = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == execution.Id, cancellationToken);
         if (existing is null)
             return null;
@@ -3140,7 +3080,7 @@ public sealed class OrchestratorStore(
 
     public async Task<WorkflowExecutionDocument?> MarkWorkflowExecutionCompletedAsync(string executionId, WorkflowExecutionState finalState, string failureReason, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
         if (execution is null)
             return null;
@@ -3154,7 +3094,7 @@ public sealed class OrchestratorStore(
 
     public async Task<WorkflowExecutionDocument?> MarkWorkflowExecutionPendingApprovalAsync(string executionId, string pendingApprovalStageId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
         if (execution is null)
             return null;
@@ -3167,7 +3107,7 @@ public sealed class OrchestratorStore(
 
     public async Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(string executionId, string approvedBy, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(
             x => x.Id == executionId && x.State == WorkflowExecutionState.PendingApproval,
             cancellationToken);
@@ -3183,20 +3123,20 @@ public sealed class OrchestratorStore(
 
     public async Task<WorkflowExecutionDocument?> GetWorkflowExecutionByRunIdAsync(string runId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var executions = await db.WorkflowExecutions.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(500).ToListAsync(cancellationToken);
         return executions.FirstOrDefault(x => x.StageResults.Any(stage => stage.RunIds.Contains(runId)));
     }
 
     public async Task<WorkflowDocument?> GetWorkflowForExecutionAsync(string workflowId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Workflows.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
     }
 
     public async Task<AlertRuleDocument> CreateAlertRuleAsync(AlertRuleDocument rule, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         db.AlertRules.Add(rule);
         await db.SaveChangesAsync(cancellationToken);
         return rule;
@@ -3204,25 +3144,25 @@ public sealed class OrchestratorStore(
 
     public async Task<List<AlertRuleDocument>> ListAlertRulesAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.AlertRules.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
     }
 
     public async Task<List<AlertRuleDocument>> ListEnabledAlertRulesAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.AlertRules.AsNoTracking().Where(x => x.Enabled).ToListAsync(cancellationToken);
     }
 
     public async Task<AlertRuleDocument?> GetAlertRuleAsync(string ruleId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.AlertRules.AsNoTracking().FirstOrDefaultAsync(x => x.Id == ruleId, cancellationToken);
     }
 
     public async Task<AlertRuleDocument?> UpdateAlertRuleAsync(string ruleId, AlertRuleDocument rule, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var existing = await db.AlertRules.FirstOrDefaultAsync(x => x.Id == ruleId, cancellationToken);
         if (existing is null)
             return null;
@@ -3235,7 +3175,7 @@ public sealed class OrchestratorStore(
 
     public async Task<bool> DeleteAlertRuleAsync(string ruleId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var rule = await db.AlertRules.FirstOrDefaultAsync(x => x.Id == ruleId, cancellationToken);
         if (rule is null)
             return false;
@@ -3247,7 +3187,7 @@ public sealed class OrchestratorStore(
 
     public async Task<AlertEventDocument> RecordAlertEventAsync(AlertEventDocument alertEvent, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         db.AlertEvents.Add(alertEvent);
         await db.SaveChangesAsync(cancellationToken);
         return alertEvent;
@@ -3255,25 +3195,25 @@ public sealed class OrchestratorStore(
 
     public async Task<AlertEventDocument?> GetAlertEventAsync(string eventId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.AlertEvents.AsNoTracking().FirstOrDefaultAsync(x => x.Id == eventId, cancellationToken);
     }
 
     public async Task<List<AlertEventDocument>> ListRecentAlertEventsAsync(int limit, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.AlertEvents.AsNoTracking().OrderByDescending(x => x.FiredAtUtc).Take(limit).ToListAsync(cancellationToken);
     }
 
     public async Task<List<AlertEventDocument>> ListAlertEventsByRuleAsync(string ruleId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.AlertEvents.AsNoTracking().Where(x => x.RuleId == ruleId).OrderByDescending(x => x.FiredAtUtc).Take(50).ToListAsync(cancellationToken);
     }
 
     public async Task<AlertEventDocument?> ResolveAlertEventAsync(string eventId, CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var alertEvent = await db.AlertEvents.FirstOrDefaultAsync(x => x.Id == eventId, cancellationToken);
         if (alertEvent is null)
             return null;
@@ -3288,7 +3228,7 @@ public sealed class OrchestratorStore(
         if (eventIds.Count == 0)
             return 0;
 
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var events = await db.AlertEvents.Where(x => eventIds.Contains(x.Id) && !x.Resolved).ToListAsync(cancellationToken);
         foreach (var alertEvent in events)
         {
@@ -3301,7 +3241,7 @@ public sealed class OrchestratorStore(
 
     public async Task<ReliabilityMetrics> GetReliabilityMetricsAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var now = DateTime.UtcNow;
         var sevenDaysAgo = now.AddDays(-7);
         var thirtyDaysAgo = now.AddDays(-30);
@@ -3635,7 +3575,7 @@ public sealed class OrchestratorStore(
         {
             try
             {
-                return JsonSerializer.Deserialize<double[]>(trimmed, (JsonSerializerOptions?)null);
+                return System.Text.Json.JsonSerializer.Deserialize<double[]>(trimmed, (JsonSerializerOptions?)null);
             }
             catch (JsonException)
             {
@@ -3661,6 +3601,39 @@ public sealed class OrchestratorStore(
         }
 
         return result;
+    }
+
+    private static double? ComputeCosineSimilarity(double[] queryEmbedding, double[]? candidateEmbedding)
+    {
+        if (candidateEmbedding is null || candidateEmbedding.Length == 0)
+        {
+            return null;
+        }
+
+        if (queryEmbedding.Length != candidateEmbedding.Length)
+        {
+            return null;
+        }
+
+        var dot = 0d;
+        var queryNorm = 0d;
+        var candidateNorm = 0d;
+
+        for (var i = 0; i < queryEmbedding.Length; i++)
+        {
+            var queryValue = queryEmbedding[i];
+            var candidateValue = candidateEmbedding[i];
+            dot += queryValue * candidateValue;
+            queryNorm += queryValue * queryValue;
+            candidateNorm += candidateValue * candidateValue;
+        }
+
+        if (queryNorm <= 0d || candidateNorm <= 0d)
+        {
+            return null;
+        }
+
+        return dot / (Math.Sqrt(queryNorm) * Math.Sqrt(candidateNorm));
     }
 
     private static DateTime MaxDateTime(params DateTime?[] values)
@@ -3725,6 +3698,64 @@ public sealed class OrchestratorStore(
         }
 
         return value.Trim().Replace('/', '-').Replace('\\', '-');
+    }
+
+    private static string NormalizeArtifactFileName(string fileName)
+    {
+        var normalized = Path.GetFileName(fileName?.Trim() ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            throw new ArgumentException("Artifact file name is required.", nameof(fileName));
+        }
+
+        return normalized;
+    }
+
+    private static string BuildArtifactId(string runId, string fileName)
+    {
+        return $"{runId.Trim()}::{fileName}";
+    }
+
+    private static string BuildArtifactFileStorageId(string runId, string fileName)
+    {
+        return $"{ArtifactFileStorageRoot}/{runId.Trim()}/{fileName}";
+    }
+
+    private Task DeleteStoredArtifactsByRunIdsAsync(IReadOnlyList<string> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        return liteDbExecutor.ExecuteAsync(
+            db =>
+            {
+                var metadataCollection = db.GetCollection<RunArtifactDocument>("run_artifacts");
+                metadataCollection.EnsureIndex(x => x.RunId);
+
+                foreach (var runId in runIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var artifacts = metadataCollection.Find(x => x.RunId == runId).ToList();
+                    foreach (var artifact in artifacts)
+                    {
+                        if (!string.IsNullOrWhiteSpace(artifact.FileStorageId) && db.FileStorage.Exists(artifact.FileStorageId))
+                        {
+                            db.FileStorage.Delete(artifact.FileStorageId);
+                        }
+
+                        metadataCollection.Delete(artifact.Id);
+                    }
+                }
+            },
+            cancellationToken);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
     }
 
     public static DateTime? ComputeNextRun(TaskDocument task, DateTime nowUtc)

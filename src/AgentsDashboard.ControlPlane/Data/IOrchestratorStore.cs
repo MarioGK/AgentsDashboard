@@ -106,7 +106,7 @@ public interface IOrchestratorStore
 
     Task SaveArtifactAsync(string runId, string fileName, Stream stream, CancellationToken cancellationToken);
     Task<List<string>> ListArtifactsAsync(string runId, CancellationToken cancellationToken);
-    Task<FileStream?> GetArtifactAsync(string runId, string fileName, CancellationToken cancellationToken);
+    Task<Stream?> GetArtifactAsync(string runId, string fileName, CancellationToken cancellationToken);
 
     Task AddRunLogAsync(RunLogEvent logEvent, CancellationToken cancellationToken);
     Task<List<RunLogEvent>> ListRunLogsAsync(string runId, CancellationToken cancellationToken);

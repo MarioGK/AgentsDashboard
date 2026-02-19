@@ -7,7 +7,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      Orchestrator__SqliteConnectionString: Data Source=/data/orchestrator.db
+      Orchestrator__LiteDbPath: /data/litedb/orchestrator.db
       Orchestrator__Workers__ContainerImage: ${WORKER_CONTAINER_IMAGE:-agentsdashboard-task-runtime-gateway:latest}
       Orchestrator__Workers__ContainerNamePrefix: task-runtime-gateway
       Orchestrator__Workers__DockerNetwork: agentsdashboard

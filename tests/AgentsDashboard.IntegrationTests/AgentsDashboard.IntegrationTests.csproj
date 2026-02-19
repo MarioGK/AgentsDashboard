@@ -9,7 +9,7 @@
   <ItemGroup>
     <PackageReference Include="TUnit" />
     <PackageReference Include="FluentAssertions" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="LiteDB" />
   </ItemGroup>
 
   <ItemGroup>

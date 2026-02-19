@@ -6,7 +6,7 @@ public sealed class OrchestratorOptions : IValidatableObject
 {
     public const string SectionName = "Orchestrator";
 
-    public string SqliteConnectionString { get; set; } = "Data Source=/data/orchestrator.db";
+    public string LiteDbPath { get; set; } = "/data/litedb/orchestrator.db";
     public string ArtifactsRootPath { get; set; } = "/data/artifacts";
     public TaskRuntimePoolConfig TaskRuntimes { get; set; } = new();
     public int SchedulerIntervalSeconds { get; set; } = 10;
@@ -21,8 +21,8 @@ public sealed class OrchestratorOptions : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (string.IsNullOrWhiteSpace(SqliteConnectionString))
-            yield return new ValidationResult("SqliteConnectionString is required", [nameof(SqliteConnectionString)]);
+        if (string.IsNullOrWhiteSpace(LiteDbPath))
+            yield return new ValidationResult("LiteDbPath is required", [nameof(LiteDbPath)]);
 
         if (string.IsNullOrWhiteSpace(ArtifactsRootPath))
             yield return new ValidationResult("ArtifactsRootPath is required", [nameof(ArtifactsRootPath)]);

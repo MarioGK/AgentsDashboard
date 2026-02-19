@@ -6,6 +6,7 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class WorkspaceImageStorageService(
     IOrchestratorStore store,
+    IWorkspaceImageCompressionService imageCompressionService,
     ILogger<WorkspaceImageStorageService> logger) : IWorkspaceImageStorageService
 {
     private const int MaxImageCount = 6;
@@ -44,7 +45,8 @@ public sealed class WorkspaceImageStorageService(
         for (var index = 0; index < images.Count; index++)
         {
             var image = images[index];
-            if (!s_extensionByMime.TryGetValue(image.MimeType ?? string.Empty, out var extension))
+            var inputMimeType = image.MimeType ?? string.Empty;
+            if (!s_extensionByMime.ContainsKey(inputMimeType))
             {
                 return new WorkspaceImageStoreResult(
                     false,
@@ -65,7 +67,28 @@ public sealed class WorkspaceImageStorageService(
                 return new WorkspaceImageStoreResult(false, $"Image '{image.FileName}' is empty.", []);
             }
 
-            if (bytes.Length > MaxImageBytes)
+            WorkspaceCompressedImage compressed;
+            try
+            {
+                compressed = await imageCompressionService.CompressAsync(inputMimeType, bytes, cancellationToken);
+            }
+            catch
+            {
+                return new WorkspaceImageStoreResult(
+                    false,
+                    $"Failed to compress image '{image.FileName}'.",
+                    []);
+            }
+
+            if (!s_extensionByMime.TryGetValue(compressed.MimeType, out var extension))
+            {
+                return new WorkspaceImageStoreResult(
+                    false,
+                    $"Unsupported compressed image type '{compressed.MimeType}'.",
+                    []);
+            }
+
+            if (compressed.Bytes.Length > MaxImageBytes)
             {
                 return new WorkspaceImageStoreResult(
                     false,
@@ -79,21 +102,21 @@ public sealed class WorkspaceImageStorageService(
             var safeFileName = GetSafeFileName(image.FileName, index + 1);
             var artifactName = $"workspace-image-{index + 1:D2}-{normalizedId[..Math.Min(8, normalizedId.Length)]}{extension}";
 
-            await using var stream = new MemoryStream(bytes, writable: false);
+            await using var stream = new MemoryStream(compressed.Bytes, writable: false);
             await store.SaveArtifactAsync(runId, artifactName, stream, cancellationToken);
 
-            var hash = Convert.ToHexString(SHA256.HashData(bytes));
+            var hash = Convert.ToHexString(SHA256.HashData(compressed.Bytes));
             stored.Add(new WorkspaceStoredImage(
                 normalizedId,
                 safeFileName,
-                image.MimeType ?? string.Empty,
-                bytes.Length,
+                compressed.MimeType,
+                compressed.Bytes.Length,
                 artifactName,
                 $"/artifacts/{runId}/{artifactName}",
                 hash,
-                image.DataUrl ?? string.Empty,
-                image.Width,
-                image.Height));
+                BuildDataUrl(compressed.MimeType, compressed.Bytes),
+                compressed.Width > 0 ? compressed.Width : image.Width,
+                compressed.Height > 0 ? compressed.Height : image.Height));
         }
 
         logger.ZLogInformation(
@@ -179,5 +202,10 @@ public sealed class WorkspaceImageStorageService(
         {
             return false;
         }
+    }
+
+    private static string BuildDataUrl(string mimeType, byte[] bytes)
+    {
+        return $"data:{mimeType};base64,{Convert.ToBase64String(bytes)}";
     }
 }

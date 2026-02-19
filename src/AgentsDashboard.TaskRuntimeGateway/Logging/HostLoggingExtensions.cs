@@ -15,8 +15,6 @@ internal static class HostLoggingExtensions
 
         logging.AddFilter<ZLoggerConsoleLoggerProvider>((_, level) => level >= LogLevel.Information);
         logging.AddFilter<ZLoggerRollingFileLoggerProvider>((_, level) => level >= LogLevel.Trace);
-        logging.AddFilter<ZLoggerConsoleLoggerProvider>("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
-        logging.AddFilter<ZLoggerRollingFileLoggerProvider>("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 
         logging.AddZLoggerConsole(options =>
         {

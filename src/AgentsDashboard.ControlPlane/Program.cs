@@ -15,8 +15,6 @@ using MessagePack;
 using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using MudBlazor.Services;
@@ -39,7 +37,7 @@ var startupOptions = builder.Configuration.GetSection(OrchestratorOptions.Sectio
 
 if (startupOptions is not null)
 {
-    EnsureSqliteDirectoryExists(startupOptions.SqliteConnectionString);
+    EnsureLiteDbDirectoryExists(startupOptions.LiteDbPath);
     EnsureArtifactsDirectoryExists(startupOptions.ArtifactsRootPath);
 }
 
@@ -119,14 +117,12 @@ builder.Services.AddMagicOnion(options =>
 });
 
 builder.Services.AddTransient<RateLimitHeadersMiddleware>();
-
-builder.Services.AddDbContextFactory<OrchestratorDbContext>((sp, options) =>
-{
-    var orchestratorOptions = sp.GetRequiredService<IOptions<OrchestratorOptions>>().Value;
-    options.UseSqlite(orchestratorOptions.SqliteConnectionString);
-});
-
-builder.Services.AddHostedService<DbMigrationHostedService>();
+builder.Services.AddSingleton<LiteDbDatabase>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LiteDbDatabase>());
+builder.Services.AddSingleton<LiteDbExecutor>();
+builder.Services.AddSingleton<ILiteDbCollectionNameResolver, LiteDbCollectionNameResolver>();
+builder.Services.AddSingleton(typeof(IRepository<>), typeof(LiteDbRepository<>));
+builder.Services.AddSingleton<ILiteDbScopeFactory, LiteDbScopeFactory>();
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddHostedService<DevelopmentSelfRepositoryBootstrapService>();
@@ -136,6 +132,8 @@ builder.Services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<Or
 builder.Services.AddSingleton<RunDispatcher>();
 builder.Services.AddSingleton<IBackgroundWorkCoordinator, BackgroundWorkScheduler>();
 builder.Services.AddHostedService(sp => (BackgroundWorkScheduler)sp.GetRequiredService<IBackgroundWorkCoordinator>());
+builder.Services.AddSingleton<ISqliteVecBootstrapService, SqliteVecBootstrapService>();
+builder.Services.AddHostedService(sp => (SqliteVecBootstrapService)sp.GetRequiredService<ISqliteVecBootstrapService>());
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<INotificationSink>(sp => sp.GetRequiredService<INotificationService>());
 builder.Services.AddHostedService<BackgroundWorkNotificationRelay>();
@@ -164,13 +162,12 @@ builder.Services.AddSingleton<WorkflowExecutor>(sp => (WorkflowExecutor)sp.GetRe
 builder.Services.AddSingleton<LlmTornadoGatewayService>();
 builder.Services.AddSingleton<IHarnessOutputParserService, HarnessOutputParserService>();
 builder.Services.AddSingleton<IWorkspaceAiService, WorkspaceAiService>();
+builder.Services.AddSingleton<IWorkspaceImageCompressionService, WorkspaceImageCompressionService>();
 builder.Services.AddSingleton<IWorkspaceImageStorageService, WorkspaceImageStorageService>();
 builder.Services.AddSingleton<IGlobalSearchService, GlobalSearchService>();
 builder.Services.AddSingleton<ITaskSemanticEmbeddingService, TaskSemanticEmbeddingService>();
 builder.Services.AddHostedService(sp => (TaskSemanticEmbeddingService)sp.GetRequiredService<ITaskSemanticEmbeddingService>());
 builder.Services.AddSingleton<IWorkspaceService, WorkspaceService>();
-builder.Services.AddSingleton<ISqliteVecBootstrapService, SqliteVecBootstrapService>();
-builder.Services.AddHostedService(sp => (SqliteVecBootstrapService)sp.GetRequiredService<ISqliteVecBootstrapService>());
 builder.Services.AddSingleton<IGitWorkspaceService, GitWorkspaceService>();
 builder.Services.AddSingleton<IHostFileExplorerService, HostFileExplorerService>();
 builder.Services.AddSingleton<ImageBuilderService>();
@@ -244,19 +241,9 @@ static void EnsureArtifactsDirectoryExists(string? artifactsRootPath)
     EnsureDirectory(artifactsRootPath);
 }
 
-static void EnsureSqliteDirectoryExists(string? sqliteConnectionString)
+static void EnsureLiteDbDirectoryExists(string? liteDbPath)
 {
-    if (string.IsNullOrWhiteSpace(sqliteConnectionString))
-        return;
-
-    try
-    {
-        var connectionBuilder = new SqliteConnectionStringBuilder(sqliteConnectionString);
-        EnsureDirectory(connectionBuilder.DataSource);
-    }
-    catch
-    {
-    }
+    EnsureDirectory(liteDbPath);
 }
 
 static void EnsureDirectory(string? path)
@@ -290,7 +277,7 @@ static Task WriteHealthResponseAsync(HttpContext context, HealthReport report)
             })
     };
 
-    return context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+    return context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(payload));
 }
 
 namespace AgentsDashboard.ControlPlane

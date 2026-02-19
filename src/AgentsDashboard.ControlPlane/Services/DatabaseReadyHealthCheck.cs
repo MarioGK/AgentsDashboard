@@ -1,44 +1,41 @@
+using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed class DatabaseReadyHealthCheck(IDbContextFactory<OrchestratorDbContext> dbContextFactory) : IHealthCheck
+public sealed class DatabaseReadyHealthCheck(
+    LiteDbDatabase database,
+    IOptions<OrchestratorOptions> options) : IHealthCheck
 {
-    private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(5);
-
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            using var timeoutTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutTokenSource.CancelAfter(CheckTimeout);
+            cancellationToken.ThrowIfCancellationRequested();
 
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync(timeoutTokenSource.Token);
-            var canConnect = await dbContext.Database.CanConnectAsync(timeoutTokenSource.Token);
-            if (!canConnect)
+            var path = options.Value.LiteDbPath;
+            if (string.IsNullOrWhiteSpace(path))
             {
-                return HealthCheckResult.Unhealthy("Database connection failed");
+                return HealthCheckResult.Unhealthy("LiteDB path is not configured");
             }
 
-            var hasPendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync(timeoutTokenSource.Token)).Any();
-            if (hasPendingMigrations)
+            _ = await database.ExecuteAsync(
+                db => db.GetCollectionNames().ToList(),
+                cancellationToken);
+            if (!File.Exists(path))
             {
-                return HealthCheckResult.Unhealthy("Database has pending migrations");
+                return HealthCheckResult.Unhealthy($"LiteDB file is missing: {path}");
             }
 
-            return HealthCheckResult.Healthy("Database is ready");
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return HealthCheckResult.Unhealthy($"Database readiness check timed out after {CheckTimeout.TotalSeconds:0}s");
+            return HealthCheckResult.Healthy("LiteDB is ready");
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy("Database readiness check failed", ex);
+            return HealthCheckResult.Unhealthy("LiteDB readiness check failed", ex);
         }
     }
 }
