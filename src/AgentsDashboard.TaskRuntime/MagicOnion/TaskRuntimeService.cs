@@ -8,6 +8,7 @@ namespace AgentsDashboard.TaskRuntime.MagicOnion;
 public sealed class TaskRuntimeService(
     ITaskRuntimeQueue queue,
     TaskRuntimeCommandService commandService,
+    TaskRuntimeFileSystemService fileSystemService,
     ILogger<TaskRuntimeService> logger)
     : ServiceBase<ITaskRuntimeService>, ITaskRuntimeService
 {
@@ -102,5 +103,25 @@ public sealed class TaskRuntimeService(
     public ValueTask<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken)
     {
         return commandService.GetCommandStatusAsync(request, cancellationToken);
+    }
+
+    public ValueTask<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request, CancellationToken cancellationToken)
+    {
+        return fileSystemService.ListRuntimeFilesAsync(request, cancellationToken);
+    }
+
+    public ValueTask<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request, CancellationToken cancellationToken)
+    {
+        return fileSystemService.CreateRuntimeFileAsync(request, cancellationToken);
+    }
+
+    public ValueTask<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request, CancellationToken cancellationToken)
+    {
+        return fileSystemService.ReadRuntimeFileAsync(request, cancellationToken);
+    }
+
+    public ValueTask<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request, CancellationToken cancellationToken)
+    {
+        return fileSystemService.DeleteRuntimeFileAsync(request, cancellationToken);
     }
 }

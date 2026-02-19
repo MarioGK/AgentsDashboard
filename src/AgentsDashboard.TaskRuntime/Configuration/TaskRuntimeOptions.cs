@@ -38,5 +38,7 @@ public sealed class TaskRuntimeOptions
     public int CommandDefaultTimeoutSeconds { get; set; } = 600;
     public int CommandMaxTimeoutSeconds { get; set; } = 3600;
     public int CommandMaxOutputBytes { get; set; } = 4_194_304;
+    public int FileReadDefaultMaxBytes { get; set; } = 262_144;
+    public int FileReadHardMaxBytes { get; set; } = 1_048_576;
     public int ArtifactChunkSizeBytes { get; set; } = 65_536;
 }

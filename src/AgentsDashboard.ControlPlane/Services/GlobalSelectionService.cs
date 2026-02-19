@@ -56,15 +56,30 @@ public sealed class GlobalSelectionService(IOrchestratorStore store, ILocalStora
 
     public event EventHandler<SelectionChangedEventArgs>? SelectionChanged;
 
-    public async Task InitializeAsync(CancellationToken cancellationToken)
+public async Task InitializeAsync(CancellationToken cancellationToken)
+{
+    bool entered = false;
+    try
     {
         await _initLock.WaitAsync(cancellationToken);
-        try
+        entered = true;
+    }
+    catch (ObjectDisposedException)
+    {
+        return;
+    }
+
+    try
+    {
+        if (_disposed)
         {
-            if (_initialized)
-            {
-                return;
-            }
+            return;
+        }
+
+        if (_initialized)
+        {
+            return;
+        }
 
             RepositoryList = await store.ListRepositoriesAsync(cancellationToken);
 
@@ -81,14 +96,23 @@ public sealed class GlobalSelectionService(IOrchestratorStore store, ILocalStora
                 await localStorage.SetItemAsync("selectedRepositoryId", SelectedRepositoryId);
             }
 
-            _initialized = true;
-            RaiseSelectionChanged();
-        }
-        finally
+        _initialized = true;
+        RaiseSelectionChanged();
+    }
+    finally
+    {
+        if (entered && !_disposed)
         {
-            _initLock.Release();
+            try
+            {
+                _initLock.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
     }
+}
 
     public async Task SelectRepositoryAsync(string? repositoryId, CancellationToken cancellationToken)
     {

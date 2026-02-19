@@ -46,7 +46,7 @@ internal static class HostLoggingExtensions
         logging.AddZLoggerRollingFile(
             (timestamp, sequence) => GetLogFilePath(serviceName, timestamp, sequence),
             RollingInterval.Day);
-        logging.AddProvider(new WarningErrorFileLoggerProvider(GetWarningErrorLogFilePath()));
+        logging.AddProvider(new WarningErrorFileLoggerProvider(GetWarningErrorLogFilePath(serviceName)));
 
         return logging;
     }
@@ -58,7 +58,7 @@ internal static class HostLoggingExtensions
         return Path.Combine(logsDirectory, $"{serviceName}-{timestamp:yyyy-MM-dd}.{sequence:D4}.log");
     }
 
-    private static string GetWarningErrorLogFilePath()
+    private static string GetWarningErrorLogFilePath(string serviceName)
     {
         var logsDirectory = RepositoryPathResolver.GetDataPath("logs");
         Directory.CreateDirectory(logsDirectory);

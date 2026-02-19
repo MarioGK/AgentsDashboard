@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const routeAssertions = [
-  { path: '/', heading: 'Command Center' },
+  { path: '/', heading: 'Workspace' },
   { path: '/overview', heading: 'Command Center' },
   { path: '/search', heading: 'Global Search' },
   { path: '/workspace', heading: 'Workspace' },
@@ -14,7 +14,7 @@ const routeAssertions = [
   { path: '/settings/automations', heading: 'Automations' },
   { path: '/settings/workflows/stages', heading: 'Workflows' },
   { path: '/settings/templates', heading: 'Task Templates' },
-  { path: '/settings/providers', heading: 'Provider Settings' },
+  { path: '/providers', heading: 'Provider Settings' },
   { path: '/settings/image-builder', heading: 'Container Image Builder' },
   { path: '/settings/mcp', heading: 'MCP Settings' },
   { path: '/settings/skills', heading: 'Global Prompt Skills' },
@@ -28,7 +28,7 @@ for (const route of routeAssertions)
 {
   test(`route ${route.path} loads`, async ({ page }) =>
   {
-    await page.goto(route.path);
+    await page.goto(route.path, { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
   });
@@ -81,21 +81,21 @@ for (const setting of settingsHomeTests)
 }
 
 const settingsSideNavTests = [
-  { id: 'settings-nav-repositories-link', heading: 'Repositories' },
-  { id: 'settings-nav-runs-link', heading: 'Runs' },
-  { id: 'settings-nav-findings-link', heading: 'Findings' },
-  { id: 'settings-nav-schedules-link', heading: 'Schedules' },
-  { id: 'settings-nav-automations-link', heading: 'Automations' },
-  { id: 'settings-nav-workflows-stages-link', heading: 'Workflows' },
-  { id: 'settings-nav-templates-link', heading: 'Task Templates' },
-  { id: 'settings-nav-skills-link', heading: 'Global Prompt Skills' },
-  { id: 'settings-nav-session-profiles-link', heading: 'Session Profiles' },
-  { id: 'settings-nav-sounds-link', heading: 'Sound Settings' },
-  { id: 'settings-nav-alerts-link', heading: 'Alert Settings' },
-  { id: 'settings-nav-image-builder-link', heading: 'Container Image Builder' },
-  { id: 'settings-nav-mcp-link', heading: 'MCP Settings' },
-  { id: 'settings-nav-task-runtimes-link', heading: 'Task Runtime Settings' },
-  { id: 'settings-nav-system-link', heading: 'System Settings' },
+  { id: 'settings-nav-repositories-link', path: '/settings/repositories', heading: 'Repositories' },
+  { id: 'settings-nav-runs-link', path: '/settings/runs', heading: 'Runs' },
+  { id: 'settings-nav-findings-link', path: '/settings/findings', heading: 'Findings' },
+  { id: 'settings-nav-schedules-link', path: '/settings/schedules', heading: 'Schedules' },
+  { id: 'settings-nav-automations-link', path: '/settings/automations', heading: 'Automations' },
+  { id: 'settings-nav-workflows-stages-link', path: '/settings/workflows/stages', heading: 'Workflows' },
+  { id: 'settings-nav-templates-link', path: '/settings/templates', heading: 'Task Templates' },
+  { id: 'settings-nav-skills-link', path: '/settings/skills', heading: 'Global Prompt Skills' },
+  { id: 'settings-nav-session-profiles-link', path: '/settings/session-profiles', heading: 'Session Profiles' },
+  { id: 'settings-nav-sounds-link', path: '/settings/sounds', heading: 'Sound Settings' },
+  { id: 'settings-nav-alerts-link', path: '/settings/alerts', heading: 'Alert Settings' },
+  { id: 'settings-nav-image-builder-link', path: '/settings/image-builder', heading: 'Container Image Builder' },
+  { id: 'settings-nav-mcp-link', path: '/settings/mcp', heading: 'MCP Settings' },
+  { id: 'settings-nav-task-runtimes-link', path: '/settings/task-runtimes', heading: 'Task Runtime Settings' },
+  { id: 'settings-nav-system-link', path: '/settings/system', heading: 'System Settings' },
 ];
 
 for (const setting of settingsSideNavTests)
@@ -103,7 +103,14 @@ for (const setting of settingsSideNavTests)
   test(`settings side nav ${setting.id} loads`, async ({ page }) =>
   {
     await page.goto('/settings');
-    await page.getByTestId(setting.id).click();
+    const link = page.getByTestId(setting.id).locator('xpath=ancestor::a').first();
+    await expect(link).toHaveAttribute('href', setting.path);
+    await Promise.all(
+      [
+        page.waitForURL(setting.path),
+        link.click()
+      ]
+    );
     await expect(page.getByRole('heading', { name: setting.heading })).toBeVisible();
   });
 }

@@ -76,6 +76,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddHostedService<TaskRuntimePoolReconciliationService>();
         services.AddHostedService<AlertingService>();
         services.AddSingleton<TaskRuntimeCommandGateway>();
+        services.AddSingleton<TaskRuntimeFileSystemGateway>();
         return services;
     }
 
