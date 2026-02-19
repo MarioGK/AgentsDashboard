@@ -18,7 +18,7 @@ COPY --from=build /app/publish .
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /data /artifacts /workspaces
+    && mkdir -p /app/data
 
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080

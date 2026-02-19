@@ -417,6 +417,5 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
-# Runtime data (SQLite DB, artifacts, workspaces)
+# Runtime data (LiteDB, logs, artifacts, workspaces)
 /data/
-/src/AgentsDashboard.ControlPlane/data/

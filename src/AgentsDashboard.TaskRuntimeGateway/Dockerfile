@@ -17,7 +17,10 @@ COPY --from=build /app/publish .
 
 ARG TARGETARCH
 
-RUN apt-get update && apt-get install -y --no-install-recommends docker.io gh ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends docker.io gh ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/data
 
 EXPOSE 5201
 ENTRYPOINT ["dotnet", "AgentsDashboard.TaskRuntimeGateway.dll"]

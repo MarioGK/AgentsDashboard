@@ -5,9 +5,11 @@ namespace AgentsDashboard.ControlPlane.Configuration;
 public sealed class OrchestratorOptions : IValidatableObject
 {
     public const string SectionName = "Orchestrator";
+    public const string DefaultLiteDbPath = "data/litedb/orchestrator.db";
+    public const string DefaultArtifactsRootPath = "data/artifacts";
 
-    public string LiteDbPath { get; set; } = "/data/litedb/orchestrator.db";
-    public string ArtifactsRootPath { get; set; } = "/data/artifacts";
+    public string LiteDbPath { get; set; } = DefaultLiteDbPath;
+    public string ArtifactsRootPath { get; set; } = DefaultArtifactsRootPath;
     public TaskRuntimePoolConfig TaskRuntimes { get; set; } = new();
     public int SchedulerIntervalSeconds { get; set; } = 10;
     public int MaxGlobalConcurrentRuns { get; set; } = 50;

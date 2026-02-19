@@ -1,20 +1,6 @@
-# AI Orchestrator - Development Context
+# AI Orchestrator
 
-Production-focused, self-hosted AI orchestration platform on .NET 10. Blazor Server is the control plane; execution runs through CLI harnesses (`codex`, `opencode`, `claude-code`, `zai`) and dashboard AI feature calls via `LlmTornado`.
-
-## AGENTS Maintenance (Mandatory)
-
-- `AGENTS.md` in this repo is a symlink to `CLAUDE.md`; edit `CLAUDE.md` only.
-- Keep this document current whenever architecture, domain model, workflow behavior, auth/policies, build/test commands, harness support, deployment, or project structure changes.
-- Update `Last Verified` for major updates.
-- Keep this file as current-state guidance only; do not append historical change logs.
-
-## Token Efficiency Rules (Mandatory)
-
-- Keep this document concise and operational.
-- Prefer stable rules over exhaustive inventories.
-- Remove stale details rather than appending historical drift.
-- Keep command sections minimal and CI-relevant.
+Self-hosted AI orchestration platform on .NET 10. Blazor Server is the control plane; execution runs through CLI harnesses (`codex`, `opencode`) and dashboard AI feature calls via `LlmTornado`.
 
 ## Solution Layout
 
@@ -36,13 +22,6 @@ deploy/
 docs/
   ai/
 ```
-
-## Snapshot
-
-- `src/AgentsDashboard.slnx` includes `ControlPlane`, `TaskRuntimeGateway`, `Contracts`, plus unit/integration test projects.
-- Active harness runtimes: `CodexAppServerRuntime`, `OpenCodeSseRuntime`, `ClaudeStreamRuntime`, `ZaiClaudeCompatibleRuntime` with command fallback.
-- Harness adapters: `CodexAdapter`, `OpenCodeAdapter`, `ClaudeCodeAdapter`, `ZaiAdapter`.
-
 ## Architecture Rules
 
 - Service boundary is MagicOnion service boundaries and application services; route-based HTTP APIs are not the target architecture.
@@ -52,17 +31,6 @@ docs/
 - Use command/query handlers + domain services/events for orchestration.
 - Keep transport DTOs at integration boundaries only.
 - Backward compatibility is not required; keep only intended current behavior.
-
-## Product Model
-
-1. Repository
-2. Task
-3. Run
-4. Finding
-5. Agent
-6. WorkflowV2
-7. WorkflowExecutionV2
-8. WorkflowDeadLetter
 
 ## Engineering Conventions
 
@@ -79,39 +47,27 @@ docs/
 
 ### LiteDB (Mandatory)
 
-- Persistence is LiteDB-only (`LiteDB` NuGet `6.0.0-prerelease.75`); EF Core/SQLite/migrations are removed.
+- Persistence is LiteDB-only (`LiteDB` NuGet `6.0.0-prerelease.75`);
 - All store/repository APIs are async-only and must flow cancellation tokens.
-- Use `IRepository<>` for collection access; do not reintroduce EF-style `DbContext`.
+- Use `IRepository<>` for collection access; do not reintroduce EF-style `DbContext` or single file database class.
 - Serialize database access through the LiteDB execution path (`LiteDbDatabase`/`LiteDbExecutor`) for safe shutdown/disposal.
 - Store run artifacts, workspace uploads, and image/file payloads in LiteDB (file storage + metadata), not filesystem paths.
 - Workspace image ingestion compresses to WebP lossless before DB persistence and multimodal dispatch.
 
-### Authentication
-
-- Cookie auth with roles: `viewer`, `operator`, `admin`.
-- Enforce policies at service boundaries and Blazor pages.
-
 ## Agent Workflow Rules
 
 - Always use `main`; do not create feature branches.
+- Assume that we dont have to save anything, this is a greenfield project and is not deployed yet.
 - Build with `dotnet build src/AgentsDashboard.slnx -m --tl`.
 - Use TUnit/MTP filtering for focused runs (`-- --treenode-filter ...` / `-- --filter-uid ...`).
 - Use `dotnet build-server shutdown` if build behavior is inconsistent.
 - Run `dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error` before commit.
 
 ## Local Run
-
-```bash
-docker compose up -d
-
-dotnet run --project src/AgentsDashboard.TaskRuntimeGateway
-dotnet run --project src/AgentsDashboard.ControlPlane
-```
-
-- Dashboard: `http://localhost:5266`
 - LAN: `http://192.168.10.101:5266` (HTTP in local dev)
 - Health: `/alive`, `/ready`, `/health`
 - Services must bind all interfaces (`0.0.0.0`) for LAN accessibility.
+- Runtime persistence/log/workspace paths resolve under repo-root `data/`.
 
 Preferred watch command:
 
@@ -120,14 +76,8 @@ DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_
 ```
 
 ## Logging
-
 - Use `ZLogger` in both ControlPlane and TaskRuntimeGateway.
-- Default format: UTC timestamp + short level + service.
-- Prefer fewer, richer context lines (`ZLog*Object`) over repetitive logs.
-- Never log secrets or full credentials/tokens.
-- Logging setup:
-  - `src/AgentsDashboard.ControlPlane/Logging/HostLoggingExtensions.cs`
-  - `src/AgentsDashboard.TaskRuntimeGateway/Logging/HostLoggingExtensions.cs`
+- Prefer fewer, richer context lines over repetitive logs.
 
 ## Build & Test Quick Commands
 
@@ -158,8 +108,6 @@ MTP note: always pass `--project`, `--solution`, or direct `.csproj/.slnx`.
 |---|---|---|
 | Codex | `codex` | OpenAI GPT |
 | OpenCode | `opencode` | OpenCode |
-| Claude Code | `claude-code` | Anthropic Claude |
-| Zai | `zai` | Zhipu GLM-5 |
 
 ## Execution Model
 
@@ -184,9 +132,4 @@ MTP note: always pass `--project`, `--solution`, or direct `.csproj/.slnx`.
 ## Container Notes
 
 - Service Dockerfiles must copy root build metadata (`global.json`, `Directory.Build.props`, `Directory.Packages.props`) before `dotnet restore`.
-- ControlPlane runtime image includes `curl` and pre-creates `/data`, `/artifacts`, `/workspaces`.
-
-## Last Verified
-
-- Date: 2026-02-18
-- Purpose: date-only freshness marker for this document.
+- ControlPlane runtime image includes `curl` and pre-creates `/app/data`; compose binds host `./data` to `/app/data`.

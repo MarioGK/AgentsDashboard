@@ -7,7 +7,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      Orchestrator__LiteDbPath: /data/litedb/orchestrator.db
+      Orchestrator__LiteDbPath: data/litedb/orchestrator.db
       Orchestrator__Workers__ContainerImage: ${WORKER_CONTAINER_IMAGE:-agentsdashboard-task-runtime-gateway:latest}
       Orchestrator__Workers__ContainerNamePrefix: task-runtime-gateway
       Orchestrator__Workers__DockerNetwork: agentsdashboard
@@ -20,9 +20,7 @@ services:
       Z_AI_API_KEY: ${Z_AI_API_KEY:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data:/data
-      - ./data/artifacts:/artifacts
-      - ./data/workspaces:/workspaces
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s

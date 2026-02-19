@@ -97,21 +97,8 @@ public sealed class LiteDbDatabase(IOptions<OrchestratorOptions> orchestratorOpt
 
     private static string ResolveDatabasePath(string liteDbPath)
     {
-        if (string.IsNullOrWhiteSpace(liteDbPath))
-        {
-            return Path.GetFullPath("data/orchestrator.litedb");
-        }
-
-        return NormalizePath(liteDbPath);
-    }
-
-    private static string NormalizePath(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return Path.GetFullPath("data/orchestrator.litedb");
-        }
-
-        return Path.IsPathRooted(path) ? path : Path.GetFullPath(path);
+        return RepositoryPathResolver.ResolveDataPath(
+            liteDbPath,
+            OrchestratorOptions.DefaultLiteDbPath);
     }
 }

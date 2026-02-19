@@ -23,7 +23,7 @@ public sealed class HarnessExecutor(
     IArtifactExtractor artifactExtractor,
     ILogger<HarnessExecutor> logger) : IHarnessExecutor
 {
-    private const string WorkspacesRootPath = "/workspaces/repos";
+    private static readonly string WorkspacesRootPath = RepositoryPathResolver.GetDataPath("workspaces", "repos");
     private const string MainBranch = "main";
     private const string RuntimeEventWireMarker = "agentsdashboard.harness-runtime-event.v1";
 

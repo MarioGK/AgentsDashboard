@@ -1,13 +1,10 @@
-using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Data;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class DatabaseReadyHealthCheck(
-    LiteDbDatabase database,
-    IOptions<OrchestratorOptions> options) : IHealthCheck
+    LiteDbDatabase database) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
@@ -17,7 +14,7 @@ public sealed class DatabaseReadyHealthCheck(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var path = options.Value.LiteDbPath;
+            var path = database.DatabasePath;
             if (string.IsNullOrWhiteSpace(path))
             {
                 return HealthCheckResult.Unhealthy("LiteDB path is not configured");
@@ -26,7 +23,7 @@ public sealed class DatabaseReadyHealthCheck(
             _ = await database.ExecuteAsync(
                 db => db.GetCollectionNames().ToList(),
                 cancellationToken);
-            if (!File.Exists(path))
+            if (!string.Equals(path, ":memory:", StringComparison.OrdinalIgnoreCase) && !File.Exists(path))
             {
                 return HealthCheckResult.Unhealthy($"LiteDB file is missing: {path}");
             }

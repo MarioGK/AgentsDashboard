@@ -21,8 +21,20 @@ builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
     .AddCheck<DockerHealthCheckService>("docker", tags: ["ready"]);
 builder.Services.Configure<TaskRuntimeOptions>(builder.Configuration.GetSection(TaskRuntimeOptions.SectionName));
+builder.Services.PostConfigure<TaskRuntimeOptions>(options =>
+{
+    options.ArtifactStoragePath = RepositoryPathResolver.ResolveDataPath(
+        options.ArtifactStoragePath,
+        TaskRuntimeOptions.DefaultArtifactStoragePath);
+});
 builder.Services.AddOptionsWithValidateOnStart<TaskRuntimeOptions>();
 builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TaskRuntimeOptions>>().Value);
+
+var startupOptions = builder.Configuration.GetSection(TaskRuntimeOptions.SectionName).Get<TaskRuntimeOptions>();
+if (startupOptions is not null)
+{
+    EnsureArtifactStorageDirectoryExists(startupOptions.ArtifactStoragePath);
+}
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -96,6 +108,25 @@ app.MapHealthChecks("/ready", readyHealthCheckOptions);
 app.MapHealthChecks("/alive", liveHealthCheckOptions);
 
 app.Run();
+
+static void EnsureArtifactStorageDirectoryExists(string? artifactStoragePath)
+{
+    if (string.IsNullOrWhiteSpace(artifactStoragePath))
+    {
+        return;
+    }
+
+    var resolvedPath = RepositoryPathResolver.ResolveDataPath(
+        artifactStoragePath,
+        TaskRuntimeOptions.DefaultArtifactStoragePath);
+
+    if (resolvedPath == ":memory:")
+    {
+        return;
+    }
+
+    Directory.CreateDirectory(resolvedPath);
+}
 
 static Task WriteHealthResponseAsync(HttpContext context, HealthReport report)
 {

@@ -31,6 +31,15 @@ builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadyHealthCheck>("database", tags: ["ready"]);
 builder.Services.AddOptions<OrchestratorOptions>()
     .Bind(builder.Configuration.GetSection(OrchestratorOptions.SectionName))
+    .PostConfigure(options =>
+    {
+        options.LiteDbPath = RepositoryPathResolver.ResolveDataPath(
+            options.LiteDbPath,
+            OrchestratorOptions.DefaultLiteDbPath);
+        options.ArtifactsRootPath = RepositoryPathResolver.ResolveDataPath(
+            options.ArtifactsRootPath,
+            OrchestratorOptions.DefaultArtifactsRootPath);
+    })
     .ValidateOnStart();
 
 var startupOptions = builder.Configuration.GetSection(OrchestratorOptions.SectionName).Get<OrchestratorOptions>();
@@ -238,20 +247,32 @@ app.Run();
 
 static void EnsureArtifactsDirectoryExists(string? artifactsRootPath)
 {
-    EnsureDirectory(artifactsRootPath);
+    if (string.IsNullOrWhiteSpace(artifactsRootPath))
+        return;
+
+    var resolvedPath = RepositoryPathResolver.ResolveDataPath(
+        artifactsRootPath,
+        OrchestratorOptions.DefaultArtifactsRootPath);
+
+    if (resolvedPath == ":memory:")
+        return;
+
+    Directory.CreateDirectory(resolvedPath);
 }
 
 static void EnsureLiteDbDirectoryExists(string? liteDbPath)
 {
-    EnsureDirectory(liteDbPath);
-}
-
-static void EnsureDirectory(string? path)
-{
-    if (string.IsNullOrWhiteSpace(path) || path == ":memory:")
+    if (string.IsNullOrWhiteSpace(liteDbPath))
         return;
 
-    var directory = Path.GetDirectoryName(path);
+    var resolvedPath = RepositoryPathResolver.ResolveDataPath(
+        liteDbPath,
+        OrchestratorOptions.DefaultLiteDbPath);
+
+    if (resolvedPath == ":memory:")
+        return;
+
+    var directory = Path.GetDirectoryName(resolvedPath);
     if (string.IsNullOrWhiteSpace(directory))
         return;
 

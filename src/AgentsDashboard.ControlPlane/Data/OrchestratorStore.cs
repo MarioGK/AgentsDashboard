@@ -17,7 +17,7 @@ public sealed class OrchestratorStore(
     private static readonly FindingState[] OpenFindingStates = [FindingState.New, FindingState.Acknowledged, FindingState.InProgress];
     private static readonly Regex PromptSkillTriggerRegex = new("^[a-z0-9-]+$", RegexOptions.Compiled);
     private const string GlobalRepositoryScope = "global";
-    private const string TaskWorkspacesRootPath = "/workspaces/repos";
+    private static readonly string TaskWorkspacesRootPath = RepositoryPathResolver.GetDataPath("workspaces", "repos");
     private const string ArtifactFileStorageRoot = "$/run-artifacts";
 
     public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;

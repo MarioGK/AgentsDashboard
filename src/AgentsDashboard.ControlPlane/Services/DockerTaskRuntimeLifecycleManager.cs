@@ -2135,7 +2135,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
     {
         var workerToken = NormalizeWorkerToken(workerId);
         var taskToken = NormalizeWorkerToken(taskId);
-        var artifactsDefault = $"worker-artifacts-{workerToken}:/artifacts";
+        var artifactsDefault = $"worker-artifacts-{workerToken}:/app/data/artifacts";
         var runtimeHomeDefault = $"task-runtime-home-{taskToken}:/home/agent";
         var workspacesBind = ResolveWorkspacesBind();
 
@@ -2161,7 +2161,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             return configuredBind;
         }
 
-        return $"{SharedWorkspacesVolumeName}:/workspaces";
+        return $"{SharedWorkspacesVolumeName}:/app/data/workspaces";
     }
 
     private async Task<(double CpuPercent, double MemoryPercent)> TryGetPressureMetricsAsync(string containerId, CancellationToken cancellationToken)

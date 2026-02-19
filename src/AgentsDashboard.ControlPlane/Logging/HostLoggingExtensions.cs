@@ -51,7 +51,7 @@ internal static class HostLoggingExtensions
 
     private static string GetLogFilePath(string serviceName, DateTimeOffset timestamp, int sequence)
     {
-        var logsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+        var logsDirectory = RepositoryPathResolver.GetDataPath("logs");
         Directory.CreateDirectory(logsDirectory);
         return Path.Combine(logsDirectory, $"{serviceName}-{timestamp:yyyy-MM-dd}.{sequence:D4}.log");
     }

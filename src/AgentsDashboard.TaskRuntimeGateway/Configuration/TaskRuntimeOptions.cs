@@ -3,6 +3,7 @@ namespace AgentsDashboard.TaskRuntimeGateway.Configuration;
 public sealed class TaskRuntimeOptions
 {
     public const string SectionName = "TaskRuntime";
+    public const string DefaultArtifactStoragePath = "data/artifacts";
 
     public string TaskRuntimeId { get; set; } = Environment.MachineName;
     public int MaxSlots { get; set; } = 1;
@@ -38,5 +39,5 @@ public sealed class TaskRuntimeOptions
         "Z_AI_API_KEY",
     ];
     public int DefaultTimeoutSeconds { get; set; } = 600;
-    public string ArtifactStoragePath { get; set; } = "/data/artifacts";
+    public string ArtifactStoragePath { get; set; } = DefaultArtifactStoragePath;
 }
