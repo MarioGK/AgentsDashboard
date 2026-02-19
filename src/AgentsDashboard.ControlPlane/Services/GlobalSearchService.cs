@@ -10,6 +10,34 @@ public interface IGlobalSearchService
     Task<GlobalSearchResult> SearchAsync(GlobalSearchRequest request, CancellationToken cancellationToken);
 }
 
+public sealed record GlobalSearchKindCount(
+    GlobalSearchKind Kind,
+    int Count);
+
+public sealed record GlobalSearchHit(
+    GlobalSearchKind Kind,
+    string Id,
+    string RepositoryId,
+    string RepositoryName,
+    string? TaskId,
+    string? TaskName,
+    string? RunId,
+    string Title,
+    string Snippet,
+    string? State,
+    DateTime TimestampUtc,
+    double Score,
+    double KeywordScore,
+    double SemanticScore);
+
+public sealed record GlobalSearchResult(
+    string Query,
+    bool LiteDbVectorAvailable,
+    string? LiteDbVectorDetail,
+    int TotalMatches,
+    IReadOnlyList<GlobalSearchKindCount> CountsByKind,
+    IReadOnlyList<GlobalSearchHit> Hits);
+
 public sealed class GlobalSearchService(
     IOrchestratorStore store,
     IWorkspaceAiService workspaceAiService,
@@ -197,7 +225,7 @@ public sealed class GlobalSearchService(
             .Take(normalizedLimit)
             .ToList();
 
-        logger.ZLogDebug(
+        logger.LogDebug(
             "Global search '{Query}' produced {HitCount} hits ({TotalMatches} total matches)",
             normalizedQuery,
             hits.Count,
@@ -205,8 +233,8 @@ public sealed class GlobalSearchService(
 
         return new GlobalSearchResult(
             Query: normalizedQuery,
-            SqliteVecAvailable: sqliteVecBootstrapService.IsAvailable,
-            SqliteVecDetail: BuildSearchDetail(queryEmbedding),
+            LiteDbVectorAvailable: sqliteVecBootstrapService.IsAvailable,
+            LiteDbVectorDetail: BuildSearchDetail(queryEmbedding),
             TotalMatches: orderedHits.Count,
             CountsByKind: countsByKind,
             Hits: hits);
@@ -351,7 +379,7 @@ public sealed class GlobalSearchService(
             }
             catch (Exception ex)
             {
-                logger.ZLogDebug(ex, "Semantic chunk lookup failed for task {TaskId}", task.Id);
+                logger.LogDebug(ex, "Semantic chunk lookup failed for task {TaskId}", task.Id);
             }
         }
 
@@ -654,8 +682,8 @@ public sealed class GlobalSearchService(
     {
         return new GlobalSearchResult(
             Query: query,
-            SqliteVecAvailable: sqliteVecBootstrapService.IsAvailable,
-            SqliteVecDetail: sqliteVecBootstrapService.Status.Detail,
+            LiteDbVectorAvailable: sqliteVecBootstrapService.IsAvailable,
+            LiteDbVectorDetail: sqliteVecBootstrapService.Status.Detail,
             TotalMatches: 0,
             CountsByKind: [],
             Hits: []);

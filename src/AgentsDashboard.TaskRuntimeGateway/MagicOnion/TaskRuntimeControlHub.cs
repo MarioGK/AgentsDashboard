@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace AgentsDashboard.TaskRuntimeGateway.MagicOnion;
 
 /// <summary>
-/// StreamingHub for task runtime control via multicaster.
+/// StreamingHub for task runtime control.
 /// Task Runtimes connect to register themselves and receive broadcast commands from the control plane.
 /// </summary>
 public sealed class TaskRuntimeControlHub : StreamingHubBase<ITaskRuntimeControlHub, ITaskRuntimeControlReceiver>, ITaskRuntimeControlHub

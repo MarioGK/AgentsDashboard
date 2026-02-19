@@ -45,7 +45,7 @@ public sealed class TaskRetentionCleanupService(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Task cleanup cycle failed");
+                logger.LogWarning(ex, "Task cleanup cycle failed");
             }
 
             await Task.Delay(delay, stoppingToken);
@@ -226,7 +226,7 @@ public sealed class TaskRetentionCleanupService(
             DeletedRows: totalDeletedRows,
             Reason: BuildReason(ageCleanupApplied, sizeCleanupApplied, totalTasksDeleted, totalFailedTasks));
 
-        logger.ZLogInformation(
+        logger.LogInformation(
             "Task cleanup cycle completed: reason={Reason}, tasksDeleted={TasksDeleted}, failedTasks={FailedTasks}, initialBytes={InitialBytes}, finalBytes={FinalBytes}, vacuum={VacuumExecuted}",
             summary.Reason,
             summary.TasksDeleted,

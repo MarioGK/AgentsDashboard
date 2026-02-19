@@ -2,13 +2,11 @@ namespace AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 
 public sealed class DefaultHarnessRuntimeFactory(
     CodexAppServerRuntime codexAppServerRuntime,
-    OpenCodeSseRuntime openCodeSseRuntime,
-    CommandHarnessRuntime commandHarnessRuntime) : IHarnessRuntimeFactory
+    OpenCodeSseRuntime openCodeSseRuntime) : IHarnessRuntimeFactory
 {
     public HarnessRuntimeSelection Select(HarnessRunRequest request)
     {
         var harness = request.Harness?.Trim() ?? string.Empty;
-        var mode = request.Mode?.Trim() ?? string.Empty;
 
         if (IsOpenCodeHarness(harness))
         {
@@ -17,19 +15,10 @@ public sealed class DefaultHarnessRuntimeFactory(
 
         if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(mode, "app-server", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(mode, "structured", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(mode, "auto", StringComparison.OrdinalIgnoreCase))
-            {
-                return new HarnessRuntimeSelection(codexAppServerRuntime, commandHarnessRuntime, "app-server");
-            }
-
-            return string.Equals(mode, "command", StringComparison.OrdinalIgnoreCase)
-                ? new HarnessRuntimeSelection(commandHarnessRuntime, null, "command")
-                : new HarnessRuntimeSelection(codexAppServerRuntime, commandHarnessRuntime, "app-server");
+            return new HarnessRuntimeSelection(codexAppServerRuntime, null, "stdio");
         }
 
-        return new HarnessRuntimeSelection(commandHarnessRuntime, null, "command");
+        throw new NotSupportedException($"Harness '{request.Harness}' is not supported. Supported harnesses: codex, opencode.");
     }
 
     private static bool IsOpenCodeHarness(string harness)

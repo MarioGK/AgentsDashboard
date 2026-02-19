@@ -45,6 +45,14 @@ docs/
 - All extensions must be inside of an Extensions folder instead of the root of the project.
 - There should not be single use interfaces. 
 - Every record or class must be in a single file, dont create a single file with multiple records and clasess.
+- Do not ever use ! for ignoring that the value is null or not, always do the best practice for handling nullable types.
+
+### Testing Policy
+
+- Prefer integration tests that use real service workflows instead of mocks.
+- Do not use Moq in test projects.
+- Do not use FluentAssertions in test projects.
+- Use TUnit assertions only (`Assert` APIs).
 
 ### LiteDB (Mandatory)
 

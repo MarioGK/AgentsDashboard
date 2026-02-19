@@ -741,8 +741,8 @@ public sealed class RunDispatcher(
 
         if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
         {
-            SetOrReplace(envVars, "CODEX_TRANSPORT", "app-server");
-            SetIfMissing(envVars, "CODEX_MODE", "app-server");
+            SetOrReplace(envVars, "CODEX_TRANSPORT", "stdio");
+            SetIfMissing(envVars, "CODEX_MODE", "stdio");
 
             var approvalPolicy = mode is HarnessExecutionMode.Plan or HarnessExecutionMode.Review
                 ? "never"

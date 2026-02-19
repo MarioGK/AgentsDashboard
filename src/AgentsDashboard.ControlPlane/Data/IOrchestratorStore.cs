@@ -74,10 +74,12 @@ public interface IOrchestratorStore
     Task<Dictionary<string, RunDocument>> GetLatestRunsByTaskIdsAsync(List<string> taskIds, CancellationToken cancellationToken);
     Task<Dictionary<string, RunState>> GetLatestRunStatesByTaskIdsAsync(List<string> taskIds, CancellationToken cancellationToken);
     Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptHistoryAsync(string taskId, int limit, CancellationToken cancellationToken);
+    Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptEntriesForEmbeddingAsync(string taskId, CancellationToken cancellationToken);
     Task<WorkspacePromptEntryDocument> AppendWorkspacePromptEntryAsync(WorkspacePromptEntryDocument promptEntry, CancellationToken cancellationToken);
     Task<RunAiSummaryDocument> UpsertRunAiSummaryAsync(RunAiSummaryDocument summary, CancellationToken cancellationToken);
     Task<RunAiSummaryDocument?> GetRunAiSummaryAsync(string runId, CancellationToken cancellationToken);
     Task<ReliabilityMetrics> GetReliabilityMetricsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
+    Task<List<RunDocument>> ListCompletedRunsByTaskForEmbeddingAsync(string taskId, CancellationToken cancellationToken);
     Task<RunDocument?> GetRunAsync(string runId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRunsByStateAsync(RunState state, CancellationToken cancellationToken);
     Task<List<string>> ListAllRunIdsAsync(CancellationToken cancellationToken);
@@ -120,6 +122,13 @@ public interface IOrchestratorStore
         int maxRuns,
         bool excludeWorkflowReferencedTasks,
         bool excludeTasksWithOpenFindings,
+        CancellationToken cancellationToken);
+    Task UpsertSemanticChunksAsync(string taskId, List<SemanticChunkDocument> chunks, CancellationToken cancellationToken);
+    Task<List<SemanticChunkDocument>> SearchWorkspaceSemanticAsync(
+        string taskId,
+        string queryText,
+        string? queryEmbeddingPayload,
+        int limit,
         CancellationToken cancellationToken);
 
     Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken);

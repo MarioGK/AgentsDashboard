@@ -26,11 +26,11 @@ public sealed class JobProcessorServiceTests
 
         var (parsed, runtimeEvent) = InvokeTryParseRuntimeEventChunk(chunk);
 
-        parsed.Should().BeTrue();
-        runtimeEvent.Should().NotBeNull();
-        GetPropertyValue<long>(runtimeEvent!, "Sequence").Should().Be(12);
-        GetPropertyValue<string>(runtimeEvent, "Type").Should().Be("assistant_delta");
-        GetPropertyValue<string>(runtimeEvent, "Content").Should().Be("hello");
+        Assert.That(parsed).IsTrue();
+        Assert.That(runtimeEvent).IsNotNull();
+        Assert.That(GetPropertyValue<long>(runtimeEvent!, "Sequence")).IsEqualTo(12);
+        Assert.That(GetPropertyValue<string>(runtimeEvent, "Type")).IsEqualTo("assistant_delta");
+        Assert.That(GetPropertyValue<string>(runtimeEvent, "Content")).IsEqualTo("hello");
     }
 
     [Test]
@@ -47,8 +47,8 @@ public sealed class JobProcessorServiceTests
 
         var (parsed, runtimeEvent) = InvokeTryParseRuntimeEventChunk(chunk);
 
-        parsed.Should().BeFalse();
-        runtimeEvent.Should().BeNull();
+        Assert.That(parsed).IsFalse();
+        Assert.That(runtimeEvent).IsNull();
     }
 
     [Test]
@@ -58,14 +58,14 @@ public sealed class JobProcessorServiceTests
 
         var projection = InvokeBuildStructuredProjection(runtimeEvent, "harness-structured-event-v2");
 
-        GetPropertyValue<string>(projection, "Category").Should().Be("reasoning.delta");
-        GetPropertyValue<string>(projection, "SchemaVersion").Should().Be("harness-structured-event-v2");
+        Assert.That(GetPropertyValue<string>(projection, "Category")).IsEqualTo("reasoning.delta");
+        Assert.That(GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("harness-structured-event-v2");
 
         var payload = GetPropertyValue<string>(projection, "PayloadJson");
         using var document = JsonDocument.Parse(payload);
-        document.RootElement.GetProperty("thinking").GetString().Should().Be("plan step");
-        document.RootElement.GetProperty("reasoning").GetString().Should().Be("plan step");
-        document.RootElement.GetProperty("content").GetString().Should().Be("plan step");
+        Assert.That(document.RootElement.GetProperty("thinking").GetString()).IsEqualTo("plan step");
+        Assert.That(document.RootElement.GetProperty("reasoning").GetString()).IsEqualTo("plan step");
+        Assert.That(document.RootElement.GetProperty("content").GetString()).IsEqualTo("plan step");
     }
 
     [Test]
@@ -78,12 +78,12 @@ public sealed class JobProcessorServiceTests
 
         var projection = InvokeBuildStructuredProjection(runtimeEvent, "harness-structured-event-v2");
 
-        GetPropertyValue<string>(projection, "Category").Should().Be("run.completed");
+        Assert.That(GetPropertyValue<string>(projection, "Category")).IsEqualTo("run.completed");
 
         var payload = GetPropertyValue<string>(projection, "PayloadJson");
         using var document = JsonDocument.Parse(payload);
-        document.RootElement.GetProperty("status").GetString().Should().Be("succeeded");
-        document.RootElement.GetProperty("content").GetString().Should().Be("completed");
+        Assert.That(document.RootElement.GetProperty("status").GetString()).IsEqualTo("succeeded");
+        Assert.That(document.RootElement.GetProperty("content").GetString()).IsEqualTo("completed");
     }
 
     [Test]
@@ -103,14 +103,14 @@ public sealed class JobProcessorServiceTests
 
         var projection = InvokeBuildStructuredProjection(runtimeEvent, "harness-structured-event-v2");
 
-        GetPropertyValue<string>(projection, "Category").Should().Be("diff.updated");
-        GetPropertyValue<string>(projection, "SchemaVersion").Should().Be("custom-v3");
+        Assert.That(GetPropertyValue<string>(projection, "Category")).IsEqualTo("diff.updated");
+        Assert.That(GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("custom-v3");
 
         var payload = GetPropertyValue<string>(projection, "PayloadJson");
         using var document = JsonDocument.Parse(payload);
-        document.RootElement.GetProperty("diffPatch").GetString().Should().Be("diff --git a/a.txt b/a.txt");
-        document.RootElement.GetProperty("diffStat").GetString().Should().Be("1 file changed");
-        document.RootElement.TryGetProperty("type", out _).Should().BeFalse();
+        Assert.That(document.RootElement.GetProperty("diffPatch").GetString()).IsEqualTo("diff --git a/a.txt b/a.txt");
+        Assert.That(document.RootElement.GetProperty("diffStat").GetString()).IsEqualTo("1 file changed");
+        Assert.That(document.RootElement.TryGetProperty("type", out _)).IsFalse();
     }
 
     [Test]
@@ -130,8 +130,8 @@ public sealed class JobProcessorServiceTests
 
         var projection = InvokeBuildStructuredProjection(runtimeEvent, "harness-structured-event-v2");
 
-        GetPropertyValue<string>(projection, "Category").Should().Be("diff.updated");
-        GetPropertyValue<string>(projection, "SchemaVersion").Should().Be("opencode.sse.v1");
+        Assert.That(GetPropertyValue<string>(projection, "Category")).IsEqualTo("diff.updated");
+        Assert.That(GetPropertyValue<string>(projection, "SchemaVersion")).IsEqualTo("opencode.sse.v1");
     }
 
     private static (bool Parsed, object? RuntimeEvent) InvokeTryParseRuntimeEventChunk(string chunk)
@@ -156,8 +156,8 @@ public sealed class JobProcessorServiceTests
         });
 
         var (parsed, runtimeEvent) = InvokeTryParseRuntimeEventChunk(chunk);
-        parsed.Should().BeTrue();
-        runtimeEvent.Should().NotBeNull();
+        Assert.That(parsed).IsTrue();
+        Assert.That(runtimeEvent).IsNotNull();
         return runtimeEvent!;
     }
 
@@ -169,7 +169,7 @@ public sealed class JobProcessorServiceTests
     private static T GetPropertyValue<T>(object source, string propertyName)
     {
         var property = source.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        property.Should().NotBeNull();
+        Assert.That(property).IsNotNull();
         return (T)property!.GetValue(source)!;
     }
 }

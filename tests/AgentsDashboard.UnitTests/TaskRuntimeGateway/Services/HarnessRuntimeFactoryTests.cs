@@ -9,26 +9,25 @@ namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
 public sealed class HarnessRuntimeFactoryTests
 {
     [Test]
-    public void Select_WhenCodexDefaultMode_UsesAppServerWithCommandFallback()
+    public void Select_WhenCodexDefaultMode_UsesStdioRuntimeWithoutFallback()
     {
         var factory = CreateFactory();
         var selection = factory.Select(CreateRequest("codex", "default"));
 
-        selection.RuntimeMode.Should().Be("app-server");
-        selection.Primary.Name.Should().Be("codex-app-server");
-        selection.Fallback.Should().NotBeNull();
-        selection.Fallback!.Name.Should().Be("command");
+        Assert.That(selection.RuntimeMode).IsEqualTo("stdio");
+        Assert.That(selection.Primary.Name).IsEqualTo("codex-stdio");
+        Assert.That(selection.Fallback).IsNull();
     }
 
     [Test]
-    public void Select_WhenCodexCommandMode_UsesCommandRuntimeWithoutFallback()
+    public void Select_WhenCodexCommandMode_UsesStdioRuntimeWithoutFallback()
     {
         var factory = CreateFactory();
         var selection = factory.Select(CreateRequest("codex", "command"));
 
-        selection.RuntimeMode.Should().Be("command");
-        selection.Primary.Name.Should().Be("command");
-        selection.Fallback.Should().BeNull();
+        Assert.That(selection.RuntimeMode).IsEqualTo("stdio");
+        Assert.That(selection.Primary.Name).IsEqualTo("codex-stdio");
+        Assert.That(selection.Fallback).IsNull();
     }
 
     [Test]
@@ -37,27 +36,31 @@ public sealed class HarnessRuntimeFactoryTests
         var factory = CreateFactory();
         var selection = factory.Select(CreateRequest("opencode", "default"));
 
-        selection.RuntimeMode.Should().Be("sse");
-        selection.Primary.Name.Should().Be("opencode-sse");
-        selection.Fallback.Should().BeNull();
+        Assert.That(selection.RuntimeMode).IsEqualTo("sse");
+        Assert.That(selection.Primary.Name).IsEqualTo("opencode-sse");
+        Assert.That(selection.Fallback).IsNull();
+    }
+
+    [Test]
+    public void Select_WhenUnsupportedHarness_ThrowsNotSupportedException()
+    {
+        var factory = CreateFactory();
+        var request = CreateRequest("other", "default");
+
+        var action = () => factory.Select(request);
+
+        Assert.That(action).Throws<NotSupportedException>();
     }
 
     private static DefaultHarnessRuntimeFactory CreateFactory()
     {
-        var workerOptions = Options.Create(new TaskRuntimeOptions());
-        var redactor = new SecretRedactor(workerOptions);
-        var commandRuntime = new CommandHarnessRuntime(
-            workerOptions,
-            Mock.Of<IDockerContainerService>(),
-            redactor,
-            NullLogger<CommandHarnessRuntime>.Instance);
+        var redactor = new SecretRedactor(Options.Create(new TaskRuntimeOptions()));
         var codexRuntime = new CodexAppServerRuntime(redactor, NullLogger<CodexAppServerRuntime>.Instance);
         var openCodeRuntime = new OpenCodeSseRuntime(redactor, NullLogger<OpenCodeSseRuntime>.Instance);
 
         return new DefaultHarnessRuntimeFactory(
             codexRuntime,
-            openCodeRuntime,
-            commandRuntime);
+            openCodeRuntime);
     }
 
     private static HarnessRunRequest CreateRequest(string harness, string mode)

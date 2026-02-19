@@ -18,7 +18,7 @@ public class HarnessEnvelopeValidatorTests
     {
         var result = _validator.Validate(json);
 
-        result.IsValid.Should().Be(shouldBeValid);
+        Assert.That(result.IsValid).IsEqualTo(shouldBeValid);
     }
 
     [Test]
@@ -37,10 +37,10 @@ public class HarnessEnvelopeValidatorTests
 
         var result = _validator.Validate(json);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.Contains("actions[0].type") && e.Contains("required"));
-        result.Errors.Should().Contain(e => e.Contains("actions[1]") && e.Contains("must be an object"));
-        result.Errors.Should().Contain(e => e.Contains("artifacts[0]") && e.Contains("cannot be empty"));
+        Assert.That(result.IsValid).IsFalse();
+        Assert.That(result.Errors).Contains(e => e.Contains("actions[0].type") && e.Contains("required"));
+        Assert.That(result.Errors).Contains(e => e.Contains("actions[1]") && e.Contains("must be an object"));
+        Assert.That(result.Errors).Contains(e => e.Contains("artifacts[0]") && e.Contains("cannot be empty"));
     }
 
     [Test]
@@ -55,8 +55,8 @@ public class HarnessEnvelopeValidatorTests
 
         var result = _validator.Validate(json);
 
-        result.IsValid.Should().BeTrue();
-        result.Warnings.Should().Contain("Unknown property 'unknownField' will be ignored");
-        result.Warnings.Should().Contain("Optional property 'runId' is missing");
+        Assert.That(result.IsValid).IsTrue();
+        Assert.That(result.Warnings).Contains("Unknown property 'unknownField' will be ignored");
+        Assert.That(result.Warnings).Contains("Optional property 'runId' is missing");
     }
 }

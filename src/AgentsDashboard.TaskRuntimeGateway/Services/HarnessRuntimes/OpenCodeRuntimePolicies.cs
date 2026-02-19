@@ -10,6 +10,17 @@ internal enum OpenCodeRuntimeMode
     Review = 2
 }
 
+internal sealed record OpenCodePermissionRule(
+    string Permission,
+    string Pattern,
+    string Action);
+
+internal sealed record OpenCodeRuntimePolicy(
+    OpenCodeRuntimeMode Mode,
+    string Agent,
+    string? SystemPrompt,
+    IReadOnlyList<OpenCodePermissionRule>? SessionPermissionRules);
+
 
 
 internal static partial class OpenCodeRuntimePolicies

@@ -1,5 +1,6 @@
+using System.Linq;
 using AgentsDashboard.Contracts.TaskRuntime;
-using Cysharp.Runtime.Multicast;
+using AgentsDashboard.TaskRuntimeGateway.Services;
 using MagicOnion.Server.Hubs;
 using Microsoft.Extensions.Logging;
 
@@ -11,26 +12,20 @@ namespace AgentsDashboard.TaskRuntimeGateway.MagicOnion;
 /// </summary>
 public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub, ITaskRuntimeEventReceiver>, ITaskRuntimeEventHub
 {
-    private const string AllEventsGroupName = "task-runtime-events:all";
     private readonly ILogger<TaskRuntimeEventHub> _logger;
-    private readonly HashSet<string> _subscribedRunIds = [];
+    private readonly TaskRuntimeEventDispatcher _dispatcher;
     private Guid _connectionId;
-    private bool _subscribedToAll;
-    private static readonly object ProviderLock = new();
-    private static IMulticastGroupProvider? _groupProvider;
 
-    public TaskRuntimeEventHub(ILogger<TaskRuntimeEventHub> logger, IMulticastGroupProvider groupProvider)
+    public TaskRuntimeEventHub(ILogger<TaskRuntimeEventHub> logger, TaskRuntimeEventDispatcher dispatcher)
     {
         _logger = logger;
-        lock (ProviderLock)
-        {
-            _groupProvider ??= groupProvider;
-        }
+        _dispatcher = dispatcher;
     }
 
     protected override ValueTask OnConnecting()
     {
         _connectionId = ConnectionId;
+        _dispatcher.RegisterConnection(_connectionId, Client);
         _logger.LogDebug("Client connecting to event hub");
         return ValueTask.CompletedTask;
     }
@@ -38,31 +33,25 @@ public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub,
     protected override ValueTask OnDisconnected()
     {
         _logger.LogDebug("Client disconnecting from event hub");
-
-        RemoveCurrentConnectionFromGroups();
+        _dispatcher.UnregisterConnection(_connectionId);
 
         return ValueTask.CompletedTask;
     }
 
     public Task SubscribeAsync(string[]? runIds = null)
     {
-        RemoveCurrentConnectionFromGroups();
+        _dispatcher.Unsubscribe(_connectionId);
 
         if (runIds == null || runIds.Length == 0)
         {
-            GetAllGroup().Add(_connectionId, Client);
-            _subscribedToAll = true;
+            _dispatcher.SubscribeAll(_connectionId);
             _logger.LogDebug("Client subscribed to all events");
         }
         else
         {
-            foreach (var runId in runIds)
+            _dispatcher.SubscribeRunIds(_connectionId, runIds);
+            foreach (var runId in runIds.Where(static runId => !string.IsNullOrWhiteSpace(runId)))
             {
-                if (string.IsNullOrWhiteSpace(runId))
-                    continue;
-
-                GetRunGroup(runId).Add(_connectionId, Client);
-                _subscribedRunIds.Add(runId);
                 _logger.LogDebug("Client subscribed to run {RunId}", runId);
             }
         }
@@ -72,94 +61,10 @@ public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub,
 
     public Task UnsubscribeAsync()
     {
-        RemoveCurrentConnectionFromGroups();
+        _dispatcher.Unsubscribe(_connectionId);
 
         _logger.LogDebug("Client unsubscribed from all events");
 
         return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Broadcasts a job event to subscribers of the specified run ID.
-    /// </summary>
-    public static async Task BroadcastJobEventAsync(JobEventMessage eventMessage)
-    {
-        var groupProvider = _groupProvider;
-        if (groupProvider is null)
-        {
-            return;
-        }
-
-        groupProvider.GetOrAddSynchronousGroup<Guid, ITaskRuntimeEventReceiver>(AllEventsGroupName)
-            .All
-            .OnJobEvent(eventMessage);
-
-        if (!string.IsNullOrWhiteSpace(eventMessage.RunId))
-        {
-            groupProvider.GetOrAddSynchronousGroup<Guid, ITaskRuntimeEventReceiver>(GetRunGroupName(eventMessage.RunId))
-                .All
-                .OnJobEvent(eventMessage);
-        }
-
-        await Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Broadcasts a task runtime status message to all subscribers.
-    /// </summary>
-    public static async Task BroadcastTaskRuntimeStatusAsync(TaskRuntimeStatusMessage statusMessage)
-    {
-        var groupProvider = _groupProvider;
-        if (groupProvider is null)
-        {
-            return;
-        }
-
-        groupProvider.GetOrAddSynchronousGroup<Guid, ITaskRuntimeEventReceiver>(AllEventsGroupName)
-            .All
-            .OnTaskRuntimeStatusChanged(statusMessage);
-
-        await Task.CompletedTask;
-    }
-
-    private void RemoveCurrentConnectionFromGroups()
-    {
-        var groupProvider = _groupProvider;
-        if (groupProvider is null)
-        {
-            return;
-        }
-
-        if (_subscribedToAll)
-        {
-            groupProvider.GetOrAddSynchronousGroup<Guid, ITaskRuntimeEventReceiver>(AllEventsGroupName)
-                .Remove(_connectionId);
-        }
-
-        foreach (var runId in _subscribedRunIds)
-        {
-            groupProvider.GetOrAddSynchronousGroup<Guid, ITaskRuntimeEventReceiver>(GetRunGroupName(runId))
-                .Remove(_connectionId);
-        }
-
-        _subscribedToAll = false;
-        _subscribedRunIds.Clear();
-    }
-
-    private static IMulticastSyncGroup<Guid, ITaskRuntimeEventReceiver> GetAllGroup()
-    {
-        return _groupProvider!
-            .GetOrAddSynchronousGroup<Guid, ITaskRuntimeEventReceiver>(AllEventsGroupName);
-    }
-
-    private static IMulticastSyncGroup<Guid, ITaskRuntimeEventReceiver> GetRunGroup(string runId)
-    {
-        return _groupProvider!
-            .GetOrAddSynchronousGroup<Guid, ITaskRuntimeEventReceiver>(GetRunGroupName(runId));
-    }
-
-    private static string GetRunGroupName(string runId)
-    {
-        return $"task-runtime-events:run:{runId}";
     }
 }

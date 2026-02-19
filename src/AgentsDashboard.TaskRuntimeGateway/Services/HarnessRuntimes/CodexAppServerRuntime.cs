@@ -8,17 +8,17 @@ using AgentsDashboard.Contracts.TaskRuntime;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 
-public sealed class CodexAppServerRuntime(
+public sealed partial class CodexAppServerRuntime(
     SecretRedactor secretRedactor,
     ILogger<CodexAppServerRuntime> logger) : IHarnessRuntime
 {
     private const string CodexCommand = "codex";
     private const string CodexListenUri = "stdio://";
-    private const string RuntimeMode = "app-server";
+    private const string RuntimeMode = "stdio";
     private const string DefaultApprovalPolicy = "on-failure";
     private const string DefaultSandbox = "danger-full-access";
 
-    public string Name => "codex-app-server";
+    public string Name => "codex-stdio";
 
     public async Task<HarnessRuntimeResult> RunAsync(HarnessRunRequest request, IHarnessEventSink sink, CancellationToken ct)
     {
@@ -64,7 +64,7 @@ public sealed class CodexAppServerRuntime(
 
         if (!process.Start())
         {
-            throw new InvalidOperationException("Failed to start codex app-server process.");
+            throw new InvalidOperationException("Failed to start codex stdio process.");
         }
 
         var pendingResponses = new ConcurrentDictionary<string, TaskCompletionSource<JsonElement>>(StringComparer.Ordinal);
@@ -400,8 +400,8 @@ public sealed class CodexAppServerRuntime(
 
             var succeeded = string.Equals(completion.Status, "completed", StringComparison.OrdinalIgnoreCase);
             var summary = succeeded
-                ? "Codex app-server execution completed"
-                : "Codex app-server execution failed";
+                ? "Codex stdio execution completed"
+                : "Codex stdio execution failed";
             var error = succeeded
                 ? string.Empty
                 : BuildFailureError(completion, stderrLog.ToString());
@@ -542,7 +542,7 @@ public sealed class CodexAppServerRuntime(
             }
 
             var exitCode = await processExitTask;
-            throw new InvalidOperationException($"codex app-server exited before turn completion (exit code {exitCode}).");
+            throw new InvalidOperationException($"codex stdio process exited before turn completion (exit code {exitCode}).");
         }
     }
 
@@ -863,7 +863,7 @@ public sealed class CodexAppServerRuntime(
         }
         catch (Exception ex)
         {
-            logger.ZLogDebug(ex, "Failed to kill codex app-server process.");
+            logger.LogDebug(ex, "Failed to kill codex stdio process.");
         }
     }
 
@@ -871,4 +871,5 @@ public sealed class CodexAppServerRuntime(
         typeof(CodexAppServerRuntime).Assembly.GetName().Version?.ToString() ?? "1.0.0";
 
     private sealed record TurnCompletion(string ThreadId, string TurnId, string Status, string Error);
+
 }

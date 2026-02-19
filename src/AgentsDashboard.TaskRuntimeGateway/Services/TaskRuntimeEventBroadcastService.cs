@@ -1,9 +1,8 @@
-using AgentsDashboard.TaskRuntimeGateway.MagicOnion;
-
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
 public sealed class TaskRuntimeEventBroadcastService(
     TaskRuntimeEventBus eventBus,
+    TaskRuntimeEventDispatcher dispatcher,
     ILogger<TaskRuntimeEventBroadcastService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -12,7 +11,7 @@ public sealed class TaskRuntimeEventBroadcastService(
         {
             try
             {
-                await TaskRuntimeEventHub.BroadcastJobEventAsync(eventMessage);
+                await dispatcher.BroadcastJobEventAsync(eventMessage);
             }
             catch (Exception ex)
             {

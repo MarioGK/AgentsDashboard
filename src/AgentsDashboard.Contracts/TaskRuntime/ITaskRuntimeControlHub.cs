@@ -26,7 +26,7 @@ public interface ITaskRuntimeControlReceiver
 }
 
 /// <summary>
-/// StreamingHub interface for task runtime control via multicaster.
+/// StreamingHub interface for task runtime control.
 /// Task Runtimes register themselves; control plane broadcasts to all registered task runtimes.
 /// </summary>
 public interface ITaskRuntimeControlHub : IStreamingHub<ITaskRuntimeControlHub, ITaskRuntimeControlReceiver>

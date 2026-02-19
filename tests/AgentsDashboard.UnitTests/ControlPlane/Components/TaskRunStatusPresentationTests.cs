@@ -13,17 +13,17 @@ public class TaskRunStatusPresentationTests
         var running = TaskRunStatusPresentation.FromRunState(RunState.Running);
         var pending = TaskRunStatusPresentation.FromRunState(RunState.PendingApproval);
 
-        queued.Label.Should().Be("Queued");
-        queued.Color.Should().Be(Color.Warning);
-        queued.IsWorking.Should().BeTrue();
+        Assert.That(queued.Label).IsEqualTo("Queued");
+        Assert.That(queued.Color).IsEqualTo(Color.Warning);
+        Assert.That(queued.IsWorking).IsTrue();
 
-        running.Label.Should().Be("Running");
-        running.Color.Should().Be(Color.Info);
-        running.IsWorking.Should().BeTrue();
+        Assert.That(running.Label).IsEqualTo("Running");
+        Assert.That(running.Color).IsEqualTo(Color.Info);
+        Assert.That(running.IsWorking).IsTrue();
 
-        pending.Label.Should().Be("PendingApproval");
-        pending.Color.Should().Be(Color.Secondary);
-        pending.IsWorking.Should().BeTrue();
+        Assert.That(pending.Label).IsEqualTo("PendingApproval");
+        Assert.That(pending.Color).IsEqualTo(Color.Secondary);
+        Assert.That(pending.IsWorking).IsTrue();
     }
 
     [Test]
@@ -38,10 +38,10 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, null);
 
-        visual.Status.Should().Be(TaskRunStatus.Inactive);
-        visual.Label.Should().Be("Inactive");
-        visual.IsWorking.Should().BeFalse();
-        visual.Tooltip.Should().Be("No runs recorded yet.");
+        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Inactive);
+        Assert.That(visual.Label).IsEqualTo("Inactive");
+        Assert.That(visual.IsWorking).IsFalse();
+        Assert.That(visual.Tooltip).IsEqualTo("No runs recorded yet.");
     }
 
     [Test]
@@ -56,9 +56,9 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, null);
 
-        visual.Status.Should().Be(TaskRunStatus.Obsolete);
-        visual.Label.Should().Be("Obsolete");
-        visual.Tooltip.Should().Contain("Task is disabled");
+        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Obsolete);
+        Assert.That(visual.Label).IsEqualTo("Obsolete");
+        Assert.That(visual.Tooltip).Contains("Task is disabled");
     }
 
     [Test]
@@ -81,9 +81,9 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, run);
 
-        visual.Status.Should().Be(TaskRunStatus.Inactive);
-        visual.Tooltip.Should().Contain("Latest run:");
-        visual.Tooltip.Should().Contain("Summary: Completed successfully");
+        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Inactive);
+        Assert.That(visual.Tooltip).Contains("Latest run:");
+        Assert.That(visual.Tooltip).Contains("Summary: Completed successfully");
     }
 
     [Test]
@@ -104,8 +104,8 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, run);
 
-        visual.Status.Should().Be(TaskRunStatus.Obsolete);
-        visual.Label.Should().Be("Obsolete");
+        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Obsolete);
+        Assert.That(visual.Label).IsEqualTo("Obsolete");
     }
 
     [Test]
@@ -126,7 +126,7 @@ public class TaskRunStatusPresentationTests
 
         var visual = TaskRunStatusPresentation.FromTaskAndLatestRun(task, run);
 
-        visual.Status.Should().Be(TaskRunStatus.Running);
-        visual.IsWorking.Should().BeTrue();
+        Assert.That(visual.Status).IsEqualTo(TaskRunStatus.Running);
+        Assert.That(visual.IsWorking).IsTrue();
     }
 }

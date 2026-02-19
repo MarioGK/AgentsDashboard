@@ -7,7 +7,6 @@
   <ItemGroup>
     <PackageReference Include="Blazor-ApexCharts" />
     <PackageReference Include="BlazorMonaco" />
-    <PackageReference Include="CliWrap" />
     <PackageReference Include="Cronos" />
     <PackageReference Include="Docker.DotNet" />
     <PackageReference Include="LiteDB" />

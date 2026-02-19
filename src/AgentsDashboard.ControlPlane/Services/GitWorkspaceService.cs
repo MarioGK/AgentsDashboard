@@ -1,8 +1,7 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Domain;
-using CliWrap;
-using CliWrap.Buffered;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
@@ -224,8 +223,6 @@ public sealed class GitWorkspaceService(ILogger<GitWorkspaceService> logger) : I
         CancellationToken cancellationToken,
         string workingDirectory)
     {
-        var command = Cli.Wrap("git");
-
         var finalArgs = new List<string>();
         if (!string.IsNullOrWhiteSpace(githubToken))
         {
@@ -235,28 +232,55 @@ public sealed class GitWorkspaceService(ILogger<GitWorkspaceService> logger) : I
 
         finalArgs.AddRange(args);
 
-        var result = await command
-            .WithArguments(finalArgs)
-            .WithWorkingDirectory(workingDirectory)
-            .WithEnvironmentVariables(new Dictionary<string, string?>
-            {
-                ["GIT_TERMINAL_PROMPT"] = "0"
-            })
-            .WithValidation(CommandResultValidation.None)
-            .ExecuteBufferedAsync(cancellationToken);
-
-        if (result.ExitCode != 0)
+        var process = new Process
         {
-            var error = string.IsNullOrWhiteSpace(result.StandardError)
-                ? result.StandardOutput
-                : result.StandardError;
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = workingDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            }
+        };
+
+        foreach (var argument in finalArgs)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        process.StartInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+
+        process.Start();
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcess(process);
+            throw;
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        if (process.ExitCode != 0)
+        {
+            var error = string.IsNullOrWhiteSpace(stderr)
+                ? stdout
+                : stderr;
             var safeArgs = finalArgs.Select(SanitizeForLog).ToArray();
             var safeError = SanitizeForLog(error);
-            logger.LogWarning("Git command failed: git {Args}; exit={ExitCode}; error={Error}", string.Join(' ', safeArgs), result.ExitCode, safeError);
+            logger.LogWarning("Git command failed: git {Args}; exit={ExitCode}; error={Error}", string.Join(' ', safeArgs), process.ExitCode, safeError);
             throw new InvalidOperationException(safeError.Trim());
         }
 
-        return result.StandardOutput.Trim();
+        return stdout.Trim();
     }
 
     private static string SanitizeForLog(string arg)
@@ -291,5 +315,19 @@ public sealed class GitWorkspaceService(ILogger<GitWorkspaceService> logger) : I
     {
         var bytes = Encoding.UTF8.GetBytes($"x-access-token:{token}");
         return Convert.ToBase64String(bytes);
+    }
+
+    private static void TryKillProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+        }
     }
 }

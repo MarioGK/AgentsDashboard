@@ -1,12 +1,12 @@
 using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.TaskRuntimeGateway.Configuration;
-using AgentsDashboard.TaskRuntimeGateway.MagicOnion;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
 public sealed class TaskRuntimeHeartbeatService(
     TaskRuntimeOptions options,
     ITaskRuntimeQueue queue,
+    TaskRuntimeEventDispatcher dispatcher,
     ILogger<TaskRuntimeHeartbeatService> logger) : BackgroundService
 {
     private static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(5);
@@ -45,7 +45,7 @@ public sealed class TaskRuntimeHeartbeatService(
             Message = "Worker heartbeat"
         };
 
-        await TaskRuntimeEventHub.BroadcastTaskRuntimeStatusAsync(status);
+        await dispatcher.BroadcastTaskRuntimeStatusAsync(status);
         logger.LogDebug("Heartbeat published successfully: Worker={TaskRuntimeId}, Active={Active}/{Max}",
             options.TaskRuntimeId, queue.ActiveSlots, queue.MaxSlots);
     }

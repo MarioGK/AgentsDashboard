@@ -1,8 +1,7 @@
+using System.Diagnostics;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
-using CliWrap;
-using CliWrap.Buffered;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
@@ -29,7 +28,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
             dedupeByOperationKey: true,
             isCritical: false);
 
-        logger.ZLogInformation("Queued development self-repository bootstrap background work {WorkId}", workId);
+        logger.LogInformation("Queued development self-repository bootstrap background work {WorkId}", workId);
         return Task.CompletedTask;
     }
 
@@ -52,7 +51,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
         var repositorySeed = await TryResolveRepositorySeedAsync(cancellationToken);
         if (repositorySeed is null)
         {
-            logger.ZLogDebug("Skipped development repository bootstrap because current directory is not a git workspace with origin.");
+            logger.LogDebug("Skipped development repository bootstrap because current directory is not a git workspace with origin.");
             progress.Report(new BackgroundWorkSnapshot(
                 WorkId: string.Empty,
                 OperationKey: string.Empty,
@@ -93,7 +92,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
                     repositorySeed.DefaultBranch),
                 cancellationToken);
 
-            logger.ZLogInformation(
+            logger.LogInformation(
                 "Development repository bootstrap created repository {RepositoryId} at {LocalPath}",
                 repository.Id,
                 repository.LocalPath);
@@ -117,7 +116,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
                     repository = updated;
                 }
 
-                logger.ZLogInformation(
+                logger.LogInformation(
                     "Development repository bootstrap updated repository {RepositoryId} at {LocalPath}",
                     existing.Id,
                     repositorySeed.LocalPath);
@@ -143,7 +142,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(
+            logger.LogWarning(
                 ex,
                 "Development repository bootstrap could not refresh git status for {RepositoryId}",
                 repository.Id);
@@ -251,11 +250,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
 
     private static async Task<string?> TryRunGitAsync(IReadOnlyList<string> args, string workingDirectory, CancellationToken cancellationToken)
     {
-        var result = await Cli.Wrap("git")
-            .WithArguments(args)
-            .WithWorkingDirectory(workingDirectory)
-            .WithValidation(CommandResultValidation.None)
-            .ExecuteBufferedAsync(cancellationToken);
+        var result = await ExecuteCommandAsync("git", args, workingDirectory, cancellationToken);
 
         if (result.ExitCode != 0)
         {
@@ -265,6 +260,69 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
         var output = result.StandardOutput.Trim();
         return string.IsNullOrWhiteSpace(output) ? null : output;
     }
+
+    private static async Task<CommandExecutionResult> ExecuteCommandAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                WorkingDirectory = workingDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            }
+        };
+
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        if (!process.Start())
+        {
+            return new CommandExecutionResult(-1, string.Empty, $"Failed to start '{fileName}'.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcess(process);
+            throw;
+        }
+
+        return new CommandExecutionResult(
+            process.ExitCode,
+            await stdoutTask,
+            await stderrTask);
+    }
+
+    private static void TryKillProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private sealed record CommandExecutionResult(int ExitCode, string StandardOutput, string StandardError);
 
     private sealed record RepositorySeed(string Name, string GitUrl, string LocalPath, string DefaultBranch);
 }

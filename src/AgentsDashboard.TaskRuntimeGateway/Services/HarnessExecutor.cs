@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using AgentsDashboard.Contracts.Domain;
@@ -8,13 +9,11 @@ using AgentsDashboard.TaskRuntimeGateway.Adapters;
 using AgentsDashboard.TaskRuntimeGateway.Configuration;
 using AgentsDashboard.TaskRuntimeGateway.Models;
 using AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
-using CliWrap;
-using CliWrap.Buffered;
 using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
-public sealed class HarnessExecutor(
+public sealed partial class HarnessExecutor(
     IOptions<TaskRuntimeOptions> options,
     HarnessAdapterFactory adapterFactory,
     IHarnessRuntimeFactory runtimeFactory,
@@ -40,8 +39,8 @@ public sealed class HarnessExecutor(
         CancellationToken cancellationToken)
     {
         var request = job.Request;
-        logger.ZLogInformationObject(
-            "Dispatching harness execution",
+        logger.LogInformation(
+            "Dispatching harness execution {@Data}",
             new
             {
                 request.RunId,
@@ -62,8 +61,8 @@ public sealed class HarnessExecutor(
         }
         catch (OperationCanceledException)
         {
-            logger.ZLogWarningObject(
-                "Harness execution canceled",
+            logger.LogWarning(
+                "Harness execution canceled {@Data}",
                 new
                 {
                     request.RunId,
@@ -83,9 +82,9 @@ public sealed class HarnessExecutor(
         }
         catch (Exception ex)
         {
-            logger.ZLogErrorObject(
+            logger.LogError(
                 ex,
-                "Harness execution failed",
+                "Harness execution failed {@Data}",
                 new
                 {
                     request.RunId,
@@ -110,8 +109,8 @@ public sealed class HarnessExecutor(
         Func<string, CancellationToken, Task>? onLogChunk,
         CancellationToken cancellationToken)
     {
-        logger.ZLogInformationObject(
-            "Starting runtime execution path",
+        logger.LogInformation(
+            "Starting runtime execution path {@Data}",
             new
             {
                 request.RunId,
@@ -142,8 +141,8 @@ public sealed class HarnessExecutor(
 
                 workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
                 workspaceHostPath = workspaceContext.WorkspacePath;
-                logger.ZLogInformationObject(
-                    "Workspace prepared for runtime execution",
+                logger.LogInformation(
+                    "Workspace prepared for runtime execution {@Data}",
                     new
                     {
                         request.RunId,
@@ -154,9 +153,9 @@ public sealed class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.ZLogErrorObject(
+                logger.LogError(
                     ex,
-                    "Workspace preparation failed",
+                    "Workspace preparation failed {@Data}",
                     new
                     {
                         request.RunId,
@@ -180,8 +179,8 @@ public sealed class HarnessExecutor(
         {
             var runtimeRequest = BuildRuntimeRequest(request, workspaceHostPath);
             var runtimeSelection = runtimeFactory.Select(runtimeRequest);
-            logger.ZLogDebugObject(
-                "Harness runtime selected",
+            logger.LogDebug(
+                "Harness runtime selected {@Data}",
                 new
                 {
                     request.RunId,
@@ -212,9 +211,9 @@ public sealed class HarnessExecutor(
                 structuredRuntimeFailure = ex;
                 runtimeName = runtimeSelection.Fallback.Name;
 
-                logger.ZLogWarningObject(
+                logger.LogWarning(
                     ex,
-                    "Structured runtime fallback triggered",
+                    "Structured runtime fallback triggered {@Data}",
                     new
                     {
                         request.RunId,
@@ -251,8 +250,8 @@ public sealed class HarnessExecutor(
 
             if (!ValidateEnvelope(envelope))
             {
-                logger.ZLogWarningObject(
-                    "Runtime envelope validation failed",
+                logger.LogWarning(
+                    "Runtime envelope validation failed {@Data}",
                     new
                     {
                         request.RunId,
@@ -280,11 +279,11 @@ public sealed class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarningObject(
-                    ex,
-                    "Failed to create harness adapter",
-                    new
-                    {
+                    logger.LogWarning(
+                        ex,
+                        "Failed to create harness adapter {@Data}",
+                        new
+                        {
                         request.RunId,
                         request.TaskId,
                         request.HarnessType,
@@ -310,8 +309,8 @@ public sealed class HarnessExecutor(
                         envelope.Metadata["remediationHints"] = string.Join("; ", classification.RemediationHints);
                     }
 
-                    logger.ZLogDebugObject(
-                        "Failure classification detected",
+                    logger.LogDebug(
+                        "Failure classification detected {@Data}",
                         new
                         {
                             request.RunId,
@@ -348,10 +347,10 @@ public sealed class HarnessExecutor(
                     envelope.Artifacts = extractedArtifacts.Select(a => a.DestinationPath).ToList();
                     envelope.Metadata["extractedArtifactCount"] = extractedArtifacts.Count.ToString();
                     envelope.Metadata["extractedArtifactSize"] = extractedArtifacts.Sum(a => a.SizeBytes).ToString();
-                    logger.ZLogDebugObject(
-                        "Extracted runtime artifacts",
-                        new
-                        {
+                        logger.LogDebug(
+                            "Extracted runtime artifacts {@Data}",
+                            new
+                            {
                             request.RunId,
                             request.TaskId,
                             ExtractedArtifactCount = extractedArtifacts.Count,
@@ -360,8 +359,8 @@ public sealed class HarnessExecutor(
                 }
             }
 
-            logger.ZLogInformationObject(
-                "Runtime execution completed",
+            logger.LogInformation(
+                "Runtime execution completed {@Data}",
                 new
                 {
                     request.RunId,
@@ -442,22 +441,31 @@ public sealed class HarnessExecutor(
         if (environment.TryGetValue("HARNESS_RUNTIME_MODE", out var runtimeMode) &&
             !string.IsNullOrWhiteSpace(runtimeMode))
         {
+            if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
+            {
+                return "stdio";
+            }
+
+            if (string.Equals(harness, "opencode", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(harness, "open-code", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(harness, "open code", StringComparison.OrdinalIgnoreCase))
+            {
+                return "sse";
+            }
+
             return runtimeMode.Trim();
         }
 
         if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
         {
-            if (environment.TryGetValue("CODEX_TRANSPORT", out var transport) &&
-                !string.IsNullOrWhiteSpace(transport))
-            {
-                return transport.Trim();
-            }
+            return "stdio";
+        }
 
-            if (environment.TryGetValue("CODEX_MODE", out var codexMode) &&
-                !string.IsNullOrWhiteSpace(codexMode))
-            {
-                return codexMode.Trim();
-            }
+        if (string.Equals(harness, "opencode", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(harness, "open-code", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(harness, "open code", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sse";
         }
 
         if (environment.TryGetValue("HARNESS_MODE", out var harnessMode) &&
@@ -477,7 +485,7 @@ public sealed class HarnessExecutor(
             return requestedMode.ToString().ToLowerInvariant();
         }
 
-        return "command";
+        return "unsupported";
     }
 
     private async Task<HarnessResultEnvelope> ExecuteViaAdapterAsync(
@@ -485,8 +493,8 @@ public sealed class HarnessExecutor(
         Func<string, CancellationToken, Task>? onLogChunk,
         CancellationToken cancellationToken)
     {
-        logger.ZLogInformationObject(
-            "Executing adapter runtime path",
+        logger.LogInformation(
+            "Executing adapter runtime path {@Data}",
             new
             {
                 request.RunId,
@@ -503,8 +511,8 @@ public sealed class HarnessExecutor(
 
         if (!IsImageAllowed(context.Image))
         {
-            logger.ZLogWarningObject(
-                "Image is not in the allowlist",
+            logger.LogWarning(
+                "Image is not in the allowlist {@Data}",
                 new
                 {
                     request.RunId,
@@ -536,8 +544,8 @@ public sealed class HarnessExecutor(
 
                 workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
                 workspaceHostPath = workspaceContext.WorkspacePath;
-                logger.ZLogInformationObject(
-                    "Adapter workspace prepared",
+                logger.LogInformation(
+                    "Adapter workspace prepared {@Data}",
                     new
                     {
                         request.RunId,
@@ -548,9 +556,9 @@ public sealed class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.ZLogErrorObject(
+                logger.LogError(
                     ex,
-                    "Adapter workspace preparation failed",
+                    "Adapter workspace preparation failed {@Data}",
                     new
                     {
                         request.RunId,
@@ -620,9 +628,9 @@ public sealed class HarnessExecutor(
                         }
                         catch (Exception ex)
                         {
-                            logger.ZLogWarningObject(
+                            logger.LogWarning(
                                 ex,
-                                "Log streaming failed",
+                                "Log streaming failed {@Data}",
                                 new
                                 {
                                     request.RunId,
@@ -665,8 +673,8 @@ public sealed class HarnessExecutor(
                     envelope.Metrics["networkTxBytes"] = metrics.NetworkTxBytes;
                     envelope.Metrics["blockReadBytes"] = metrics.BlockReadBytes;
                     envelope.Metrics["blockWriteBytes"] = metrics.BlockWriteBytes;
-                    logger.ZLogDebugObject(
-                        "Container runtime metrics captured",
+                    logger.LogDebug(
+                        "Container runtime metrics captured {@Data}",
                         new
                         {
                             request.RunId,
@@ -680,8 +688,8 @@ public sealed class HarnessExecutor(
 
                 if (!ValidateEnvelope(envelope))
                 {
-                    logger.ZLogWarningObject(
-                        "Adapter envelope validation failed",
+                    logger.LogWarning(
+                    "Adapter envelope validation failed {@Data}",
                         new
                         {
                             request.RunId,
@@ -713,8 +721,8 @@ public sealed class HarnessExecutor(
                     if (classification.RemediationHints.Count > 0)
                         envelope.Metadata["remediationHints"] = string.Join("; ", classification.RemediationHints);
 
-                    logger.ZLogDebugObject(
-                        "Adapter failure classification detected",
+                    logger.LogDebug(
+                        "Adapter failure classification detected {@Data}",
                         new
                         {
                             request.RunId,
@@ -731,8 +739,8 @@ public sealed class HarnessExecutor(
                 {
                     envelope.Metadata["artifactCount"] = artifacts.Count.ToString();
                     envelope.Metadata["artifacts"] = string.Join(",", artifacts.Select(a => a.Path));
-                    logger.ZLogDebugObject(
-                        "Adapter mapped artifacts",
+                    logger.LogDebug(
+                        "Adapter mapped artifacts {@Data}",
                         new
                         {
                             request.RunId,
@@ -758,10 +766,10 @@ public sealed class HarnessExecutor(
                         envelope.Artifacts = extractedArtifacts.Select(a => a.DestinationPath).ToList();
                         envelope.Metadata["extractedArtifactCount"] = extractedArtifacts.Count.ToString();
                         envelope.Metadata["extractedArtifactSize"] = extractedArtifacts.Sum(a => a.SizeBytes).ToString();
-                        logger.ZLogDebugObject(
-                            "Adapter extracted artifacts",
-                            new
-                            {
+                            logger.LogDebug(
+                                "Adapter extracted artifacts {@Data}",
+                                new
+                                {
                                 request.RunId,
                                 request.TaskId,
                                 ExtractedArtifactCount = extractedArtifacts.Count,
@@ -770,8 +778,8 @@ public sealed class HarnessExecutor(
                     }
                 }
 
-                logger.ZLogInformationObject(
-                    "Adapter execution completed",
+                logger.LogInformation(
+                "Adapter execution completed {@Data}",
                     new
                     {
                         request.RunId,
@@ -1032,7 +1040,7 @@ public sealed class HarnessExecutor(
         }
     }
 
-    private async Task<BufferedCommandResult> ExecuteGitInPathAsync(
+    private async Task<GitCommandResult> ExecuteGitInPathAsync(
         string workspacePath,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
@@ -1047,17 +1055,52 @@ public sealed class HarnessExecutor(
         return await ExecuteGitAsync(fullArguments, cancellationToken);
     }
 
-    private static async Task<BufferedCommandResult> ExecuteGitAsync(
+    private static async Task<GitCommandResult> ExecuteGitAsync(
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
-        return await Cli.Wrap("git")
-            .WithArguments(arguments)
-            .WithValidation(CommandResultValidation.None)
-            .ExecuteBufferedAsync(cancellationToken);
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = Directory.GetCurrentDirectory(),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            }
+        };
+
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        if (!process.Start())
+        {
+            return new GitCommandResult(-1, string.Empty, "Failed to start git process.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcess(process);
+            throw;
+        }
+
+        return new GitCommandResult(
+            process.ExitCode,
+            await stdoutTask,
+            await stderrTask);
     }
 
-    private static string BuildGitFailureMessage(string operation, BufferedCommandResult result)
+    private static string BuildGitFailureMessage(string operation, GitCommandResult result)
     {
         var details = string.IsNullOrWhiteSpace(result.StandardError)
             ? result.StandardOutput
@@ -1072,7 +1115,7 @@ public sealed class HarnessExecutor(
         return $"{operation} failed (exit code {result.ExitCode}): {details}";
     }
 
-    private static bool IsNothingToCommit(BufferedCommandResult result)
+    private static bool IsNothingToCommit(GitCommandResult result)
     {
         var combined = $"{result.StandardOutput}\n{result.StandardError}";
         return combined.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase) ||
@@ -1153,67 +1196,6 @@ public sealed class HarnessExecutor(
         return !string.IsNullOrWhiteSpace(envelope.Status) && !string.IsNullOrWhiteSpace(envelope.Summary);
     }
 
-    private async Task<HarnessResultEnvelope> ExecuteDirectAsync(
-        DispatchJobRequest request,
-        Func<string, CancellationToken, Task>? onLogChunk,
-        CancellationToken cancellationToken)
-    {
-        var command = request.CustomArgs ?? string.Empty;
-
-        var stdoutBuf = new StringBuilder();
-        var stderrBuf = new StringBuilder();
-
-        var stdoutPipe = onLogChunk is not null
-            ? PipeTarget.Merge(
-                PipeTarget.ToStringBuilder(stdoutBuf),
-                PipeTarget.Create(async (chunk, ct) =>
-                {
-                    var str = chunk.ToString() ?? string.Empty;
-                    stdoutBuf.Append(str);
-                    var redacted = secretRedactor.Redact(str, request.EnvironmentVars);
-                    await onLogChunk(redacted, ct);
-                }))
-            : PipeTarget.ToStringBuilder(stdoutBuf);
-
-        var stderrPipe = onLogChunk is not null
-            ? PipeTarget.Merge(
-                PipeTarget.ToStringBuilder(stderrBuf),
-                PipeTarget.Create(async (chunk, ct) =>
-                {
-                    var str = chunk.ToString() ?? string.Empty;
-                    stderrBuf.Append(str);
-                    var redacted = secretRedactor.Redact(str, request.EnvironmentVars);
-                    await onLogChunk(redacted, ct);
-                }))
-            : PipeTarget.ToStringBuilder(stderrBuf);
-
-        var cmd = Cli.Wrap("sh")
-            .WithArguments(["-lc", command])
-            .WithValidation(CommandResultValidation.None)
-            .WithStandardOutputPipe(stdoutPipe)
-            .WithStandardErrorPipe(stderrPipe);
-
-        if (request.EnvironmentVars is not null && request.EnvironmentVars.Count > 0)
-        {
-            cmd = cmd.WithEnvironmentVariables(env =>
-            {
-                foreach (var kv in request.EnvironmentVars)
-                    env.Set(kv.Key, kv.Value);
-            });
-        }
-
-        var result = await cmd.ExecuteAsync(cancellationToken);
-
-        var stdout = stdoutBuf.ToString();
-        var stderr = stderrBuf.ToString();
-        var redactedStdout = secretRedactor.Redact(stdout, request.EnvironmentVars);
-        var redactedStderr = secretRedactor.Redact(stderr, request.EnvironmentVars);
-        var envelope = CreateEnvelope(result.ExitCode, redactedStdout, redactedStderr);
-        envelope.RunId = request.RunId;
-        envelope.TaskId = request.TaskId;
-        return envelope;
-    }
-
     private static HarnessResultEnvelope CreateEnvelope(int exitCode, string stdout, string stderr)
     {
         if (TryParseEnvelope(stdout, out var parsed))
@@ -1247,38 +1229,18 @@ public sealed class HarnessExecutor(
         }
     }
 
-    private sealed class CallbackHarnessEventSink(
-        Func<string, CancellationToken, Task> onLogChunk) : IHarnessEventSink
+    private static void TryKillProcess(Process process)
     {
-        private long _sequence;
-
-        public ValueTask PublishAsync(HarnessRuntimeEvent @event, CancellationToken cancellationToken)
+        try
         {
-            if (string.IsNullOrWhiteSpace(@event.Content))
+            if (!process.HasExited)
             {
-                return ValueTask.CompletedTask;
+                process.Kill(entireProcessTree: true);
             }
-
-            var payload = JsonSerializer.Serialize(new RuntimeEventWireEnvelope(
-                RuntimeEventWireMarker,
-                Interlocked.Increment(ref _sequence),
-                @event.Type.ToCanonicalName(),
-                @event.Content,
-                @event.Metadata));
-
-            return new ValueTask(onLogChunk(payload, cancellationToken));
+        }
+        catch
+        {
         }
     }
 
-    private sealed record RuntimeEventWireEnvelope(
-        string Marker,
-        long Sequence,
-        string Type,
-        string Content,
-        IReadOnlyDictionary<string, string>? Metadata);
-
-    private sealed record WorkspaceContext(
-        string WorkspacePath,
-        string MainBranch,
-        string HeadBeforeRun);
 }

@@ -47,7 +47,7 @@ public class JobProcessorService(
 
             if (jobsToWait.Count > 0)
             {
-                logger.ZLogInformation("Waiting for {Count} running jobs to complete (timeout: {Timeout}s)...",
+                logger.LogInformation("Waiting for {Count} running jobs to complete (timeout: {Timeout}s)...",
                     jobsToWait.Count, _shutdownTimeout.TotalSeconds);
 
                 var timeoutTask = Task.Delay(_shutdownTimeout, CancellationToken.None);
@@ -56,17 +56,17 @@ public class JobProcessorService(
 
                 if (completedTask == timeoutTask)
                 {
-                    logger.ZLogWarning("Shutdown timeout reached, {Count} jobs still running", jobsToWait.Count);
+                    logger.LogWarning("Shutdown timeout reached, {Count} jobs still running", jobsToWait.Count);
                 }
                 else
                 {
-                    logger.ZLogInformation("All jobs completed gracefully");
+                    logger.LogInformation("All jobs completed gracefully");
                 }
             }
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Error during graceful shutdown");
+            logger.LogError(ex, "Error during graceful shutdown");
         }
     }
 
@@ -79,8 +79,8 @@ public class JobProcessorService(
         long maxSequence = 0;
         var fallbackChunks = 0;
 
-        logger.ZLogInformationObject(
-            "Starting job execution",
+        logger.LogInformation(
+            "Starting job execution {@Job}",
             new
             {
                 request.RunId,
@@ -141,8 +141,8 @@ public class JobProcessorService(
                 CreateEvent(request.RunId, "completed", envelope.Summary, payload),
                 cancellationToken);
 
-            logger.ZLogInformationObject(
-                "Job processing completed",
+            logger.LogInformation(
+                "Job processing completed {@Result}",
                 new
                 {
                     request.RunId,
@@ -163,8 +163,8 @@ public class JobProcessorService(
                 CreateEvent(request.RunId, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
                 CancellationToken.None);
 
-            logger.ZLogWarningObject(
-                "Job processing cancelled",
+            logger.LogWarning(
+                "Job processing cancelled {@Cancellation}",
                 new
                 {
                     request.RunId,
@@ -176,9 +176,9 @@ public class JobProcessorService(
         }
         catch (Exception ex)
         {
-            logger.ZLogErrorObject(
+            logger.LogError(
                 ex,
-                "Job processing crashed",
+                "Job processing crashed {@Failure}",
                 new
                 {
                     request.RunId,

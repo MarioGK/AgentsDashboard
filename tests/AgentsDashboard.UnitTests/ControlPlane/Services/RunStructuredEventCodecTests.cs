@@ -16,16 +16,12 @@ public sealed class RunStructuredEventCodecTests
         var normalizedJson = InvokeNormalizePayloadJson(" { \"thinking\" : \"step\" } ");
         using (var document = JsonDocument.Parse(normalizedJson))
         {
-            document.RootElement.GetProperty("thinking").GetString().Should().Be("step");
+            Assert.That(document.RootElement.GetProperty("thinking").GetString()).IsEqualTo("step");
         }
 
-        InvokeNormalizePayloadJson("not-json")
-            .Should()
-            .Be("\"not-json\"");
+        Assert.That(InvokeNormalizePayloadJson("not-json")).IsEqualTo("\"not-json\"");
 
-        InvokeNormalizePayloadJson("   ")
-            .Should()
-            .Be("{}");
+        Assert.That(InvokeNormalizePayloadJson("   ")).IsEqualTo("{}");
     }
 
     [Test]
@@ -48,34 +44,34 @@ public sealed class RunStructuredEventCodecTests
 
         var decoded = InvokeDecode(source);
 
-        GetDecodedValue<string>(decoded, "EventType").Should().Be("structured");
-        GetDecodedValue<string>(decoded, "Category").Should().Be("structured");
-        GetDecodedValue<string>(decoded, "PayloadJson").Should().Be("\"not-json\"");
-        GetDecodedValue<string>(decoded, "Schema").Should().Be("harness-structured-event-v2");
-        GetDecodedValue<string>(decoded, "Summary").Should().Be("summary");
-        GetDecodedValue<string>(decoded, "Error").Should().Be("error");
-        GetDecodedValue<DateTime>(decoded, "TimestampUtc").Should().Be(createdAt);
-        GetDecodedValue<long>(decoded, "Sequence").Should().Be(7L);
+        Assert.That(GetDecodedValue<string>(decoded, "EventType")).IsEqualTo("structured");
+        Assert.That(GetDecodedValue<string>(decoded, "Category")).IsEqualTo("structured");
+        Assert.That(GetDecodedValue<string>(decoded, "PayloadJson")).IsEqualTo("\"not-json\"");
+        Assert.That(GetDecodedValue<string>(decoded, "Schema")).IsEqualTo("harness-structured-event-v2");
+        Assert.That(GetDecodedValue<string>(decoded, "Summary")).IsEqualTo("summary");
+        Assert.That(GetDecodedValue<string>(decoded, "Error")).IsEqualTo("error");
+        Assert.That(GetDecodedValue<DateTime>(decoded, "TimestampUtc")).IsEqualTo(createdAt);
+        Assert.That(GetDecodedValue<long>(decoded, "Sequence")).IsEqualTo(7L);
     }
 
     private static string InvokeNormalizePayloadJson(string? payload)
     {
         var method = CodecType.GetMethod("NormalizePayloadJson", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
+        Assert.That(method).IsNotNull();
         return (string)method!.Invoke(null, [payload])!;
     }
 
     private static object InvokeDecode(RunStructuredEventDocument source)
     {
         var method = CodecType.GetMethod("Decode", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
+        Assert.That(method).IsNotNull();
         return method!.Invoke(null, [source])!;
     }
 
     private static T GetDecodedValue<T>(object decoded, string propertyName)
     {
         var property = decoded.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-        property.Should().NotBeNull();
+        Assert.That(property).IsNotNull();
         return (T)property!.GetValue(decoded)!;
     }
 }

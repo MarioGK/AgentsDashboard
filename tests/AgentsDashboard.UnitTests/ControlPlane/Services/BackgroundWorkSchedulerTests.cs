@@ -27,13 +27,13 @@ public partial class BackgroundWorkSchedulerTests
                 async (ct, _) => await gate.Task.WaitAsync(ct),
                 dedupeByOperationKey: true);
 
-            secondWorkId.Should().Be(firstWorkId);
+            Assert.That(secondWorkId).IsEqualTo(firstWorkId);
 
             await WaitForStateAsync(scheduler, firstWorkId, BackgroundWorkState.Running);
 
             gate.TrySetResult();
             var completed = await WaitForStateAsync(scheduler, firstWorkId, BackgroundWorkState.Succeeded);
-            completed.PercentComplete.Should().Be(100);
+            Assert.That(completed.PercentComplete).IsEqualTo(100);
         }
         finally
         {
@@ -98,16 +98,16 @@ public partial class BackgroundWorkSchedulerTests
 
             await WaitForStateAsync(scheduler, workId, BackgroundWorkState.Succeeded);
 
-            states.Should().Contain(BackgroundWorkState.Pending);
-            states.Should().Contain(BackgroundWorkState.Running);
-            states.Should().Contain(BackgroundWorkState.Succeeded);
+            Assert.That(states).Contains(BackgroundWorkState.Pending);
+            Assert.That(states).Contains(BackgroundWorkState.Running);
+            Assert.That(states).Contains(BackgroundWorkState.Succeeded);
 
             var pendingIndex = states.IndexOf(BackgroundWorkState.Pending);
             var firstRunningIndex = states.IndexOf(BackgroundWorkState.Running);
             var succeededIndex = states.LastIndexOf(BackgroundWorkState.Succeeded);
-            pendingIndex.Should().BeGreaterThanOrEqualTo(0);
-            firstRunningIndex.Should().BeGreaterThan(pendingIndex);
-            succeededIndex.Should().BeGreaterThan(firstRunningIndex);
+            Assert.That(pendingIndex).IsGreaterThanOrEqualTo(0);
+            Assert.That(firstRunningIndex).IsGreaterThan(pendingIndex);
+            Assert.That(succeededIndex).IsGreaterThan(firstRunningIndex);
         }
         finally
         {
@@ -131,8 +131,8 @@ public partial class BackgroundWorkSchedulerTests
                 dedupeByOperationKey: true);
 
             var failed = await WaitForStateAsync(scheduler, workId, BackgroundWorkState.Failed);
-            failed.ErrorCode.Should().Be("exception");
-            failed.ErrorMessage.Should().Contain("boom");
+            Assert.That(failed.ErrorCode).IsEqualTo("exception");
+            Assert.That(failed.ErrorMessage).Contains("boom");
         }
         finally
         {
@@ -155,8 +155,8 @@ public partial class BackgroundWorkSchedulerTests
         await WaitForStateAsync(scheduler, workId, BackgroundWorkState.Running);
         await scheduler.StopAsync(CancellationToken.None);
 
-        scheduler.TryGet(workId, out var snapshot).Should().BeTrue();
-        snapshot.State.Should().Be(BackgroundWorkState.Cancelled);
+        Assert.That(scheduler.TryGet(workId, out var snapshot)).IsTrue();
+        Assert.That(snapshot.State).IsEqualTo(BackgroundWorkState.Cancelled);
     }
 
     [Test]
@@ -205,15 +205,15 @@ public partial class BackgroundWorkSchedulerTests
             await WaitForStateAsync(scheduler, failedWorkId, BackgroundWorkState.Failed);
             await WaitForNotificationCountAsync(sink, 4);
 
-            sink.Messages.Should().Contain(message =>
-                message.Title.Contains("queued", StringComparison.OrdinalIgnoreCase));
-            sink.Messages.Should().Contain(message =>
-                message.Title.Contains("running", StringComparison.OrdinalIgnoreCase));
-            sink.Messages.Should().Contain(message =>
-                message.Title.Contains("succeeded", StringComparison.OrdinalIgnoreCase));
-            sink.Messages.Should().Contain(message =>
-                message.Title.Contains("failed", StringComparison.OrdinalIgnoreCase));
-            sink.Messages.Should().Contain(message => message.Severity == NotificationSeverity.Error);
+            Assert.That(sink.Messages.Any(message =>
+                message.Title.Contains("queued", StringComparison.OrdinalIgnoreCase))).IsTrue();
+            Assert.That(sink.Messages.Any(message =>
+                message.Title.Contains("running", StringComparison.OrdinalIgnoreCase))).IsTrue();
+            Assert.That(sink.Messages.Any(message =>
+                message.Title.Contains("succeeded", StringComparison.OrdinalIgnoreCase))).IsTrue();
+            Assert.That(sink.Messages.Any(message =>
+                message.Title.Contains("failed", StringComparison.OrdinalIgnoreCase))).IsTrue();
+            Assert.That(sink.Messages).Contains(message => message.Severity == NotificationSeverity.Error);
         }
         finally
         {

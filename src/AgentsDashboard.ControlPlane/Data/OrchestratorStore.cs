@@ -2863,34 +2863,6 @@ public sealed class OrchestratorStore(
         return true;
     }
 
-    public async Task RecordProxyRequestAsync(ProxyAuditDocument audit, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        db.ProxyAudits.Add(audit);
-        await db.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string runId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.ProxyAudits.AsNoTracking().Where(x => x.RunId == runId).OrderByDescending(x => x.TimestampUtc).Take(200).ToListAsync(cancellationToken);
-    }
-
-    public async Task<List<ProxyAuditDocument>> ListProxyAuditsAsync(string? repoId, string? taskId, string? runId, int limit, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var query = db.ProxyAudits.AsNoTracking().AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(repoId))
-            query = query.Where(x => x.RepoId == repoId);
-        if (!string.IsNullOrWhiteSpace(taskId))
-            query = query.Where(x => x.TaskId == taskId);
-        if (!string.IsNullOrWhiteSpace(runId))
-            query = query.Where(x => x.RunId == runId);
-
-        return await query.OrderByDescending(x => x.TimestampUtc).Take(limit).ToListAsync(cancellationToken);
-    }
-
     public async Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);

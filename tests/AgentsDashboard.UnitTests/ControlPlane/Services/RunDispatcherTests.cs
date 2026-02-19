@@ -1,3 +1,4 @@
+using System.Reflection;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane.Configuration;
@@ -11,6 +12,15 @@ namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public partial class RunDispatcherTests
 {
+    private static readonly MethodInfo ResolveTaskModelOverrideMethod = typeof(RunDispatcher)
+        .GetMethod("ResolveTaskModelOverride", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo ApplyHarnessModelOverrideMethod = typeof(RunDispatcher)
+        .GetMethod("ApplyHarnessModelOverride", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo ApplyHarnessModeEnvironmentMethod = typeof(RunDispatcher)
+        .GetMethod("ApplyHarnessModeEnvironment", BindingFlags.NonPublic | BindingFlags.Static)!;
+
     [Test]
     public async Task DispatchAsync_WithApprovalRequirementOnly_MarksRunPendingApproval()
     {
@@ -149,7 +159,7 @@ public partial class RunDispatcherTests
     }
 
     [Test]
-    public async Task DispatchAsync_ForCodexDefaultMode_SetsAppServerTransportAndApprovalDefaults()
+    public async Task DispatchAsync_ForCodexDefaultMode_SetsCodexApprovalDefaults()
     {
         var service = new SutBuilder().WithActiveWorker().Build();
         var run = CreateRun();
@@ -168,7 +178,7 @@ public partial class RunDispatcherTests
         result.Should().BeTrue();
         dispatchedRequest.Should().NotBeNull();
         dispatchedRequest!.Mode.Should().Be(HarnessExecutionMode.Default);
-        dispatchedRequest.EnvironmentVars.Should().ContainKey("CODEX_TRANSPORT").WhoseValue.Should().Be("app-server");
+        dispatchedRequest.EnvironmentVars.Should().ContainKey("CODEX_TRANSPORT").WhoseValue.Should().Be("stdio");
         dispatchedRequest.EnvironmentVars.Should().ContainKey("CODEX_APPROVAL_POLICY").WhoseValue.Should().Be("on-failure");
         dispatchedRequest.EnvironmentVars.Should().ContainKey("TASK_MODE").WhoseValue.Should().Be("default");
         dispatchedRequest.EnvironmentVars.Should().ContainKey("RUN_MODE").WhoseValue.Should().Be("default");
@@ -197,6 +207,89 @@ public partial class RunDispatcherTests
         dispatchedRequest.EnvironmentVars.Should().ContainKey("CODEX_APPROVAL_POLICY").WhoseValue.Should().Be("never");
         dispatchedRequest.EnvironmentVars.Should().ContainKey("TASK_MODE").WhoseValue.Should().Be("review");
         dispatchedRequest.EnvironmentVars.Should().ContainKey("RUN_MODE").WhoseValue.Should().Be("review");
+    }
+
+    [Test]
+    public void ResolveTaskModelOverride_WhenModelOverrideInstructionPresent_ReturnsTrimmedModel()
+    {
+        var task = CreateTask();
+        task.InstructionFiles = [new InstructionFile("modeloverride.md", "  gpt-4o-mini ", 1)];
+
+        var modelOverride = (string)ResolveTaskModelOverrideMethod.Invoke(null, [task])!;
+
+        modelOverride.Should().Be("gpt-4o-mini");
+    }
+
+    [Test]
+    public void ResolveTaskModelOverride_WhenHarnessModelInstructionPresent_ReturnsTrimmedModel()
+    {
+        var task = CreateTask();
+        task.InstructionFiles =
+        [
+            new InstructionFile("modeloverride.md", "ignored"),
+            new InstructionFile("hARNeSS-model.json", "  gpt-4 "),
+        ];
+
+        var modelOverride = (string)ResolveTaskModelOverrideMethod.Invoke(null, [task])!;
+
+        modelOverride.Should().Be("ignored");
+    }
+
+    [Test]
+    public void ApplyHarnessModelOverride_WhenCodex_HonorsCoreAndHarnessModelVariables()
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        ApplyHarnessModelOverrideMethod.Invoke(null, ["codex", environment, "  gpt-4o-mini  "]);
+
+        environment.Should().ContainKey("HARNESS_MODEL").WhoseValue.Should().Be("gpt-4o-mini");
+        environment.Should().ContainKey("CODEX_MODEL").WhoseValue.Should().Be("gpt-4o-mini");
+    }
+
+    [Test]
+    public void ApplyHarnessModelOverride_WhenOpencode_SetsHarnessAndOpencodeModelVariables()
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        ApplyHarnessModelOverrideMethod.Invoke(null, ["opencode", environment, "provider/model  "]);
+
+        environment.Should().ContainKey("HARNESS_MODEL").WhoseValue.Should().Be("provider/model");
+        environment.Should().ContainKey("OPENCODE_MODEL").WhoseValue.Should().Be("provider/model");
+    }
+
+    [Test]
+    public void ApplyHarnessModeEnvironment_ForCodex_UsesStdioTransportAndKeepsExplicitCodexMode()
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CODEX_TRANSPORT"] = "command",
+            ["CODEX_MODE"] = "command",
+            ["TASK_MODE"] = "review",
+        };
+
+        ApplyHarnessModeEnvironmentMethod.Invoke(null, ["codex", HarnessExecutionMode.Plan, environment]);
+
+        environment.Should().ContainKey("CODEX_TRANSPORT").WhoseValue.Should().Be("stdio");
+        environment.Should().ContainKey("CODEX_MODE").WhoseValue.Should().Be("command");
+        environment.Should().ContainKey("CODEX_APPROVAL_POLICY").WhoseValue.Should().Be("never");
+        environment.Should().ContainKey("TASK_MODE").WhoseValue.Should().Be("plan");
+        environment.Should().ContainKey("RUN_MODE").WhoseValue.Should().Be("plan");
+    }
+
+    [Test]
+    public void ApplyHarnessModeEnvironment_ForOpencode_SetsModeOnlyWhenMissing()
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["OPENCODE_MODE"] = "custom-mode",
+            ["TASK_MODE"] = "review",
+        };
+
+        ApplyHarnessModeEnvironmentMethod.Invoke(null, ["opencode", HarnessExecutionMode.Review, environment]);
+
+        environment.Should().ContainKey("OPENCODE_MODE").WhoseValue.Should().Be("custom-mode");
+        environment.Should().ContainKey("TASK_MODE").WhoseValue.Should().Be("review");
+        environment.Should().ContainKey("RUN_MODE").WhoseValue.Should().Be("review");
     }
 
     [Test]

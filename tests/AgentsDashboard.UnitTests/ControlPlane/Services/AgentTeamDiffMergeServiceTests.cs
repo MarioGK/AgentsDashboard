@@ -43,15 +43,15 @@ public sealed class AgentTeamDiffMergeServiceTests
 
         var merged = AgentTeamDiffMergeService.Build(laneInputs);
 
-        merged.MergedFiles.Should().Be(2);
-        merged.ConflictCount.Should().Be(0);
-        merged.Conflicts.Should().BeEmpty();
-        merged.Additions.Should().Be(2);
-        merged.Deletions.Should().Be(2);
-        merged.MergedPatch.Should().Contain("diff --git a/a.txt b/a.txt");
-        merged.MergedPatch.Should().Contain("diff --git a/b.txt b/b.txt");
-        merged.LaneDiffs.Should().HaveCount(2);
-        merged.LaneDiffs.Select(x => x.Harness).Should().Contain("codex");
+        Assert.That(merged.MergedFiles).IsEqualTo(2);
+        Assert.That(merged.ConflictCount).IsEqualTo(0);
+        Assert.That(merged.Conflicts).IsEmpty();
+        Assert.That(merged.Additions).IsEqualTo(2);
+        Assert.That(merged.Deletions).IsEqualTo(2);
+        Assert.That(merged.MergedPatch).Contains("diff --git a/a.txt b/a.txt");
+        Assert.That(merged.MergedPatch).Contains("diff --git a/b.txt b/b.txt");
+        Assert.That(merged.LaneDiffs.Count()).IsEqualTo(2);
+        Assert.That(merged.LaneDiffs.Select(x => x.Harness)).Contains("codex");
     }
 
     [Test]
@@ -93,14 +93,14 @@ public sealed class AgentTeamDiffMergeServiceTests
 
         var merged = AgentTeamDiffMergeService.Build(laneInputs);
 
-        merged.MergedFiles.Should().Be(0);
-        merged.ConflictCount.Should().Be(1);
-        merged.Conflicts.Should().ContainSingle();
-        merged.Conflicts[0].FilePath.Should().Be("foo.txt");
-        merged.Conflicts[0].Reason.Should().Contain("overlapping");
-        merged.Conflicts[0].LaneLabels.Should().Contain("planner");
-        merged.Conflicts[0].LaneLabels.Should().Contain("reviewer");
-        merged.MergedPatch.Should().BeEmpty();
+        Assert.That(merged.MergedFiles).IsEqualTo(0);
+        Assert.That(merged.ConflictCount).IsEqualTo(1);
+        Assert.That(merged.Conflicts.Count()).IsEqualTo(1);
+        Assert.That(merged.Conflicts[0].FilePath).IsEqualTo("foo.txt");
+        Assert.That(merged.Conflicts[0].Reason).Contains("overlapping");
+        Assert.That(merged.Conflicts[0].LaneLabels).Contains("planner");
+        Assert.That(merged.Conflicts[0].LaneLabels).Contains("reviewer");
+        Assert.That(merged.MergedPatch).IsEmpty();
     }
 
     [Test]
@@ -142,11 +142,11 @@ public sealed class AgentTeamDiffMergeServiceTests
 
         var merged = AgentTeamDiffMergeService.Build(laneInputs);
 
-        merged.MergedFiles.Should().Be(1);
-        merged.ConflictCount.Should().Be(0);
-        merged.Conflicts.Should().BeEmpty();
-        merged.MergedPatch.Should().Contain("diff --git a/foo.txt b/foo.txt");
-        merged.MergedPatch.Should().Contain("@@ -1 +1 @@");
-        merged.MergedPatch.Should().Contain("@@ -10 +10 @@");
+        Assert.That(merged.MergedFiles).IsEqualTo(1);
+        Assert.That(merged.ConflictCount).IsEqualTo(0);
+        Assert.That(merged.Conflicts).IsEmpty();
+        Assert.That(merged.MergedPatch).Contains("diff --git a/foo.txt b/foo.txt");
+        Assert.That(merged.MergedPatch).Contains("@@ -1 +1 @@");
+        Assert.That(merged.MergedPatch).Contains("@@ -10 +10 @@");
     }
 }

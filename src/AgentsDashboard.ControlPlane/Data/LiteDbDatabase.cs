@@ -34,7 +34,15 @@ public sealed class LiteDbDatabase(IOptions<OrchestratorOptions> orchestratorOpt
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            await _gate.WaitAsync(cancellationToken);
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
         try
         {
             _stopped = true;

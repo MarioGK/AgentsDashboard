@@ -37,7 +37,7 @@ public sealed class RecoveryService(
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.ZLogInformation("Recovery service starting; queuing startup recovery background work.");
+        logger.LogInformation("Recovery service starting; queuing startup recovery background work.");
 
         if (!applicationLifetime.ApplicationStarted.IsCancellationRequested)
         {
@@ -62,7 +62,7 @@ public sealed class RecoveryService(
             RunStartupRecoveryAsync,
             dedupeByOperationKey: true,
             isCritical: false);
-        logger.ZLogInformation("Queued startup recovery background work {WorkId}", workId);
+        logger.LogInformation("Queued startup recovery background work {WorkId}", workId);
     }
 
     private async Task RunStartupRecoveryAsync(
@@ -84,7 +84,7 @@ public sealed class RecoveryService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Recovery startup pass failed");
+            logger.LogError(ex, "Recovery startup pass failed");
             progress.Report(new BackgroundWorkSnapshot(
                 WorkId: string.Empty,
                 OperationKey: string.Empty,
@@ -145,18 +145,18 @@ public sealed class RecoveryService(
                 s_orphanedContainersDetected.Add(orphanedCount);
                 s_orphanedContainersRemoved.Add(orphanedCount);
 
-                logger.ZLogWarning(
+                logger.LogWarning(
                     "Container reconciliation complete: {Count} orphaned containers removed",
                     orphanedCount);
             }
             else
             {
-                logger.ZLogInformation("No orphaned containers found during reconciliation");
+                logger.LogInformation("No orphaned containers found during reconciliation");
             }
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Failed to reconcile orphaned containers");
+            logger.LogError(ex, "Failed to reconcile orphaned containers");
         }
     }
 
@@ -174,7 +174,7 @@ public sealed class RecoveryService(
                 interval,
                 interval);
 
-            logger.ZLogInformation("Dead-run monitoring started with {Interval}s interval", _config.CheckIntervalSeconds);
+            logger.LogInformation("Dead-run monitoring started with {Interval}s interval", _config.CheckIntervalSeconds);
         }
     }
 
@@ -189,7 +189,7 @@ public sealed class RecoveryService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Error during dead-run monitoring cycle");
+            logger.LogError(ex, "Error during dead-run monitoring cycle");
         }
         return result;
     }
@@ -205,7 +205,7 @@ public sealed class RecoveryService(
             var lastActivity = run.StartedAtUtc ?? run.CreatedAtUtc;
             if (lastActivity < staleThreshold)
             {
-                logger.ZLogWarning("Detected stale run {RunId} (last activity: {LastActivity}). Terminating...",
+                logger.LogWarning("Detected stale run {RunId} (last activity: {LastActivity}). Terminating...",
                     run.Id, lastActivity);
 
                 await TerminateRunAsync(run, "Stale run detected - no activity within threshold", "StaleRun");
@@ -214,7 +214,7 @@ public sealed class RecoveryService(
         }
 
         if (terminatedCount > 0)
-            logger.ZLogInformation("Terminated {Count} stale runs", terminatedCount);
+            logger.LogInformation("Terminated {Count} stale runs", terminatedCount);
 
         return terminatedCount;
     }
@@ -230,7 +230,7 @@ public sealed class RecoveryService(
             var runAge = run.StartedAtUtc ?? run.CreatedAtUtc;
             if (runAge < zombieThreshold)
             {
-                logger.ZLogWarning("Detected zombie run {RunId} (started: {StartedAt}). Force terminating...",
+                logger.LogWarning("Detected zombie run {RunId} (started: {StartedAt}). Force terminating...",
                     run.Id, runAge);
 
                 await TerminateRunAsync(run, "Zombie run detected - exceeded maximum runtime", "ZombieRun", force: true);
@@ -239,7 +239,7 @@ public sealed class RecoveryService(
         }
 
         if (terminatedCount > 0)
-            logger.ZLogInformation("Force terminated {Count} zombie runs", terminatedCount);
+            logger.LogInformation("Force terminated {Count} zombie runs", terminatedCount);
 
         return terminatedCount;
     }
@@ -255,7 +255,7 @@ public sealed class RecoveryService(
             var runAge = run.StartedAtUtc ?? run.CreatedAtUtc;
             if (runAge < maxAgeThreshold)
             {
-                logger.ZLogWarning("Detected overdue run {RunId} (started: {StartedAt}, max age: {MaxAge}h). Terminating...",
+                logger.LogWarning("Detected overdue run {RunId} (started: {StartedAt}, max age: {MaxAge}h). Terminating...",
                     run.Id, runAge, _config.MaxRunAgeHours);
 
                 await TerminateRunAsync(run, "Run exceeded maximum allowed age", "OverdueRun", force: true);
@@ -264,7 +264,7 @@ public sealed class RecoveryService(
         }
 
         if (terminatedCount > 0)
-            logger.ZLogInformation("Terminated {Count} overdue runs", terminatedCount);
+            logger.LogInformation("Terminated {Count} overdue runs", terminatedCount);
 
         return terminatedCount;
     }
@@ -278,11 +278,11 @@ public sealed class RecoveryService(
                 var killResult = await containerReaper.KillContainerAsync(run.Id, reason, force: true, CancellationToken.None);
                 if (killResult.Killed)
                 {
-                    logger.ZLogInformation("Container {ContainerId} killed for run {RunId}", killResult.ContainerId, run.Id);
+                    logger.LogInformation("Container {ContainerId} killed for run {RunId}", killResult.ContainerId, run.Id);
                 }
                 else
                 {
-                    logger.ZLogWarning("Failed to kill container for run {RunId}: {Error}", run.Id, killResult.Error);
+                    logger.LogWarning("Failed to kill container for run {RunId}: {Error}", run.Id, killResult.Error);
                 }
             }
 
@@ -302,7 +302,7 @@ public sealed class RecoveryService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Failed to terminate run {RunId}", run.Id);
+            logger.LogError(ex, "Failed to terminate run {RunId}", run.Id);
         }
     }
 
@@ -315,7 +315,7 @@ public sealed class RecoveryService(
         {
             try
             {
-                logger.ZLogWarning("Orphaned running run detected: {RunId}. Marking as failed", run.Id);
+                logger.LogWarning("Orphaned running run detected: {RunId}. Marking as failed", run.Id);
 
                 var failed = await store.MarkRunCompletedAsync(
                     run.Id,
@@ -334,12 +334,12 @@ public sealed class RecoveryService(
             }
             catch (Exception ex)
             {
-                logger.ZLogError(ex, "Failed to recover orphaned run {RunId}", run.Id);
+                logger.LogError(ex, "Failed to recover orphaned run {RunId}", run.Id);
             }
         }
 
         if (recoveredCount > 0)
-            logger.ZLogInformation("Recovery complete: {Count} orphaned runs marked as failed", recoveredCount);
+            logger.LogInformation("Recovery complete: {Count} orphaned runs marked as failed", recoveredCount);
     }
 
     private async Task RecoverOrphanedWorkflowExecutionsAsync(CancellationToken cancellationToken)
@@ -351,7 +351,7 @@ public sealed class RecoveryService(
         {
             try
             {
-                logger.ZLogWarning("Orphaned workflow execution detected: {ExecutionId} (Workflow: {WorkflowId}). Marking as failed",
+                logger.LogWarning("Orphaned workflow execution detected: {ExecutionId} (Workflow: {WorkflowId}). Marking as failed",
                     execution.Id, execution.WorkflowId);
 
                 var failed = await store.MarkWorkflowExecutionCompletedAsync(
@@ -367,12 +367,12 @@ public sealed class RecoveryService(
             }
             catch (Exception ex)
             {
-                logger.ZLogError(ex, "Failed to recover orphaned workflow execution {ExecutionId}", execution.Id);
+                logger.LogError(ex, "Failed to recover orphaned workflow execution {ExecutionId}", execution.Id);
             }
         }
 
         if (recoveredCount > 0)
-            logger.ZLogInformation("Recovery complete: {Count} orphaned workflow executions marked as failed", recoveredCount);
+            logger.LogInformation("Recovery complete: {Count} orphaned workflow executions marked as failed", recoveredCount);
     }
 
     private async Task LogPendingApprovalRunsAsync(CancellationToken cancellationToken)
@@ -380,10 +380,10 @@ public sealed class RecoveryService(
         var pendingRuns = await store.ListRunsByStateAsync(RunState.PendingApproval, cancellationToken);
         if (pendingRuns.Count > 0)
         {
-            logger.ZLogWarning("Found {Count} runs pending approval after restart. These require manual action.", pendingRuns.Count);
+            logger.LogWarning("Found {Count} runs pending approval after restart. These require manual action.", pendingRuns.Count);
             foreach (var run in pendingRuns)
             {
-                logger.ZLogInformation("Run {RunId} is pending approval (Task: {TaskId})", run.Id, run.TaskId);
+                logger.LogInformation("Run {RunId} is pending approval (Task: {TaskId})", run.Id, run.TaskId);
             }
         }
     }
@@ -392,12 +392,12 @@ public sealed class RecoveryService(
     {
         var queuedRuns = await store.ListRunsByStateAsync(RunState.Queued, cancellationToken);
         if (queuedRuns.Count > 0)
-            logger.ZLogInformation("Recovery found {Count} queued runs that will be picked up by the scheduler", queuedRuns.Count);
+            logger.LogInformation("Recovery found {Count} queued runs that will be picked up by the scheduler", queuedRuns.Count);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        logger.ZLogInformation("Recovery service stopping");
+        logger.LogInformation("Recovery service stopping");
         _monitoringTimer?.Change(Timeout.Infinite, 0);
         await Task.CompletedTask;
     }

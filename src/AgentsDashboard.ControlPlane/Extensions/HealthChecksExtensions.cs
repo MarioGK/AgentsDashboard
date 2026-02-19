@@ -1,4 +1,5 @@
 using AgentsDashboard.ControlPlane.Data;
+using AgentsDashboard.ControlPlane.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;

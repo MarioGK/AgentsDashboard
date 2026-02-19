@@ -439,7 +439,7 @@ public class ImageBuilderService(
 
         try
         {
-            logger.ZLogInformation("Building Docker image {Tag}", tag);
+            logger.LogInformation("Building Docker image {Tag}", tag);
 
             var tarStream = CreateTarArchive(dockerfileContent);
             tarStream.Position = 0;
@@ -493,13 +493,13 @@ public class ImageBuilderService(
             }
 
             var success = !logs.Any(l => l.Contains("error", StringComparison.OrdinalIgnoreCase));
-            logger.ZLogInformation("Build completed for {Tag}. Success: {Success}, ImageId: {ImageId}", tag, success, imageId);
+            logger.LogInformation("Build completed for {Tag}. Success: {Success}, ImageId: {ImageId}", tag, success, imageId);
 
             return new ImageBuildResult(success, imageId, logs);
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Exception during image build for {Tag}", tag);
+            logger.LogError(ex, "Exception during image build for {Tag}", tag);
             logs.Add($"Error: {ex.Message}");
             return new ImageBuildResult(false, string.Empty, logs);
         }
@@ -528,12 +528,12 @@ public class ImageBuilderService(
                 .OrderByDescending(img => img.Created)
                 .ToList();
 
-            logger.ZLogInformation("Listed {Count} Docker images", result.Count);
+            logger.LogInformation("Listed {Count} Docker images", result.Count);
             return result;
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Exception while listing images");
+            logger.LogError(ex, "Exception while listing images");
             return [];
         }
     }
@@ -542,19 +542,19 @@ public class ImageBuilderService(
     {
         try
         {
-            logger.ZLogInformation("Deleting Docker image {Tag}", tag);
+            logger.LogInformation("Deleting Docker image {Tag}", tag);
 
             await _dockerClient.Images.DeleteImageAsync(
                 tag,
                 new ImageDeleteParameters { Force = true },
                 cancellationToken);
 
-            logger.ZLogInformation("Successfully deleted image {Tag}", tag);
+            logger.LogInformation("Successfully deleted image {Tag}", tag);
             return true;
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Failed to delete image {Tag}", tag);
+            logger.LogError(ex, "Failed to delete image {Tag}", tag);
             return false;
         }
     }
@@ -563,7 +563,7 @@ public class ImageBuilderService(
     {
         try
         {
-            logger.ZLogInformation("Tagging image {SourceTag} as {TargetTag}", sourceTag, targetTag);
+            logger.LogInformation("Tagging image {SourceTag} as {TargetTag}", sourceTag, targetTag);
 
             var parts = targetTag.Split(':', 2);
             var repo = parts.Length > 0 ? parts[0] : targetTag;
@@ -574,12 +574,12 @@ public class ImageBuilderService(
                 new ImageTagParameters { RepositoryName = repo, Tag = tag },
                 cancellationToken);
 
-            logger.ZLogInformation("Successfully tagged image {SourceTag} as {TargetTag}", sourceTag, targetTag);
+            logger.LogInformation("Successfully tagged image {SourceTag} as {TargetTag}", sourceTag, targetTag);
             return true;
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Failed to tag image {SourceTag} as {TargetTag}", sourceTag, targetTag);
+            logger.LogError(ex, "Failed to tag image {SourceTag} as {TargetTag}", sourceTag, targetTag);
             return false;
         }
     }

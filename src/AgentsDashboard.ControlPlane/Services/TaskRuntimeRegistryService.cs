@@ -68,7 +68,7 @@ public class TaskRuntimeRegistryService : ITaskRuntimeRegistryService
         var taskRuntimes = await _lifecycleManager.ListTaskRuntimesAsync(cancellationToken);
         if (taskRuntimes.Count == 0)
         {
-            _logger.ZLogInformation("No task runtimes available for status request {RequestId}", request.RequestId);
+            _logger.LogInformation("No task runtimes available for status request {RequestId}", request.RequestId);
             return;
         }
 
@@ -88,11 +88,11 @@ public class TaskRuntimeRegistryService : ITaskRuntimeRegistryService
             }
             catch (Exception ex)
             {
-                _logger.ZLogDebug(ex, "Status request heartbeat failed for task runtime {TaskRuntimeId}", runtime.TaskRuntimeId);
+                _logger.LogDebug(ex, "Status request heartbeat failed for task runtime {TaskRuntimeId}", runtime.TaskRuntimeId);
             }
         }
 
-        _logger.ZLogInformation("Issued task runtime status request {RequestId} to {Count} task runtimes", request.RequestId, taskRuntimes.Count(x => x.IsRunning));
+        _logger.LogInformation("Issued task runtime status request {RequestId} to {Count} task runtimes", request.RequestId, taskRuntimes.Count(x => x.IsRunning));
     }
 
     public int GetRegisteredTaskRuntimeCount()

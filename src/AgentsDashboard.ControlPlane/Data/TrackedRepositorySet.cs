@@ -169,7 +169,8 @@ public sealed class TrackedRepositorySet<T>(IRepository<T> repository) : IEnumer
         var itemsById = itemsSnapshot
             .Select(item => (Id: repository.GetDocumentId(item), Item: item))
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Id))
-            .ToDictionary(entry => entry.Id, entry => entry.Item, StringComparer.Ordinal);
+            .GroupBy(entry => entry.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last().Item, StringComparer.Ordinal);
 
         foreach (var trackedId in trackedKeysSnapshot)
         {

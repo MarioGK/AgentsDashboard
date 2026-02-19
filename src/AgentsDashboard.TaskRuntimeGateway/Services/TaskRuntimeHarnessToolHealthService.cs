@@ -1,10 +1,13 @@
-using CliWrap;
-using CliWrap.Buffered;
+using System.Diagnostics;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
-public sealed class TaskRuntimeHarnessToolHealthService
+public sealed partial class TaskRuntimeHarnessToolHealthService
 {
+    private sealed record ToolDefinition(string Command, string DisplayName);
+
+    private sealed record CommandExecutionResult(int ExitCode, string StandardOutput, string StandardError);
+
     private static readonly ToolDefinition[] Tools =
     [
         new("codex", "Codex"),
@@ -23,9 +26,7 @@ public sealed class TaskRuntimeHarnessToolHealthService
     {
         try
         {
-            var whichResult = await Cli.Wrap("which")
-                .WithArguments(tool.Command)
-                .ExecuteBufferedAsync(cancellationToken);
+            var whichResult = await ExecuteCommandAsync("which", [tool.Command], cancellationToken);
 
             if (whichResult.ExitCode != 0)
             {
@@ -45,9 +46,7 @@ public sealed class TaskRuntimeHarnessToolHealthService
     {
         try
         {
-            var versionResult = await Cli.Wrap(command)
-                .WithArguments("--version")
-                .ExecuteBufferedAsync(cancellationToken);
+            var versionResult = await ExecuteCommandAsync(command, ["--version"], cancellationToken);
 
             if (versionResult.ExitCode != 0 || string.IsNullOrWhiteSpace(versionResult.StandardOutput))
             {
@@ -71,11 +70,63 @@ public sealed class TaskRuntimeHarnessToolHealthService
         }
     }
 
-    private sealed record ToolDefinition(string Command, string DisplayName);
-}
+    private static async Task<CommandExecutionResult> ExecuteCommandAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                WorkingDirectory = Directory.GetCurrentDirectory(),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            }
+        };
 
-public sealed record TaskRuntimeHarnessToolHealth(
-    string Command,
-    string DisplayName,
-    string Status,
-    string? Version);
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        if (!process.Start())
+        {
+            return new CommandExecutionResult(-1, string.Empty, $"Failed to start '{fileName}'.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcess(process);
+            throw;
+        }
+
+        return new CommandExecutionResult(
+            process.ExitCode,
+            await stdoutTask,
+            await stderrTask);
+    }
+
+    private static void TryKillProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+        }
+    }
+}

@@ -11,18 +11,24 @@ public sealed class CodexAppServerRuntimeTests
     private static readonly MethodInfo ApplyModePromptMethod = typeof(CodexAppServerRuntime)
         .GetMethod("ApplyModePrompt", BindingFlags.NonPublic | BindingFlags.Static)!;
 
+    private static readonly MethodInfo ResolveExecutionModeMethod = typeof(CodexAppServerRuntime)
+        .GetMethod("ResolveExecutionMode", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo ResolveModelMethod = typeof(CodexAppServerRuntime)
+        .GetMethod("ResolveModel", BindingFlags.NonPublic | BindingFlags.Static)!;
+
     [Test]
     public void ResolveApprovalPolicy_WhenDefaultMode_UsesMutationCapableDefault()
     {
         var result = (string)ResolveApprovalPolicyMethod.Invoke(null, [new Dictionary<string, string>(), "default"])!;
-        result.Should().Be("on-failure");
+        Assert.That(result).IsEqualTo("on-failure");
     }
 
     [Test]
     public void ResolveApprovalPolicy_WhenReadOnlyMode_UsesNeverApproval()
     {
         var result = (string)ResolveApprovalPolicyMethod.Invoke(null, [new Dictionary<string, string>(), "review"])!;
-        result.Should().Be("never");
+        Assert.That(result).IsEqualTo("never");
     }
 
     [Test]
@@ -34,7 +40,7 @@ public sealed class CodexAppServerRuntimeTests
         };
 
         var result = (string)ResolveApprovalPolicyMethod.Invoke(null, [env, "plan"])!;
-        result.Should().Be("on-request");
+        Assert.That(result).IsEqualTo("on-request");
     }
 
     [Test]
@@ -42,8 +48,54 @@ public sealed class CodexAppServerRuntimeTests
     {
         var prompt = (string)ApplyModePromptMethod.Invoke(null, ["Implement feature X", "plan"])!;
 
-        prompt.Should().Contain("Execution mode: plan");
-        prompt.Should().Contain("Do not modify files");
-        prompt.Should().Contain("Implement feature X");
+        Assert.That(prompt).Contains("Execution mode: plan");
+        Assert.That(prompt).Contains("Do not modify files");
+        Assert.That(prompt).Contains("Implement feature X");
+    }
+
+    [Test]
+    public void ResolveExecutionMode_PrioritizesHarnessAndTaskMode()
+    {
+        var mode = (string)ResolveExecutionModeMethod.Invoke(null, ["plan", new Dictionary<string, string>
+        {
+            ["HARNESS_MODE"] = "review",
+            ["TASK_MODE"] = "plan",
+        }])!;
+
+        Assert.That(mode).IsEqualTo("review");
+    }
+
+    [Test]
+    public void ResolveExecutionMode_RetainsNormalizedAliases()
+    {
+        var mode = (string)ResolveExecutionModeMethod.Invoke(null, ["planning", new Dictionary<string, string>
+        {
+            ["RUN_MODE"] = "audit",
+        }])!;
+
+        Assert.That(mode).IsEqualTo("review");
+    }
+
+    [Test]
+    public void ResolveModel_UsesCodexModelOverHarnessModel()
+    {
+        var model = (string?)ResolveModelMethod.Invoke(null, [new Dictionary<string, string>
+        {
+            ["CODEX_MODEL"] = "codex-model",
+            ["HARNESS_MODEL"] = "harness-model",
+        }])!;
+
+        Assert.That(model).IsEqualTo("codex-model");
+    }
+
+    [Test]
+    public void ResolveModel_FallsBackToHarnessModel()
+    {
+        var model = (string?)ResolveModelMethod.Invoke(null, [new Dictionary<string, string>
+        {
+            ["HARNESS_MODEL"] = "harness-model",
+        }]);
+
+        Assert.That(model).IsEqualTo("harness-model");
     }
 }

@@ -33,7 +33,7 @@ public sealed class DataAccessArchitectureTests
             pattern: SqlitePattern,
             pathFilter: _ => true);
 
-        matches.Should().BeEmpty();
+        Assert.That(matches).IsEmpty();
     }
 
     [Test]
@@ -45,7 +45,7 @@ public sealed class DataAccessArchitectureTests
             pattern: LiteDbUsingPattern,
             pathFilter: path => !AllowedLiteDbUsingFiles.Contains(path));
 
-        matches.Should().BeEmpty();
+        Assert.That(matches).IsEmpty();
     }
 
     [Test]
@@ -57,7 +57,7 @@ public sealed class DataAccessArchitectureTests
             pattern: ScopePattern,
             pathFilter: _ => true);
 
-        matches.Should().BeEmpty();
+        Assert.That(matches).IsEmpty();
     }
 
     [Test]
@@ -69,7 +69,7 @@ public sealed class DataAccessArchitectureTests
             pattern: OrchestratorStorePattern,
             pathFilter: RepositoryPatternServiceFiles.Contains);
 
-        matches.Should().BeEmpty();
+        Assert.That(matches).IsEmpty();
     }
 
     private static List<string> FindMatches(

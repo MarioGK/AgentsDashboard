@@ -10,22 +10,22 @@ public sealed class HarnessExecutorModeResolutionTests
         .GetMethod("ResolveRuntimeMode", BindingFlags.NonPublic | BindingFlags.Static)!;
 
     [Test]
-    public void ResolveRuntimeMode_WhenRuntimeModeEnvIsSet_ReturnsIt()
+    public void ResolveRuntimeMode_WhenRuntimeModeEnvIsSet_ReturnsStdioForCodex()
     {
         var mode = InvokeResolveRuntimeMode(
             "codex",
             HarnessExecutionMode.Default,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["HARNESS_RUNTIME_MODE"] = "app-server",
-                ["CODEX_TRANSPORT"] = "app-server",
+                ["HARNESS_RUNTIME_MODE"] = "stdio",
+                ["CODEX_TRANSPORT"] = "stdio",
             });
 
-        mode.Should().Be("app-server");
+        Assert.That(mode).IsEqualTo("stdio");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenCodexTransportSetBeforeHarnessMode_PrioritizesTransport()
+    public void ResolveRuntimeMode_WhenLegacyCodexTransportIsSet_IgnoresTransport()
     {
         var mode = InvokeResolveRuntimeMode(
             "codex",
@@ -36,44 +36,124 @@ public sealed class HarnessExecutorModeResolutionTests
                 ["HARNESS_MODE"] = "command",
             });
 
-        mode.Should().Be("command");
+        Assert.That(mode).IsEqualTo("stdio");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenCodexTransportIsSet_UsesCodexTransportBeforeHarnessMode()
+    public void ResolveRuntimeMode_WhenCodexHasTransportAndHarnessMode_SetToStdio()
     {
         var mode = InvokeResolveRuntimeMode(
             "codex",
             HarnessExecutionMode.Default,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["CODEX_TRANSPORT"] = "app-server",
+                ["CODEX_TRANSPORT"] = "stdio",
                 ["HARNESS_MODE"] = "plan",
             });
 
-        mode.Should().Be("app-server");
+        Assert.That(mode).IsEqualTo("stdio");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenExecutionModeRequested_UsesRequestedModeWhenNoOverrides()
+    public void ResolveRuntimeMode_WhenOpenCodeExecutionModeRequested_UsesSseMode()
     {
         var mode = InvokeResolveRuntimeMode(
             "opencode",
             HarnessExecutionMode.Review,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 
-        mode.Should().Be("review");
+        Assert.That(mode).IsEqualTo("sse");
     }
 
     [Test]
-    public void ResolveRuntimeMode_WhenNothingSpecified_DefaultsToCommand()
+    public void ResolveRuntimeMode_WhenOpencodeRuntimeModeConfiguredAsWs_StillUsesSse()
+    {
+        var mode = InvokeResolveRuntimeMode(
+            "opencode",
+            HarnessExecutionMode.Default,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["HARNESS_RUNTIME_MODE"] = "ws",
+            });
+
+        Assert.That(mode).IsEqualTo("sse");
+    }
+
+    [Test]
+    public void ResolveRuntimeMode_WhenCodexHasNoOverrides_DefaultsToStdio()
+    {
+        var mode = InvokeResolveRuntimeMode(
+            "codex",
+            HarnessExecutionMode.Default,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+
+        Assert.That(mode).IsEqualTo("stdio");
+    }
+
+    [Test]
+    public void ResolveRuntimeMode_WhenCustomHarnessNoRuntimeMode_UsesRequestedMode()
+    {
+        var mode = InvokeResolveRuntimeMode(
+            "thirdparty",
+            HarnessExecutionMode.Review,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+
+        Assert.That(mode).IsEqualTo("review");
+    }
+
+    [Test]
+    public void ResolveRuntimeMode_WhenNothingSpecified_DefaultsToServerTransport()
     {
         var mode = InvokeResolveRuntimeMode(
             "opencode",
             HarnessExecutionMode.Default,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 
-        mode.Should().Be("command");
+        Assert.That(mode).IsEqualTo("sse");
+    }
+
+    [Test]
+    public void ResolveRuntimeMode_WhenHarnessRuntimeModeExists_UsesHarnessRuntimeTransport()
+    {
+        var mode = InvokeResolveRuntimeMode(
+            "opencode",
+            HarnessExecutionMode.Review,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["HARNESS_RUNTIME_MODE"] = "stdio",
+                ["HARNESS_MODE"] = "review",
+            });
+
+        Assert.That(mode).IsEqualTo("sse");
+    }
+
+    [Test]
+    public void ResolveRuntimeMode_WhenNoRuntimeMode_UsesHarnessModeOverRequestedMode()
+    {
+        var mode = InvokeResolveRuntimeMode(
+            "codex",
+            HarnessExecutionMode.Review,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["HARNESS_MODE"] = "plan",
+            });
+
+        Assert.That(mode).IsEqualTo("stdio");
+    }
+
+    [Test]
+    public void ResolveRuntimeMode_WhenUnsupportedHarnessHonorsProvidedRuntimeMode()
+    {
+        var mode = InvokeResolveRuntimeMode(
+            "custom",
+            HarnessExecutionMode.Default,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["HARNESS_RUNTIME_MODE"] = "ws",
+                ["HARNESS_MODE"] = "plan",
+            });
+
+        Assert.That(mode).IsEqualTo("ws");
     }
 
     private static string InvokeResolveRuntimeMode(

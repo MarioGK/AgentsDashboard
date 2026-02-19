@@ -15,11 +15,36 @@
             <MudPaper Class="settings-home-card" Elevation="0">
                 <MudText Typo="Typo.subtitle1">Core</MudText>
                 <MudList T="string" Dense="true">
-                    <MudListItem><MudLink Href="/settings/repositories" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Folder" Class="mr-2" />Repositories</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/runs" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.PlayCircle" Class="mr-2" />Runs</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/findings" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.FactCheck" Class="mr-2" />Findings</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/schedules" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />Schedules</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/automations" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.AutoMode" Class="mr-2" />Automations</MudLink></MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/repositories" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Folder" Class="mr-2" />
+                            <span data-testid="settings-home-repositories">Repositories</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/runs" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Class="mr-2" />
+                            <span data-testid="settings-home-runs">Runs</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/findings" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.FactCheck" Class="mr-2" />
+                            <span data-testid="settings-home-findings">Findings</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/schedules" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
+                            <span data-testid="settings-home-schedules">Schedules</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/automations" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.AutoMode" Class="mr-2" />
+                            <span data-testid="settings-home-automations">Automations</span>
+                        </MudLink>
+                    </MudListItem>
                 </MudList>
             </MudPaper>
         </MudItem>
@@ -28,7 +53,12 @@
             <MudPaper Class="settings-home-card" Elevation="0">
                 <MudText Typo="Typo.subtitle1">Workflows</MudText>
                 <MudList T="string" Dense="true">
-                    <MudListItem><MudLink Href="/settings/workflows/stages" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Layers" Class="mr-2" />Stages</MudLink></MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/workflows/stages" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Layers" Class="mr-2" />
+                            <span data-testid="settings-home-workflows-stages">Stages</span>
+                        </MudLink>
+                    </MudListItem>
                 </MudList>
             </MudPaper>
         </MudItem>
@@ -37,10 +67,30 @@
             <MudPaper Class="settings-home-card" Elevation="0">
                 <MudText Typo="Typo.subtitle1">Platform</MudText>
                 <MudList T="string" Dense="true">
-                    <MudListItem><MudLink Href="/settings/templates" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Description" Class="mr-2" />Templates</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/skills" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Bolt" Class="mr-2" />Skills</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/session-profiles" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />Session Profiles</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/alerts" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-2" />Alerts</MudLink></MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/templates" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Description" Class="mr-2" />
+                            <span data-testid="settings-home-templates">Templates</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/skills" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Bolt" Class="mr-2" />
+                            <span data-testid="settings-home-skills">Skills</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/session-profiles" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
+                            <span data-testid="settings-home-session-profiles">Session Profiles</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/alerts" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-2" />
+                            <span data-testid="settings-home-alerts">Alerts</span>
+                        </MudLink>
+                    </MudListItem>
                 </MudList>
             </MudPaper>
         </MudItem>
@@ -49,11 +99,36 @@
             <MudPaper Class="settings-home-card" Elevation="0">
                 <MudText Typo="Typo.subtitle1">Infrastructure</MudText>
                 <MudList T="string" Dense="true">
-                    <MudListItem><MudLink Href="/settings/image-builder" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Build" Class="mr-2" />Image Builder</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/mcp" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Extension" Class="mr-2" />MCP</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/task-runtimes" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Memory" Class="mr-2" />Orchestrator</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/sounds" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.VolumeUp" Class="mr-2" />Sounds</MudLink></MudListItem>
-                    <MudListItem><MudLink Href="/settings/system" Class="settings-home-link"><MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" />System</MudLink></MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/image-builder" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Build" Class="mr-2" />
+                            <span data-testid="settings-home-image-builder">Image Builder</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/mcp" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Extension" Class="mr-2" />
+                            <span data-testid="settings-home-mcp">MCP</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/task-runtimes" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Memory" Class="mr-2" />
+                            <span data-testid="settings-home-task-runtimes">Orchestrator</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/sounds" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.VolumeUp" Class="mr-2" />
+                            <span data-testid="settings-home-sounds">Sounds</span>
+                        </MudLink>
+                    </MudListItem>
+                    <MudListItem>
+                        <MudLink Href="/settings/system" Class="settings-home-link">
+                            <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" />
+                            <span data-testid="settings-home-system">System</span>
+                        </MudLink>
+                    </MudListItem>
                 </MudList>
             </MudPaper>
         </MudItem>

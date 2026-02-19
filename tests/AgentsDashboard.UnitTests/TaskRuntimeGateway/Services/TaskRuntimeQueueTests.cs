@@ -34,13 +34,13 @@ public class TaskRuntimeQueueTests
 
         queue.MarkCompleted("run-a");
 
-        snapshot.Should().HaveCount(2);
-        snapshot.Any(id => id.Equals("run-a", StringComparison.OrdinalIgnoreCase)).Should().BeTrue();
-        snapshot.Any(id => id.Equals("run-b", StringComparison.OrdinalIgnoreCase)).Should().BeTrue();
+        Assert.That(snapshot.Count()).IsEqualTo(2);
+        Assert.That(snapshot.Any(id => id.Equals("run-a", StringComparison.OrdinalIgnoreCase))).IsTrue();
+        Assert.That(snapshot.Any(id => id.Equals("run-b", StringComparison.OrdinalIgnoreCase))).IsTrue();
 
-        queue.ActiveRunIds.Should().HaveCount(1);
-        queue.ActiveRunIds.Should().Contain("Run-B");
-        queue.ActiveRunIds.Should().NotContain("run-a");
+        Assert.That(queue.ActiveRunIds.Count()).IsEqualTo(1);
+        Assert.That(queue.ActiveRunIds).Contains("Run-B");
+        Assert.That(queue.ActiveRunIds).DoesNotContain("run-a");
     }
 
     [Test]
@@ -48,15 +48,15 @@ public class TaskRuntimeQueueTests
     {
         var queue = CreateQueue(maxSlots: 1);
 
-        queue.CanAcceptJob().Should().BeTrue();
+        Assert.That(queue.CanAcceptJob()).IsTrue();
         await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
 
-        queue.CanAcceptJob().Should().BeFalse();
-        queue.ActiveSlots.Should().Be(1);
+        Assert.That(queue.CanAcceptJob()).IsFalse();
+        Assert.That(queue.ActiveSlots).IsEqualTo(1);
 
         queue.MarkCompleted("run-1");
-        queue.CanAcceptJob().Should().BeTrue();
-        queue.ActiveSlots.Should().Be(0);
+        Assert.That(queue.CanAcceptJob()).IsTrue();
+        Assert.That(queue.ActiveSlots).IsEqualTo(0);
     }
 
     [Test]
@@ -65,7 +65,7 @@ public class TaskRuntimeQueueTests
         var queue = CreateQueue();
         await queue.EnqueueAsync(CreateJob("Run-Case"), CancellationToken.None);
 
-        queue.Cancel("run-case").Should().BeTrue();
-        queue.Cancel("run-case").Should().BeTrue();
+        Assert.That(queue.Cancel("run-case")).IsTrue();
+        Assert.That(queue.Cancel("run-case")).IsTrue();
     }
 }

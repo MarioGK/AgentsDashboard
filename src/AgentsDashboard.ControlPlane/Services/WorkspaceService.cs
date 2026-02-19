@@ -203,7 +203,7 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
-        logger.ZLogDebug("Submitting workspace prompt for repository {RepositoryId}", repositoryId);
+        logger.LogDebug("Submitting workspace prompt for repository {RepositoryId}", repositoryId);
 
         var tasks = await store.ListTasksAsync(repositoryId, cancellationToken);
         var task = await ResolveTaskAsync(tasks, repositoryId, request, cancellationToken);
@@ -419,7 +419,7 @@ public sealed class WorkspaceService(
                 promptEntryId: promptEntry?.Id);
         }
 
-        logger.ZLogDebug(
+        logger.LogDebug(
             "Workspace prompt submission created run {RunId} for task {TaskId} (dispatch accepted: {DispatchAccepted})",
             run.Id,
             task.Id,

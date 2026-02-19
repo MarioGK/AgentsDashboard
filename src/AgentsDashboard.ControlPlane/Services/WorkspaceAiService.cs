@@ -312,13 +312,13 @@ public sealed class WorkspaceAiService(
                 }
                 catch (Exception ex)
                 {
-                    logger.ZLogDebug(ex, "Embedding generation failed for model {ModelName}", modelName);
+                    logger.LogDebug(ex, "Embedding generation failed for model {ModelName}", modelName);
                 }
             }
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to initialize Z.ai embedding client");
+            logger.LogWarning(ex, "Failed to initialize Z.ai embedding client");
         }
 
         var fallback = BuildDeterministicEmbeddingPayload(normalizedText, FallbackEmbeddingDimensions);
@@ -360,7 +360,7 @@ public sealed class WorkspaceAiService(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(
+                logger.LogWarning(
                     ex,
                     "Failed to decrypt provider secret for repository {RepositoryId} and provider {Provider}",
                     candidate.RepositoryId,
