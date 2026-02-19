@@ -36,7 +36,7 @@ public sealed class RunDispatcher(
         string? mcpConfigSnapshotJson = null,
         string? automationRunId = null)
     {
-        logger.ZLogInformation(
+        logger.LogInformation(
             "Dispatch request repo={RepositoryId} task={TaskId} run={RunId} harness={Harness} mode={Mode} protocol={Protocol} sessionProfile={SessionProfileId} requireApproval={RequireApproval} linkedFailures={LinkedFailureRuns} artifactPatterns={ArtifactPatterns}",
             repository.Id,
             task.Id,
@@ -53,7 +53,7 @@ public sealed class RunDispatcher(
         if (taskQueueHead is not null &&
             !string.Equals(taskQueueHead.Id, run.Id, StringComparison.Ordinal))
         {
-            logger.ZLogInformation(
+            logger.LogInformation(
                 "Task queue head is run {HeadRunId} for task {TaskId}; leaving run {RunId} queued",
                 taskQueueHead.Id,
                 task.Id,
@@ -67,7 +67,7 @@ public sealed class RunDispatcher(
             if (pendingRun is not null)
             {
                 await publisher.PublishStatusAsync(pendingRun, cancellationToken);
-                logger.ZLogInformation("Run {RunId} marked as pending approval", run.Id);
+                logger.LogInformation("Run {RunId} marked as pending approval", run.Id);
             }
             return true;
         }
@@ -80,7 +80,7 @@ public sealed class RunDispatcher(
         var queuedRuns = await store.CountRunsByStateAsync(RunState.Queued, cancellationToken);
         if (queuedRuns > runtime.MaxQueueDepth)
         {
-            logger.ZLogWarning("Admission rejected for run {RunId}: queue depth {QueuedRuns} exceeds configured limit {Limit}", run.Id, queuedRuns, runtime.MaxQueueDepth);
+            logger.LogWarning("Admission rejected for run {RunId}: queue depth {QueuedRuns} exceeds configured limit {Limit}", run.Id, queuedRuns, runtime.MaxQueueDepth);
             var rejected = await store.MarkRunCompletedAsync(
                 run.Id,
                 succeeded: false,
@@ -100,14 +100,14 @@ public sealed class RunDispatcher(
         var globalActive = await store.CountActiveRunsAsync(cancellationToken);
         if (globalActive >= opts.MaxGlobalConcurrentRuns)
         {
-            logger.ZLogWarning("Global concurrency limit reached ({Limit}), leaving run {RunId} queued", opts.MaxGlobalConcurrentRuns, run.Id);
+            logger.LogWarning("Global concurrency limit reached ({Limit}), leaving run {RunId} queued", opts.MaxGlobalConcurrentRuns, run.Id);
             return false;
         }
 
         var repoActive = await store.CountActiveRunsByRepoAsync(repository.Id, cancellationToken);
         if (repoActive >= opts.PerRepoConcurrencyLimit)
         {
-            logger.ZLogWarning("Repo concurrency limit reached for {RepositoryId}, leaving run {RunId} queued", repository.Id, run.Id);
+            logger.LogWarning("Repo concurrency limit reached for {RepositoryId}, leaving run {RunId} queued", repository.Id, run.Id);
             return false;
         }
 
@@ -121,11 +121,11 @@ public sealed class RunDispatcher(
             cancellationToken);
         if (workerLease is null)
         {
-            logger.ZLogWarning("No worker capacity available; leaving run {RunId} queued", run.Id);
+            logger.LogWarning("No worker capacity available; leaving run {RunId} queued", run.Id);
             return false;
         }
 
-        logger.ZLogDebug("Selected worker {TaskRuntimeId} for run {RunId}", workerLease.TaskRuntimeId, run.Id);
+        logger.LogDebug("Selected worker {TaskRuntimeId} for run {RunId}", workerLease.TaskRuntimeId, run.Id);
 
         var selectedWorker = await workerLifecycleManager.GetTaskRuntimeAsync(workerLease.TaskRuntimeId, cancellationToken);
 
@@ -141,7 +141,7 @@ public sealed class RunDispatcher(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to persist task git metadata for task {TaskId}", task.Id);
+            logger.LogWarning(ex, "Failed to persist task git metadata for task {TaskId}", task.Id);
         }
 
         var layeredPrompt = await BuildLayeredPromptAsync(repository, task, defaultBranch, cancellationToken);
@@ -169,7 +169,7 @@ public sealed class RunDispatcher(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Failed to decrypt provider secret for repository {RepositoryId} and provider {Provider}", repository.Id, secret.Provider);
+                logger.LogWarning(ex, "Failed to decrypt provider secret for repository {RepositoryId} and provider {Provider}", repository.Id, secret.Provider);
             }
         }
 
@@ -181,7 +181,7 @@ public sealed class RunDispatcher(
             if (!string.IsNullOrWhiteSpace(hostCodexApiKey))
             {
                 AddMappedProviderEnvironmentVariables(envVars, secretsDict, "codex", hostCodexApiKey);
-                logger.ZLogInformation("Using host Codex credentials fallback for run {RunId}", run.Id);
+                logger.LogInformation("Using host Codex credentials fallback for run {RunId}", run.Id);
             }
         }
 
@@ -256,7 +256,7 @@ public sealed class RunDispatcher(
 
         if (!response.Success)
         {
-            logger.ZLogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.ErrorMessage);
+            logger.LogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.ErrorMessage);
             var failed = await store.MarkRunCompletedAsync(run.Id, false, $"Dispatch failed: {response.ErrorMessage}", "{}", cancellationToken);
             if (failed is not null)
             {
@@ -335,14 +335,14 @@ public sealed class RunDispatcher(
             var run = await store.GetRunAsync(runId, cancellationToken);
             if (run is null || string.IsNullOrWhiteSpace(run.TaskRuntimeId))
             {
-                logger.ZLogWarning("Skipping cancel for run {RunId}: no assigned worker", runId);
+                logger.LogWarning("Skipping cancel for run {RunId}: no assigned worker", runId);
                 return;
             }
 
             var worker = await workerLifecycleManager.GetTaskRuntimeAsync(run.TaskRuntimeId, cancellationToken);
             if (worker is null || !worker.IsRunning)
             {
-                logger.ZLogWarning("Skipping cancel for run {RunId}: worker {TaskRuntimeId} is unavailable", runId, run.TaskRuntimeId);
+                logger.LogWarning("Skipping cancel for run {RunId}: worker {TaskRuntimeId} is unavailable", runId, run.TaskRuntimeId);
                 return;
             }
 
@@ -351,7 +351,7 @@ public sealed class RunDispatcher(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to send cancel to worker for run {RunId}", runId);
+            logger.LogWarning(ex, "Failed to send cancel to worker for run {RunId}", runId);
         }
     }
 

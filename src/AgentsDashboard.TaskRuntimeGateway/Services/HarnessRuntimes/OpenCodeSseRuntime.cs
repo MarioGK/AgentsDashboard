@@ -134,7 +134,7 @@ public sealed class OpenCodeSseRuntime(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "OpenCode SSE runtime failed for run {RunId}", request.RunId);
+            logger.LogError(ex, "OpenCode SSE runtime failed for run {RunId}", request.RunId);
 
             var error = Redact(ex.Message, request.Environment);
             await sink.PublishAsync(
@@ -986,7 +986,7 @@ public sealed class OpenCodeSseRuntime(
             throw new InvalidOperationException("OpenCode server startup failed.");
         }
 
-        logger.ZLogInformation("Started OpenCode server for run runtime at {BaseUrl}", uri);
+        logger.LogInformation("Started OpenCode server for run runtime at {BaseUrl}", uri);
         return new OpenCodeServerHandle(client, process, stdoutPump, stderrPump);
     }
 

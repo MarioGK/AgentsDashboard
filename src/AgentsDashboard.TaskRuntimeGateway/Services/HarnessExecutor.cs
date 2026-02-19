@@ -40,7 +40,7 @@ public sealed class HarnessExecutor(
         CancellationToken cancellationToken)
     {
         var request = job.Request;
-        logger.ZLogInformationObject(
+        logger.LogInformationObject(
             "Dispatching harness execution",
             new
             {
@@ -62,7 +62,7 @@ public sealed class HarnessExecutor(
         }
         catch (OperationCanceledException)
         {
-            logger.ZLogWarningObject(
+            logger.LogWarningObject(
                 "Harness execution canceled",
                 new
                 {
@@ -83,7 +83,7 @@ public sealed class HarnessExecutor(
         }
         catch (Exception ex)
         {
-            logger.ZLogErrorObject(
+            logger.LogErrorObject(
                 ex,
                 "Harness execution failed",
                 new
@@ -110,7 +110,7 @@ public sealed class HarnessExecutor(
         Func<string, CancellationToken, Task>? onLogChunk,
         CancellationToken cancellationToken)
     {
-        logger.ZLogInformationObject(
+        logger.LogInformationObject(
             "Starting runtime execution path",
             new
             {
@@ -142,7 +142,7 @@ public sealed class HarnessExecutor(
 
                 workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
                 workspaceHostPath = workspaceContext.WorkspacePath;
-                logger.ZLogInformationObject(
+                logger.LogInformationObject(
                     "Workspace prepared for runtime execution",
                     new
                     {
@@ -154,7 +154,7 @@ public sealed class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.ZLogErrorObject(
+                logger.LogErrorObject(
                     ex,
                     "Workspace preparation failed",
                     new
@@ -180,7 +180,7 @@ public sealed class HarnessExecutor(
         {
             var runtimeRequest = BuildRuntimeRequest(request, workspaceHostPath);
             var runtimeSelection = runtimeFactory.Select(runtimeRequest);
-            logger.ZLogDebugObject(
+            logger.LogDebugObject(
                 "Harness runtime selected",
                 new
                 {
@@ -212,7 +212,7 @@ public sealed class HarnessExecutor(
                 structuredRuntimeFailure = ex;
                 runtimeName = runtimeSelection.Fallback.Name;
 
-                logger.ZLogWarningObject(
+                logger.LogWarningObject(
                     ex,
                     "Structured runtime fallback triggered",
                     new
@@ -251,7 +251,7 @@ public sealed class HarnessExecutor(
 
             if (!ValidateEnvelope(envelope))
             {
-                logger.ZLogWarningObject(
+                logger.LogWarningObject(
                     "Runtime envelope validation failed",
                     new
                     {
@@ -280,7 +280,7 @@ public sealed class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarningObject(
+                logger.LogWarningObject(
                     ex,
                     "Failed to create harness adapter",
                     new
@@ -310,7 +310,7 @@ public sealed class HarnessExecutor(
                         envelope.Metadata["remediationHints"] = string.Join("; ", classification.RemediationHints);
                     }
 
-                    logger.ZLogDebugObject(
+                    logger.LogDebugObject(
                         "Failure classification detected",
                         new
                         {
@@ -348,7 +348,7 @@ public sealed class HarnessExecutor(
                     envelope.Artifacts = extractedArtifacts.Select(a => a.DestinationPath).ToList();
                     envelope.Metadata["extractedArtifactCount"] = extractedArtifacts.Count.ToString();
                     envelope.Metadata["extractedArtifactSize"] = extractedArtifacts.Sum(a => a.SizeBytes).ToString();
-                    logger.ZLogDebugObject(
+                    logger.LogDebugObject(
                         "Extracted runtime artifacts",
                         new
                         {
@@ -360,7 +360,7 @@ public sealed class HarnessExecutor(
                 }
             }
 
-            logger.ZLogInformationObject(
+            logger.LogInformationObject(
                 "Runtime execution completed",
                 new
                 {
@@ -485,7 +485,7 @@ public sealed class HarnessExecutor(
         Func<string, CancellationToken, Task>? onLogChunk,
         CancellationToken cancellationToken)
     {
-        logger.ZLogInformationObject(
+        logger.LogInformationObject(
             "Executing adapter runtime path",
             new
             {
@@ -503,7 +503,7 @@ public sealed class HarnessExecutor(
 
         if (!IsImageAllowed(context.Image))
         {
-            logger.ZLogWarningObject(
+            logger.LogWarningObject(
                 "Image is not in the allowlist",
                 new
                 {
@@ -536,7 +536,7 @@ public sealed class HarnessExecutor(
 
                 workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
                 workspaceHostPath = workspaceContext.WorkspacePath;
-                logger.ZLogInformationObject(
+                logger.LogInformationObject(
                     "Adapter workspace prepared",
                     new
                     {
@@ -548,7 +548,7 @@ public sealed class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.ZLogErrorObject(
+                logger.LogErrorObject(
                     ex,
                     "Adapter workspace preparation failed",
                     new
@@ -620,7 +620,7 @@ public sealed class HarnessExecutor(
                         }
                         catch (Exception ex)
                         {
-                            logger.ZLogWarningObject(
+                            logger.LogWarningObject(
                                 ex,
                                 "Log streaming failed",
                                 new
@@ -665,7 +665,7 @@ public sealed class HarnessExecutor(
                     envelope.Metrics["networkTxBytes"] = metrics.NetworkTxBytes;
                     envelope.Metrics["blockReadBytes"] = metrics.BlockReadBytes;
                     envelope.Metrics["blockWriteBytes"] = metrics.BlockWriteBytes;
-                    logger.ZLogDebugObject(
+                    logger.LogDebugObject(
                         "Container runtime metrics captured",
                         new
                         {
@@ -680,7 +680,7 @@ public sealed class HarnessExecutor(
 
                 if (!ValidateEnvelope(envelope))
                 {
-                    logger.ZLogWarningObject(
+                    logger.LogWarningObject(
                         "Adapter envelope validation failed",
                         new
                         {
@@ -713,7 +713,7 @@ public sealed class HarnessExecutor(
                     if (classification.RemediationHints.Count > 0)
                         envelope.Metadata["remediationHints"] = string.Join("; ", classification.RemediationHints);
 
-                    logger.ZLogDebugObject(
+                    logger.LogDebugObject(
                         "Adapter failure classification detected",
                         new
                         {
@@ -731,7 +731,7 @@ public sealed class HarnessExecutor(
                 {
                     envelope.Metadata["artifactCount"] = artifacts.Count.ToString();
                     envelope.Metadata["artifacts"] = string.Join(",", artifacts.Select(a => a.Path));
-                    logger.ZLogDebugObject(
+                    logger.LogDebugObject(
                         "Adapter mapped artifacts",
                         new
                         {
@@ -758,7 +758,7 @@ public sealed class HarnessExecutor(
                         envelope.Artifacts = extractedArtifacts.Select(a => a.DestinationPath).ToList();
                         envelope.Metadata["extractedArtifactCount"] = extractedArtifacts.Count.ToString();
                         envelope.Metadata["extractedArtifactSize"] = extractedArtifacts.Sum(a => a.SizeBytes).ToString();
-                        logger.ZLogDebugObject(
+                        logger.LogDebugObject(
                             "Adapter extracted artifacts",
                             new
                             {
@@ -770,7 +770,7 @@ public sealed class HarnessExecutor(
                     }
                 }
 
-                logger.ZLogInformationObject(
+                logger.LogInformationObject(
                     "Adapter execution completed",
                     new
                     {

@@ -14,7 +14,7 @@ public sealed class TaskRuntimeIdleShutdownService(
             }
             catch (Exception ex)
             {
-                logger.ZLogDebug(ex, "Worker idle shutdown tick failed");
+                logger.LogDebug(ex, "Worker idle shutdown tick failed");
             }
 
             await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);

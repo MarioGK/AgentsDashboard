@@ -14,7 +14,10 @@ public interface ITaskSemanticEmbeddingService
 }
 
 public sealed class TaskSemanticEmbeddingService(
-    IOrchestratorStore store,
+    IRepository<TaskDocument> tasks,
+    IRepository<WorkspacePromptEntryDocument> workspacePromptEntries,
+    IRepository<RunDocument> runs,
+    ISemanticChunkRepository semanticChunks,
     IWorkspaceAiService workspaceAiService,
     ILogger<TaskSemanticEmbeddingService> logger) : BackgroundService, ITaskSemanticEmbeddingService
 {
@@ -90,15 +93,30 @@ public sealed class TaskSemanticEmbeddingService(
             return;
         }
 
-        var task = await store.GetTaskAsync(taskId, cancellationToken);
+        var task = await tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
         if (task is null)
         {
             return;
         }
 
         var resolvedRepositoryId = string.IsNullOrWhiteSpace(repositoryId) ? task.RepositoryId : repositoryId;
-        var promptEntriesTask = store.ListWorkspacePromptEntriesForEmbeddingAsync(taskId, cancellationToken);
-        var completedRunsTask = store.ListCompletedRunsByTaskForEmbeddingAsync(taskId, cancellationToken);
+        var promptEntriesTask = workspacePromptEntries.QueryAsync(
+            query => query
+                .Where(x => x.TaskId == taskId)
+                .OrderBy(x => x.CreatedAtUtc)
+                .ToList(),
+            cancellationToken);
+        var completedRunsTask = runs.QueryAsync(
+            query => query
+                .Where(x =>
+                    x.TaskId == taskId &&
+                    x.State != RunState.Queued &&
+                    x.State != RunState.Running &&
+                    x.State != RunState.PendingApproval &&
+                    x.OutputJson != string.Empty)
+                .OrderBy(x => x.CreatedAtUtc)
+                .ToList(),
+            cancellationToken);
         await Task.WhenAll(promptEntriesTask, completedRunsTask);
 
         var promptEntries = promptEntriesTask.Result
@@ -156,12 +174,12 @@ public sealed class TaskSemanticEmbeddingService(
 
         if (chunks.Count == 0)
         {
-            logger.ZLogDebug("Task semantic embedding skipped for task {TaskId}: no changed chunks", taskId);
+            logger.LogDebug("Task semantic embedding skipped for task {TaskId}: no changed chunks", taskId);
             return;
         }
 
-        await store.UpsertSemanticChunksAsync(taskId, chunks, cancellationToken);
-        logger.ZLogDebug(
+        await semanticChunks.UpsertAsync(taskId, chunks, cancellationToken);
+        logger.LogDebug(
             "Task semantic embedding upserted {ChunkCount} chunk rows for task {TaskId} in repository {RepositoryId}",
             chunks.Count,
             taskId,
@@ -197,7 +215,7 @@ public sealed class TaskSemanticEmbeddingService(
 
         try
         {
-            logger.ZLogDebug(
+            logger.LogDebug(
                 "Processing task semantic embedding for task {TaskId} in repository {RepositoryId} ({Reason})",
                 trigger.TaskId,
                 trigger.RepositoryId,
@@ -210,7 +228,7 @@ public sealed class TaskSemanticEmbeddingService(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(
+            logger.LogWarning(
                 ex,
                 "Task semantic embedding failed for task {TaskId} in repository {RepositoryId}",
                 trigger.TaskId,

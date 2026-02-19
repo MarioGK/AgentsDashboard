@@ -4,6 +4,7 @@ using Yarp.ReverseProxy.Configuration;
 
 namespace AgentsDashboard.ControlPlane.Proxy;
 
+
 public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposable
 {
     private volatile InMemoryConfig _config;
@@ -128,11 +129,4 @@ public sealed class InMemoryYarpConfigProvider : IProxyConfigProvider, IDisposab
 
         public void SignalChange() => _cts.Cancel();
     }
-}
-
-public sealed class RouteOwnership
-{
-    public string RepoId { get; init; } = string.Empty;
-    public string TaskId { get; init; } = string.Empty;
-    public string RunId { get; init; } = string.Empty;
 }

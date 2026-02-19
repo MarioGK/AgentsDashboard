@@ -25,32 +25,7 @@ public interface ITaskRuntimeLifecycleManager
     Task<OrchestratorHealthSnapshot> GetHealthSnapshotAsync(CancellationToken cancellationToken);
 }
 
-public sealed record TaskRuntimeLease(
-    string TaskRuntimeId,
-    string ContainerId,
-    string GrpcEndpoint,
-    string ProxyEndpoint);
 
-public sealed record TaskRuntimeInstance(
-    string TaskRuntimeId,
-    string TaskId,
-    string ContainerId,
-    string ContainerName,
-    bool IsRunning,
-    TaskRuntimeLifecycleState LifecycleState,
-    bool IsDraining,
-    string GrpcEndpoint,
-    string ProxyEndpoint,
-    int ActiveSlots,
-    int MaxSlots,
-    double CpuPercent,
-    double MemoryPercent,
-    DateTime LastActivityUtc,
-    DateTime StartedAtUtc,
-    int DispatchCount,
-    string ImageRef,
-    string ImageDigest,
-    string ImageSource);
 
 public enum TaskRuntimeLifecycleState
 {
@@ -65,12 +40,8 @@ public enum TaskRuntimeLifecycleState
     FailedStart = 8
 }
 
-public sealed record OrchestratorHealthSnapshot(
-    int RunningTaskRuntimes,
-    int ReadyTaskRuntimes,
-    int BusyTaskRuntimes,
-    int DrainingTaskRuntimes,
-    bool ScaleOutPaused,
-    DateTime? ScaleOutCooldownUntilUtc,
-    int StartAttemptsInWindow,
-    int FailedStartsInWindow);
+public sealed record TaskRuntimeLease(
+    string TaskRuntimeId,
+    string ContainerId,
+    string GrpcEndpoint,
+    string ProxyEndpoint);

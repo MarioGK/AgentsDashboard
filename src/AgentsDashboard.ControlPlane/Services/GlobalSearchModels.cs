@@ -10,6 +10,9 @@ public enum GlobalSearchKind
     RunLog = 3
 }
 
+
+
+
 public sealed record GlobalSearchRequest(
     string Query,
     string? RepositoryId = null,
@@ -21,31 +24,3 @@ public sealed record GlobalSearchRequest(
     FindingState? FindingStateFilter = null,
     int Limit = 50,
     bool IncludeRunLogs = true);
-
-public sealed record GlobalSearchResult(
-    string Query,
-    bool LiteDbVectorAvailable,
-    string? LiteDbVectorDetail,
-    int TotalMatches,
-    IReadOnlyList<GlobalSearchKindCount> CountsByKind,
-    IReadOnlyList<GlobalSearchHit> Hits);
-
-public sealed record GlobalSearchKindCount(
-    GlobalSearchKind Kind,
-    int Count);
-
-public sealed record GlobalSearchHit(
-    GlobalSearchKind Kind,
-    string Id,
-    string RepositoryId,
-    string RepositoryName,
-    string? TaskId,
-    string? TaskName,
-    string? RunId,
-    string Title,
-    string Snippet,
-    string? State,
-    DateTime TimestampUtc,
-    double Score,
-    double KeywordScore,
-    double SemanticScore);

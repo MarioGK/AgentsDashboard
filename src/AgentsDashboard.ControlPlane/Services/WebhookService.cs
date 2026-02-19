@@ -8,7 +8,7 @@ public sealed class WebhookService(IOrchestratorStore store, ILogger<WebhookServ
 {
     public async Task<WebhookRegistration> RegisterAsync(CreateWebhookRequest request, CancellationToken cancellationToken)
     {
-        logger.ZLogInformation("Registering webhook for repo {RepositoryId}, task {TaskId}", request.RepositoryId, request.TaskId);
+        logger.LogInformation("Registering webhook for repo {RepositoryId}, task {TaskId}", request.RepositoryId, request.TaskId);
         return await store.CreateWebhookAsync(request, cancellationToken);
     }
 
@@ -19,7 +19,7 @@ public sealed class WebhookService(IOrchestratorStore store, ILogger<WebhookServ
 
     public async Task<bool> DeleteAsync(string webhookId, CancellationToken cancellationToken)
     {
-        logger.ZLogInformation("Deleting webhook {WebhookId}", webhookId);
+        logger.LogInformation("Deleting webhook {WebhookId}", webhookId);
         return await store.DeleteWebhookAsync(webhookId, cancellationToken);
     }
 }

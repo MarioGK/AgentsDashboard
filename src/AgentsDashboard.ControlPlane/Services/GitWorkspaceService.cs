@@ -252,7 +252,7 @@ public sealed class GitWorkspaceService(ILogger<GitWorkspaceService> logger) : I
                 : result.StandardError;
             var safeArgs = finalArgs.Select(SanitizeForLog).ToArray();
             var safeError = SanitizeForLog(error);
-            logger.ZLogWarning("Git command failed: git {Args}; exit={ExitCode}; error={Error}", string.Join(' ', safeArgs), result.ExitCode, safeError);
+            logger.LogWarning("Git command failed: git {Args}; exit={ExitCode}; error={Error}", string.Join(' ', safeArgs), result.ExitCode, safeError);
             throw new InvalidOperationException(safeError.Trim());
         }
 

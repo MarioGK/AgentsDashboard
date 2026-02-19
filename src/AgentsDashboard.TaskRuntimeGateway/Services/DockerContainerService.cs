@@ -73,7 +73,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         };
 
         var response = await _client.Containers.CreateContainerAsync(createParams, cancellationToken);
-        logger.ZLogInformation("Created container {ContainerId} from image {Image}", response.ID[..12], image);
+        logger.LogInformation("Created container {ContainerId} from image {Image}", response.ID[..12], image);
         return response.ID;
     }
 
@@ -144,7 +144,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
             }
             catch (Exception ex) when (ex is TimeoutException or IOException)
             {
-                logger.ZLogDebug(ex, "Log stream ended for container {ContainerId}", containerId[..12]);
+                logger.LogDebug(ex, "Log stream ended for container {ContainerId}", containerId[..12]);
                 break;
             }
 
@@ -194,7 +194,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to remove container {ContainerId}", containerId[..12]);
+            logger.LogWarning(ex, "Failed to remove container {ContainerId}", containerId[..12]);
         }
     }
 
@@ -240,7 +240,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
                 containerId,
                 new ContainerRemoveParameters { Force = true },
                 cancellationToken);
-            logger.ZLogInformation("Force removed orphaned container {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
+            logger.LogInformation("Force removed orphaned container {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
             return true;
         }
         catch (DockerContainerNotFoundException)
@@ -249,7 +249,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to force remove container {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
+            logger.LogWarning(ex, "Failed to force remove container {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
             return false;
         }
     }
@@ -322,7 +322,7 @@ public sealed class DockerContainerService(ILogger<DockerContainerService> logge
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to get container stats for {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
+            logger.LogWarning(ex, "Failed to get container stats for {ContainerId}", containerId[..Math.Min(12, containerId.Length)]);
             return null;
         }
     }

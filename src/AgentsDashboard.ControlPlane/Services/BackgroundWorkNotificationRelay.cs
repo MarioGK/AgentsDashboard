@@ -56,7 +56,7 @@ public sealed class BackgroundWorkNotificationRelay(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed to relay background work notification for {WorkId}", snapshot.WorkId);
+            logger.LogWarning(ex, "Failed to relay background work notification for {WorkId}", snapshot.WorkId);
         }
     }
 

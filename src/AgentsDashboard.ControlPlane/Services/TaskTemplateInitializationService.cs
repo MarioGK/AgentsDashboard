@@ -43,7 +43,7 @@ public sealed class TaskTemplateInitializationService(
             dedupeByOperationKey: true,
             isCritical: false);
 
-        logger.ZLogInformation("Queued task template initialization background work {WorkId}", workId);
+        logger.LogInformation("Queued task template initialization background work {WorkId}", workId);
         return Task.CompletedTask;
     }
 

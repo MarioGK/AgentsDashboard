@@ -42,6 +42,9 @@ docs/
 - One primary type per file.
 - No comments unless explicitly requested.
 - Warnings are errors (`TreatWarningsAsErrors=true`); do not disable with `NoWarn`.
+- All extensions must be inside of an Extensions folder instead of the root of the project.
+- There should not be single use interfaces. 
+- Every record or class must be in a single file, dont create a single file with multiple records and clasess.
 
 ### LiteDB (Mandatory)
 
@@ -125,8 +128,3 @@ MTP note: always pass `--project`, `--solution`, or direct `.csproj/.slnx`.
 - Task dispatch is singleton per task (one active/pending run; additional triggers queue).
 - Successful changed runs auto-commit and push default branch; successful no-diff runs end `Obsolete`.
 - Health probes are split: `/alive` (liveness), `/ready` (readiness), `/health` (readiness alias + payload).
-
-## Last Verified
-
-- Date: 2026-02-19
-- Purpose: date-only freshness marker for this document.

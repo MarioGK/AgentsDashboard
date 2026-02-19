@@ -11,7 +11,12 @@ public interface IGlobalSearchService
 }
 
 public sealed class GlobalSearchService(
-    IOrchestratorStore store,
+    IRepository<RepositoryDocument> repositoryDocuments,
+    IRepository<TaskDocument> taskDocuments,
+    IRepository<RunDocument> runDocuments,
+    IRepository<FindingDocument> findingDocuments,
+    IRepository<RunLogEvent> runEvents,
+    ISemanticChunkRepository semanticChunkRepository,
     IWorkspaceAiService workspaceAiService,
     IHarnessOutputParserService parserService,
     ILiteDbVectorSearchStatusService vectorSearchStatusService,
@@ -61,7 +66,11 @@ public sealed class GlobalSearchService(
         }
 
         var normalizedLimit = NormalizeLimit(request.Limit);
-        var repositories = await store.ListRepositoriesAsync(cancellationToken);
+        var repositories = await repositoryDocuments.QueryAsync(
+            query => query
+                .OrderBy(x => x.Name)
+                .ToList(),
+            cancellationToken);
         var scopedRepositories = repositories
             .Where(repo =>
                 string.IsNullOrWhiteSpace(request.RepositoryId) ||
@@ -78,10 +87,21 @@ public sealed class GlobalSearchService(
         var kinds = NormalizeKinds(request.Kinds);
 
         var tasksByRepositoryTasks = scopedRepositories
-            .Select(repository => store.ListTasksAsync(repository.Id, cancellationToken))
+            .Select(repository => taskDocuments.QueryAsync(
+                query => query
+                    .Where(x => x.RepositoryId == repository.Id)
+                    .OrderBy(x => x.CreatedAtUtc)
+                    .ToList(),
+                cancellationToken))
             .ToList();
         var findingsByRepositoryTasks = scopedRepositories
-            .Select(repository => store.ListFindingsAsync(repository.Id, cancellationToken))
+            .Select(repository => findingDocuments.QueryAsync(
+                query => query
+                    .Where(x => x.RepositoryId == repository.Id)
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .Take(200)
+                    .ToList(),
+                cancellationToken))
             .ToList();
         await Task.WhenAll(tasksByRepositoryTasks.Cast<Task>().Concat(findingsByRepositoryTasks));
 
@@ -197,7 +217,7 @@ public sealed class GlobalSearchService(
             .Take(normalizedLimit)
             .ToList();
 
-        logger.ZLogDebug(
+        logger.LogDebug(
             "Global search '{Query}' produced {HitCount} hits ({TotalMatches} total matches)",
             normalizedQuery,
             hits.Count,
@@ -242,11 +262,23 @@ public sealed class GlobalSearchService(
     {
         if (!string.IsNullOrWhiteSpace(request.TaskId))
         {
-            return await store.ListRunsByTaskAsync(request.TaskId, 500, cancellationToken);
+            return await runDocuments.QueryAsync(
+                query => query
+                    .Where(x => x.TaskId == request.TaskId)
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .Take(500)
+                    .ToList(),
+                cancellationToken);
         }
 
         var runTasks = scopedRepositories
-            .Select(repository => store.ListRunsByRepositoryAsync(repository.Id, cancellationToken))
+            .Select(repository => runDocuments.QueryAsync(
+                query => query
+                    .Where(x => x.RepositoryId == repository.Id)
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .Take(200)
+                    .ToList(),
+                cancellationToken))
             .ToList();
         await Task.WhenAll(runTasks);
 
@@ -271,7 +303,12 @@ public sealed class GlobalSearchService(
             .Take(MaxRunLogRuns)
             .ToList();
         var logTasks = selectedRuns
-            .Select(run => store.ListRunLogsAsync(run.Id, cancellationToken))
+            .Select(run => runEvents.QueryAsync(
+                query => query
+                    .Where(x => x.RunId == run.Id)
+                    .OrderBy(x => x.TimestampUtc)
+                    .ToList(),
+                cancellationToken))
             .ToList();
         await Task.WhenAll(logTasks);
 
@@ -310,7 +347,7 @@ public sealed class GlobalSearchService(
 
             try
             {
-                var chunks = await store.SearchWorkspaceSemanticAsync(
+                var chunks = await semanticChunkRepository.SearchAsync(
                     task.Id,
                     queryText,
                     queryEmbeddingPayload,
@@ -351,7 +388,7 @@ public sealed class GlobalSearchService(
             }
             catch (Exception ex)
             {
-                logger.ZLogDebug(ex, "Semantic chunk lookup failed for task {TaskId}", task.Id);
+                logger.LogDebug(ex, "Semantic chunk lookup failed for task {TaskId}", task.Id);
             }
         }
 

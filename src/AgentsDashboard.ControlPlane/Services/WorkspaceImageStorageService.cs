@@ -5,7 +5,7 @@ using AgentsDashboard.ControlPlane.Data;
 namespace AgentsDashboard.ControlPlane.Services;
 
 public sealed class WorkspaceImageStorageService(
-    IOrchestratorStore store,
+    IRunArtifactStorage artifactStorage,
     IWorkspaceImageCompressionService imageCompressionService,
     ILogger<WorkspaceImageStorageService> logger) : IWorkspaceImageStorageService
 {
@@ -103,7 +103,7 @@ public sealed class WorkspaceImageStorageService(
             var artifactName = $"workspace-image-{index + 1:D2}-{normalizedId[..Math.Min(8, normalizedId.Length)]}{extension}";
 
             await using var stream = new MemoryStream(compressed.Bytes, writable: false);
-            await store.SaveArtifactAsync(runId, artifactName, stream, cancellationToken);
+            await artifactStorage.SaveAsync(runId, artifactName, stream, cancellationToken);
 
             var hash = Convert.ToHexString(SHA256.HashData(compressed.Bytes));
             stored.Add(new WorkspaceStoredImage(
@@ -119,7 +119,7 @@ public sealed class WorkspaceImageStorageService(
                 compressed.Height > 0 ? compressed.Height : image.Height));
         }
 
-        logger.ZLogInformation(
+        logger.LogInformation(
             "Stored workspace images for run {RunId} repository {RepositoryId} task {TaskId}. Count: {Count}",
             runId,
             repositoryId,

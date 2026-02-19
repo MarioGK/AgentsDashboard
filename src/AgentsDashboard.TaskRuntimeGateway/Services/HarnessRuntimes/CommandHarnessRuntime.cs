@@ -117,7 +117,7 @@ public sealed class CommandHarnessRuntime(
                 }
                 catch (Exception ex)
                 {
-                    logger.ZLogWarning(ex, "Log streaming failed for command runtime container {ContainerId}", containerId[..12]);
+                    logger.LogWarning(ex, "Log streaming failed for command runtime container {ContainerId}", containerId[..12]);
                 }
             }, CancellationToken.None);
 

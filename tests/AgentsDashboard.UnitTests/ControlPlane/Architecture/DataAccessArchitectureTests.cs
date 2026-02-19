@@ -7,6 +7,7 @@ public sealed class DataAccessArchitectureTests
     private static readonly Regex SqlitePattern = new("Sqlite|sqlite-vec|Microsoft\\.Data\\.Sqlite|UseSqlite", RegexOptions.Compiled);
     private static readonly Regex LiteDbUsingPattern = new("^using\\s+LiteDB;", RegexOptions.Compiled | RegexOptions.Multiline);
     private static readonly Regex ScopePattern = new("\\bILiteDbScopeFactory\\b|\\bLiteDbScope\\b|\\bLiteDbScopeFactory\\b|\\bLiteDbSet<", RegexOptions.Compiled);
+    private static readonly Regex OrchestratorStorePattern = new("\\bIOrchestratorStore\\b", RegexOptions.Compiled);
 
     private static readonly HashSet<string> AllowedLiteDbUsingFiles =
     [
@@ -14,6 +15,13 @@ public sealed class DataAccessArchitectureTests
         "src/AgentsDashboard.ControlPlane/Data/LiteDbExecutor.cs",
         "src/AgentsDashboard.ControlPlane/Data/LiteDbRepository.cs",
         "src/AgentsDashboard.ControlPlane/Data/RunArtifactStorageRepository.cs"
+    ];
+
+    private static readonly HashSet<string> RepositoryPatternServiceFiles =
+    [
+        "src/AgentsDashboard.ControlPlane/Services/TaskSemanticEmbeddingService.cs",
+        "src/AgentsDashboard.ControlPlane/Services/GlobalSearchService.cs",
+        "src/AgentsDashboard.ControlPlane/Services/WorkspaceImageStorageService.cs"
     ];
 
     [Test]
@@ -48,6 +56,18 @@ public sealed class DataAccessArchitectureTests
             includeFile: path => path.EndsWith(".cs", StringComparison.Ordinal),
             pattern: ScopePattern,
             pathFilter: _ => true);
+
+        matches.Should().BeEmpty();
+    }
+
+    [Test]
+    public void VectorAndWorkspaceServices_DoNotReferenceCentralOrchestratorStore()
+    {
+        var matches = FindMatches(
+            rootFolder: "src/AgentsDashboard.ControlPlane/Services",
+            includeFile: path => path.EndsWith(".cs", StringComparison.Ordinal),
+            pattern: OrchestratorStorePattern,
+            pathFilter: RepositoryPatternServiceFiles.Contains);
 
         matches.Should().BeEmpty();
     }

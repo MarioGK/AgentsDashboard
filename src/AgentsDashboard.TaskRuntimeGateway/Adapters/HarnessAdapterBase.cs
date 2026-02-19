@@ -195,9 +195,6 @@ public abstract class HarnessAdapterBase(
         if (ContainsAny(lowerError, "unauthorized", "invalid api key", "authentication", "auth failed", "401"))
             return FailureClassification.FromClass(FailureClass.AuthenticationError, "Authentication failed", false, 0, "Check API credentials");
 
-        if (ContainsAny(lowerError, "rate limit", "too many requests", "429", "quota exceeded"))
-            return FailureClassification.FromClass(FailureClass.RateLimitExceeded, "Rate limit exceeded", true, 60, "Wait before retrying", "Consider reducing request frequency");
-
         if (ContainsAny(lowerError, "timeout", "timed out", "deadline exceeded"))
             return FailureClassification.FromClass(FailureClass.Timeout, "Operation timed out", true, 30, "Increase timeout", "Check for slow operations");
 
@@ -310,7 +307,7 @@ public abstract class HarnessAdapterBase(
             process.StartInfo.Environment[key] = value;
         }
 
-        logger.ZLogInformation("Executing harness {Harness} for run {RunId}", HarnessName, process.StartInfo.Environment.TryGetValue("RUN_ID", out var runId) ? runId ?? "unknown" : "unknown");
+        logger.LogInformation("Executing harness {Harness} for run {RunId}", HarnessName, process.StartInfo.Environment.TryGetValue("RUN_ID", out var runId) ? runId ?? "unknown" : "unknown");
 
         process.Start();
 

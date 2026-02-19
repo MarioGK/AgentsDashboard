@@ -23,7 +23,7 @@ public sealed class AutomationSchedulerService(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Automation scheduler tick failed");
+                logger.LogWarning(ex, "Automation scheduler tick failed");
             }
 
             try

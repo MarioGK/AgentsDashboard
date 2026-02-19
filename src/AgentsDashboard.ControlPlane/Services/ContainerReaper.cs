@@ -9,7 +9,7 @@ public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContaine
 
     public async Task<ContainerKillResult> KillContainerAsync(string runId, string reason, bool force, CancellationToken cancellationToken)
     {
-        logger.ZLogWarning("Requesting container kill for run {RunId}. Reason: {Reason}, Force: {Force}", runId, reason, force);
+        logger.LogWarning("Requesting container kill for run {RunId}. Reason: {Reason}, Force: {Force}", runId, reason, force);
 
         try
         {
@@ -46,7 +46,7 @@ public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContaine
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Exception while killing container for run {RunId}", runId);
+            logger.LogError(ex, "Exception while killing container for run {RunId}", runId);
             return new ContainerKillResult
             {
                 Killed = false,
@@ -58,7 +58,7 @@ public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContaine
     public async Task<int> ReapOrphanedContainersAsync(IEnumerable<string> activeRunIds, CancellationToken cancellationToken)
     {
         var active = new HashSet<string>(activeRunIds, StringComparer.OrdinalIgnoreCase);
-        logger.ZLogInformation("Scanning for orphaned containers with {Count} active run IDs", active.Count);
+        logger.LogInformation("Scanning for orphaned containers with {Count} active run IDs", active.Count);
 
         try
         {
@@ -72,7 +72,7 @@ public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContaine
                 try
                 {
                     await _dockerClient.Containers.RemoveContainerAsync(orphan.ContainerId, new ContainerRemoveParameters { Force = true }, cancellationToken);
-                    logger.ZLogInformation("Removed orphaned container {ContainerId} for run {RunId}", orphan.ContainerId[..Math.Min(12, orphan.ContainerId.Length)], orphan.RunId);
+                    logger.LogInformation("Removed orphaned container {ContainerId} for run {RunId}", orphan.ContainerId[..Math.Min(12, orphan.ContainerId.Length)], orphan.RunId);
                 }
                 catch (DockerContainerNotFoundException)
                 {
@@ -83,7 +83,7 @@ public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContaine
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Error during container reaping");
+            logger.LogError(ex, "Error during container reaping");
             return 0;
         }
     }

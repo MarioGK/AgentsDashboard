@@ -31,13 +31,13 @@ public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub,
     protected override ValueTask OnConnecting()
     {
         _connectionId = ConnectionId;
-        _logger.ZLogDebug("Client connecting to event hub");
+        _logger.LogDebug("Client connecting to event hub");
         return ValueTask.CompletedTask;
     }
 
     protected override ValueTask OnDisconnected()
     {
-        _logger.ZLogDebug("Client disconnecting from event hub");
+        _logger.LogDebug("Client disconnecting from event hub");
 
         RemoveCurrentConnectionFromGroups();
 
@@ -52,7 +52,7 @@ public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub,
         {
             GetAllGroup().Add(_connectionId, Client);
             _subscribedToAll = true;
-            _logger.ZLogDebug("Client subscribed to all events");
+            _logger.LogDebug("Client subscribed to all events");
         }
         else
         {
@@ -63,7 +63,7 @@ public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub,
 
                 GetRunGroup(runId).Add(_connectionId, Client);
                 _subscribedRunIds.Add(runId);
-                _logger.ZLogDebug("Client subscribed to run {RunId}", runId);
+                _logger.LogDebug("Client subscribed to run {RunId}", runId);
             }
         }
 
@@ -74,7 +74,7 @@ public sealed class TaskRuntimeEventHub : StreamingHubBase<ITaskRuntimeEventHub,
     {
         RemoveCurrentConnectionFromGroups();
 
-        _logger.ZLogDebug("Client unsubscribed from all events");
+        _logger.LogDebug("Client unsubscribed from all events");
 
         return Task.CompletedTask;
     }

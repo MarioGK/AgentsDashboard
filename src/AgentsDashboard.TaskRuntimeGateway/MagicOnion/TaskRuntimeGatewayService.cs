@@ -42,7 +42,7 @@ public sealed class TaskRuntimeGatewayService(
 
         await queue.EnqueueAsync(new QueuedJob { Request = request }, CancellationToken.None);
 
-        logger.ZLogInformation("Accepted run {RunId} using harness {Harness}", request.RunId, request.HarnessType);
+        logger.LogInformation("Accepted run {RunId} using harness {Harness}", request.RunId, request.HarnessType);
 
         return new DispatchJobReply
         {
@@ -75,7 +75,7 @@ public sealed class TaskRuntimeGatewayService(
             };
         }
 
-        logger.ZLogWarning("KillContainer request received for container {ContainerId}",
+        logger.LogWarning("KillContainer request received for container {ContainerId}",
             request.ContainerId);
 
         try
@@ -93,7 +93,7 @@ public sealed class TaskRuntimeGatewayService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Error killing container {ContainerId}", request.ContainerId);
+            logger.LogError(ex, "Error killing container {ContainerId}", request.ContainerId);
 
             return new KillContainerReply
             {
@@ -106,7 +106,7 @@ public sealed class TaskRuntimeGatewayService(
 
     public UnaryResult<HeartbeatReply> HeartbeatAsync(HeartbeatRequest request)
     {
-        logger.ZLogDebug("Heartbeat received from task runtime {TaskRuntimeId} on {HostName}: {ActiveSlots}/{MaxSlots} slots",
+        logger.LogDebug("Heartbeat received from task runtime {TaskRuntimeId} on {HostName}: {ActiveSlots}/{MaxSlots} slots",
             request.TaskRuntimeId, request.HostName, request.ActiveSlots, request.MaxSlots);
 
         return new UnaryResult<HeartbeatReply>(new HeartbeatReply
@@ -119,7 +119,7 @@ public sealed class TaskRuntimeGatewayService(
     public async UnaryResult<ReconcileOrphanedContainersReply> ReconcileOrphanedContainersAsync(
         ReconcileOrphanedContainersRequest request)
     {
-        logger.ZLogInformation("Received orphan reconciliation request from task runtime {TaskRuntimeId}",
+        logger.LogInformation("Received orphan reconciliation request from task runtime {TaskRuntimeId}",
             request.TaskRuntimeId);
 
         try
@@ -128,7 +128,7 @@ public sealed class TaskRuntimeGatewayService(
 
             var result = await orphanReconciler.ReconcileAsync(activeRunIds, CancellationToken.None);
 
-            logger.ZLogInformation("Orphan reconciliation complete for task runtime {TaskRuntimeId}: {OrphanedCount} found, {RemovedCount} removed",
+            logger.LogInformation("Orphan reconciliation complete for task runtime {TaskRuntimeId}: {OrphanedCount} found, {RemovedCount} removed",
                 request.TaskRuntimeId, result.OrphanedCount, result.RemovedContainers.Count);
 
             return new ReconcileOrphanedContainersReply
@@ -141,7 +141,7 @@ public sealed class TaskRuntimeGatewayService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Error during orphan reconciliation for task runtime {TaskRuntimeId}", request.TaskRuntimeId);
+            logger.LogError(ex, "Error during orphan reconciliation for task runtime {TaskRuntimeId}", request.TaskRuntimeId);
 
             return new ReconcileOrphanedContainersReply
             {
@@ -177,7 +177,7 @@ public sealed class TaskRuntimeGatewayService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Failed to retrieve harness tool status for task runtime");
+            logger.LogError(ex, "Failed to retrieve harness tool status for task runtime");
 
             return new GetHarnessToolsReply
             {

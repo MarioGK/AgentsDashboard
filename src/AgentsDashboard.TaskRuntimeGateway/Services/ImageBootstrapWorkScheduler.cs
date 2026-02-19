@@ -40,7 +40,7 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
         {
             if (_warmupQueuedOrRunning)
             {
-                _logger.ZLogDebug("Image warmup request ignored because warmup is already queued or running.");
+                _logger.LogDebug("Image warmup request ignored because warmup is already queued or running.");
                 return Task.CompletedTask;
             }
 
@@ -57,7 +57,7 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
             throw new InvalidOperationException("Unable to queue image warmup request.");
         }
 
-        _logger.ZLogInformation("Queued image warmup with policy {Policy}", policy);
+        _logger.LogInformation("Queued image warmup with policy {Policy}", policy);
         return Task.CompletedTask;
     }
 
@@ -85,7 +85,7 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.ZLogError(ex, "Image warmup background cycle failed");
+                _logger.LogError(ex, "Image warmup background cycle failed");
             }
             finally
             {
@@ -103,16 +103,16 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
 
         if (images.Count == 0)
         {
-            _logger.ZLogInformation("No harness images configured for pre-pull");
+            _logger.LogInformation("No harness images configured for pre-pull");
             return;
         }
 
-        _logger.ZLogInformation("Starting background image warmup for {Count} harness images using policy {Policy}", images.Count, policy);
+        _logger.LogInformation("Starting background image warmup for {Count} harness images using policy {Policy}", images.Count, policy);
 
         var tasks = images.Select(image => PullImageAsync(image, policy, cancellationToken));
         await Task.WhenAll(tasks);
 
-        _logger.ZLogInformation("Completed background image warmup for harness images");
+        _logger.LogInformation("Completed background image warmup for harness images");
     }
 
     private HashSet<string> GetUniqueImages()
@@ -143,17 +143,17 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
             var existsLocally = await ImageExistsLocallyAsync(image, cancellationToken);
             if (policy == ImagePrePullPolicy.MissingOnly && existsLocally)
             {
-                _logger.ZLogInformation("Image {Image} already exists locally, skipping warmup", image);
+                _logger.LogInformation("Image {Image} already exists locally, skipping warmup", image);
                 return;
             }
 
             if (await TryBuildImageAsync(image, cancellationToken))
             {
-                _logger.ZLogInformation("Successfully built image {Image}", image);
+                _logger.LogInformation("Successfully built image {Image}", image);
                 return;
             }
 
-            _logger.ZLogInformation("Pulling image {Image} during warmup", image);
+            _logger.LogInformation("Pulling image {Image} during warmup", image);
 
             var authConfig = GetAuthConfig(image);
 
@@ -161,7 +161,7 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
             {
                 if (!string.IsNullOrEmpty(msg.Status))
                 {
-                    _logger.ZLogDebug("Warmup pull {Image}: {Status}", image, msg.Status);
+                    _logger.LogDebug("Warmup pull {Image}: {Status}", image, msg.Status);
                 }
             });
 
@@ -171,11 +171,11 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
                 progress,
                 cancellationToken);
 
-            _logger.ZLogInformation("Successfully pulled image {Image}", image);
+            _logger.LogInformation("Successfully pulled image {Image}", image);
         }
         catch (Exception ex)
         {
-            _logger.ZLogError(ex, "Failed to warm image {Image}", image);
+            _logger.LogError(ex, "Failed to warm image {Image}", image);
         }
         finally
         {
@@ -205,7 +205,7 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
             return false;
         }
 
-        _logger.ZLogInformation("Building image {Image} from {Dockerfile}", image, dockerfilePath);
+        _logger.LogInformation("Building image {Image} from {Dockerfile}", image, dockerfilePath);
         return await BuildImageWithCliAsync(image, dockerfilePath, contextPath, cancellationToken);
     }
 
@@ -236,20 +236,20 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
         {
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
-                _logger.ZLogDebug("Docker build output ({Image}): {Message}", image, args.Data);
+                _logger.LogDebug("Docker build output ({Image}): {Message}", image, args.Data);
             }
         };
         process.ErrorDataReceived += (_, args) =>
         {
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
-                _logger.ZLogDebug("Docker build error ({Image}): {Message}", image, args.Data);
+                _logger.LogDebug("Docker build error ({Image}): {Message}", image, args.Data);
             }
         };
 
         if (!process.Start())
         {
-            _logger.ZLogWarning("Failed to launch docker CLI to build image {Image}", image);
+            _logger.LogWarning("Failed to launch docker CLI to build image {Image}", image);
             return false;
         }
 
@@ -262,7 +262,7 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
             return true;
         }
 
-        _logger.ZLogWarning("docker build for image {Image} failed with exit code {ExitCode}", image, process.ExitCode);
+        _logger.LogWarning("docker build for image {Image} failed with exit code {ExitCode}", image, process.ExitCode);
         return false;
     }
 
@@ -334,7 +334,7 @@ public sealed class ImageBootstrapWorkScheduler : BackgroundService
             "ai-harness" => ("deploy/harness-image/Dockerfile", "deploy/harness-image"),
             "ai-harness-base" => ("deploy/harness-images/Dockerfile.harness-base", "deploy/harness-images"),
             "harness-codex" => ("deploy/harness-images/Dockerfile.harness-codex", "deploy/harness-images"),
-        "harness-opencode" => ("deploy/harness-images/Dockerfile.harness-opencode", "deploy/harness-images"),
+            "harness-opencode" => ("deploy/harness-images/Dockerfile.harness-opencode", "deploy/harness-images"),
             _ => null
         };
     }

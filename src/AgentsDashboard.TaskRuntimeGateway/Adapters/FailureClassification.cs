@@ -4,15 +4,14 @@ public enum FailureClass
 {
     None = 0,
     AuthenticationError = 1,
-    RateLimitExceeded = 2,
-    Timeout = 3,
-    ResourceExhausted = 4,
-    InvalidInput = 5,
-    ConfigurationError = 6,
-    NetworkError = 7,
-    PermissionDenied = 8,
-    NotFound = 9,
-    InternalError = 10,
+    Timeout = 2,
+    ResourceExhausted = 3,
+    InvalidInput = 4,
+    ConfigurationError = 5,
+    NetworkError = 6,
+    PermissionDenied = 7,
+    NotFound = 8,
+    InternalError = 9,
     Unknown = 99
 }
 

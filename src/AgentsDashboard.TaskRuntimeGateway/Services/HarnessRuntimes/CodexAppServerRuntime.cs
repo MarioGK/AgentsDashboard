@@ -863,7 +863,7 @@ public sealed class CodexAppServerRuntime(
         }
         catch (Exception ex)
         {
-            logger.ZLogDebug(ex, "Failed to kill codex app-server process.");
+            logger.LogDebug(ex, "Failed to kill codex app-server process.");
         }
     }
 

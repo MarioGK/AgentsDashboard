@@ -7,6 +7,7 @@ using System.Text.Json;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 
+
 internal sealed class OpenCodeApiClient : IDisposable
 {
     private static readonly JsonElement s_emptyObject = JsonSerializer.SerializeToElement(new Dictionary<string, string>());
@@ -271,7 +272,3 @@ internal sealed class OpenCodeApiClient : IDisposable
             : string.Empty;
     }
 }
-
-internal sealed record OpenCodeSseEvent(
-    string Type,
-    JsonElement Properties);

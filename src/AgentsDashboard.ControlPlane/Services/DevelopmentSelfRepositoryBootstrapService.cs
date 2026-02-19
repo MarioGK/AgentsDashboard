@@ -29,7 +29,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
             dedupeByOperationKey: true,
             isCritical: false);
 
-        logger.ZLogInformation("Queued development self-repository bootstrap background work {WorkId}", workId);
+        logger.LogInformation("Queued development self-repository bootstrap background work {WorkId}", workId);
         return Task.CompletedTask;
     }
 
@@ -52,7 +52,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
         var repositorySeed = await TryResolveRepositorySeedAsync(cancellationToken);
         if (repositorySeed is null)
         {
-            logger.ZLogDebug("Skipped development repository bootstrap because current directory is not a git workspace with origin.");
+            logger.LogDebug("Skipped development repository bootstrap because current directory is not a git workspace with origin.");
             progress.Report(new BackgroundWorkSnapshot(
                 WorkId: string.Empty,
                 OperationKey: string.Empty,
@@ -93,7 +93,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
                     repositorySeed.DefaultBranch),
                 cancellationToken);
 
-            logger.ZLogInformation(
+            logger.LogInformation(
                 "Development repository bootstrap created repository {RepositoryId} at {LocalPath}",
                 repository.Id,
                 repository.LocalPath);
@@ -117,7 +117,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
                     repository = updated;
                 }
 
-                logger.ZLogInformation(
+                logger.LogInformation(
                     "Development repository bootstrap updated repository {RepositoryId} at {LocalPath}",
                     existing.Id,
                     repositorySeed.LocalPath);
@@ -143,7 +143,7 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(
+            logger.LogWarning(
                 ex,
                 "Development repository bootstrap could not refresh git status for {RepositoryId}",
                 repository.Id);

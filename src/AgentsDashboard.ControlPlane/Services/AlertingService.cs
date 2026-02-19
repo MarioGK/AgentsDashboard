@@ -37,7 +37,7 @@ public sealed class AlertingService(
             }
             catch (Exception ex)
             {
-                logger.ZLogError(ex, "Error during alerting check cycle");
+                logger.LogError(ex, "Error during alerting check cycle");
             }
         }
     }
@@ -51,7 +51,7 @@ public sealed class AlertingService(
                 var cooldownEnd = rule.LastFiredAtUtc.Value.AddMinutes(rule.CooldownMinutes);
                 if (DateTime.UtcNow < cooldownEnd)
                 {
-                    logger.ZLogDebug("Alert rule {RuleName} is in cooldown until {CooldownEnd}", rule.Name, cooldownEnd);
+                    logger.LogDebug("Alert rule {RuleName} is in cooldown until {CooldownEnd}", rule.Name, cooldownEnd);
                     return;
                 }
             }
@@ -68,13 +68,13 @@ public sealed class AlertingService(
 
             if (triggered)
             {
-                logger.ZLogWarning("Alert rule {RuleName} triggered: {Message}", rule.Name, message);
+                logger.LogWarning("Alert rule {RuleName} triggered: {Message}", rule.Name, message);
                 await FireAlertAsync(rule, message, store, cancellationToken);
             }
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Error checking alert rule {RuleName} ({RuleType})", rule.Name, rule.RuleType);
+            logger.LogError(ex, "Error checking alert rule {RuleName} ({RuleType})", rule.Name, rule.RuleType);
         }
     }
 
@@ -234,14 +234,14 @@ public sealed class AlertingService(
 
             if (response.IsSuccessStatusCode)
             {
-                logger.ZLogInformation(
+                logger.LogInformation(
                     "Alert webhook fired successfully for rule {RuleName} to {WebhookUrl}",
                     rule.Name,
                     rule.WebhookUrl);
             }
             else
             {
-                logger.ZLogWarning(
+                logger.LogWarning(
                     "Alert webhook failed for rule {RuleName} to {WebhookUrl}: {StatusCode}",
                     rule.Name,
                     rule.WebhookUrl,
@@ -250,7 +250,7 @@ public sealed class AlertingService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(
+            logger.LogError(
                 ex,
                 "Error sending alert webhook for rule {RuleName} to {WebhookUrl}",
                 rule.Name,

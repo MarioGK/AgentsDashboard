@@ -16,7 +16,7 @@ public sealed class TaskRuntimeEventBroadcastService(
             }
             catch (Exception ex)
             {
-                logger.ZLogError(ex, "Failed to broadcast worker event for run {RunId}", eventMessage.RunId);
+                logger.LogError(ex, "Failed to broadcast worker event for run {RunId}", eventMessage.RunId);
             }
         }
     }

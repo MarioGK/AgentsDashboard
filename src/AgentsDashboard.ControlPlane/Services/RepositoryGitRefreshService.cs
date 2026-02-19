@@ -32,7 +32,7 @@ public sealed class RepositoryGitRefreshService(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Background repository git refresh failed");
+                logger.LogWarning(ex, "Background repository git refresh failed");
             }
         }
     }
@@ -45,7 +45,7 @@ public sealed class RepositoryGitRefreshService(
             RefreshRecentlyViewedAsync,
             dedupeByOperationKey: true,
             isCritical: false);
-        logger.ZLogDebug("Queued repository git refresh cycle as background work {WorkId}", workId);
+        logger.LogDebug("Queued repository git refresh cycle as background work {WorkId}", workId);
     }
 
     private async Task RefreshRecentlyViewedAsync(
@@ -93,7 +93,7 @@ public sealed class RepositoryGitRefreshService(
             }
             catch (Exception ex)
             {
-                logger.ZLogDebug(ex, "Skipping repository git refresh for {RepositoryId}", repository.Id);
+                logger.LogDebug(ex, "Skipping repository git refresh for {RepositoryId}", repository.Id);
                 var status = new RepositoryGitStatus(
                     repository.CurrentBranch,
                     repository.CurrentCommit,

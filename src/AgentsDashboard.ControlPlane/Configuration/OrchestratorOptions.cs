@@ -2,6 +2,18 @@ using System.ComponentModel.DataAnnotations;
 
 namespace AgentsDashboard.ControlPlane.Configuration;
 
+
+public enum TaskRuntimeConnectivityMode
+{
+    AutoDetect = 0,
+    DockerDnsOnly = 1,
+    HostPortOnly = 2
+}
+
+
+
+
+
 public sealed class OrchestratorOptions : IValidatableObject
 {
     public const string SectionName = "Orchestrator";
@@ -19,8 +31,6 @@ public sealed class OrchestratorOptions : IValidatableObject
     public TtlDaysConfig TtlDays { get; set; } = new();
     public DeadRunDetectionConfig DeadRunDetection { get; set; } = new();
     public StageTimeoutConfig StageTimeout { get; set; } = new();
-    public RateLimitConfig RateLimit { get; set; } = new();
-
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (string.IsNullOrWhiteSpace(LiteDbPath))
@@ -77,68 +87,4 @@ public sealed class OrchestratorOptions : IValidatableObject
         if (TaskRuntimes.MemoryScaleOutThresholdPercent < 1 || TaskRuntimes.MemoryScaleOutThresholdPercent > 100)
             yield return new ValidationResult("TaskRuntimes.MemoryScaleOutThresholdPercent must be between 1 and 100", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.MemoryScaleOutThresholdPercent)}"]);
     }
-}
-
-public enum TaskRuntimeConnectivityMode
-{
-    AutoDetect = 0,
-    DockerDnsOnly = 1,
-    HostPortOnly = 2
-}
-
-public sealed class TaskRuntimePoolConfig
-{
-    public int MaxTaskRuntimes { get; set; } = 100;
-    public int ParallelSlotsPerTaskRuntime { get; set; } = 1;
-    public int IdleTimeoutMinutes { get; set; } = 5;
-    public int StartupTimeoutSeconds { get; set; } = 60;
-    public string ContainerImage { get; set; } = "agentsdashboard-task-runtime-gateway:latest";
-    public string ContainerNamePrefix { get; set; } = "task-runtime-gateway";
-    public string DockerNetwork { get; set; } = "agentsdashboard";
-    public TaskRuntimeConnectivityMode ConnectivityMode { get; set; } = TaskRuntimeConnectivityMode.AutoDetect;
-    public bool EnablePressureScaling { get; set; } = true;
-    public int CpuScaleOutThresholdPercent { get; set; } = 85;
-    public int MemoryScaleOutThresholdPercent { get; set; } = 85;
-    public int PressureSampleWindowSeconds { get; set; } = 30;
-}
-
-public sealed class RetryDefaultsConfig
-{
-    public int MaxAttempts { get; set; } = 3;
-    public int BackoffBaseSeconds { get; set; } = 10;
-    public double BackoffMultiplier { get; set; } = 2.0;
-}
-
-public sealed class TtlDaysConfig
-{
-    public int Logs { get; set; } = 30;
-    public int Runs { get; set; } = 90;
-}
-
-public sealed class DeadRunDetectionConfig
-{
-    public int CheckIntervalSeconds { get; set; } = 60;
-    public int StaleRunThresholdMinutes { get; set; } = 30;
-    public int ZombieRunThresholdMinutes { get; set; } = 120;
-    public int MaxRunAgeHours { get; set; } = 24;
-    public bool EnableAutoTermination { get; set; } = true;
-    public bool ForceKillOnTimeout { get; set; } = true;
-}
-
-public sealed class StageTimeoutConfig
-{
-    public int DefaultTaskStageTimeoutMinutes { get; set; } = 60;
-    public int DefaultApprovalStageTimeoutHours { get; set; } = 24;
-    public int DefaultParallelStageTimeoutMinutes { get; set; } = 90;
-    public int MaxStageTimeoutHours { get; set; } = 48;
-}
-
-public sealed class RateLimitConfig
-{
-    public int WebhookPermitLimit { get; set; } = 30;
-    public int WebhookWindowSeconds { get; set; } = 60;
-    public int GlobalPermitLimit { get; set; } = 100;
-    public int GlobalWindowSeconds { get; set; } = 60;
-    public int BurstPermitLimit { get; set; } = 20;
-    public int BurstWindowSeconds { get; set; } = 1;
 }

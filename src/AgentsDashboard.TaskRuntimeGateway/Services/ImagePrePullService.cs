@@ -7,7 +7,7 @@ public sealed class ImagePrePullService(
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await imageBootstrapWorkScheduler.EnqueueImageWarmupAsync(ImagePrePullPolicy.MissingOnly, cancellationToken);
-        logger.ZLogInformation("Scheduled background harness image warmup.");
+        logger.LogInformation("Scheduled background harness image warmup.");
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

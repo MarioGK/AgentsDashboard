@@ -44,7 +44,7 @@ public sealed class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.ZLogError(ex, "Worker event listener synchronization failed");
+                logger.LogError(ex, "Worker event listener synchronization failed");
             }
 
             await Task.Delay(PollInterval, stoppingToken);
@@ -94,7 +94,7 @@ public sealed class TaskRuntimeEventListenerService(
         {
             try
             {
-                logger.ZLogInformation("Connecting worker event hub for {TaskRuntimeId} at {Endpoint}", connection.TaskRuntimeId, connection.Endpoint);
+                logger.LogInformation("Connecting worker event hub for {TaskRuntimeId} at {Endpoint}", connection.TaskRuntimeId, connection.Endpoint);
                 var hub = await clientFactory.ConnectEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, this, cancellationToken);
                 connection.SetHub(hub);
                 reconnectDelay = TimeSpan.FromSeconds(1);
@@ -102,7 +102,7 @@ public sealed class TaskRuntimeEventListenerService(
                 await hub.SubscribeAsync(runIds: null);
                 await hub.WaitForDisconnect();
 
-                logger.ZLogWarning("Worker event hub disconnected for {TaskRuntimeId}", connection.TaskRuntimeId);
+                logger.LogWarning("Worker event hub disconnected for {TaskRuntimeId}", connection.TaskRuntimeId);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -110,7 +110,7 @@ public sealed class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Worker event hub connection failed for {TaskRuntimeId}", connection.TaskRuntimeId);
+                logger.LogWarning(ex, "Worker event hub connection failed for {TaskRuntimeId}", connection.TaskRuntimeId);
                 await Task.Delay(reconnectDelay, cancellationToken);
                 reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
             }
@@ -247,7 +247,7 @@ public sealed class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Failed to update task git metadata for task {TaskId}", completedRun.TaskId);
+                logger.LogWarning(ex, "Failed to update task git metadata for task {TaskId}", completedRun.TaskId);
             }
 
             if (!string.IsNullOrWhiteSpace(completedRun.OutputJson) &&
@@ -276,7 +276,7 @@ public sealed class TaskRuntimeEventListenerService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Failed to handle job event for run {RunId}", message.RunId);
+            logger.LogError(ex, "Failed to handle job event for run {RunId}", message.RunId);
         }
     }
 
@@ -353,7 +353,7 @@ public sealed class TaskRuntimeEventListenerService(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed handling structured event for run {RunId}", message.RunId);
+            logger.LogWarning(ex, "Failed handling structured event for run {RunId}", message.RunId);
         }
     }
 
@@ -480,7 +480,7 @@ public sealed class TaskRuntimeEventListenerService(
     {
         try
         {
-            logger.ZLogDebug("Worker {TaskRuntimeId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
+            logger.LogDebug("Worker {TaskRuntimeId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
                 statusMessage.TaskRuntimeId, statusMessage.Status, statusMessage.ActiveSlots, statusMessage.MaxSlots);
 
             var endpoint = await ResolveTaskRuntimeEndpointAsync(statusMessage.TaskRuntimeId);
@@ -512,7 +512,7 @@ public sealed class TaskRuntimeEventListenerService(
         }
         catch (Exception ex)
         {
-            logger.ZLogError(ex, "Failed to handle worker status for worker {TaskRuntimeId}", statusMessage.TaskRuntimeId);
+            logger.LogError(ex, "Failed to handle worker status for worker {TaskRuntimeId}", statusMessage.TaskRuntimeId);
         }
     }
 
@@ -544,7 +544,7 @@ public sealed class TaskRuntimeEventListenerService(
         var nextAttempt = failedRun.Attempt + 1;
         var delaySeconds = task.RetryPolicy.BackoffBaseSeconds * Math.Pow(task.RetryPolicy.BackoffMultiplier, failedRun.Attempt - 1);
 
-        logger.ZLogInformation("Scheduling retry {Attempt}/{Max} for run {RunId} in {Delay}s",
+        logger.LogInformation("Scheduling retry {Attempt}/{Max} for run {RunId} in {Delay}s",
             nextAttempt, maxAttempts, failedRun.Id, delaySeconds);
 
         await Task.Delay(TimeSpan.FromSeconds(Math.Min(delaySeconds, 300)));
@@ -565,12 +565,12 @@ public sealed class TaskRuntimeEventListenerService(
             var dispatched = await dispatcher.DispatchNextQueuedRunForTaskAsync(taskId, CancellationToken.None);
             if (dispatched)
             {
-                logger.ZLogInformation("Dispatched next queued run for task {TaskId}", taskId);
+                logger.LogInformation("Dispatched next queued run for task {TaskId}", taskId);
             }
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning(ex, "Failed dispatching next queued run for task {TaskId}", taskId);
+            logger.LogWarning(ex, "Failed dispatching next queued run for task {TaskId}", taskId);
         }
     }
 
@@ -649,7 +649,7 @@ public sealed class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Failed to persist run artifact {ArtifactPath} for run {RunId}", artifactPath, runId);
+                logger.LogWarning(ex, "Failed to persist run artifact {ArtifactPath} for run {RunId}", artifactPath, runId);
             }
         }
     }

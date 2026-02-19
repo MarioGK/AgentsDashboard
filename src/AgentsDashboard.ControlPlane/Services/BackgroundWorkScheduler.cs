@@ -150,7 +150,7 @@ public sealed class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> log
                 }
                 catch (Exception ex)
                 {
-                    logger.ZLogDebug(ex, "Background work scheduler observed exception while draining outstanding tasks.");
+                    logger.LogDebug(ex, "Background work scheduler observed exception while draining outstanding tasks.");
                 }
             }
         }
@@ -216,11 +216,11 @@ public sealed class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> log
 
             if (workItem.IsCritical)
             {
-                logger.ZLogError(ex, "Critical background work failed for {OperationKey}", workItem.OperationKey);
+                logger.LogError(ex, "Critical background work failed for {OperationKey}", workItem.OperationKey);
             }
             else
             {
-                logger.ZLogWarning(ex, "Background work failed for {OperationKey}", workItem.OperationKey);
+                logger.LogWarning(ex, "Background work failed for {OperationKey}", workItem.OperationKey);
             }
         }
         finally
@@ -351,7 +351,7 @@ public sealed class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> log
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Failed to deliver background work update for {WorkId}", snapshot.WorkId);
+                logger.LogWarning(ex, "Failed to deliver background work update for {WorkId}", snapshot.WorkId);
             }
         }
     }

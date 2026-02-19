@@ -24,7 +24,7 @@ public sealed class TaskRuntimeHeartbeatService(
             }
             catch (Exception ex)
             {
-                logger.ZLogWarning(ex, "Failed to publish worker heartbeat");
+                logger.LogWarning(ex, "Failed to publish worker heartbeat");
             }
 
             await Task.Delay(HeartbeatInterval, stoppingToken);
@@ -46,7 +46,7 @@ public sealed class TaskRuntimeHeartbeatService(
         };
 
         await TaskRuntimeEventHub.BroadcastTaskRuntimeStatusAsync(status);
-        logger.ZLogDebug("Heartbeat published successfully: Worker={TaskRuntimeId}, Active={Active}/{Max}",
+        logger.LogDebug("Heartbeat published successfully: Worker={TaskRuntimeId}, Active={Active}/{Max}",
             options.TaskRuntimeId, queue.ActiveSlots, queue.MaxSlots);
     }
 }

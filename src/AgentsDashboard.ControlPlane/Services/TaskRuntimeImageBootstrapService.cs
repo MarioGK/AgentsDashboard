@@ -16,7 +16,7 @@ public sealed class TaskRuntimeImageBootstrapService(
             dedupeByOperationKey: true,
             isCritical: false);
 
-        logger.ZLogInformation("Queued startup task runtime image bootstrap as background work {WorkId}", workId);
+        logger.LogInformation("Queued startup task runtime image bootstrap as background work {WorkId}", workId);
         return Task.CompletedTask;
     }
 

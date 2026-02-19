@@ -52,17 +52,17 @@ public sealed class DockerHealthCheckService(ILogger<DockerHealthCheckService> l
             timeoutTokenSource.CancelAfter(CheckTimeout);
             await _client.System.PingAsync(timeoutTokenSource.Token);
             SetResult(HealthCheckResult.Healthy("Docker daemon is available"));
-            logger.ZLogDebug("Docker health check passed");
+            logger.LogDebug("Docker health check passed");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             SetResult(HealthCheckResult.Unhealthy($"Docker daemon ping timed out after {CheckTimeout.TotalSeconds:0}s"));
-            logger.ZLogWarning("Docker health check timed out");
+            logger.LogWarning("Docker health check timed out");
         }
         catch (Exception ex)
         {
             SetResult(HealthCheckResult.Unhealthy($"Docker daemon unavailable: {ex.Message}"));
-            logger.ZLogWarning("Docker daemon is unavailable: {Message}", ex.Message);
+            logger.LogWarning("Docker daemon is unavailable: {Message}", ex.Message);
         }
     }
 
