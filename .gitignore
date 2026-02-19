@@ -419,3 +419,4 @@ FodyWeavers.xsd
 
 # Runtime data (SQLite DB, artifacts, workspaces)
 /data/
+/src/AgentsDashboard.ControlPlane/data/
