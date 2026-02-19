@@ -3,16 +3,18 @@ using System.Text.Json;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane.Data;
+using AgentsDashboard.ControlPlane.Proxy;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed partial class TaskRuntimeEventListenerService(
+public sealed class TaskRuntimeEventListenerService(
     IMagicOnionClientFactory clientFactory,
     ITaskRuntimeLifecycleManager lifecycleManager,
     IOrchestratorStore store,
     ITaskSemanticEmbeddingService taskSemanticEmbeddingService,
     ITaskRuntimeRegistryService workerRegistry,
     IRunEventPublisher publisher,
+    InMemoryYarpConfigProvider yarpProvider,
     RunDispatcher dispatcher,
     ILogger<TaskRuntimeEventListenerService> logger,
     IRunStructuredViewService? runStructuredViewService = null) : BackgroundService, ITaskRuntimeEventReceiver
@@ -42,7 +44,7 @@ public sealed partial class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Worker event listener synchronization failed");
+                logger.ZLogError(ex, "Worker event listener synchronization failed");
             }
 
             await Task.Delay(PollInterval, stoppingToken);
@@ -92,7 +94,7 @@ public sealed partial class TaskRuntimeEventListenerService(
         {
             try
             {
-                logger.LogInformation("Connecting worker event hub for {TaskRuntimeId} at {Endpoint}", connection.TaskRuntimeId, connection.Endpoint);
+                logger.ZLogInformation("Connecting worker event hub for {TaskRuntimeId} at {Endpoint}", connection.TaskRuntimeId, connection.Endpoint);
                 var hub = await clientFactory.ConnectEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, this, cancellationToken);
                 connection.SetHub(hub);
                 reconnectDelay = TimeSpan.FromSeconds(1);
@@ -100,7 +102,7 @@ public sealed partial class TaskRuntimeEventListenerService(
                 await hub.SubscribeAsync(runIds: null);
                 await hub.WaitForDisconnect();
 
-                logger.LogWarning("Worker event hub disconnected for {TaskRuntimeId}", connection.TaskRuntimeId);
+                logger.ZLogWarning("Worker event hub disconnected for {TaskRuntimeId}", connection.TaskRuntimeId);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -108,7 +110,7 @@ public sealed partial class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Worker event hub connection failed for {TaskRuntimeId}", connection.TaskRuntimeId);
+                logger.ZLogWarning(ex, "Worker event hub connection failed for {TaskRuntimeId}", connection.TaskRuntimeId);
                 await Task.Delay(reconnectDelay, cancellationToken);
                 reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
             }
@@ -245,7 +247,7 @@ public sealed partial class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to update task git metadata for task {TaskId}", completedRun.TaskId);
+                logger.ZLogWarning(ex, "Failed to update task git metadata for task {TaskId}", completedRun.TaskId);
             }
 
             if (!string.IsNullOrWhiteSpace(completedRun.OutputJson) &&
@@ -257,6 +259,8 @@ public sealed partial class TaskRuntimeEventListenerService(
                     "run-output",
                     runId: completedRun.Id);
             }
+
+            yarpProvider.RemoveRoute($"run-{message.RunId}");
 
             await publisher.PublishStatusAsync(completedRun, CancellationToken.None);
 
@@ -272,7 +276,7 @@ public sealed partial class TaskRuntimeEventListenerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to handle job event for run {RunId}", message.RunId);
+            logger.ZLogError(ex, "Failed to handle job event for run {RunId}", message.RunId);
         }
     }
 
@@ -349,7 +353,7 @@ public sealed partial class TaskRuntimeEventListenerService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed handling structured event for run {RunId}", message.RunId);
+            logger.ZLogWarning(ex, "Failed handling structured event for run {RunId}", message.RunId);
         }
     }
 
@@ -476,7 +480,7 @@ public sealed partial class TaskRuntimeEventListenerService(
     {
         try
         {
-            logger.LogDebug("Worker {TaskRuntimeId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
+            logger.ZLogDebug("Worker {TaskRuntimeId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
                 statusMessage.TaskRuntimeId, statusMessage.Status, statusMessage.ActiveSlots, statusMessage.MaxSlots);
 
             var endpoint = await ResolveTaskRuntimeEndpointAsync(statusMessage.TaskRuntimeId);
@@ -508,7 +512,7 @@ public sealed partial class TaskRuntimeEventListenerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to handle worker status for worker {TaskRuntimeId}", statusMessage.TaskRuntimeId);
+            logger.ZLogError(ex, "Failed to handle worker status for worker {TaskRuntimeId}", statusMessage.TaskRuntimeId);
         }
     }
 
@@ -540,7 +544,7 @@ public sealed partial class TaskRuntimeEventListenerService(
         var nextAttempt = failedRun.Attempt + 1;
         var delaySeconds = task.RetryPolicy.BackoffBaseSeconds * Math.Pow(task.RetryPolicy.BackoffMultiplier, failedRun.Attempt - 1);
 
-        logger.LogInformation("Scheduling retry {Attempt}/{Max} for run {RunId} in {Delay}s",
+        logger.ZLogInformation("Scheduling retry {Attempt}/{Max} for run {RunId} in {Delay}s",
             nextAttempt, maxAttempts, failedRun.Id, delaySeconds);
 
         await Task.Delay(TimeSpan.FromSeconds(Math.Min(delaySeconds, 300)));
@@ -561,12 +565,12 @@ public sealed partial class TaskRuntimeEventListenerService(
             var dispatched = await dispatcher.DispatchNextQueuedRunForTaskAsync(taskId, CancellationToken.None);
             if (dispatched)
             {
-                logger.LogInformation("Dispatched next queued run for task {TaskId}", taskId);
+                logger.ZLogInformation("Dispatched next queued run for task {TaskId}", taskId);
             }
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed dispatching next queued run for task {TaskId}", taskId);
+            logger.ZLogWarning(ex, "Failed dispatching next queued run for task {TaskId}", taskId);
         }
     }
 
@@ -645,7 +649,7 @@ public sealed partial class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to persist run artifact {ArtifactPath} for run {RunId}", artifactPath, runId);
+                logger.ZLogWarning(ex, "Failed to persist run artifact {ArtifactPath} for run {RunId}", artifactPath, runId);
             }
         }
     }
@@ -661,5 +665,73 @@ public sealed partial class TaskRuntimeEventListenerService(
         await base.StopAsync(cancellationToken);
     }
 
+    private sealed class NullRunStructuredViewService : IRunStructuredViewService
+    {
+        public static readonly NullRunStructuredViewService Instance = new();
 
+        public Task<RunStructuredProjectionDelta> ApplyStructuredEventAsync(RunStructuredEventDocument structuredEvent, CancellationToken cancellationToken)
+        {
+            var snapshot = new RunStructuredViewSnapshot(
+                structuredEvent.RunId,
+                structuredEvent.Sequence,
+                [],
+                [],
+                [],
+                null,
+                structuredEvent.CreatedAtUtc == default ? DateTime.UtcNow : structuredEvent.CreatedAtUtc);
+            return Task.FromResult(new RunStructuredProjectionDelta(snapshot, null, null));
+        }
+
+        public Task<RunStructuredViewSnapshot> GetViewAsync(string runId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new RunStructuredViewSnapshot(runId, 0, [], [], [], null, DateTime.UtcNow));
+        }
+    }
+
+    private sealed class TaskRuntimeHubConnection
+    {
+        public required string TaskRuntimeId { get; init; }
+        public required string Endpoint { get; init; }
+        public required CancellationTokenSource Cancellation { get; init; }
+        public Task? ConnectionTask { get; set; }
+        private ITaskRuntimeEventHub? _hub;
+        private readonly SemaphoreSlim _hubLock = new(1, 1);
+
+        public static TaskRuntimeHubConnection Create(string runtimeId, string endpoint)
+        {
+            return new TaskRuntimeHubConnection
+            {
+                TaskRuntimeId = runtimeId,
+                Endpoint = endpoint,
+                Cancellation = new CancellationTokenSource(),
+            };
+        }
+
+        public void SetHub(ITaskRuntimeEventHub hub)
+        {
+            _hub = hub;
+        }
+
+        public async Task DisposeHubAsync()
+        {
+            await _hubLock.WaitAsync();
+            try
+            {
+                if (_hub is null)
+                {
+                    return;
+                }
+
+                await _hub.DisposeAsync();
+                _hub = null;
+            }
+            catch
+            {
+            }
+            finally
+            {
+                _hubLock.Release();
+            }
+        }
+    }
 }

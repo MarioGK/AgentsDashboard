@@ -8,7 +8,7 @@ using AgentsDashboard.Contracts.TaskRuntime;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 
-public sealed partial class OpenCodeSseRuntime(
+public sealed class OpenCodeSseRuntime(
     SecretRedactor secretRedactor,
     ILogger<OpenCodeSseRuntime> logger) : IHarnessRuntime
 {
@@ -134,7 +134,7 @@ public sealed partial class OpenCodeSseRuntime(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "OpenCode SSE runtime failed for run {RunId}", request.RunId);
+            logger.ZLogError(ex, "OpenCode SSE runtime failed for run {RunId}", request.RunId);
 
             var error = Redact(ex.Message, request.Environment);
             await sink.PublishAsync(
@@ -986,7 +986,7 @@ public sealed partial class OpenCodeSseRuntime(
             throw new InvalidOperationException("OpenCode server startup failed.");
         }
 
-        logger.LogInformation("Started OpenCode server for run runtime at {BaseUrl}", uri);
+        logger.ZLogInformation("Started OpenCode server for run runtime at {BaseUrl}", uri);
         return new OpenCodeServerHandle(client, process, stdoutPump, stderrPump);
     }
 
@@ -1212,4 +1212,43 @@ public sealed partial class OpenCodeSseRuntime(
         return secretRedactor.Redact(value, environment);
     }
 
+    private sealed class OpenCodeServerHandle : IAsyncDisposable
+    {
+        private readonly Process? _process;
+        private readonly Task _stdoutPump;
+        private readonly Task _stderrPump;
+
+        public OpenCodeServerHandle(
+            OpenCodeApiClient client,
+            Process? process = null,
+            Task? stdoutPump = null,
+            Task? stderrPump = null)
+        {
+            Client = client;
+            _process = process;
+            _stdoutPump = stdoutPump ?? Task.CompletedTask;
+            _stderrPump = stderrPump ?? Task.CompletedTask;
+        }
+
+        public OpenCodeApiClient Client { get; }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_process is not null)
+            {
+                await StopProcessAsync(_process);
+            }
+
+            try
+            {
+                await Task.WhenAll(_stdoutPump, _stderrPump);
+            }
+            catch
+            {
+            }
+
+            Client.Dispose();
+            _process?.Dispose();
+        }
+    }
 }

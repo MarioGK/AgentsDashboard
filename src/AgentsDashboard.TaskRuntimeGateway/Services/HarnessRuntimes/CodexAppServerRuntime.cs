@@ -8,7 +8,7 @@ using AgentsDashboard.Contracts.TaskRuntime;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
 
-public sealed partial class CodexAppServerRuntime(
+public sealed class CodexAppServerRuntime(
     SecretRedactor secretRedactor,
     ILogger<CodexAppServerRuntime> logger) : IHarnessRuntime
 {
@@ -863,11 +863,12 @@ public sealed partial class CodexAppServerRuntime(
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to kill codex app-server process.");
+            logger.ZLogDebug(ex, "Failed to kill codex app-server process.");
         }
     }
 
     private static string ThisAssemblyVersion =>
         typeof(CodexAppServerRuntime).Assembly.GetName().Version?.ToString() ?? "1.0.0";
 
+    private sealed record TurnCompletion(string ThreadId, string TurnId, string Status, string Error);
 }

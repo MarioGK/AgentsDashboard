@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public partial class WorkflowExecutor(
+public class WorkflowExecutor(
     IOrchestratorStore store,
     RunDispatcher dispatcher,
     IContainerReaper containerReaper,
@@ -32,7 +32,7 @@ public partial class WorkflowExecutor(
 
         execution = await store.CreateWorkflowExecutionAsync(execution, cancellationToken);
 
-        logger.LogInformation("Starting workflow execution {ExecutionId} for workflow {WorkflowId} with {StageCount} stages",
+        logger.ZLogInformation("Starting workflow execution {ExecutionId} for workflow {WorkflowId} with {StageCount} stages",
             execution.Id, workflow.Id, workflow.Stages.Count);
 
         _ = Task.Run(async () =>
@@ -43,7 +43,7 @@ public partial class WorkflowExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Unhandled exception in workflow execution {ExecutionId}", execution.Id);
+                logger.ZLogError(ex, "Unhandled exception in workflow execution {ExecutionId}", execution.Id);
                 await store.MarkWorkflowExecutionCompletedAsync(
                     execution.Id,
                     WorkflowExecutionState.Failed,
@@ -67,7 +67,7 @@ public partial class WorkflowExecutor(
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                logger.LogInformation("Workflow execution {ExecutionId} cancelled at stage {StageIndex}", execution.Id, i);
+                logger.ZLogInformation("Workflow execution {ExecutionId} cancelled at stage {StageIndex}", execution.Id, i);
                 await store.MarkWorkflowExecutionCompletedAsync(
                     execution.Id,
                     WorkflowExecutionState.Cancelled,
@@ -79,7 +79,7 @@ public partial class WorkflowExecutor(
             var stage = orderedStages[i];
             execution.CurrentStageIndex = i;
 
-            logger.LogInformation("Executing stage {StageIndex}/{TotalStages}: {StageName} (Type: {StageType})",
+            logger.ZLogInformation("Executing stage {StageIndex}/{TotalStages}: {StageName} (Type: {StageType})",
                 i + 1, orderedStages.Count, stage.Name, stage.Type);
 
             var stageResult = new WorkflowStageResult
@@ -106,7 +106,7 @@ public partial class WorkflowExecutor(
 
                 if (!stageResult.Succeeded)
                 {
-                    logger.LogWarning("Stage {StageName} failed: {Summary}", stage.Name, stageResult.Summary);
+                    logger.ZLogWarning("Stage {StageName} failed: {Summary}", stage.Name, stageResult.Summary);
                     await store.MarkWorkflowExecutionCompletedAsync(
                         execution.Id,
                         WorkflowExecutionState.Failed,
@@ -120,11 +120,11 @@ public partial class WorkflowExecutor(
                     return;
                 }
 
-                logger.LogInformation("Stage {StageName} completed successfully: {Summary}", stage.Name, stageResult.Summary);
+                logger.ZLogInformation("Stage {StageName} completed successfully: {Summary}", stage.Name, stageResult.Summary);
             }
             catch (OperationCanceledException) when (stageCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
-                logger.LogWarning("Stage {StageName} timed out after {Timeout}", stage.Name, stageTimeout);
+                logger.ZLogWarning("Stage {StageName} timed out after {Timeout}", stage.Name, stageTimeout);
                 stageResult.Succeeded = false;
                 stageResult.Summary = $"Stage timed out after {stageTimeout.TotalMinutes:F0} minutes";
                 stageResult.EndedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
@@ -142,7 +142,7 @@ public partial class WorkflowExecutor(
             }
             catch (OperationCanceledException)
             {
-                logger.LogInformation("Workflow execution {ExecutionId} cancelled during stage {StageName}", execution.Id, stage.Name);
+                logger.ZLogInformation("Workflow execution {ExecutionId} cancelled during stage {StageName}", execution.Id, stage.Name);
                 await store.MarkWorkflowExecutionCompletedAsync(
                     execution.Id,
                     WorkflowExecutionState.Cancelled,
@@ -152,7 +152,7 @@ public partial class WorkflowExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Exception during stage {StageName} execution", stage.Name);
+                logger.ZLogError(ex, "Exception during stage {StageName} execution", stage.Name);
                 stageResult.Succeeded = false;
                 stageResult.Summary = $"Exception: {ex.Message}";
                 stageResult.EndedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
@@ -167,7 +167,7 @@ public partial class WorkflowExecutor(
             }
         }
 
-        logger.LogInformation("Workflow execution {ExecutionId} completed successfully", execution.Id);
+        logger.ZLogInformation("Workflow execution {ExecutionId} completed successfully", execution.Id);
         await store.MarkWorkflowExecutionCompletedAsync(
             execution.Id,
             WorkflowExecutionState.Succeeded,
@@ -225,7 +225,7 @@ public partial class WorkflowExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to kill container for run {RunId}", runId);
+                logger.ZLogWarning(ex, "Failed to kill container for run {RunId}", runId);
             }
         }
     }
@@ -261,13 +261,13 @@ public partial class WorkflowExecutor(
         var run = await store.CreateRunAsync(task, cancellationToken);
         result.RunIds.Add(run.Id);
 
-        logger.LogInformation("Created run {RunId} for task stage {StageName} (task {TaskId})",
+        logger.ZLogInformation("Created run {RunId} for task stage {StageName} (task {TaskId})",
             run.Id, stage.Name, task.Id);
 
         var dispatched = await dispatcher.DispatchAsync(repository, task, run, cancellationToken);
         if (!dispatched)
         {
-            logger.LogInformation(
+            logger.ZLogInformation(
                 "Run {RunId} for workflow stage {StageName} was queued; waiting for terminal state",
                 run.Id,
                 stage.Name);
@@ -328,7 +328,7 @@ public partial class WorkflowExecutor(
         WorkflowExecutionDocument execution,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation("Stage {StageName} requires approval", stage.Name);
+        logger.ZLogInformation("Stage {StageName} requires approval", stage.Name);
 
         await store.MarkWorkflowExecutionPendingApprovalAsync(execution.Id, stage.Id, cancellationToken);
 
@@ -391,7 +391,7 @@ public partial class WorkflowExecutor(
             return;
         }
 
-        logger.LogInformation("Stage {StageName} delaying for {DelaySeconds} seconds", stage.Name, delaySeconds);
+        logger.ZLogInformation("Stage {StageName} delaying for {DelaySeconds} seconds", stage.Name, delaySeconds);
 
         try
         {
@@ -429,7 +429,7 @@ public partial class WorkflowExecutor(
             return;
         }
 
-        logger.LogInformation("Stage {StageName} executing {TaskCount} tasks in parallel", stage.Name, parallelTaskIds.Count);
+        logger.ZLogInformation("Stage {StageName} executing {TaskCount} tasks in parallel", stage.Name, parallelTaskIds.Count);
 
         var tasks = new List<Task<ParallelRunResult>>();
 
@@ -480,7 +480,7 @@ public partial class WorkflowExecutor(
             return;
         }
 
-        logger.LogInformation("Stage {StageName} executing Agent Team with {MemberCount} members", stage.Name, members.Count);
+        logger.ZLogInformation("Stage {StageName} executing Agent Team with {MemberCount} members", stage.Name, members.Count);
 
         var memberTasks = members
             .Select((member, index) => ExecuteAgentTeamMemberAsync(
@@ -672,12 +672,12 @@ public partial class WorkflowExecutor(
             dispatchTask,
             cancellationToken,
             executionModeOverride: executionModeOverride);
-        logger.LogInformation("Created run {RunId} for workflow lane {LaneLabel}", run.Id, laneLabel);
+        logger.ZLogInformation("Created run {RunId} for workflow lane {LaneLabel}", run.Id, laneLabel);
 
         var dispatched = await dispatcher.DispatchAsync(repository, dispatchTask, run, cancellationToken);
         if (!dispatched)
         {
-            logger.LogInformation(
+            logger.ZLogInformation(
                 "Run {RunId} for workflow lane {LaneLabel} was queued; waiting for terminal state",
                 run.Id,
                 laneLabel);
@@ -946,6 +946,7 @@ public partial class WorkflowExecutor(
         task.InstructionFiles.Add(instruction);
     }
 
+    private sealed record ParallelRunResult(bool Success, string Summary, string RunId, string LaneLabel, string Harness);
 
     public virtual async Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(
         string executionId,

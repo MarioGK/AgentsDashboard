@@ -10,16 +10,11 @@ public interface IGlobalSearchService
     Task<GlobalSearchResult> SearchAsync(GlobalSearchRequest request, CancellationToken cancellationToken);
 }
 
-public sealed partial class GlobalSearchService(
-    IRepository<RepositoryDocument> repositoryDocuments,
-    IRepository<TaskDocument> taskDocuments,
-    IRepository<RunDocument> runDocuments,
-    IRepository<FindingDocument> findingDocuments,
-    IRepository<RunLogEvent> runEvents,
-    ISemanticChunkRepository semanticChunkRepository,
+public sealed class GlobalSearchService(
+    IOrchestratorStore store,
     IWorkspaceAiService workspaceAiService,
     IHarnessOutputParserService parserService,
-    ILiteDbVectorSearchStatusService vectorSearchStatusService,
+    ISqliteVecBootstrapService sqliteVecBootstrapService,
     ILogger<GlobalSearchService> logger) : IGlobalSearchService
 {
     private static readonly Regex s_tokenRegex = new("[a-z0-9_]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -66,11 +61,7 @@ public sealed partial class GlobalSearchService(
         }
 
         var normalizedLimit = NormalizeLimit(request.Limit);
-        var repositories = await repositoryDocuments.QueryAsync(
-            query => query
-                .OrderBy(x => x.Name)
-                .ToList(),
-            cancellationToken);
+        var repositories = await store.ListRepositoriesAsync(cancellationToken);
         var scopedRepositories = repositories
             .Where(repo =>
                 string.IsNullOrWhiteSpace(request.RepositoryId) ||
@@ -87,21 +78,10 @@ public sealed partial class GlobalSearchService(
         var kinds = NormalizeKinds(request.Kinds);
 
         var tasksByRepositoryTasks = scopedRepositories
-            .Select(repository => taskDocuments.QueryAsync(
-                query => query
-                    .Where(x => x.RepositoryId == repository.Id)
-                    .OrderBy(x => x.CreatedAtUtc)
-                    .ToList(),
-                cancellationToken))
+            .Select(repository => store.ListTasksAsync(repository.Id, cancellationToken))
             .ToList();
         var findingsByRepositoryTasks = scopedRepositories
-            .Select(repository => findingDocuments.QueryAsync(
-                query => query
-                    .Where(x => x.RepositoryId == repository.Id)
-                    .OrderByDescending(x => x.CreatedAtUtc)
-                    .Take(200)
-                    .ToList(),
-                cancellationToken))
+            .Select(repository => store.ListFindingsAsync(repository.Id, cancellationToken))
             .ToList();
         await Task.WhenAll(tasksByRepositoryTasks.Cast<Task>().Concat(findingsByRepositoryTasks));
 
@@ -198,7 +178,7 @@ public sealed partial class GlobalSearchService(
             candidates,
             normalizedQuery,
             semanticSignals,
-            vectorSearchStatusService.IsAvailable);
+            sqliteVecBootstrapService.IsAvailable);
 
         var orderedHits = scoredHits
             .OrderByDescending(hit => hit.Score)
@@ -217,7 +197,7 @@ public sealed partial class GlobalSearchService(
             .Take(normalizedLimit)
             .ToList();
 
-        logger.LogDebug(
+        logger.ZLogDebug(
             "Global search '{Query}' produced {HitCount} hits ({TotalMatches} total matches)",
             normalizedQuery,
             hits.Count,
@@ -225,8 +205,8 @@ public sealed partial class GlobalSearchService(
 
         return new GlobalSearchResult(
             Query: normalizedQuery,
-            LiteDbVectorAvailable: vectorSearchStatusService.IsAvailable,
-            LiteDbVectorDetail: BuildSearchDetail(queryEmbedding),
+            SqliteVecAvailable: sqliteVecBootstrapService.IsAvailable,
+            SqliteVecDetail: BuildSearchDetail(queryEmbedding),
             TotalMatches: orderedHits.Count,
             CountsByKind: countsByKind,
             Hits: hits);
@@ -262,23 +242,11 @@ public sealed partial class GlobalSearchService(
     {
         if (!string.IsNullOrWhiteSpace(request.TaskId))
         {
-            return await runDocuments.QueryAsync(
-                query => query
-                    .Where(x => x.TaskId == request.TaskId)
-                    .OrderByDescending(x => x.CreatedAtUtc)
-                    .Take(500)
-                    .ToList(),
-                cancellationToken);
+            return await store.ListRunsByTaskAsync(request.TaskId, 500, cancellationToken);
         }
 
         var runTasks = scopedRepositories
-            .Select(repository => runDocuments.QueryAsync(
-                query => query
-                    .Where(x => x.RepositoryId == repository.Id)
-                    .OrderByDescending(x => x.CreatedAtUtc)
-                    .Take(200)
-                    .ToList(),
-                cancellationToken))
+            .Select(repository => store.ListRunsByRepositoryAsync(repository.Id, cancellationToken))
             .ToList();
         await Task.WhenAll(runTasks);
 
@@ -303,12 +271,7 @@ public sealed partial class GlobalSearchService(
             .Take(MaxRunLogRuns)
             .ToList();
         var logTasks = selectedRuns
-            .Select(run => runEvents.QueryAsync(
-                query => query
-                    .Where(x => x.RunId == run.Id)
-                    .OrderBy(x => x.TimestampUtc)
-                    .ToList(),
-                cancellationToken))
+            .Select(run => store.ListRunLogsAsync(run.Id, cancellationToken))
             .ToList();
         await Task.WhenAll(logTasks);
 
@@ -347,7 +310,7 @@ public sealed partial class GlobalSearchService(
 
             try
             {
-                var chunks = await semanticChunkRepository.SearchAsync(
+                var chunks = await store.SearchWorkspaceSemanticAsync(
                     task.Id,
                     queryText,
                     queryEmbeddingPayload,
@@ -388,7 +351,7 @@ public sealed partial class GlobalSearchService(
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "Semantic chunk lookup failed for task {TaskId}", task.Id);
+                logger.ZLogDebug(ex, "Semantic chunk lookup failed for task {TaskId}", task.Id);
             }
         }
 
@@ -590,7 +553,7 @@ public sealed partial class GlobalSearchService(
         IReadOnlyList<SearchCandidate> candidates,
         string queryText,
         IReadOnlyDictionary<string, double> semanticSignals,
-        bool liteDbVectorAvailable)
+        bool sqliteVecAvailable)
     {
         var normalizedQuery = NormalizeForSearch(queryText);
         var queryTokens = Tokenize(normalizedQuery).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -633,7 +596,7 @@ public sealed partial class GlobalSearchService(
             }
 
             var recencyBonus = CalculateRecencyBonus(candidate.TimestampUtc);
-            var vectorWeight = liteDbVectorAvailable ? 5.6 : 3.6;
+            var vectorWeight = sqliteVecAvailable ? 5.6 : 3.6;
             var score = (keywordScore * 0.74) + (lexicalSemanticScore * 2.2) + (vectorSemanticScore * vectorWeight) + recencyBonus;
 
             if (score <= 0)
@@ -663,36 +626,36 @@ public sealed partial class GlobalSearchService(
 
     private string? BuildSearchDetail(WorkspaceEmbeddingResult queryEmbedding)
     {
-        var vectorDetail = vectorSearchStatusService.Status.Detail;
+        var sqliteDetail = sqliteVecBootstrapService.Status.Detail;
         if (!queryEmbedding.Success)
         {
-            return vectorDetail;
+            return sqliteDetail;
         }
 
         if (!queryEmbedding.UsedFallback)
         {
-            return vectorDetail;
+            return sqliteDetail;
         }
 
-        if (string.IsNullOrWhiteSpace(vectorDetail))
+        if (string.IsNullOrWhiteSpace(sqliteDetail))
         {
             return queryEmbedding.Message;
         }
 
         if (string.IsNullOrWhiteSpace(queryEmbedding.Message))
         {
-            return vectorDetail;
+            return sqliteDetail;
         }
 
-        return $"{vectorDetail} | {queryEmbedding.Message}";
+        return $"{sqliteDetail} | {queryEmbedding.Message}";
     }
 
     private GlobalSearchResult BuildEmptyResult(string query)
     {
         return new GlobalSearchResult(
             Query: query,
-            LiteDbVectorAvailable: vectorSearchStatusService.IsAvailable,
-            LiteDbVectorDetail: vectorSearchStatusService.Status.Detail,
+            SqliteVecAvailable: sqliteVecBootstrapService.IsAvailable,
+            SqliteVecDetail: sqliteVecBootstrapService.Status.Detail,
             TotalMatches: 0,
             CountsByKind: [],
             Hits: []);
@@ -983,4 +946,17 @@ public sealed partial class GlobalSearchService(
         return token;
     }
 
+    private sealed record SearchCandidate(
+        GlobalSearchKind Kind,
+        string Id,
+        string RepositoryId,
+        string RepositoryName,
+        string? TaskId,
+        string? TaskName,
+        string? RunId,
+        string Title,
+        string Body,
+        string? State,
+        DateTime TimestampUtc,
+        string? SemanticKey);
 }

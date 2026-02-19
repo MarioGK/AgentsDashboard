@@ -3,13 +3,14 @@ using CliWrap.Buffered;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
-
-public sealed partial class TaskRuntimeHarnessToolHealthService
+public sealed class TaskRuntimeHarnessToolHealthService
 {
     private static readonly ToolDefinition[] Tools =
     [
         new("codex", "Codex"),
-        new("opencode", "OpenCode")
+        new("opencode", "OpenCode"),
+        new("claude-code", "Claude Code"),
+        new("zai", "Z.ai")
     ];
 
     public async Task<IReadOnlyList<TaskRuntimeHarnessToolHealth>> GetHarnessToolsAsync(CancellationToken cancellationToken)
@@ -70,4 +71,11 @@ public sealed partial class TaskRuntimeHarnessToolHealthService
         }
     }
 
+    private sealed record ToolDefinition(string Command, string DisplayName);
 }
+
+public sealed record TaskRuntimeHarnessToolHealth(
+    string Command,
+    string DisplayName,
+    string Status,
+    string? Version);

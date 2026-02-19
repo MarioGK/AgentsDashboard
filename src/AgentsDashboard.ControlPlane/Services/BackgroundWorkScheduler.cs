@@ -3,7 +3,7 @@ using System.Threading.Channels;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed partial class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> logger)
+public sealed class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> logger)
     : BackgroundService, IBackgroundWorkCoordinator
 {
     private const int MaxRetainedSnapshots = 256;
@@ -150,7 +150,7 @@ public sealed partial class BackgroundWorkScheduler(ILogger<BackgroundWorkSchedu
                 }
                 catch (Exception ex)
                 {
-                    logger.LogDebug(ex, "Background work scheduler observed exception while draining outstanding tasks.");
+                    logger.ZLogDebug(ex, "Background work scheduler observed exception while draining outstanding tasks.");
                 }
             }
         }
@@ -216,11 +216,11 @@ public sealed partial class BackgroundWorkScheduler(ILogger<BackgroundWorkSchedu
 
             if (workItem.IsCritical)
             {
-                logger.LogError(ex, "Critical background work failed for {OperationKey}", workItem.OperationKey);
+                logger.ZLogError(ex, "Critical background work failed for {OperationKey}", workItem.OperationKey);
             }
             else
             {
-                logger.LogWarning(ex, "Background work failed for {OperationKey}", workItem.OperationKey);
+                logger.ZLogWarning(ex, "Background work failed for {OperationKey}", workItem.OperationKey);
             }
         }
         finally
@@ -351,7 +351,7 @@ public sealed partial class BackgroundWorkScheduler(ILogger<BackgroundWorkSchedu
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to deliver background work update for {WorkId}", snapshot.WorkId);
+                logger.ZLogWarning(ex, "Failed to deliver background work update for {WorkId}", snapshot.WorkId);
             }
         }
     }
@@ -361,4 +361,11 @@ public sealed partial class BackgroundWorkScheduler(ILogger<BackgroundWorkSchedu
         return state is BackgroundWorkState.Pending or BackgroundWorkState.Running;
     }
 
+    private sealed record QueuedBackgroundWork(
+        string WorkId,
+        string OperationKey,
+        BackgroundWorkKind Kind,
+        Func<CancellationToken, IProgress<BackgroundWorkSnapshot>, Task> Work,
+        bool DedupeByOperationKey,
+        bool IsCritical);
 }

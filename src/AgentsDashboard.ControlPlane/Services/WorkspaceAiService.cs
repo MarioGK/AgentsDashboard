@@ -40,11 +40,528 @@ public interface IWorkspaceAiService
         CancellationToken cancellationToken);
 }
 
-
-
 public sealed record WorkspaceAiTextResult(
     bool Success,
     string Text,
     bool UsedFallback,
     bool KeyConfigured,
     string? Message);
+
+public sealed record WorkspaceEmbeddingResult(
+    bool Success,
+    string Payload,
+    int Dimensions,
+    string Model,
+    bool UsedFallback,
+    bool KeyConfigured,
+    string? Message);
+
+public sealed class WorkspaceAiService(
+    IOrchestratorStore store,
+    ISecretCryptoService secretCryptoService,
+    LlmTornadoGatewayService llmTornadoGatewayService,
+    IHarnessOutputParserService parserService,
+    ILogger<WorkspaceAiService> logger) : IWorkspaceAiService
+{
+    private static readonly string[] s_defaultEmbeddingModelCandidates =
+    [
+        "embedding-3",
+        "text-embedding-3-small"
+    ];
+
+    private const int MaxEmbeddingInputCharacters = 6000;
+    private const int FallbackEmbeddingDimensions = 128;
+
+    public async Task<WorkspaceAiTextResult> SuggestPromptContinuationAsync(
+        string repositoryId,
+        string prompt,
+        string? context,
+        CancellationToken cancellationToken)
+    {
+        var fallback = BuildFallbackPromptContinuation(prompt);
+        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                fallback,
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "AI key not configured; returned heuristic continuation.");
+        }
+
+        var result = await llmTornadoGatewayService.SuggestPromptContinuationAsync(
+            prompt,
+            context,
+            apiKey,
+            cancellationToken);
+
+        if (result.Success && !string.IsNullOrWhiteSpace(result.Text))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                result.Text,
+                UsedFallback: false,
+                KeyConfigured: true,
+                Message: null);
+        }
+
+        return new WorkspaceAiTextResult(
+            true,
+            fallback,
+            UsedFallback: true,
+            KeyConfigured: true,
+            Message: result.Error ?? "AI continuation failed; returned heuristic continuation.");
+    }
+
+    public async Task<WorkspaceAiTextResult> ImprovePromptAsync(
+        string repositoryId,
+        string prompt,
+        string? context,
+        CancellationToken cancellationToken)
+    {
+        var fallback = BuildFallbackPromptImprovement(prompt);
+        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                fallback,
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "AI key not configured; returned heuristic prompt improvement.");
+        }
+
+        var result = await llmTornadoGatewayService.ImprovePromptAsync(
+            prompt,
+            context,
+            apiKey,
+            cancellationToken);
+
+        if (result.Success && !string.IsNullOrWhiteSpace(result.Text))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                result.Text,
+                UsedFallback: false,
+                KeyConfigured: true,
+                Message: null);
+        }
+
+        return new WorkspaceAiTextResult(
+            true,
+            fallback,
+            UsedFallback: true,
+            KeyConfigured: true,
+            Message: result.Error ?? "AI improvement failed; returned heuristic prompt improvement.");
+    }
+
+    public async Task<WorkspaceAiTextResult> GeneratePromptFromContextAsync(
+        string repositoryId,
+        string context,
+        CancellationToken cancellationToken)
+    {
+        var fallback = BuildFallbackGeneratedPrompt(context);
+        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                fallback,
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "AI key not configured; returned template prompt.");
+        }
+
+        var result = await llmTornadoGatewayService.GeneratePromptFromContextAsync(
+            context,
+            apiKey,
+            cancellationToken);
+
+        if (result.Success && !string.IsNullOrWhiteSpace(result.Text))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                result.Text,
+                UsedFallback: false,
+                KeyConfigured: true,
+                Message: null);
+        }
+
+        return new WorkspaceAiTextResult(
+            true,
+            fallback,
+            UsedFallback: true,
+            KeyConfigured: true,
+            Message: result.Error ?? "AI generation failed; returned template prompt.");
+    }
+
+    public async Task<WorkspaceAiTextResult> SummarizeRunOutputAsync(
+        string repositoryId,
+        string outputJson,
+        IReadOnlyList<RunLogEvent> runLogs,
+        CancellationToken cancellationToken)
+    {
+        var fallback = BuildFallbackRunSummary(outputJson, runLogs);
+        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                fallback,
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "AI key not configured; returned parser-based summary.");
+        }
+
+        var logText = string.Join(
+            Environment.NewLine,
+            runLogs
+                .OrderBy(x => x.TimestampUtc)
+                .TakeLast(250)
+                .Select(x => $"[{x.TimestampUtc:O}] {x.Level}: {x.Message}"));
+
+        var result = await llmTornadoGatewayService.SummarizeRunOutputAsync(
+            outputJson,
+            logText,
+            apiKey,
+            cancellationToken);
+
+        if (result.Success && !string.IsNullOrWhiteSpace(result.Text))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                result.Text,
+                UsedFallback: false,
+                KeyConfigured: true,
+                Message: null);
+        }
+
+        return new WorkspaceAiTextResult(
+            true,
+            fallback,
+            UsedFallback: true,
+            KeyConfigured: true,
+            Message: result.Error ?? "AI summarization failed; returned parser-based summary.");
+    }
+
+    public async Task<WorkspaceEmbeddingResult> CreateEmbeddingAsync(
+        string repositoryId,
+        string text,
+        CancellationToken cancellationToken)
+    {
+        var normalizedText = NormalizeForEmbedding(text);
+        if (normalizedText.Length == 0)
+        {
+            return new WorkspaceEmbeddingResult(
+                Success: false,
+                Payload: string.Empty,
+                Dimensions: 0,
+                Model: string.Empty,
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "Embedding input is empty.");
+        }
+
+        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            var fallbackPayload = BuildDeterministicEmbeddingPayload(normalizedText, FallbackEmbeddingDimensions);
+            return new WorkspaceEmbeddingResult(
+                Success: true,
+                Payload: fallbackPayload,
+                Dimensions: FallbackEmbeddingDimensions,
+                Model: "deterministic-fallback",
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "AI key not configured; using deterministic fallback embedding.");
+        }
+
+        try
+        {
+            var api = new TornadoApi(LLmProviders.Zai, apiKey);
+            var modelCandidates = ResolveEmbeddingModelCandidates();
+
+            foreach (var modelName in modelCandidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                try
+                {
+                    var model = new EmbeddingModel(modelName, LLmProviders.Zai);
+                    var vector = await api.Embeddings.GetEmbeddings(model, normalizedText);
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (vector is not { Length: > 0 })
+                    {
+                        continue;
+                    }
+
+                    return new WorkspaceEmbeddingResult(
+                        Success: true,
+                        Payload: SerializeEmbeddingPayload(vector),
+                        Dimensions: vector.Length,
+                        Model: modelName,
+                        UsedFallback: false,
+                        KeyConfigured: true,
+                        Message: null);
+                }
+                catch (Exception ex)
+                {
+                    logger.ZLogDebug(ex, "Embedding generation failed for model {ModelName}", modelName);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.ZLogWarning(ex, "Failed to initialize Z.ai embedding client");
+        }
+
+        var fallback = BuildDeterministicEmbeddingPayload(normalizedText, FallbackEmbeddingDimensions);
+        return new WorkspaceEmbeddingResult(
+            Success: true,
+            Payload: fallback,
+            Dimensions: FallbackEmbeddingDimensions,
+            Model: "deterministic-fallback",
+            UsedFallback: true,
+            KeyConfigured: true,
+            Message: "Embedding API unavailable; using deterministic fallback embedding.");
+    }
+
+    private async Task<string?> ResolveApiKeyAsync(string repositoryId, CancellationToken cancellationToken)
+    {
+        var candidates = new[]
+        {
+            (RepositoryId: repositoryId, Provider: "llmtornado"),
+            (RepositoryId: repositoryId, Provider: "zai"),
+            (RepositoryId: "global", Provider: "llmtornado"),
+            (RepositoryId: "global", Provider: "zai"),
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var secret = await store.GetProviderSecretAsync(candidate.RepositoryId, candidate.Provider, cancellationToken);
+            if (secret is null || string.IsNullOrWhiteSpace(secret.EncryptedValue))
+            {
+                continue;
+            }
+
+            try
+            {
+                var decrypted = secretCryptoService.Decrypt(secret.EncryptedValue);
+                if (!string.IsNullOrWhiteSpace(decrypted))
+                {
+                    return decrypted;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.ZLogWarning(
+                    ex,
+                    "Failed to decrypt provider secret for repository {RepositoryId} and provider {Provider}",
+                    candidate.RepositoryId,
+                    candidate.Provider);
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> ResolveEmbeddingModelCandidates()
+    {
+        var configured = Environment.GetEnvironmentVariable("WORKSPACE_EMBEDDING_MODEL");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return [configured.Trim()];
+        }
+
+        return s_defaultEmbeddingModelCandidates;
+    }
+
+    private static string NormalizeForEmbedding(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var normalized = text.Trim();
+        return normalized.Length <= MaxEmbeddingInputCharacters
+            ? normalized
+            : normalized[..MaxEmbeddingInputCharacters];
+    }
+
+    private static string SerializeEmbeddingPayload(float[] embedding)
+    {
+        if (embedding.Length == 0)
+        {
+            return "[]";
+        }
+
+        return $"[{string.Join(",", embedding.Select(value => value.ToString("R", CultureInfo.InvariantCulture)))}]";
+    }
+
+    private static string BuildDeterministicEmbeddingPayload(string text, int dimensions)
+    {
+        if (dimensions <= 0)
+        {
+            dimensions = FallbackEmbeddingDimensions;
+        }
+
+        var vector = new double[dimensions];
+        var tokens = text
+            .Split([' ', '\n', '\r', '\t', ',', '.', ';', ':', '!', '?', '(', ')', '[', ']', '{', '}', '"', '\''],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(token => token.Length > 1)
+            .Take(400)
+            .ToList();
+
+        if (tokens.Count == 0)
+        {
+            return $"[{string.Join(",", Enumerable.Repeat("0", dimensions))}]";
+        }
+
+        foreach (var token in tokens)
+        {
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token.ToLowerInvariant()));
+            var bucket = ((hash[0] << 8) | hash[1]) % dimensions;
+            var sign = (hash[2] & 1) == 0 ? 1d : -1d;
+            var magnitude = (hash[3] / 255d) + 0.05d;
+            vector[bucket] += sign * magnitude;
+        }
+
+        var norm = Math.Sqrt(vector.Sum(value => value * value));
+        if (norm > 0d)
+        {
+            for (var i = 0; i < vector.Length; i++)
+            {
+                vector[i] /= norm;
+            }
+        }
+
+        return $"[{string.Join(",", vector.Select(value => value.ToString("0.######", CultureInfo.InvariantCulture)))}]";
+    }
+
+    private static string BuildFallbackPromptContinuation(string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return "Add goal, constraints, validation checks, and expected output format.";
+        }
+
+        var normalized = prompt.Trim();
+        if (normalized.EndsWith(':'))
+        {
+            return "\n- Add concrete steps\n- Define validation checks\n- Define expected output";
+        }
+
+        return "\n\nValidation checks:\n- Build passes\n- Tests pass\n\nExpected output format:\n- Structured summary with actions and artifacts";
+    }
+
+    private static string BuildFallbackPromptImprovement(string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return "Goal:\n- Describe the intended outcome\n\nRequired steps:\n- Implement changes\n- Validate behavior\n\nExpected output format:\n- Brief summary plus verification evidence";
+        }
+
+        var normalized = prompt.Trim();
+        var builder = new StringBuilder(normalized);
+
+        if (!normalized.Contains("Validation", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.AppendLine();
+            builder.AppendLine();
+            builder.AppendLine("Validation checks:");
+            builder.AppendLine("- Build succeeds");
+            builder.AppendLine("- Relevant tests pass");
+        }
+
+        if (!normalized.Contains("Expected output", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.AppendLine();
+            builder.AppendLine("Expected output format:");
+            builder.AppendLine("- Concise summary of changes");
+            builder.AppendLine("- Verification results");
+            builder.AppendLine("- Risks or follow-ups");
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string BuildFallbackGeneratedPrompt(string context)
+    {
+        var normalizedContext = string.IsNullOrWhiteSpace(context)
+            ? "No context provided"
+            : context.Trim();
+
+        return $"""
+Goal:
+- {normalizedContext}
+
+Constraints:
+- Keep scope focused and deterministic.
+- Preserve existing behavior unless explicitly requested.
+
+Required steps:
+- Inspect relevant files and dependencies.
+- Implement minimal, correct changes.
+- Validate with focused checks.
+
+Validation checks:
+- Build succeeds.
+- Behavior matches requested goal.
+
+Expected output format:
+- Summary of changes
+- Verification performed
+- Remaining risks
+""";
+    }
+
+    private string BuildFallbackRunSummary(string outputJson, IReadOnlyList<RunLogEvent> runLogs)
+    {
+        var parsed = parserService.Parse(outputJson, runLogs);
+
+        var lines = new List<string>
+        {
+            $"Status: {parsed.Status}",
+        };
+
+        if (!string.IsNullOrWhiteSpace(parsed.Summary))
+        {
+            lines.Add($"Summary: {parsed.Summary}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(parsed.Error))
+        {
+            lines.Add($"Error: {parsed.Error}");
+        }
+
+        var artifactSection = parsed.Sections.FirstOrDefault(x =>
+            string.Equals(x.Key, "artifacts", StringComparison.OrdinalIgnoreCase));
+        if (artifactSection is not null && artifactSection.Fields.Count > 0)
+        {
+            lines.Add($"Artifacts: {artifactSection.Fields.Count}");
+        }
+
+        if (parsed.ToolCallGroups.Count > 0)
+        {
+            lines.Add($"Tool calls: {parsed.ToolCallGroups.Count}");
+        }
+
+        var latestErrorLog = runLogs
+            .OrderByDescending(x => x.TimestampUtc)
+            .FirstOrDefault(x => x.Level.Contains("error", StringComparison.OrdinalIgnoreCase));
+        if (latestErrorLog is not null)
+        {
+            lines.Add($"Latest error log: {latestErrorLog.Message}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+}

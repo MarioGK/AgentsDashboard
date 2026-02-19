@@ -6,7 +6,7 @@ using CliWrap.Buffered;
 
 namespace AgentsDashboard.ControlPlane.Services;
 
-public sealed partial class DevelopmentSelfRepositoryBootstrapService(
+public sealed class DevelopmentSelfRepositoryBootstrapService(
     IHostEnvironment hostEnvironment,
     IBackgroundWorkCoordinator backgroundWorkCoordinator,
     IOrchestratorStore store,
@@ -29,7 +29,7 @@ public sealed partial class DevelopmentSelfRepositoryBootstrapService(
             dedupeByOperationKey: true,
             isCritical: false);
 
-        logger.LogInformation("Queued development self-repository bootstrap background work {WorkId}", workId);
+        logger.ZLogInformation("Queued development self-repository bootstrap background work {WorkId}", workId);
         return Task.CompletedTask;
     }
 
@@ -52,7 +52,7 @@ public sealed partial class DevelopmentSelfRepositoryBootstrapService(
         var repositorySeed = await TryResolveRepositorySeedAsync(cancellationToken);
         if (repositorySeed is null)
         {
-            logger.LogDebug("Skipped development repository bootstrap because current directory is not a git workspace with origin.");
+            logger.ZLogDebug("Skipped development repository bootstrap because current directory is not a git workspace with origin.");
             progress.Report(new BackgroundWorkSnapshot(
                 WorkId: string.Empty,
                 OperationKey: string.Empty,
@@ -93,7 +93,7 @@ public sealed partial class DevelopmentSelfRepositoryBootstrapService(
                     repositorySeed.DefaultBranch),
                 cancellationToken);
 
-            logger.LogInformation(
+            logger.ZLogInformation(
                 "Development repository bootstrap created repository {RepositoryId} at {LocalPath}",
                 repository.Id,
                 repository.LocalPath);
@@ -117,7 +117,7 @@ public sealed partial class DevelopmentSelfRepositoryBootstrapService(
                     repository = updated;
                 }
 
-                logger.LogInformation(
+                logger.ZLogInformation(
                     "Development repository bootstrap updated repository {RepositoryId} at {LocalPath}",
                     existing.Id,
                     repositorySeed.LocalPath);
@@ -143,7 +143,7 @@ public sealed partial class DevelopmentSelfRepositoryBootstrapService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(
+            logger.ZLogWarning(
                 ex,
                 "Development repository bootstrap could not refresh git status for {RepositoryId}",
                 repository.Id);
@@ -266,4 +266,5 @@ public sealed partial class DevelopmentSelfRepositoryBootstrapService(
         return string.IsNullOrWhiteSpace(output) ? null : output;
     }
 
+    private sealed record RepositorySeed(string Name, string GitUrl, string LocalPath, string DefaultBranch);
 }

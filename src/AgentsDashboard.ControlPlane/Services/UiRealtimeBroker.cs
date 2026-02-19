@@ -8,7 +8,7 @@ public interface IUiRealtimeBroker
     Task PublishAsync<TEvent>(TEvent message, CancellationToken cancellationToken = default);
 }
 
-public sealed partial class UiRealtimeBroker(ILogger<UiRealtimeBroker> logger) : IUiRealtimeBroker
+public sealed class UiRealtimeBroker(ILogger<UiRealtimeBroker> logger) : IUiRealtimeBroker
 {
     private readonly ConcurrentDictionary<Type, ConcurrentDictionary<Guid, Subscription>> _subscriptions = [];
 
@@ -60,10 +60,22 @@ public sealed partial class UiRealtimeBroker(ILogger<UiRealtimeBroker> logger) :
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to deliver UI realtime event {EventType}", typeof(TEvent).Name);
+                logger.ZLogWarning(ex, "Failed to deliver UI realtime event {EventType}", typeof(TEvent).Name);
             }
         }
     }
 
+    private sealed record Subscription(
+        Func<object, Task> Handler,
+        Func<object, bool>? Filter);
 
+    private sealed class SubscriptionToken(Action onDispose) : IDisposable
+    {
+        private Action? _onDispose = onDispose;
+
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref _onDispose, null)?.Invoke();
+        }
+    }
 }

@@ -5,7 +5,7 @@ using AgentsDashboard.TaskRuntimeGateway.Models;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
-public partial class JobProcessorService(
+public class JobProcessorService(
     ITaskRuntimeQueue queue,
     IHarnessExecutor executor,
     TaskRuntimeEventBus eventBus,
@@ -47,7 +47,7 @@ public partial class JobProcessorService(
 
             if (jobsToWait.Count > 0)
             {
-                logger.LogInformation("Waiting for {Count} running jobs to complete (timeout: {Timeout}s)...",
+                logger.ZLogInformation("Waiting for {Count} running jobs to complete (timeout: {Timeout}s)...",
                     jobsToWait.Count, _shutdownTimeout.TotalSeconds);
 
                 var timeoutTask = Task.Delay(_shutdownTimeout, CancellationToken.None);
@@ -56,17 +56,17 @@ public partial class JobProcessorService(
 
                 if (completedTask == timeoutTask)
                 {
-                    logger.LogWarning("Shutdown timeout reached, {Count} jobs still running", jobsToWait.Count);
+                    logger.ZLogWarning("Shutdown timeout reached, {Count} jobs still running", jobsToWait.Count);
                 }
                 else
                 {
-                    logger.LogInformation("All jobs completed gracefully");
+                    logger.ZLogInformation("All jobs completed gracefully");
                 }
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error during graceful shutdown");
+            logger.ZLogError(ex, "Error during graceful shutdown");
         }
     }
 
@@ -79,9 +79,8 @@ public partial class JobProcessorService(
         long maxSequence = 0;
         var fallbackChunks = 0;
 
-        logger.LogInformation(
-            "Starting job execution: {Payload:json}",
-
+        logger.ZLogInformationObject(
+            "Starting job execution",
             new
             {
                 request.RunId,
@@ -142,9 +141,8 @@ public partial class JobProcessorService(
                 CreateEvent(request.RunId, "completed", envelope.Summary, payload),
                 cancellationToken);
 
-            logger.LogInformation(
-                "Job processing completed: {Payload:json}",
-
+            logger.ZLogInformationObject(
+                "Job processing completed",
                 new
                 {
                     request.RunId,
@@ -165,9 +163,8 @@ public partial class JobProcessorService(
                 CreateEvent(request.RunId, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
                 CancellationToken.None);
 
-            logger.LogWarning(
-                "Job processing cancelled: {Payload:json}",
-
+            logger.ZLogWarningObject(
+                "Job processing cancelled",
                 new
                 {
                     request.RunId,
@@ -179,10 +176,9 @@ public partial class JobProcessorService(
         }
         catch (Exception ex)
         {
-            logger.LogError(
+            logger.ZLogErrorObject(
                 ex,
-                "Job processing crashed: {Payload:json}",
-
+                "Job processing crashed",
                 new
                 {
                     request.RunId,
@@ -410,5 +406,15 @@ public partial class JobProcessorService(
         };
     }
 
+    private sealed record StructuredProjection(
+        string Category,
+        string PayloadJson,
+        string SchemaVersion);
 
+    private sealed record RuntimeEventWireEnvelope(
+        string Marker,
+        long Sequence,
+        string Type,
+        string Content,
+        Dictionary<string, string>? Metadata);
 }

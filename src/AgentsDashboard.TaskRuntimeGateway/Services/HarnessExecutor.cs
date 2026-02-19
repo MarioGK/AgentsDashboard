@@ -14,7 +14,7 @@ using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.TaskRuntimeGateway.Services;
 
-public sealed partial class HarnessExecutor(
+public sealed class HarnessExecutor(
     IOptions<TaskRuntimeOptions> options,
     HarnessAdapterFactory adapterFactory,
     IHarnessRuntimeFactory runtimeFactory,
@@ -23,7 +23,7 @@ public sealed partial class HarnessExecutor(
     IArtifactExtractor artifactExtractor,
     ILogger<HarnessExecutor> logger) : IHarnessExecutor
 {
-    private static readonly string WorkspacesRootPath = RepositoryPathResolver.GetDataPath("workspaces", "repos");
+    private const string WorkspacesRootPath = "/workspaces/repos";
     private const string MainBranch = "main";
     private const string RuntimeEventWireMarker = "agentsdashboard.harness-runtime-event.v1";
 
@@ -40,9 +40,8 @@ public sealed partial class HarnessExecutor(
         CancellationToken cancellationToken)
     {
         var request = job.Request;
-        logger.LogInformation(
-            "Dispatching harness execution: {Payload:json}",
-
+        logger.ZLogInformationObject(
+            "Dispatching harness execution",
             new
             {
                 request.RunId,
@@ -63,9 +62,8 @@ public sealed partial class HarnessExecutor(
         }
         catch (OperationCanceledException)
         {
-            logger.LogWarning(
-                "Harness execution canceled: {Payload:json}",
-
+            logger.ZLogWarningObject(
+                "Harness execution canceled",
                 new
                 {
                     request.RunId,
@@ -85,10 +83,9 @@ public sealed partial class HarnessExecutor(
         }
         catch (Exception ex)
         {
-            logger.LogError(
+            logger.ZLogErrorObject(
                 ex,
-                "Harness execution failed: {Payload:json}",
-
+                "Harness execution failed",
                 new
                 {
                     request.RunId,
@@ -113,9 +110,8 @@ public sealed partial class HarnessExecutor(
         Func<string, CancellationToken, Task>? onLogChunk,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation(
-            "Starting runtime execution path: {Payload:json}",
-
+        logger.ZLogInformationObject(
+            "Starting runtime execution path",
             new
             {
                 request.RunId,
@@ -146,9 +142,8 @@ public sealed partial class HarnessExecutor(
 
                 workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
                 workspaceHostPath = workspaceContext.WorkspacePath;
-                logger.LogInformation(
-                    "Workspace prepared for runtime execution: {Payload:json}",
-
+                logger.ZLogInformationObject(
+                    "Workspace prepared for runtime execution",
                     new
                     {
                         request.RunId,
@@ -159,10 +154,9 @@ public sealed partial class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogError(
+                logger.ZLogErrorObject(
                     ex,
-                    "Workspace preparation failed: {Payload:json}",
-
+                    "Workspace preparation failed",
                     new
                     {
                         request.RunId,
@@ -186,9 +180,8 @@ public sealed partial class HarnessExecutor(
         {
             var runtimeRequest = BuildRuntimeRequest(request, workspaceHostPath);
             var runtimeSelection = runtimeFactory.Select(runtimeRequest);
-            logger.LogDebug(
-                "Harness runtime selected: {Payload:json}",
-
+            logger.ZLogDebugObject(
+                "Harness runtime selected",
                 new
                 {
                     request.RunId,
@@ -219,10 +212,9 @@ public sealed partial class HarnessExecutor(
                 structuredRuntimeFailure = ex;
                 runtimeName = runtimeSelection.Fallback.Name;
 
-                logger.LogWarning(
+                logger.ZLogWarningObject(
                     ex,
-                    "Structured runtime fallback triggered: {Payload:json}",
-
+                    "Structured runtime fallback triggered",
                     new
                     {
                         request.RunId,
@@ -259,9 +251,8 @@ public sealed partial class HarnessExecutor(
 
             if (!ValidateEnvelope(envelope))
             {
-                logger.LogWarning(
-                    "Runtime envelope validation failed: {Payload:json}",
-
+                logger.ZLogWarningObject(
+                    "Runtime envelope validation failed",
                     new
                     {
                         request.RunId,
@@ -289,10 +280,9 @@ public sealed partial class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(
+                logger.ZLogWarningObject(
                     ex,
-                    "Failed to create harness adapter: {Payload:json}",
-
+                    "Failed to create harness adapter",
                     new
                     {
                         request.RunId,
@@ -320,9 +310,8 @@ public sealed partial class HarnessExecutor(
                         envelope.Metadata["remediationHints"] = string.Join("; ", classification.RemediationHints);
                     }
 
-                    logger.LogDebug(
-                        "Failure classification detected: {Payload:json}",
-
+                    logger.ZLogDebugObject(
+                        "Failure classification detected",
                         new
                         {
                             request.RunId,
@@ -359,9 +348,8 @@ public sealed partial class HarnessExecutor(
                     envelope.Artifacts = extractedArtifacts.Select(a => a.DestinationPath).ToList();
                     envelope.Metadata["extractedArtifactCount"] = extractedArtifacts.Count.ToString();
                     envelope.Metadata["extractedArtifactSize"] = extractedArtifacts.Sum(a => a.SizeBytes).ToString();
-                    logger.LogDebug(
-                        "Extracted runtime artifacts: {Payload:json}",
-
+                    logger.ZLogDebugObject(
+                        "Extracted runtime artifacts",
                         new
                         {
                             request.RunId,
@@ -372,9 +360,8 @@ public sealed partial class HarnessExecutor(
                 }
             }
 
-            logger.LogInformation(
-                "Runtime execution completed: {Payload:json}",
-
+            logger.ZLogInformationObject(
+                "Runtime execution completed",
                 new
                 {
                     request.RunId,
@@ -498,9 +485,8 @@ public sealed partial class HarnessExecutor(
         Func<string, CancellationToken, Task>? onLogChunk,
         CancellationToken cancellationToken)
     {
-        logger.LogInformation(
-            "Executing adapter runtime path: {Payload:json}",
-
+        logger.ZLogInformationObject(
+            "Executing adapter runtime path",
             new
             {
                 request.RunId,
@@ -517,9 +503,8 @@ public sealed partial class HarnessExecutor(
 
         if (!IsImageAllowed(context.Image))
         {
-            logger.LogWarning(
-                "Image is not in the allowlist: {Payload:json}",
-
+            logger.ZLogWarningObject(
+                "Image is not in the allowlist",
                 new
                 {
                     request.RunId,
@@ -551,9 +536,8 @@ public sealed partial class HarnessExecutor(
 
                 workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
                 workspaceHostPath = workspaceContext.WorkspacePath;
-                logger.LogInformation(
-                    "Adapter workspace prepared: {Payload:json}",
-
+                logger.ZLogInformationObject(
+                    "Adapter workspace prepared",
                     new
                     {
                         request.RunId,
@@ -564,10 +548,9 @@ public sealed partial class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                logger.LogError(
+                logger.ZLogErrorObject(
                     ex,
-                    "Adapter workspace preparation failed: {Payload:json}",
-
+                    "Adapter workspace preparation failed",
                     new
                     {
                         request.RunId,
@@ -637,10 +620,9 @@ public sealed partial class HarnessExecutor(
                         }
                         catch (Exception ex)
                         {
-                            logger.LogWarning(
+                            logger.ZLogWarningObject(
                                 ex,
-                                "Log streaming failed: {Payload:json}",
-
+                                "Log streaming failed",
                                 new
                                 {
                                     request.RunId,
@@ -683,9 +665,8 @@ public sealed partial class HarnessExecutor(
                     envelope.Metrics["networkTxBytes"] = metrics.NetworkTxBytes;
                     envelope.Metrics["blockReadBytes"] = metrics.BlockReadBytes;
                     envelope.Metrics["blockWriteBytes"] = metrics.BlockWriteBytes;
-                    logger.LogDebug(
-                        "Container runtime metrics captured: {Payload:json}",
-
+                    logger.ZLogDebugObject(
+                        "Container runtime metrics captured",
                         new
                         {
                             request.RunId,
@@ -699,9 +680,8 @@ public sealed partial class HarnessExecutor(
 
                 if (!ValidateEnvelope(envelope))
                 {
-                    logger.LogWarning(
-                        "Adapter envelope validation failed: {Payload:json}",
-
+                    logger.ZLogWarningObject(
+                        "Adapter envelope validation failed",
                         new
                         {
                             request.RunId,
@@ -733,9 +713,8 @@ public sealed partial class HarnessExecutor(
                     if (classification.RemediationHints.Count > 0)
                         envelope.Metadata["remediationHints"] = string.Join("; ", classification.RemediationHints);
 
-                    logger.LogDebug(
-                        "Adapter failure classification detected: {Payload:json}",
-
+                    logger.ZLogDebugObject(
+                        "Adapter failure classification detected",
                         new
                         {
                             request.RunId,
@@ -752,9 +731,8 @@ public sealed partial class HarnessExecutor(
                 {
                     envelope.Metadata["artifactCount"] = artifacts.Count.ToString();
                     envelope.Metadata["artifacts"] = string.Join(",", artifacts.Select(a => a.Path));
-                    logger.LogDebug(
-                        "Adapter mapped artifacts: {Payload:json}",
-
+                    logger.ZLogDebugObject(
+                        "Adapter mapped artifacts",
                         new
                         {
                             request.RunId,
@@ -780,9 +758,8 @@ public sealed partial class HarnessExecutor(
                         envelope.Artifacts = extractedArtifacts.Select(a => a.DestinationPath).ToList();
                         envelope.Metadata["extractedArtifactCount"] = extractedArtifacts.Count.ToString();
                         envelope.Metadata["extractedArtifactSize"] = extractedArtifacts.Sum(a => a.SizeBytes).ToString();
-                        logger.LogDebug(
-                            "Adapter extracted artifacts: {Payload:json}",
-
+                        logger.ZLogDebugObject(
+                            "Adapter extracted artifacts",
                             new
                             {
                                 request.RunId,
@@ -793,9 +770,8 @@ public sealed partial class HarnessExecutor(
                     }
                 }
 
-                logger.LogInformation(
-                    "Adapter execution completed: {Payload:json}",
-
+                logger.ZLogInformationObject(
+                    "Adapter execution completed",
                     new
                     {
                         request.RunId,
@@ -1271,6 +1247,38 @@ public sealed partial class HarnessExecutor(
         }
     }
 
+    private sealed class CallbackHarnessEventSink(
+        Func<string, CancellationToken, Task> onLogChunk) : IHarnessEventSink
+    {
+        private long _sequence;
 
+        public ValueTask PublishAsync(HarnessRuntimeEvent @event, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(@event.Content))
+            {
+                return ValueTask.CompletedTask;
+            }
 
+            var payload = JsonSerializer.Serialize(new RuntimeEventWireEnvelope(
+                RuntimeEventWireMarker,
+                Interlocked.Increment(ref _sequence),
+                @event.Type.ToCanonicalName(),
+                @event.Content,
+                @event.Metadata));
+
+            return new ValueTask(onLogChunk(payload, cancellationToken));
+        }
+    }
+
+    private sealed record RuntimeEventWireEnvelope(
+        string Marker,
+        long Sequence,
+        string Type,
+        string Content,
+        IReadOnlyDictionary<string, string>? Metadata);
+
+    private sealed record WorkspaceContext(
+        string WorkspacePath,
+        string MainBranch,
+        string HeadBeforeRun);
 }
