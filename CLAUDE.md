@@ -49,9 +49,9 @@ docs/
 
 ### Testing Policy
 
-- Prefer integration tests that use real service workflows instead of mocks.
-- Do not use Moq in test projects.
-- Do not use FluentAssertions in test projects.
+- Use integration tests with real service workflows instead of mock-based tests.
+- Never use Moq in test projects.
+- Never use FluentAssertions in test projects.
 - Use TUnit assertions only (`Assert` APIs).
 
 ### LiteDB (Mandatory)

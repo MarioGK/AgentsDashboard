@@ -1,13 +1,13 @@
 using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntimeGateway.Configuration;
-using AgentsDashboard.TaskRuntimeGateway.MagicOnion;
-using AgentsDashboard.TaskRuntimeGateway.Models;
-using AgentsDashboard.TaskRuntimeGateway.Services;
+using AgentsDashboard.TaskRuntime.Configuration;
+using AgentsDashboard.TaskRuntime.MagicOnion;
+using AgentsDashboard.TaskRuntime.Models;
+using AgentsDashboard.TaskRuntime.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.MagicOnion;
+namespace AgentsDashboard.UnitTests.TaskRuntime.MagicOnion;
 
-public class TaskRuntimeGatewayServiceTests
+public class TaskRuntimeServiceTests
 {
     [Test]
     public async Task ReconcileOrphanedContainersAsync_UsesActiveRunIdsFromQueue()
@@ -21,12 +21,12 @@ public class TaskRuntimeGatewayServiceTests
             .Setup(x => x.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new OrphanReconciliationResult(0, []));
 
-        var service = new TaskRuntimeGatewayService(
+        var service = new TaskRuntimeService(
             queue,
             reconcilerMock.Object,
             Mock.Of<IDockerContainerService>(),
             new TaskRuntimeHarnessToolHealthService(),
-            NullLogger<TaskRuntimeGatewayService>.Instance);
+            NullLogger<TaskRuntimeService>.Instance);
 
         await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { TaskRuntimeId = "task-runtime-1" });
 
@@ -47,12 +47,12 @@ public class TaskRuntimeGatewayServiceTests
             .Setup(x => x.ReconcileAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("reconciler disconnected"));
 
-        var service = new TaskRuntimeGatewayService(
+        var service = new TaskRuntimeService(
             queue,
             reconcilerMock.Object,
             Mock.Of<IDockerContainerService>(),
             new TaskRuntimeHarnessToolHealthService(),
-            NullLogger<TaskRuntimeGatewayService>.Instance);
+            NullLogger<TaskRuntimeService>.Instance);
 
         var response = await service.ReconcileOrphanedContainersAsync(new ReconcileOrphanedContainersRequest { TaskRuntimeId = "task-runtime-1" });
 
@@ -66,12 +66,12 @@ public class TaskRuntimeGatewayServiceTests
         var queue = new TaskRuntimeQueue(new TaskRuntimeOptions { MaxSlots = 4 });
         await queue.EnqueueAsync(CreateJob("run-1"), CancellationToken.None);
 
-        var service = new TaskRuntimeGatewayService(
+        var service = new TaskRuntimeService(
             queue,
             Mock.Of<IContainerOrphanReconciler>(),
             Mock.Of<IDockerContainerService>(),
             new TaskRuntimeHarnessToolHealthService(),
-            NullLogger<TaskRuntimeGatewayService>.Instance);
+            NullLogger<TaskRuntimeService>.Instance);
 
         var response = await service.CancelJobAsync(new CancelJobRequest { RunId = "run-1" });
 

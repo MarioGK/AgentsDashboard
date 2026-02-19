@@ -6,9 +6,4 @@
     <PackageReference Include="MessagePack.Annotations" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Disable MessagePack source generator analyzers -->
-    <CompilerVisibleProperty Remove="MessagePackGenerator" />
-  </ItemGroup>
-
 </Project>

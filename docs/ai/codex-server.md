@@ -2,12 +2,12 @@
 
 ## Purpose
 
-`AgentsDashboard.TaskRuntimeGateway` runs Codex tasks through Codex app-server over stdio JSON-RPC.
-Task dispatch/control flow remains ControlPlane -> MagicOnion -> TaskRuntimeGateway.
+`AgentsDashboard.TaskRuntime` runs Codex tasks through Codex app-server over stdio JSON-RPC.
+Task dispatch/control flow remains ControlPlane -> MagicOnion -> TaskRuntime.
 
 ## Runtime Topology
 
-1. ControlPlane dispatches a run with harness `codex` over `ITaskRuntimeGatewayService.DispatchJobAsync`.
+1. ControlPlane dispatches a run with harness `codex` over `ITaskRuntimeService.DispatchJobAsync`.
 2. `HarnessExecutor` resolves runtime mode and selects `CodexAppServerRuntime`.
 3. Runtime starts `codex app-server --listen stdio://`.
 4. Runtime speaks JSON-RPC over stdio:

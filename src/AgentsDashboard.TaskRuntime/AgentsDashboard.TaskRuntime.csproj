@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="MagicOnion.Server" />
+    <PackageReference Include="MessagePack" />
+    <PackageReference Include="ZLogger" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AgentsDashboard.Contracts\AgentsDashboard.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

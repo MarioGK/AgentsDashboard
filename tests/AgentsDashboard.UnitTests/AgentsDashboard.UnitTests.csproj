@@ -24,12 +24,12 @@
     <Compile Remove="ControlPlane/Services/LiteDbVectorSearchStatusServiceTests.cs" />
     <Compile Remove="ControlPlane/Services/TaskRuntimeEventListenerServiceTests.cs" />
     <Compile Remove="ControlPlane/Services/OrchestratorRuntimeSettingsProviderTests.cs" />
-    <Compile Remove="TaskRuntimeGateway/MagicOnion/TaskRuntimeGatewayServiceTests.cs" />
+    <Compile Remove="TaskRuntime/MagicOnion/TaskRuntimeServiceTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AgentsDashboard.Contracts\AgentsDashboard.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\AgentsDashboard.TaskRuntimeGateway\AgentsDashboard.TaskRuntimeGateway.csproj" />
+    <ProjectReference Include="..\..\src\AgentsDashboard.TaskRuntime\AgentsDashboard.TaskRuntime.csproj" />
     <ProjectReference Include="..\..\src\AgentsDashboard.ControlPlane\AgentsDashboard.ControlPlane.csproj" />
   </ItemGroup>
 

@@ -234,12 +234,12 @@ public class TaskRuntimeEventListenerServiceTests
                 It.IsAny<string?>()))
             .ReturnsAsync(startedRun);
 
-        var workerClient = new Mock<ITaskRuntimeGatewayService>(MockBehavior.Loose);
+        var workerClient = new Mock<ITaskRuntimeService>(MockBehavior.Loose);
         workerClient.Setup(c => c.DispatchJobAsync(It.IsAny<DispatchJobRequest>()))
             .Returns(UnaryResult.FromResult(new DispatchJobReply { Success = true, DispatchedAt = DateTimeOffset.UtcNow }));
 
         var clientFactory = new Mock<IMagicOnionClientFactory>(MockBehavior.Loose);
-        clientFactory.Setup(f => f.CreateTaskRuntimeGatewayService("worker-2", It.IsAny<string>()))
+        clientFactory.Setup(f => f.CreateTaskRuntimeService("worker-2", It.IsAny<string>()))
             .Returns(workerClient.Object);
 
         var lifecycleManager = new Mock<ITaskRuntimeLifecycleManager>(MockBehavior.Loose);

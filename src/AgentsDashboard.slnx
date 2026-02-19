@@ -1,7 +1,7 @@
 <Solution>
   <Project Path="AgentsDashboard.Contracts/AgentsDashboard.Contracts.csproj" />
   <Project Path="AgentsDashboard.ControlPlane/AgentsDashboard.ControlPlane.csproj" />
-  <Project Path="AgentsDashboard.TaskRuntimeGateway/AgentsDashboard.TaskRuntimeGateway.csproj" />
+  <Project Path="AgentsDashboard.TaskRuntime/AgentsDashboard.TaskRuntime.csproj" />
   <Project Path="../tests/AgentsDashboard.IntegrationTests/AgentsDashboard.IntegrationTests.csproj" />
   <Project Path="../tests/AgentsDashboard.UnitTests/AgentsDashboard.UnitTests.csproj" />
 </Solution>

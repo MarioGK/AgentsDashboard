@@ -2,12 +2,12 @@
 
 ## Purpose
 
-`AgentsDashboard.TaskRuntimeGateway` runs OpenCode tasks through OpenCode server APIs and SSE events.
-ControlPlane and TaskRuntimeGateway communication stays on MagicOnion contracts.
+`AgentsDashboard.TaskRuntime` runs OpenCode tasks through OpenCode server APIs and SSE events.
+ControlPlane and TaskRuntime communication stays on MagicOnion contracts.
 
 ## Runtime Topology
 
-1. ControlPlane dispatches a run with harness `opencode` over `ITaskRuntimeGatewayService.DispatchJobAsync`.
+1. ControlPlane dispatches a run with harness `opencode` over `ITaskRuntimeService.DispatchJobAsync`.
 2. `HarnessExecutor` selects `OpenCodeSseRuntime`.
 3. Runtime either:
    - connects to an externally configured OpenCode server, or

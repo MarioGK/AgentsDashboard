@@ -34,14 +34,18 @@ public sealed class DockerTaskRuntimeLifecycleManager(
     private const int WorkerGrpcPort = 5201;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ScaleOutAttemptWindow = TimeSpan.FromMinutes(10);
-    private static readonly string[] TaskRuntimeGatewayBuildContextRequirements =
+    private static readonly string[] TaskRuntimeBuildContextRequirements =
     [
         "global.json",
         "Directory.Build.props",
         "Directory.Packages.props",
         Path.Combine("src", "AgentsDashboard.slnx"),
-        Path.Combine("src", "AgentsDashboard.TaskRuntimeGateway"),
         Path.Combine("src", "AgentsDashboard.Contracts")
+    ];
+    private static readonly string[] TaskRuntimeProjectPathCandidates =
+    [
+        Path.Combine("src", "AgentsDashboard.TaskRuntime"),
+        Path.Combine("src", "AgentsDashboard.TaskRuntimeGateway")
     ];
     private static readonly Regex PullProgressRegex = new(
         @"(?<current>\d+(?:\.\d+)?)\s*(?<currentUnit>[KMGTP]?B)\s*/\s*(?<total>\d+(?:\.\d+)?)\s*(?<totalUnit>[KMGTP]?B)",
@@ -1351,7 +1355,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         IProgress<BackgroundWorkSnapshot>? progress,
         CancellationToken cancellationToken)
     {
-        var dockerfilePath = ResolveTaskRuntimeGatewayDockerfilePath(runtime);
+        var dockerfilePath = ResolveTaskRuntimeDockerfilePath(runtime);
         if (string.IsNullOrWhiteSpace(dockerfilePath))
         {
             logger.LogWarning("Worker Dockerfile could not be resolved for automatic image build");
@@ -1363,14 +1367,14 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             return false;
         }
 
-        foreach (var buildContext in ResolveTaskRuntimeGatewayBuildContextCandidates(dockerfilePath, runtime).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var buildContext in ResolveTaskRuntimeBuildContextCandidates(dockerfilePath, runtime).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (!Directory.Exists(buildContext))
             {
                 continue;
             }
 
-            if (!IsValidTaskRuntimeGatewayBuildContext(buildContext, dockerfilePath))
+            if (!IsValidTaskRuntimeBuildContext(buildContext, dockerfilePath))
             {
                 logger.LogDebug("Skipping invalid worker build context {Context} for dockerfile {Dockerfile}", buildContext, dockerfilePath);
                 continue;
@@ -1614,7 +1618,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         };
     }
 
-    private static string? ResolveTaskRuntimeGatewayDockerfilePath(OrchestratorRuntimeSettings runtime)
+    private static string? ResolveTaskRuntimeDockerfilePath(OrchestratorRuntimeSettings runtime)
     {
         if (!string.IsNullOrWhiteSpace(runtime.WorkerDockerfilePath))
         {
@@ -1625,7 +1629,11 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             }
         }
 
-        var configuredPath = Environment.GetEnvironmentVariable("TASK_RUNTIME_GATEWAY_DOCKERFILE_PATH");
+        var configuredPath = Environment.GetEnvironmentVariable("TASK_RUNTIME_DOCKERFILE_PATH");
+        if (string.IsNullOrWhiteSpace(configuredPath))
+        {
+            configuredPath = Environment.GetEnvironmentVariable("TASK_RUNTIME_GATEWAY_DOCKERFILE_PATH");
+        }
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
             var resolvedConfigured = Path.GetFullPath(configuredPath, Directory.GetCurrentDirectory());
@@ -1637,6 +1645,11 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
         var candidates = new[]
         {
+            "src/AgentsDashboard.TaskRuntime/Dockerfile",
+            Path.Combine("..", "src", "AgentsDashboard.TaskRuntime", "Dockerfile"),
+            Path.Combine("..", "..", "src", "AgentsDashboard.TaskRuntime", "Dockerfile"),
+            Path.Combine("..", "..", "..", "src", "AgentsDashboard.TaskRuntime", "Dockerfile"),
+            Path.Combine("..", "..", "..", "..", "src", "AgentsDashboard.TaskRuntime", "Dockerfile"),
             "src/AgentsDashboard.TaskRuntimeGateway/Dockerfile",
             Path.Combine("..", "src", "AgentsDashboard.TaskRuntimeGateway", "Dockerfile"),
             Path.Combine("..", "..", "src", "AgentsDashboard.TaskRuntimeGateway", "Dockerfile"),
@@ -1664,17 +1677,20 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
         foreach (var root in FindWorkspaceRoots(Directory.GetCurrentDirectory()).Concat(FindWorkspaceRoots(AppContext.BaseDirectory)))
         {
-            var candidate = Path.Combine(root, "src", "AgentsDashboard.TaskRuntimeGateway", "Dockerfile");
-            if (File.Exists(candidate))
+            foreach (var projectPath in TaskRuntimeProjectPathCandidates)
             {
-                return candidate;
+                var candidate = Path.Combine(root, projectPath, "Dockerfile");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
             }
         }
 
         return null;
     }
 
-    private static IEnumerable<string> ResolveTaskRuntimeGatewayBuildContextCandidates(string dockerfilePath, OrchestratorRuntimeSettings runtime)
+    private static IEnumerable<string> ResolveTaskRuntimeBuildContextCandidates(string dockerfilePath, OrchestratorRuntimeSettings runtime)
     {
         if (!string.IsNullOrWhiteSpace(runtime.WorkerDockerBuildContextPath))
         {
@@ -1682,7 +1698,11 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             yield return Path.GetFullPath(runtime.WorkerDockerBuildContextPath, AppContext.BaseDirectory);
         }
 
-        var configuredContext = Environment.GetEnvironmentVariable("TASK_RUNTIME_GATEWAY_BUILD_CONTEXT");
+        var configuredContext = Environment.GetEnvironmentVariable("TASK_RUNTIME_BUILD_CONTEXT");
+        if (string.IsNullOrWhiteSpace(configuredContext))
+        {
+            configuredContext = Environment.GetEnvironmentVariable("TASK_RUNTIME_GATEWAY_BUILD_CONTEXT");
+        }
         if (!string.IsNullOrWhiteSpace(configuredContext))
         {
             yield return Path.GetFullPath(configuredContext, Directory.GetCurrentDirectory());
@@ -1702,7 +1722,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
     }
 
-    private static bool IsValidTaskRuntimeGatewayBuildContext(string buildContext, string dockerfilePath)
+    private static bool IsValidTaskRuntimeBuildContext(string buildContext, string dockerfilePath)
     {
         var dockerfileDirectory = Path.GetDirectoryName(dockerfilePath);
         if (string.IsNullOrWhiteSpace(dockerfileDirectory))
@@ -1718,17 +1738,24 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             return false;
         }
 
-        if (!string.Equals(Path.GetFileName(dockerfileDirectory), "AgentsDashboard.TaskRuntimeGateway", StringComparison.OrdinalIgnoreCase))
+        var dockerfileDirectoryName = Path.GetFileName(dockerfileDirectory);
+        if (!string.Equals(dockerfileDirectoryName, "AgentsDashboard.TaskRuntime", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(dockerfileDirectoryName, "AgentsDashboard.TaskRuntimeGateway", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        foreach (var requiredPath in TaskRuntimeGatewayBuildContextRequirements)
+        foreach (var requiredPath in TaskRuntimeBuildContextRequirements)
         {
             if (!Path.Exists(Path.Combine(absoluteContext, requiredPath)))
             {
                 return false;
             }
+        }
+
+        if (TaskRuntimeProjectPathCandidates.All(requiredPath => !Path.Exists(Path.Combine(absoluteContext, requiredPath))))
+        {
+            return false;
         }
 
         return true;
@@ -1739,8 +1766,10 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         var current = new DirectoryInfo(startDirectory);
         while (current is not null)
         {
-            var candidate = Path.Combine(current.FullName, "src", "AgentsDashboard.TaskRuntimeGateway", "Dockerfile");
-            if (File.Exists(candidate))
+            var hasDockerfile = TaskRuntimeProjectPathCandidates
+                .Select(projectPath => Path.Combine(current.FullName, projectPath, "Dockerfile"))
+                .Any(File.Exists);
+            if (hasDockerfile)
             {
                 yield return current.FullName;
             }
@@ -1837,15 +1866,13 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             {
                 try
                 {
-                    var client = clientFactory.CreateTaskRuntimeGatewayService(state.TaskRuntimeId, state.GrpcEndpoint);
-                    await client.HeartbeatAsync(new HeartbeatRequest
+                    var client = clientFactory.CreateTaskRuntimeService(state.TaskRuntimeId, state.GrpcEndpoint);
+                    var health = await client.CheckHealthAsync();
+                    if (!health.Success)
                     {
-                        TaskRuntimeId = "control-plane-startup-probe",
-                        HostName = "control-plane",
-                        ActiveSlots = 0,
-                        MaxSlots = state.MaxSlots,
-                        Timestamp = DateTimeOffset.UtcNow
-                    });
+                        await Task.Delay(delay, cancellationToken);
+                        continue;
+                    }
 
                     state.LifecycleState = TaskRuntimeLifecycleState.Ready;
                     await PersistTaskRuntimeStateAsync(

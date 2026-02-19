@@ -8,7 +8,9 @@ namespace AgentsDashboard.ControlPlane.Services;
 
 public interface IMagicOnionClientFactory
 {
-    ITaskRuntimeGatewayService CreateTaskRuntimeGatewayService(string runtimeId, string grpcAddress);
+    ITaskRuntimeService CreateTaskRuntimeService(string runtimeId, string grpcAddress);
+    ITaskRuntimeFileService CreateTaskRuntimeFileService(string runtimeId, string grpcAddress);
+    ITaskRuntimeGitService CreateTaskRuntimeGitService(string runtimeId, string grpcAddress);
     Task<ITaskRuntimeEventHub> ConnectEventHubAsync(string runtimeId, string grpcAddress, ITaskRuntimeEventReceiver receiver, CancellationToken ct = default);
     void RemoveTaskRuntime(string runtimeId);
 }
@@ -32,10 +34,22 @@ public class MagicOnionClientFactory : IMagicOnionClientFactory
         return address;
     }
 
-    public ITaskRuntimeGatewayService CreateTaskRuntimeGatewayService(string runtimeId, string grpcAddress)
+    public ITaskRuntimeService CreateTaskRuntimeService(string runtimeId, string grpcAddress)
     {
         var channel = GetOrCreateChannel(runtimeId, grpcAddress);
-        return MagicOnionClient.Create<ITaskRuntimeGatewayService>(channel);
+        return MagicOnionClient.Create<ITaskRuntimeService>(channel);
+    }
+
+    public ITaskRuntimeFileService CreateTaskRuntimeFileService(string runtimeId, string grpcAddress)
+    {
+        var channel = GetOrCreateChannel(runtimeId, grpcAddress);
+        return MagicOnionClient.Create<ITaskRuntimeFileService>(channel);
+    }
+
+    public ITaskRuntimeGitService CreateTaskRuntimeGitService(string runtimeId, string grpcAddress)
+    {
+        var channel = GetOrCreateChannel(runtimeId, grpcAddress);
+        return MagicOnionClient.Create<ITaskRuntimeGitService>(channel);
     }
 
     public async Task<ITaskRuntimeEventHub> ConnectEventHubAsync(string runtimeId, string grpcAddress, ITaskRuntimeEventReceiver receiver, CancellationToken ct = default)

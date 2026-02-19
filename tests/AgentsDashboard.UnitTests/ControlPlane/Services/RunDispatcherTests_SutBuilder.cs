@@ -18,7 +18,7 @@ public partial class RunDispatcherTests
             public Mock<ISecretCryptoService> SecretCryptoMock { get; } = new();
             public Mock<IRunEventPublisher> PublisherMock { get; } = new();
             public Mock<IMagicOnionClientFactory> ClientFactoryMock { get; } = new();
-            public Mock<ITaskRuntimeGatewayService> WorkerClientMock { get; } = new();
+            public Mock<ITaskRuntimeService> WorkerClientMock { get; } = new();
             public RunDispatcher Dispatcher { get; }
 
             private readonly OrchestratorOptions _options = new();
@@ -30,7 +30,7 @@ public partial class RunDispatcherTests
                 WorkerLifecycleManagerMock.Setup(x => x.RecordDispatchActivityAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                     .Returns(Task.CompletedTask);
                 ClientFactoryMock
-                    .Setup(f => f.CreateTaskRuntimeGatewayService(It.IsAny<string>(), It.IsAny<string>()))
+                    .Setup(f => f.CreateTaskRuntimeService(It.IsAny<string>(), It.IsAny<string>()))
                     .Returns(WorkerClientMock.Object);
                 Store.Setup(s => s.CountActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(0);
                 Store.Setup(s => s.CountActiveRunsByRepoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);

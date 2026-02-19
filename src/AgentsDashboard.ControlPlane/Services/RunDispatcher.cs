@@ -249,7 +249,7 @@ public sealed class RunDispatcher(
             AutomationRunId = automationRunId?.Trim() ?? run.AutomationRunId ?? string.Empty,
         };
 
-        var workerClient = clientFactory.CreateTaskRuntimeGatewayService(workerLease.TaskRuntimeId, workerLease.GrpcEndpoint);
+        var workerClient = clientFactory.CreateTaskRuntimeService(workerLease.TaskRuntimeId, workerLease.GrpcEndpoint);
         var response = await workerClient.DispatchJobAsync(request);
 
         if (!response.Success)
@@ -333,8 +333,8 @@ public sealed class RunDispatcher(
                 return;
             }
 
-            var workerClient = clientFactory.CreateTaskRuntimeGatewayService(worker.TaskRuntimeId, worker.GrpcEndpoint);
-            await workerClient.CancelJobAsync(new CancelJobRequest { RunId = runId });
+            var workerClient = clientFactory.CreateTaskRuntimeService(worker.TaskRuntimeId, worker.GrpcEndpoint);
+            await workerClient.StopJobAsync(new StopJobRequest { RunId = runId });
         }
         catch (Exception ex)
         {

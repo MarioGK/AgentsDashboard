@@ -10,7 +10,7 @@ public interface ITaskRuntimeRegistryService
     void RecordHeartbeat(string runtimeId, string hostName, int activeSlots, int maxSlots);
 
     /// <summary>
-    /// Broadcast a status request to all registered task runtimes via TaskRuntimeGateway.
+    /// Broadcast a status request to all registered task runtimes via unary runtime service.
     /// </summary>
     Task BroadcastStatusRequestAsync(StatusRequestMessage request, CancellationToken cancellationToken = default);
 
@@ -76,15 +76,12 @@ public class TaskRuntimeRegistryService : ITaskRuntimeRegistryService
         {
             try
             {
-                var client = _clientFactory.CreateTaskRuntimeGatewayService(runtime.TaskRuntimeId, runtime.GrpcEndpoint);
-                await client.HeartbeatAsync(new HeartbeatRequest
+                var client = _clientFactory.CreateTaskRuntimeService(runtime.TaskRuntimeId, runtime.GrpcEndpoint);
+                var result = await client.CheckHealthAsync();
+                if (!result.Success)
                 {
-                    TaskRuntimeId = $"control-plane-status-request-{request.RequestId}",
-                    HostName = "control-plane",
-                    ActiveSlots = 0,
-                    MaxSlots = 0,
-                    Timestamp = DateTimeOffset.UtcNow
-                });
+                    _logger.LogDebug("Status request health check returned failure for task runtime {TaskRuntimeId}: {Error}", runtime.TaskRuntimeId, result.ErrorMessage);
+                }
             }
             catch (Exception ex)
             {

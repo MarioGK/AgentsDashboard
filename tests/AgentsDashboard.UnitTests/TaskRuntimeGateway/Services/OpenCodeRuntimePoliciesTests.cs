@@ -1,12 +1,12 @@
 using System.Reflection;
-using AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
+using AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
 
-namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntime.Services;
 
 public sealed class OpenCodeRuntimePoliciesTests
 {
     private static readonly Type PoliciesType = typeof(OpenCodeSseRuntime).Assembly
-        .GetType("AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes.OpenCodeRuntimePolicies")!;
+        .GetType("AgentsDashboard.TaskRuntime.Services.HarnessRuntimes.OpenCodeRuntimePolicies")!;
 
     private static readonly MethodInfo ResolveMethod = PoliciesType
         .GetMethod("Resolve", BindingFlags.Public | BindingFlags.Static, [typeof(HarnessRunRequest)])!;

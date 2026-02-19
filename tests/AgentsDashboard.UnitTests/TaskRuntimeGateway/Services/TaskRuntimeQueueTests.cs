@@ -1,9 +1,9 @@
 using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntimeGateway.Configuration;
-using AgentsDashboard.TaskRuntimeGateway.Models;
-using AgentsDashboard.TaskRuntimeGateway.Services;
+using AgentsDashboard.TaskRuntime.Configuration;
+using AgentsDashboard.TaskRuntime.Models;
+using AgentsDashboard.TaskRuntime.Services;
 
-namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntime.Services;
 
 public class TaskRuntimeQueueTests
 {

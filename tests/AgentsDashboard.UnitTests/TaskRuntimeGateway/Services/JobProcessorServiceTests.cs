@@ -1,8 +1,8 @@
 using System.Reflection;
 using System.Text.Json;
-using AgentsDashboard.TaskRuntimeGateway.Services;
+using AgentsDashboard.TaskRuntime.Services;
 
-namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntime.Services;
 
 public sealed class JobProcessorServiceTests
 {

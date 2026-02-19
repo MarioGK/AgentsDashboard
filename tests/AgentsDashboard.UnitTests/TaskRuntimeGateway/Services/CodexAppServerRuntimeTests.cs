@@ -1,7 +1,7 @@
 using System.Reflection;
-using AgentsDashboard.TaskRuntimeGateway.Services.HarnessRuntimes;
+using AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
 
-namespace AgentsDashboard.UnitTests.TaskRuntimeGateway.Services;
+namespace AgentsDashboard.UnitTests.TaskRuntime.Services;
 
 public sealed class CodexAppServerRuntimeTests
 {
