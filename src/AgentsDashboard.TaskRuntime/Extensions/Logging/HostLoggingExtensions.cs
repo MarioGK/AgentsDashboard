@@ -8,6 +8,9 @@ namespace AgentsDashboard.TaskRuntime;
 
 internal static class HostLoggingExtensions
 {
+    private const int MaxLogFileSizeKb = 4 * 1024;
+    private const long MaxWarningErrorLogFileSizeBytes = 4L * 1024 * 1024;
+
     public static ILoggingBuilder AddStructuredContainerLogging(this ILoggingBuilder logging, string serviceName)
     {
         var useAnsi = ShouldEnableAnsi();
@@ -45,8 +48,9 @@ internal static class HostLoggingExtensions
 
         logging.AddZLoggerRollingFile(
             (timestamp, sequence) => GetLogFilePath(serviceName, timestamp, sequence),
-            RollingInterval.Day);
-        logging.AddProvider(new WarningErrorFileLoggerProvider(GetWarningErrorLogFilePath(serviceName)));
+            RollingInterval.Day,
+            MaxLogFileSizeKb);
+        logging.AddProvider(new WarningErrorFileLoggerProvider(GetWarningErrorLogFilePath(serviceName), MaxWarningErrorLogFileSizeBytes));
 
         return logging;
     }

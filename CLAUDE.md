@@ -2,26 +2,9 @@
 
 Self-hosted AI orchestration platform on .NET 10. Blazor Server is the control plane; execution runs through CLI harnesses (`codex`, `opencode`) and dashboard AI feature calls via `LlmTornado`.
 
-## Solution Layout
+## Documentation
+- Check the docs folder for better documentation
 
-```text
-src/
-  AgentsDashboard.ControlPlane        # Blazor Server UI, orchestration, SignalR
-  AgentsDashboard.TaskRuntimeGateway  # MagicOnion runtime gateway, queue, harness execution
-  AgentsDashboard.Contracts           # Shared domain + MagicOnion contracts
-
-tests/
-  AgentsDashboard.UnitTests
-  AgentsDashboard.IntegrationTests
-  AgentsDashboard.Playwright
-
-deploy/
-  harness-image/
-  harness-images/
-
-docs/
-  ai/
-```
 ## Architecture Rules
 
 - All intra communication MUST use MagicOnion.
@@ -68,9 +51,6 @@ docs/
 - Always use `main`; do not create feature branches.
 - Assume that we dont have to save anything, this is a greenfield project and is not deployed yet.
 - Build with `dotnet build src/AgentsDashboard.slnx -m --tl`.
-- Use TUnit/MTP filtering for focused runs (`-- --treenode-filter ...` / `-- --filter-uid ...`).
-- Use `dotnet build-server shutdown` if build behavior is inconsistent.
-- Run `dotnet format src/AgentsDashboard.slnx --verify-no-changes --severity error` before commit.
 
 ## Local Run
 - LAN: `http://192.168.10.101:5266` (HTTP in local dev)
@@ -109,30 +89,3 @@ npm test
 ```
 
 MTP note: always pass `--project`, `--solution`, or direct `.csproj/.slnx`.
-
-## Harnesses
-
-| Harness | CLI | Provider |
-|---|---|---|
-| Codex | `codex` | OpenAI GPT |
-| OpenCode | `opencode` | OpenCode |
-
-## Execution Model
-
-- Repository is the top-level scope.
-- Run execution mode is first-class domain data (`Default`, `Plan`, `Review`).
-- Runtime execution is policy-driven (`IHarnessRuntime`) and transport-aware.
-- ControlPlane persistence runs on LiteDB with repository abstractions and no EF migration/bootstrap path.
-- TaskRuntimeGateway emits structured events; ControlPlane persists projections (`RunStructuredEventDocument`, `RunDiffSnapshotDocument`, `RunToolProjectionDocument`).
-- Artifact/file/image persistence is DB-backed through LiteDB file storage; run detail downloads stream from DB.
-- Realtime typed updates remain enabled during log/status cutover.
-- Startup/bootstrap non-critical operations run through `IBackgroundWorkCoordinator` with bounded concurrency and dedupe.
-- Runtime image policy/settings are orchestrator-driven (`SystemSettingsDocument.Orchestrator`) with runtime cache + invalidation.
-- Image ensure/rebuild is background work (`TaskRuntimeImageResolution`).
-- Runtime operations/policy UI lives at `/settings/task-runtimes`.
-- Runtime allocation is task-scoped; runtimes are reused per active task and stopped after inactivity timeout.
-- Runtime lifecycle transitions are persisted into `TaskRuntimeDocument` (`Ready`, `Busy`, `Inactive`, `Failed`) with cold-start/inactivity aggregates shown on `/overview`.
-- Semantic chunk search uses LiteDB-backed storage with in-process cosine fallback scoring.
-- Task dispatch is singleton per task (one active/pending run; additional triggers queue).
-- Successful changed runs auto-commit and push default branch; successful no-diff runs end `Obsolete`.
-- Health probes are split: `/alive` (liveness), `/ready` (readiness), `/health` (readiness alias + payload).
