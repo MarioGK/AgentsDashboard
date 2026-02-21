@@ -46,6 +46,64 @@ public sealed class OrchestratorStoreIntegrationTests
     }
 
     [Test]
+    public async Task RepositoryTaskDefaults_WhenUpdated_AppliedToNewTasks()
+    {
+        await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
+
+        var repository = await fixture.Store.CreateRepositoryAsync(
+            new CreateRepositoryRequest(
+                Name: "Defaults Repository",
+                GitUrl: "https://example.com/org/defaults.git",
+                LocalPath: "/tmp/defaults-repository",
+                DefaultBranch: "main"),
+            CancellationToken.None);
+
+        var updatedRepository = await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+            repository.Id,
+            new UpdateRepositoryTaskDefaultsRequest(
+                Kind: TaskKind.Cron,
+                Harness: "OpenCode",
+                ExecutionModeDefault: HarnessExecutionMode.Plan,
+                Command: "echo defaults",
+                CronExpression: "*/5 * * * *",
+                AutoCreatePullRequest: true,
+                Enabled: false,
+                SessionProfileId: "profile-1"),
+            CancellationToken.None);
+
+        await Assert.That(updatedRepository).IsNotNull();
+        if (updatedRepository is null)
+        {
+            return;
+        }
+
+        await Assert.That(updatedRepository.TaskDefaults.Kind).IsEqualTo(TaskKind.Cron);
+        await Assert.That(updatedRepository.TaskDefaults.Harness).IsEqualTo("opencode");
+        await Assert.That(updatedRepository.TaskDefaults.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
+        await Assert.That(updatedRepository.TaskDefaults.Command).IsEqualTo("echo defaults");
+        await Assert.That(updatedRepository.TaskDefaults.CronExpression).IsEqualTo("*/5 * * * *");
+        await Assert.That(updatedRepository.TaskDefaults.AutoCreatePullRequest).IsTrue();
+        await Assert.That(updatedRepository.TaskDefaults.Enabled).IsFalse();
+        await Assert.That(updatedRepository.TaskDefaults.SessionProfileId).IsEqualTo("profile-1");
+
+        var task = await fixture.Store.CreateTaskAsync(
+            new CreateTaskRequest(
+                RepositoryId: repository.Id,
+                Prompt: "run defaults",
+                Name: "defaults task"),
+            CancellationToken.None);
+
+        await Assert.That(task.Kind).IsEqualTo(TaskKind.Cron);
+        await Assert.That(task.Harness).IsEqualTo("opencode");
+        await Assert.That(task.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
+        await Assert.That(task.Command).IsEqualTo("echo defaults");
+        await Assert.That(task.CronExpression).IsEqualTo("*/5 * * * *");
+        await Assert.That(task.AutoCreatePullRequest).IsTrue();
+        await Assert.That(task.Enabled).IsFalse();
+        await Assert.That(task.SessionProfileId).IsEqualTo("profile-1");
+    }
+
+    [Test]
     public async Task TaskAndRunStateOperations_WhenPersisted_ReflectDueTasksAndLatestRunState()
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
@@ -58,43 +116,61 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
+        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+            repository.Id,
+            new UpdateRepositoryTaskDefaultsRequest(
+                Kind: TaskKind.OneShot,
+                Harness: "codex",
+                ExecutionModeDefault: HarnessExecutionMode.Default,
+                Command: "echo one-shot",
+                CronExpression: string.Empty,
+                AutoCreatePullRequest: false,
+                Enabled: true),
+            CancellationToken.None);
+
         var oneShotTask = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Name: "One-shot task",
-                Kind: TaskKind.OneShot,
-                Harness: "Codex",
                 Prompt: "Do one thing",
-                Command: "echo one-shot",
+                Name: "One-shot task"),
+            CancellationToken.None);
+
+        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+            repository.Id,
+            new UpdateRepositoryTaskDefaultsRequest(
+                Kind: TaskKind.Cron,
+                Harness: "codex",
+                ExecutionModeDefault: HarnessExecutionMode.Default,
+                Command: "echo cron",
+                CronExpression: "* * * * *",
                 AutoCreatePullRequest: false,
-                CronExpression: string.Empty,
                 Enabled: true),
             CancellationToken.None);
 
         var cronTask = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Name: "Cron task",
-                Kind: TaskKind.Cron,
-                Harness: "Codex",
                 Prompt: "Do recurring thing",
-                Command: "echo cron",
+                Name: "Cron task"),
+            CancellationToken.None);
+
+        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+            repository.Id,
+            new UpdateRepositoryTaskDefaultsRequest(
+                Kind: TaskKind.OneShot,
+                Harness: "codex",
+                ExecutionModeDefault: HarnessExecutionMode.Default,
+                Command: "echo disabled",
+                CronExpression: string.Empty,
                 AutoCreatePullRequest: false,
-                CronExpression: "* * * * *",
-                Enabled: true),
+                Enabled: false),
             CancellationToken.None);
 
         var disabledTask = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Name: "Disabled task",
-                Kind: TaskKind.OneShot,
-                Harness: "Codex",
                 Prompt: "Disabled",
-                Command: "echo disabled",
-                AutoCreatePullRequest: false,
-                CronExpression: string.Empty,
-                Enabled: false),
+                Name: "Disabled task"),
             CancellationToken.None);
 
         await fixture.Store.UpdateTaskNextRunAsync(cronTask.Id, DateTime.UtcNow.AddMinutes(-1), CancellationToken.None);
@@ -148,14 +224,8 @@ public sealed class OrchestratorStoreIntegrationTests
         var task = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Name: "Structured task",
-                Kind: TaskKind.OneShot,
-                Harness: "codex",
                 Prompt: "stream structured output",
-                Command: "echo structured",
-                AutoCreatePullRequest: false,
-                CronExpression: string.Empty,
-                Enabled: true),
+                Name: "Structured task"),
             CancellationToken.None);
 
         var run = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
@@ -237,18 +307,23 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
+        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+            repository.Id,
+            new UpdateRepositoryTaskDefaultsRequest(
+                Kind: TaskKind.OneShot,
+                Harness: "codex",
+                ExecutionModeDefault: HarnessExecutionMode.Plan,
+                Command: "echo mode",
+                CronExpression: string.Empty,
+                AutoCreatePullRequest: false,
+                Enabled: true),
+            CancellationToken.None);
+
         var task = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Name: "Mode task",
-                Kind: TaskKind.OneShot,
-                Harness: "codex",
                 Prompt: "mode prompt",
-                Command: "echo mode",
-                AutoCreatePullRequest: false,
-                CronExpression: string.Empty,
-                Enabled: true,
-                ExecutionModeDefault: HarnessExecutionMode.Plan),
+                Name: "Mode task"),
             CancellationToken.None);
 
         await Assert.That(task.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
@@ -284,18 +359,23 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
+        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+            repository.Id,
+            new UpdateRepositoryTaskDefaultsRequest(
+                Kind: TaskKind.OneShot,
+                Harness: "codex",
+                ExecutionModeDefault: HarnessExecutionMode.Plan,
+                Command: "echo mode",
+                CronExpression: string.Empty,
+                AutoCreatePullRequest: false,
+                Enabled: true),
+            CancellationToken.None);
+
         var task = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Name: "Run mode task",
-                Kind: TaskKind.OneShot,
-                Harness: "codex",
                 Prompt: "mode prompt",
-                Command: "echo mode",
-                AutoCreatePullRequest: false,
-                CronExpression: string.Empty,
-                Enabled: true,
-                ExecutionModeDefault: HarnessExecutionMode.Plan),
+                Name: "Run mode task"),
             CancellationToken.None);
 
         var defaultRun = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
@@ -326,14 +406,8 @@ public sealed class OrchestratorStoreIntegrationTests
         var task = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Name: "Prune task",
-                Kind: TaskKind.OneShot,
-                Harness: "codex",
                 Prompt: "prune structured rows",
-                Command: "echo prune",
-                AutoCreatePullRequest: false,
-                CronExpression: string.Empty,
-                Enabled: true),
+                Name: "Prune task"),
             CancellationToken.None);
 
         var terminalRun = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
@@ -450,14 +524,8 @@ public sealed class OrchestratorStoreIntegrationTests
         var task = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Name: "Referenced task",
-                Kind: TaskKind.OneShot,
-                Harness: "codex",
                 Prompt: "prune exclusion",
-                Command: "echo prune",
-                AutoCreatePullRequest: false,
-                CronExpression: string.Empty,
-                Enabled: true),
+                Name: "Referenced task"),
             CancellationToken.None);
 
         await fixture.Store.CreateWorkflowAsync(

@@ -774,25 +774,12 @@ public sealed class WorkspaceService(
             return selected;
         }
 
-        if (string.IsNullOrWhiteSpace(request.Command))
-        {
-            return null;
-        }
-
         var createRequest = new CreateTaskRequest(
             RepositoryId: repositoryId,
-            Name: "Workspace Prompt Task",
-            Kind: TaskKind.OneShot,
-            Harness: string.IsNullOrWhiteSpace(request.Harness) ? "codex" : request.Harness.Trim().ToLowerInvariant(),
             Prompt: string.IsNullOrWhiteSpace(request.Prompt)
                 ? "Execute the task and return a structured JSON envelope."
                 : request.Prompt.Trim(),
-            Command: request.Command.Trim(),
-            AutoCreatePullRequest: false,
-            CronExpression: string.Empty,
-            Enabled: true,
-            ExecutionModeDefault: request.ModeOverride,
-            SessionProfileId: request.SessionProfileId);
+            Name: "Workspace Prompt Task");
 
         return await store.CreateTaskAsync(createRequest, cancellationToken);
     }

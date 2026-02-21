@@ -1,6 +1,7 @@
 using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.TaskRuntime.Models;
 using AgentsDashboard.TaskRuntime.Services;
+using MagicOnion;
 using MagicOnion.Server;
 
 namespace AgentsDashboard.TaskRuntime.MagicOnion;
@@ -12,7 +13,7 @@ public sealed class TaskRuntimeService(
     ILogger<TaskRuntimeService> logger)
     : ServiceBase<ITaskRuntimeService>, ITaskRuntimeService
 {
-    public async ValueTask<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.RunId))
         {
@@ -46,13 +47,13 @@ public sealed class TaskRuntimeService(
         };
     }
 
-    public ValueTask<StopJobResult> StopJobAsync(StopJobRequest request, CancellationToken cancellationToken)
+    public UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (string.IsNullOrWhiteSpace(request.RunId))
         {
-            return ValueTask.FromResult(new StopJobResult
+            return UnaryResult.FromResult(new StopJobResult
             {
                 Success = false,
                 ErrorMessage = "run_id is required",
@@ -61,20 +62,20 @@ public sealed class TaskRuntimeService(
 
         var accepted = queue.Cancel(request.RunId);
 
-        return ValueTask.FromResult(new StopJobResult
+        return UnaryResult.FromResult(new StopJobResult
         {
             Success = accepted,
             ErrorMessage = accepted ? null : $"Run {request.RunId} not found or already completed",
         });
     }
 
-    public ValueTask<HealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken)
+    public UnaryResult<HealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (queue.ActiveSlots > queue.MaxSlots)
         {
-            return ValueTask.FromResult(new HealthCheckResult
+            return UnaryResult.FromResult(new HealthCheckResult
             {
                 Success = false,
                 ErrorMessage = $"active slots {queue.ActiveSlots} exceeds max slots {queue.MaxSlots}",
@@ -82,7 +83,7 @@ public sealed class TaskRuntimeService(
             });
         }
 
-        return ValueTask.FromResult(new HealthCheckResult
+        return UnaryResult.FromResult(new HealthCheckResult
         {
             Success = true,
             ErrorMessage = null,
@@ -90,38 +91,38 @@ public sealed class TaskRuntimeService(
         });
     }
 
-    public ValueTask<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request, CancellationToken cancellationToken)
     {
-        return commandService.StartCommandAsync(request, cancellationToken);
+        return await commandService.StartCommandAsync(request, cancellationToken);
     }
 
-    public ValueTask<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request, CancellationToken cancellationToken)
     {
-        return commandService.CancelCommandAsync(request, cancellationToken);
+        return await commandService.CancelCommandAsync(request, cancellationToken);
     }
 
-    public ValueTask<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken)
     {
-        return commandService.GetCommandStatusAsync(request, cancellationToken);
+        return await commandService.GetCommandStatusAsync(request, cancellationToken);
     }
 
-    public ValueTask<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request, CancellationToken cancellationToken)
     {
-        return fileSystemService.ListRuntimeFilesAsync(request, cancellationToken);
+        return await fileSystemService.ListRuntimeFilesAsync(request, cancellationToken);
     }
 
-    public ValueTask<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request, CancellationToken cancellationToken)
     {
-        return fileSystemService.CreateRuntimeFileAsync(request, cancellationToken);
+        return await fileSystemService.CreateRuntimeFileAsync(request, cancellationToken);
     }
 
-    public ValueTask<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request, CancellationToken cancellationToken)
     {
-        return fileSystemService.ReadRuntimeFileAsync(request, cancellationToken);
+        return await fileSystemService.ReadRuntimeFileAsync(request, cancellationToken);
     }
 
-    public ValueTask<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request, CancellationToken cancellationToken)
     {
-        return fileSystemService.DeleteRuntimeFileAsync(request, cancellationToken);
+        return await fileSystemService.DeleteRuntimeFileAsync(request, cancellationToken);
     }
 }

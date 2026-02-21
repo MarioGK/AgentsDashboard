@@ -6,7 +6,7 @@ public sealed class TaskRuntimePoolConfig
     public int ParallelSlotsPerTaskRuntime { get; set; } = 1;
     public int IdleTimeoutMinutes { get; set; } = 5;
     public int StartupTimeoutSeconds { get; set; } = 60;
-    public string ContainerImage { get; set; } = "agentsdashboard-task-runtime:latest";
+    public string ContainerImage { get; set; } = "ghcr.io/mariogk/ai-harness:latest";
     public string ContainerNamePrefix { get; set; } = "task-runtime";
     public string DockerNetwork { get; set; } = "agentsdashboard";
     public TaskRuntimeConnectivityMode ConnectivityMode { get; set; } = TaskRuntimeConnectivityMode.AutoDetect;

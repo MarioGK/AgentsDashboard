@@ -1,6 +1,7 @@
 using AgentsDashboard.Contracts.TaskRuntime;
 using AgentsDashboard.ControlPlane.Services;
 using Grpc.Core;
+using MagicOnion;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
@@ -143,10 +144,10 @@ public sealed class TaskRuntimeFileSystemGatewayTests
         public ReadRuntimeFileRequest? LastReadRequest { get; private set; }
         public DeleteRuntimeFileRequest? LastDeleteRequest { get; private set; }
 
-        public ValueTask<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request, CancellationToken cancellationToken)
+        public UnaryResult<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request, CancellationToken cancellationToken)
         {
             LastListRequest = request;
-            return ValueTask.FromResult(new ListRuntimeFilesResult
+            return UnaryResult.FromResult(new ListRuntimeFilesResult
             {
                 Success = true,
                 Found = true,
@@ -157,10 +158,10 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public ValueTask<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request, CancellationToken cancellationToken)
+        public UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request, CancellationToken cancellationToken)
         {
             LastCreateRequest = request;
-            return ValueTask.FromResult(new CreateRuntimeFileResult
+            return UnaryResult.FromResult(new CreateRuntimeFileResult
             {
                 Success = true,
                 Created = true,
@@ -170,10 +171,10 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public ValueTask<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request, CancellationToken cancellationToken)
+        public UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request, CancellationToken cancellationToken)
         {
             LastReadRequest = request;
-            return ValueTask.FromResult(new ReadRuntimeFileResult
+            return UnaryResult.FromResult(new ReadRuntimeFileResult
             {
                 Found = true,
                 IsDirectory = false,
@@ -186,10 +187,10 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public ValueTask<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request, CancellationToken cancellationToken)
+        public UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request, CancellationToken cancellationToken)
         {
             LastDeleteRequest = request;
-            return ValueTask.FromResult(new DeleteRuntimeFileResult
+            return UnaryResult.FromResult(new DeleteRuntimeFileResult
             {
                 Success = true,
                 Deleted = true,
@@ -199,9 +200,9 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public ValueTask<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request, CancellationToken cancellationToken)
+        public UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request, CancellationToken cancellationToken)
         {
-            return ValueTask.FromResult(new DispatchJobResult
+            return UnaryResult.FromResult(new DispatchJobResult
             {
                 Success = true,
                 ErrorMessage = null,
@@ -209,18 +210,18 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public ValueTask<StopJobResult> StopJobAsync(StopJobRequest request, CancellationToken cancellationToken)
+        public UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request, CancellationToken cancellationToken)
         {
-            return ValueTask.FromResult(new StopJobResult
+            return UnaryResult.FromResult(new StopJobResult
             {
                 Success = true,
                 ErrorMessage = null,
             });
         }
 
-        public ValueTask<HealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken)
+        public UnaryResult<HealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken)
         {
-            return ValueTask.FromResult(new HealthCheckResult
+            return UnaryResult.FromResult(new HealthCheckResult
             {
                 Success = true,
                 ErrorMessage = null,
@@ -228,9 +229,9 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public ValueTask<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request, CancellationToken cancellationToken)
+        public UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request, CancellationToken cancellationToken)
         {
-            return ValueTask.FromResult(new StartRuntimeCommandResult
+            return UnaryResult.FromResult(new StartRuntimeCommandResult
             {
                 Success = true,
                 ErrorMessage = null,
@@ -239,9 +240,9 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public ValueTask<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request, CancellationToken cancellationToken)
+        public UnaryResult<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request, CancellationToken cancellationToken)
         {
-            return ValueTask.FromResult(new CancelRuntimeCommandResult
+            return UnaryResult.FromResult(new CancelRuntimeCommandResult
             {
                 Success = true,
                 ErrorMessage = null,
@@ -249,9 +250,9 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public ValueTask<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken)
+        public UnaryResult<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken)
         {
-            return ValueTask.FromResult(new RuntimeCommandStatusResult
+            return UnaryResult.FromResult(new RuntimeCommandStatusResult
             {
                 Found = true,
                 CommandId = request.CommandId,

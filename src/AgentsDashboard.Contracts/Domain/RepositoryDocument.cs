@@ -83,6 +83,7 @@ public class RepositoryDocument
     public DateTime? LastCloneAtUtc { get; set; }
     public DateTime? LastViewedAtUtc { get; set; }
     public string LastSyncError { get; set; } = string.Empty;
+    public RepositoryTaskDefaultsConfig TaskDefaults { get; set; } = new();
     public List<InstructionFile> InstructionFiles { get; set; } = [];
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

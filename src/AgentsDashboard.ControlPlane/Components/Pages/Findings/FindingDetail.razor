@@ -97,12 +97,6 @@ else
 <MudDialog @bind-Visible="_showTaskDialog">
     <TitleContent>Create Follow-up Task</TitleContent>
     <DialogContent>
-        <MudTextField @bind-Value="_taskName" Label="Task Name" Class="mb-3" />
-        <MudSelect @bind-Value="_taskHarness" Label="Harness" Class="mb-3">
-            <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
-            <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
-        </MudSelect>
-        <MudTextField @bind-Value="_taskCommand" Label="Command" Class="mb-3" />
         <MudTextField @bind-Value="_taskPrompt" Label="Prompt" Lines="4" />
     </DialogContent>
     <DialogActions>
@@ -117,7 +111,7 @@ else
         <MudAlert Severity="Severity.Info" Class="mb-3">
             This will create a task linked to run <strong>@(_finding?.RunId?[..8])</strong> for regression replay.
         </MudAlert>
-        <MudTextField @bind-Value="_regressionTaskName" Label="Task Name" Class="mb-3" />
+        <MudTextField @bind-Value="_regressionTaskPrompt" Label="Prompt" Lines="4" />
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => _showRegressionDialog = false">Cancel</MudButton>
@@ -132,11 +126,8 @@ else
     private string _assignee = string.Empty;
     private bool _showTaskDialog;
     private bool _showRegressionDialog;
-    private string _taskName = string.Empty;
-    private string _taskHarness = "codex";
-    private string _taskCommand = string.Empty;
     private string _taskPrompt = string.Empty;
-    private string _regressionTaskName = "Regression Replay";
+    private string _regressionTaskPrompt = "Replay the linked failure, validate reproducibility, and summarize required fixes.";
 
     protected override async Task OnInitializedAsync()
     {
@@ -161,13 +152,11 @@ else
     private async Task CreateFollowupTaskAsync()
     {
         if (_finding is null) return;
+        if (string.IsNullOrWhiteSpace(_taskPrompt)) return;
         _showTaskDialog = false;
 
         var created = await CreateTaskFromFindingAsync(
-            _taskName.Trim(),
-            _taskHarness,
-            _taskCommand,
-            _taskPrompt,
+            _taskPrompt.Trim(),
             [_finding.RunId]);
 
         if (created is not null)
@@ -182,11 +171,13 @@ else
         var template = await TemplateService.GetTemplateByTemplateIdAsync("regression-replay", CancellationToken.None);
         if (template is null) return;
 
+        var prompt = string.IsNullOrWhiteSpace(_regressionTaskPrompt)
+            ? template.Prompt
+            : _regressionTaskPrompt.Trim();
+        if (string.IsNullOrWhiteSpace(prompt)) return;
+
         var created = await CreateTaskFromFindingAsync(
-            _regressionTaskName.Trim(),
-            template.Harness,
-            string.Join(" && ", template.Commands),
-            template.Prompt,
+            prompt,
             [_finding.RunId]);
 
         if (created is not null)
@@ -229,9 +220,6 @@ else
     };
 
     private async Task<TaskDocument?> CreateTaskFromFindingAsync(
-        string name,
-        string harness,
-        string command,
         string prompt,
         List<string>? linkedFailureRuns)
     {
@@ -248,14 +236,7 @@ else
 
         var createTaskRequest = new CreateTaskRequest(
             RepositoryId: sourceTask.RepositoryId,
-            Name: name,
-            Kind: TaskKind.OneShot,
-            Harness: harness,
             Prompt: prompt,
-            Command: command,
-            AutoCreatePullRequest: false,
-            CronExpression: string.Empty,
-            Enabled: true,
             LinkedFailureRuns: linkedFailureRuns ?? [_finding.RunId]);
 
         return await Store.CreateTaskAsync(createTaskRequest, CancellationToken.None);

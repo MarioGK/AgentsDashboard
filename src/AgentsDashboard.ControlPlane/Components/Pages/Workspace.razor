@@ -183,90 +183,11 @@
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_selectedRepository.Name</MudChip>
                         </MudStack>
 
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                            Repository defaults: @_selectedRepository.TaskDefaults.Harness / @_selectedRepository.TaskDefaults.Kind / @_selectedRepository.TaskDefaults.ExecutionModeDefault
+                        </MudText>
+
                         <MudGrid>
-                            <MudItem xs="12" md="3">
-                                <MudTextField T="string"
-                                              @ref="_createTaskNameField"
-                                              @bind-Value="_createTaskName"
-                                              Label="Task Name"
-                                              Variant="Variant.Outlined"
-                                              Margin="Margin.Dense"
-                                              Immediate="true"
-                                              data-testid="workspace-create-task-name" />
-                            </MudItem>
-
-                            <MudItem xs="12" md="3">
-                                <MudSelect T="string"
-                                           @bind-Value="_createTaskHarness"
-                                           Label="Harness"
-                                           Variant="Variant.Outlined"
-                                           Margin="Margin.Dense"
-                                           data-testid="workspace-create-task-harness">
-                                    <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
-                                    <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
-                                </MudSelect>
-                            </MudItem>
-
-                            <MudItem xs="12" md="3">
-                                <MudSelect T="TaskKind"
-                                           @bind-Value="_createTaskKind"
-                                           Label="Kind"
-                                           Variant="Variant.Outlined"
-                                           Margin="Margin.Dense"
-                                           data-testid="workspace-create-task-kind">
-                                    <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
-                                    <MudSelectItem T="TaskKind" Value="@TaskKind.Cron">Cron</MudSelectItem>
-                                    <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
-                                </MudSelect>
-                            </MudItem>
-
-                            <MudItem xs="12" md="3">
-                                <MudSelect T="HarnessExecutionMode"
-                                           @bind-Value="_createTaskModeDefault"
-                                           Label="Default Mode"
-                                           Variant="Variant.Outlined"
-                                           Margin="Margin.Dense"
-                                           data-testid="workspace-create-task-default-mode">
-                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
-                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
-                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
-                                </MudSelect>
-                            </MudItem>
-
-                            <MudItem xs="12" md="3">
-                                <MudSelect T="string"
-                                           @bind-Value="_createTaskSessionProfileId"
-                                           Label="Session Profile"
-                                           Variant="Variant.Outlined"
-                                           Margin="Margin.Dense">
-                                    <MudSelectItem T="string" Value="@string.Empty">None</MudSelectItem>
-                                    @foreach (var profile in _sessionProfiles.Where(x => x.Enabled))
-                                    {
-                                        <MudSelectItem T="string" Value="@profile.Id">@profile.Name</MudSelectItem>
-                                    }
-                                </MudSelect>
-                            </MudItem>
-
-                            <MudItem xs="12" md="8">
-                                <MudTextField T="string"
-                                              @bind-Value="_createTaskCommand"
-                                              Label="Shell Command"
-                                              Variant="Variant.Outlined"
-                                              Margin="Margin.Dense"
-                                              Immediate="true"
-                                              data-testid="workspace-create-task-command" />
-                            </MudItem>
-
-                            <MudItem xs="12" md="4">
-                                <MudTextField T="string"
-                                              @bind-Value="_createTaskCron"
-                                              Label="Cron Expression"
-                                              Variant="Variant.Outlined"
-                                              Margin="Margin.Dense"
-                                              Immediate="true"
-                                              data-testid="workspace-create-task-cron" />
-                            </MudItem>
-
                             <MudItem xs="12">
                                 <MudText Typo="Typo.caption" Class="mb-1">Prompt</MudText>
                                 <TaskPromptComposer InputId="@_createTaskPromptInputId"
@@ -283,10 +204,6 @@
                         </MudGrid>
 
                         <MudStack Row Spacing="1" Class="mt-2">
-                            <MudSwitch T="bool"
-                                       @bind-Value="_createTaskAutoPr"
-                                       Label="Auto PR"
-                                       Color="Color.Primary" />
                             <MudSpacer />
                             <MudButton Variant="Variant.Outlined"
                                        Color="Color.Default"
@@ -627,35 +544,41 @@
 
                                 <MudExpansionPanels Elevation="0">
                                     <MudExpansionPanel Text="Agent Team Configuration" Dense>
-                                        @for (var index = 0; index < _agentTeamMembers.Count; index++)
+                                        @{
+                                            var memberIndex = 1;
+                                        }
+
+                                        @foreach (var member in _agentTeamMembers)
                                         {
                                             <MudPaper Class="workspace-structured-section mb-1" Elevation="0">
-                                                <MudText Typo="Typo.caption">Member @(index + 1)</MudText>
+                                                <MudText Typo="Typo.caption">Member @memberIndex</MudText>
                                                 <MudGrid>
                                                     <MudItem xs="12" md="2">
-                                                        <MudSelect T="string" @bind-Value="_agentTeamMembers[index].Harness" Label="Harness" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                                                        <MudSelect T="string" @bind-Value="member.Harness" Label="Harness" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
                                                             <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
                                                             <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
                                                         </MudSelect>
                                                     </MudItem>
                                                     <MudItem xs="12" md="2">
-                                                        <MudSelect T="HarnessExecutionMode" @bind-Value="_agentTeamMembers[index].Mode" Label="Mode" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                                                        <MudSelect T="HarnessExecutionMode" @bind-Value="member.Mode" Label="Mode" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
                                                             <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
                                                             <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
                                                             <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
                                                         </MudSelect>
                                                     </MudItem>
                                                     <MudItem xs="12" md="4">
-                                                        <MudTextField T="string" @bind-Value="_agentTeamMembers[index].RolePrompt" Label="Role Prompt" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                                        <MudTextField T="string" @bind-Value="member.RolePrompt" Label="Role Prompt" Variant="Variant.Outlined" Margin="Margin.Dense" />
                                                     </MudItem>
                                                     <MudItem xs="12" md="2">
-                                                        <MudTextField T="string" @bind-Value="_agentTeamMembers[index].ModelOverride" Label="Model Override" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                                        <MudTextField T="string" @bind-Value="member.ModelOverride" Label="Model Override" Variant="Variant.Outlined" Margin="Margin.Dense" />
                                                     </MudItem>
                                                     <MudItem xs="12" md="2">
-                                                        <MudNumericField T="int?" @bind-Value="_agentTeamMembers[index].TimeoutSeconds" Label="Timeout (sec)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+                                                        <MudNumericField T="int?" @bind-Value="member.TimeoutSeconds" Label="Timeout (sec)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
                                                     </MudItem>
                                                 </MudGrid>
                                             </MudPaper>
+
+                                            memberIndex++;
                                         }
 
                                         <MudPaper Class="workspace-structured-section mt-1" Elevation="0">
@@ -978,20 +901,10 @@
 
     private bool _isCreateTaskMode;
     private bool _isCreatingTask;
-    private MudTextField<string>? _createTaskNameField;
-    private bool _pendingCreateTaskNameFocus;
 
-    private string _createTaskName = string.Empty;
-    private TaskKind _createTaskKind = TaskKind.OneShot;
-    private string _createTaskHarness = "codex";
     private string _createTaskPrompt = "Describe the goal, constraints, validation, and output format.";
     private IReadOnlyList<WorkspaceImageInput> _createTaskPromptImages = [];
     private readonly string _createTaskPromptInputId = $"workspace-create-task-prompt-{Guid.NewGuid():N}";
-    private string _createTaskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Workspace run\",\"artifacts\":[]}'";
-    private string _createTaskCron = string.Empty;
-    private bool _createTaskAutoPr;
-    private HarnessExecutionMode _createTaskModeDefault = HarnessExecutionMode.Default;
-    private string _createTaskSessionProfileId = string.Empty;
 
     private bool _isSubmittingComposer;
     private HarnessExecutionMode? _composerModeOverride;
@@ -1133,12 +1046,6 @@
             await InvokeAsync(StateHasChanged);
         }
 
-        if (_pendingCreateTaskNameFocus && _createTaskNameField is not null)
-        {
-            _pendingCreateTaskNameFocus = false;
-            await _createTaskNameField.FocusAsync();
-        }
-
         if (_workspaceJsModule is not null)
         {
             if (ShouldAttachComposerBridge() && _composerKeyBridgeHandle is null)
@@ -1212,7 +1119,6 @@
                 _selectedTaskPromptHistory = [];
                 _sessionProfiles = [];
                 _selectedSessionProfileId = string.Empty;
-                _createTaskSessionProfileId = string.Empty;
                 _composerImages = [];
             }
         }
@@ -1261,7 +1167,6 @@
         _selectedRunAiSummary = null;
         _selectedTaskPromptHistory = [];
         _selectedSessionProfileId = string.Empty;
-        _createTaskSessionProfileId = string.Empty;
         _composerImages = [];
 
         if (syncSelection && SelectionService.SelectedRepositoryId != repositoryId)
@@ -1578,7 +1483,6 @@
 
         ResetCreateTaskForm();
         _isCreateTaskMode = true;
-        _pendingCreateTaskNameFocus = true;
     }
 
     private void CloseCreateTaskForm()
@@ -1589,16 +1493,8 @@
 
     private void ResetCreateTaskForm()
     {
-        _createTaskName = string.Empty;
-        _createTaskKind = TaskKind.OneShot;
-        _createTaskHarness = "codex";
         _createTaskPrompt = "Describe the goal, constraints, validation, and output format.";
         _createTaskPromptImages = [];
-        _createTaskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Workspace run\",\"artifacts\":[]}'";
-        _createTaskCron = string.Empty;
-        _createTaskAutoPr = false;
-        _createTaskModeDefault = HarnessExecutionMode.Default;
-        _createTaskSessionProfileId = string.Empty;
     }
 
     private async Task CreateTaskAsync()
@@ -1608,9 +1504,10 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_createTaskName))
+        var taskPrompt = AppendCreateTaskPromptImageReferences(_createTaskPrompt, _createTaskPromptImages).Trim();
+        if (string.IsNullOrWhiteSpace(taskPrompt))
         {
-            Snackbar.Add("Task name is required.", Severity.Warning);
+            Snackbar.Add("Task prompt is required.", Severity.Warning);
             return;
         }
 
@@ -1618,24 +1515,26 @@
 
         try
         {
-            var taskPrompt = AppendCreateTaskPromptImageReferences(_createTaskPrompt, _createTaskPromptImages);
+            var titleResult = await WorkspaceAiService.GenerateTaskTitleAsync(_selectedRepository.Id, taskPrompt, CancellationToken.None);
+            var taskName = titleResult.Success && !string.IsNullOrWhiteSpace(titleResult.Text)
+                ? titleResult.Text
+                : BuildFallbackTaskName(taskPrompt);
+
             var request = new CreateTaskRequest(
                 RepositoryId: _selectedRepository.Id,
-                Name: _createTaskName.Trim(),
-                Kind: _createTaskKind,
-                Harness: _createTaskHarness,
                 Prompt: taskPrompt,
-                Command: _createTaskCommand,
-                AutoCreatePullRequest: _createTaskAutoPr,
-                CronExpression: _createTaskCron,
-                Enabled: true,
-                ExecutionModeDefault: _createTaskModeDefault,
-                SessionProfileId: string.IsNullOrWhiteSpace(_createTaskSessionProfileId) ? null : _createTaskSessionProfileId);
+                Name: taskName);
 
             var created = await Store.CreateTaskAsync(request, CancellationToken.None);
             _isCreateTaskMode = false;
             await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: false);
             await SelectTaskAsync(created.Id);
+
+            if (titleResult.UsedFallback && !string.IsNullOrWhiteSpace(titleResult.Message))
+            {
+                Snackbar.Add(titleResult.Message, Severity.Warning);
+            }
+
             Snackbar.Add("Task created.", Severity.Success);
         }
         catch (Exception ex)
@@ -2619,6 +2518,26 @@ Composer Focus:
             task.ArtifactPatterns.Count > 0 ? [.. task.ArtifactPatterns] : null,
             task.LinkedFailureRuns.Count > 0 ? [.. task.LinkedFailureRuns] : null,
             task.ExecutionModeDefault);
+    }
+
+    private static string BuildFallbackTaskName(string prompt)
+    {
+        var firstLine = prompt
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? string.Empty;
+
+        var normalized = string.Join(
+            " ",
+            firstLine.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+        if (normalized.Length == 0)
+        {
+            return $"Task {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+        }
+
+        return normalized.Length <= 80
+            ? normalized
+            : normalized[..80].TrimEnd();
     }
 
     private static string TruncateForDisplay(string text, int maxLength)

@@ -11,6 +11,7 @@ public interface IOrchestratorStore
     Task<List<RepositoryDocument>> ListRepositoriesAsync(CancellationToken cancellationToken);
     Task<RepositoryDocument?> GetRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<RepositoryDocument?> UpdateRepositoryAsync(string repositoryId, UpdateRepositoryRequest request, CancellationToken cancellationToken);
+    Task<RepositoryDocument?> UpdateRepositoryTaskDefaultsAsync(string repositoryId, UpdateRepositoryTaskDefaultsRequest request, CancellationToken cancellationToken);
     Task<RepositoryDocument?> UpdateRepositoryGitStateAsync(string repositoryId, RepositoryGitStatus gitStatus, CancellationToken cancellationToken);
     Task<RepositoryDocument?> TouchRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<bool> DeleteRepositoryAsync(string repositoryId, CancellationToken cancellationToken);

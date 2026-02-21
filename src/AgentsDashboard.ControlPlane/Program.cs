@@ -34,6 +34,7 @@ if (startupOptions is not null)
 builder.Services.AddControlPlaneServices(builder.Environment.IsDevelopment());
 
 var app = builder.Build();
+Microsoft.AspNetCore.Hosting.StaticWebAssets.StaticWebAssetsLoader.UseStaticWebAssets(app.Environment, app.Configuration);
 
 if (!app.Environment.IsDevelopment())
 {

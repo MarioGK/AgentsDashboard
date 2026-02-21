@@ -688,6 +688,27 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             catch (DockerApiException ex) when (ex.Message.Contains("already in use", StringComparison.OrdinalIgnoreCase))
             {
                 logger.LogDebug(ex, "Task runtime container {ContainerName} already exists, reusing existing runtime", containerName);
+
+                var existingContainer = await FindContainerByNameAsync(containerName, cancellationToken);
+                if (existingContainer is not null
+                    && !string.Equals(existingContainer.State, "running", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogInformation(
+                        "Recreating stopped task runtime container {ContainerName} ({ContainerId}) after name conflict",
+                        containerName,
+                        existingContainer.ID[..Math.Min(12, existingContainer.ID.Length)]);
+
+                    await _dockerClient.Containers.RemoveContainerAsync(
+                        existingContainer.ID,
+                        new ContainerRemoveParameters { Force = true },
+                        cancellationToken);
+
+                    created = await _dockerClient.Containers.CreateContainerAsync(createParameters, cancellationToken);
+                    await _dockerClient.Containers.StartContainerAsync(created.ID, new ContainerStartParameters(), cancellationToken);
+                    await RefreshWorkersAsync(runtime, cancellationToken);
+                    return await WaitForWorkerReadyAsync(workerId, runtime, cancellationToken);
+                }
+
                 await RefreshWorkersAsync(runtime, cancellationToken);
                 return await WaitForWorkerReadyAsync(workerId, runtime, cancellationToken);
             }
@@ -814,6 +835,22 @@ public sealed class DockerTaskRuntimeLifecycleManager(
 
             logger.LogWarning(ex, "Unable to create Docker network {Network}; worker creation may fall back.", networkName);
         }
+    }
+
+    private async Task<ContainerListResponse?> FindContainerByNameAsync(string containerName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(containerName))
+        {
+            return null;
+        }
+
+        var containers = await _dockerClient.Containers.ListContainersAsync(
+            new ContainersListParameters { All = true },
+            cancellationToken);
+
+        return containers.FirstOrDefault(container =>
+            container.Names?.Any(name =>
+                string.Equals(name.Trim('/'), containerName, StringComparison.OrdinalIgnoreCase)) == true);
     }
 
     private async Task<bool> StopWorkerAsync(

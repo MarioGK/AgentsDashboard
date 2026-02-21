@@ -30,6 +30,7 @@ public sealed class OrchestratorStore(
             GitUrl = request.GitUrl,
             LocalPath = request.LocalPath,
             DefaultBranch = string.IsNullOrWhiteSpace(request.DefaultBranch) ? "main" : request.DefaultBranch,
+            TaskDefaults = NormalizeRepositoryTaskDefaults(null),
         };
 
         db.Repositories.Add(repository);
@@ -40,13 +41,26 @@ public sealed class OrchestratorStore(
     public async Task<List<RepositoryDocument>> ListRepositoriesAsync(CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Repositories.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        var repositories = await db.Repositories.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        foreach (var repository in repositories)
+        {
+            repository.TaskDefaults = NormalizeRepositoryTaskDefaults(repository.TaskDefaults);
+        }
+
+        return repositories;
     }
 
     public async Task<RepositoryDocument?> GetRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Repositories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
+        var repository = await db.Repositories.AsNoTracking().FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
+        if (repository is null)
+        {
+            return null;
+        }
+
+        repository.TaskDefaults = NormalizeRepositoryTaskDefaults(repository.TaskDefaults);
+        return repository;
     }
 
     public async Task<RepositoryDocument?> UpdateRepositoryAsync(string repositoryId, UpdateRepositoryRequest request, CancellationToken cancellationToken)
@@ -60,6 +74,49 @@ public sealed class OrchestratorStore(
         repository.GitUrl = request.GitUrl;
         repository.LocalPath = request.LocalPath;
         repository.DefaultBranch = string.IsNullOrWhiteSpace(request.DefaultBranch) ? "main" : request.DefaultBranch;
+        repository.TaskDefaults = NormalizeRepositoryTaskDefaults(repository.TaskDefaults);
+        await db.SaveChangesAsync(cancellationToken);
+        return repository;
+    }
+
+    public async Task<RepositoryDocument?> UpdateRepositoryTaskDefaultsAsync(
+        string repositoryId,
+        UpdateRepositoryTaskDefaultsRequest request,
+        CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == repositoryId, cancellationToken);
+        if (repository is null)
+        {
+            return null;
+        }
+
+        var taskDefaults = NormalizeRepositoryTaskDefaults(
+            new RepositoryTaskDefaultsConfig
+            {
+                Kind = request.Kind,
+                Harness = request.Harness,
+                ExecutionModeDefault = request.ExecutionModeDefault,
+                SessionProfileId = request.SessionProfileId?.Trim() ?? string.Empty,
+                Command = request.Command,
+                CronExpression = request.CronExpression,
+                AutoCreatePullRequest = request.AutoCreatePullRequest,
+                Enabled = request.Enabled,
+            });
+
+        if (taskDefaults.Kind == TaskKind.Cron && !string.IsNullOrWhiteSpace(taskDefaults.CronExpression))
+        {
+            try
+            {
+                _ = CronExpression.Parse(taskDefaults.CronExpression, CronFormat.Standard);
+            }
+            catch (Exception ex)
+            {
+                throw new ArgumentException($"Invalid cron expression '{taskDefaults.CronExpression}': {ex.Message}", nameof(request.CronExpression), ex);
+            }
+        }
+
+        repository.TaskDefaults = taskDefaults;
         await db.SaveChangesAsync(cancellationToken);
         return repository;
     }
@@ -82,6 +139,7 @@ public sealed class OrchestratorStore(
         repository.LastScannedAtUtc = gitStatus.ScannedAtUtc;
         repository.LastFetchedAtUtc = gitStatus.FetchedAtUtc;
         repository.LastSyncError = gitStatus.LastSyncError;
+        repository.TaskDefaults = NormalizeRepositoryTaskDefaults(repository.TaskDefaults);
 
         await db.SaveChangesAsync(cancellationToken);
         return repository;
@@ -95,6 +153,7 @@ public sealed class OrchestratorStore(
             return null;
 
         repository.LastViewedAtUtc = DateTime.UtcNow;
+        repository.TaskDefaults = NormalizeRepositoryTaskDefaults(repository.TaskDefaults);
         await db.SaveChangesAsync(cancellationToken);
         return repository;
     }
@@ -126,6 +185,7 @@ public sealed class OrchestratorStore(
             return null;
 
         repo.InstructionFiles = instructionFiles;
+        repo.TaskDefaults = NormalizeRepositoryTaskDefaults(repo.TaskDefaults);
         await db.SaveChangesAsync(cancellationToken);
         return repo;
     }
@@ -572,27 +632,44 @@ public sealed class OrchestratorStore(
     public async Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var repository = await db.Repositories.FirstOrDefaultAsync(x => x.Id == request.RepositoryId, cancellationToken);
+        if (repository is null)
+        {
+            throw new InvalidOperationException($"Repository '{request.RepositoryId}' was not found.");
+        }
+
+        repository.TaskDefaults = NormalizeRepositoryTaskDefaults(repository.TaskDefaults);
+        var normalizedPrompt = request.Prompt.Trim();
+        if (normalizedPrompt.Length == 0)
+        {
+            throw new ArgumentException("Prompt is required.", nameof(request.Prompt));
+        }
+
+        var normalizedName = string.IsNullOrWhiteSpace(request.Name)
+            ? BuildTaskNameFromPrompt(normalizedPrompt)
+            : request.Name.Trim();
+
         var task = new TaskDocument
         {
             RepositoryId = request.RepositoryId,
-            Name = request.Name,
-            Kind = request.Kind,
-            Harness = request.Harness.Trim().ToLowerInvariant(),
-            ExecutionModeDefault = request.ExecutionModeDefault,
-            SessionProfileId = request.SessionProfileId?.Trim() ?? string.Empty,
-            Prompt = request.Prompt,
-            Command = request.Command,
-            AutoCreatePullRequest = request.AutoCreatePullRequest,
-            CronExpression = request.CronExpression,
-            Enabled = request.Enabled,
-            RetryPolicy = request.RetryPolicy ?? new RetryPolicyConfig(),
-            Timeouts = request.Timeouts ?? new TimeoutConfig(),
-            SandboxProfile = request.SandboxProfile ?? new SandboxProfileConfig(),
-            ArtifactPolicy = request.ArtifactPolicy ?? new ArtifactPolicyConfig(),
-            ApprovalProfile = request.ApprovalProfile ?? new ApprovalProfileConfig(),
-            ConcurrencyLimit = request.ConcurrencyLimit ?? 0,
-            InstructionFiles = request.InstructionFiles ?? [],
-            ArtifactPatterns = request.ArtifactPatterns ?? [],
+            Name = normalizedName,
+            Kind = repository.TaskDefaults.Kind,
+            Harness = repository.TaskDefaults.Harness,
+            ExecutionModeDefault = repository.TaskDefaults.ExecutionModeDefault,
+            SessionProfileId = repository.TaskDefaults.SessionProfileId,
+            Prompt = normalizedPrompt,
+            Command = repository.TaskDefaults.Command,
+            AutoCreatePullRequest = repository.TaskDefaults.AutoCreatePullRequest,
+            CronExpression = repository.TaskDefaults.CronExpression,
+            Enabled = repository.TaskDefaults.Enabled,
+            RetryPolicy = new RetryPolicyConfig(),
+            Timeouts = new TimeoutConfig(),
+            SandboxProfile = new SandboxProfileConfig(),
+            ArtifactPolicy = new ArtifactPolicyConfig(),
+            ApprovalProfile = new ApprovalProfileConfig(),
+            ConcurrencyLimit = 0,
+            InstructionFiles = [],
+            ArtifactPatterns = [],
             LinkedFailureRuns = request.LinkedFailureRuns ?? [],
         };
 
@@ -3476,6 +3553,46 @@ public sealed class OrchestratorStore(
         return NormalizeRequiredValue(harness, nameof(harness)).ToLowerInvariant();
     }
 
+    private static RepositoryTaskDefaultsConfig NormalizeRepositoryTaskDefaults(RepositoryTaskDefaultsConfig? taskDefaults)
+    {
+        var kind = taskDefaults?.Kind ?? TaskKind.OneShot;
+        if (!Enum.IsDefined(kind))
+        {
+            kind = TaskKind.OneShot;
+        }
+
+        var mode = taskDefaults?.ExecutionModeDefault ?? HarnessExecutionMode.Default;
+        if (!Enum.IsDefined(mode))
+        {
+            mode = HarnessExecutionMode.Default;
+        }
+
+        var defaultCommand = new RepositoryTaskDefaultsConfig().Command;
+        var command = taskDefaults?.Command?.Trim() ?? string.Empty;
+        if (command.Length == 0)
+        {
+            command = defaultCommand;
+        }
+
+        var harness = taskDefaults?.Harness?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (harness.Length == 0)
+        {
+            harness = "codex";
+        }
+
+        return new RepositoryTaskDefaultsConfig
+        {
+            Kind = kind,
+            Harness = harness,
+            ExecutionModeDefault = mode,
+            SessionProfileId = taskDefaults?.SessionProfileId?.Trim() ?? string.Empty,
+            Command = command,
+            CronExpression = taskDefaults?.CronExpression?.Trim() ?? string.Empty,
+            AutoCreatePullRequest = taskDefaults?.AutoCreatePullRequest ?? false,
+            Enabled = taskDefaults?.Enabled ?? true,
+        };
+    }
+
     private static DateTime? ComputeNextAutomationRun(string triggerKind, string cronExpression, bool enabled, DateTime nowUtc)
     {
         if (!enabled)
@@ -3527,6 +3644,23 @@ public sealed class OrchestratorStore(
         }
 
         return normalized;
+    }
+
+    private static string BuildTaskNameFromPrompt(string prompt)
+    {
+        var firstLine = prompt
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? string.Empty;
+
+        var normalized = Regex.Replace(firstLine, @"\s+", " ").Trim();
+        if (normalized.Length == 0)
+        {
+            return $"Task {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+        }
+
+        return normalized.Length <= 80
+            ? normalized
+            : normalized[..80].TrimEnd();
     }
 
     private static double[]? ParseEmbeddingPayload(string? payload)

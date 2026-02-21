@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Domain;
 using AgentsDashboard.ControlPlane.Data;
 using LlmTornado;
@@ -26,6 +27,11 @@ public interface IWorkspaceAiService
     Task<WorkspaceAiTextResult> GeneratePromptFromContextAsync(
         string repositoryId,
         string context,
+        CancellationToken cancellationToken);
+
+    Task<WorkspaceAiTextResult> GenerateTaskTitleAsync(
+        string repositoryId,
+        string prompt,
         CancellationToken cancellationToken);
 
     Task<WorkspaceAiTextResult> SummarizeRunOutputAsync(
@@ -71,6 +77,8 @@ public sealed class WorkspaceAiService(
 
     private const int MaxEmbeddingInputCharacters = 6000;
     private const int FallbackEmbeddingDimensions = 128;
+    private const int TaskTitleMaxRetries = 5;
+    private const int TaskTitleMaxLength = 80;
 
     public async Task<WorkspaceAiTextResult> SuggestPromptContinuationAsync(
         string repositoryId,
@@ -197,6 +205,71 @@ public sealed class WorkspaceAiService(
             UsedFallback: true,
             KeyConfigured: true,
             Message: result.Error ?? "AI generation failed; returned template prompt.");
+    }
+
+    public async Task<WorkspaceAiTextResult> GenerateTaskTitleAsync(
+        string repositoryId,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        var normalizedPrompt = prompt?.Trim() ?? string.Empty;
+        if (normalizedPrompt.Length == 0)
+        {
+            return new WorkspaceAiTextResult(
+                false,
+                string.Empty,
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "Prompt is required.");
+        }
+
+        var fallback = BuildFallbackTaskTitle(normalizedPrompt);
+        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new WorkspaceAiTextResult(
+                true,
+                fallback,
+                UsedFallback: true,
+                KeyConfigured: false,
+                Message: "AI key not configured; using fallback task title.");
+        }
+
+        string? lastError = null;
+
+        for (var attempt = 0; attempt < TaskTitleMaxRetries; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var result = await llmTornadoGatewayService.GenerateTaskTitleAsync(
+                normalizedPrompt,
+                apiKey,
+                cancellationToken);
+
+            if (result.Success)
+            {
+                var title = NormalizeTaskTitle(result.Text);
+                if (!string.IsNullOrWhiteSpace(title))
+                {
+                    return new WorkspaceAiTextResult(
+                        true,
+                        title,
+                        UsedFallback: false,
+                        KeyConfigured: true,
+                        Message: null);
+                }
+            }
+
+            lastError = result.Error;
+        }
+
+        return new WorkspaceAiTextResult(
+            true,
+            fallback,
+            UsedFallback: true,
+            KeyConfigured: true,
+            Message: lastError ?? "AI title generation failed; using fallback task title.");
     }
 
     public async Task<WorkspaceAiTextResult> SummarizeRunOutputAsync(
@@ -521,6 +594,41 @@ Expected output format:
 - Verification performed
 - Remaining risks
 """;
+    }
+
+    private static string BuildFallbackTaskTitle(string prompt)
+    {
+        var firstLine = prompt
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? string.Empty;
+
+        var normalized = Regex.Replace(firstLine, @"\s+", " ").Trim();
+        if (normalized.Length == 0)
+        {
+            return $"Task {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+        }
+
+        return normalized.Length <= TaskTitleMaxLength
+            ? normalized
+            : normalized[..TaskTitleMaxLength].TrimEnd();
+    }
+
+    private static string NormalizeTaskTitle(string value)
+    {
+        var firstLine = value
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? string.Empty;
+
+        var normalized = Regex.Replace(firstLine, @"\s+", " ").Trim();
+        normalized = normalized.Trim('"', '\'', '`', '.', ':', ';', '-', '*');
+        if (normalized.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return normalized.Length <= TaskTitleMaxLength
+            ? normalized
+            : normalized[..TaskTitleMaxLength].TrimEnd();
     }
 
     private string BuildFallbackRunSummary(string outputJson, IReadOnlyList<RunLogEvent> runLogs)

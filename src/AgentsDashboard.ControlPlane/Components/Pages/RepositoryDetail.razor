@@ -6,7 +6,7 @@
 @inject Services.RunDispatcher Dispatcher
 @inject Services.SecretCryptoService Crypto
 @inject Services.TaskTemplateService TemplateService
-@inject Services.LlmTornadoGatewayService LlmTornadoGateway
+@inject Services.IWorkspaceAiService WorkspaceAiService
 @inject Services.IGitWorkspaceService GitWorkspace
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
@@ -111,38 +111,75 @@ else
                 </MudPaper>
 
                 <MudPaper Class="pa-4 mb-3">
-                    <MudText Typo="Typo.h6" Class="mb-3">Create Task</MudText>
+                    <MudText Typo="Typo.h6" Class="mb-3">Task Defaults</MudText>
                     <MudGrid>
-                        <MudItem xs="12" md="4"><MudTextField @bind-Value="_taskName" Label="Task Name" /></MudItem>
-                        <MudItem xs="12" md="2">
-                            <MudSelect T="TaskKind" @bind-Value="_taskKind" Label="Kind">
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="TaskKind" @bind-Value="_taskDefaultsKind" Label="Kind">
                                 <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
                                 <MudSelectItem T="TaskKind" Value="@TaskKind.Cron">Cron</MudSelectItem>
                                 <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
                             </MudSelect>
                         </MudItem>
-                        <MudItem xs="12" md="2">
-                                <MudSelect T="string" @bind-Value="_taskHarness" Label="Harness">
-                                    <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
-                                    <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
-                                </MudSelect>
-                            </MudItem>
-                        <MudItem xs="12" md="2">
-                            <MudSelect T="HarnessExecutionMode" @bind-Value="_taskExecutionModeDefault" Label="Default Mode">
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="string" @bind-Value="_taskDefaultsHarness" Label="Harness">
+                                <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
+                                <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="HarnessExecutionMode" @bind-Value="_taskDefaultsExecutionMode" Label="Default Mode">
                                 <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
                                 <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
                                 <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
                             </MudSelect>
                         </MudItem>
-                        <MudItem xs="12" md="2" Class="d-flex align-center">
-                            <MudSwitch @bind-Value="_taskEnabled" Label="Enabled" />
+                        <MudItem xs="12" md="3">
+                            <MudSelect T="string" @bind-Value="_taskDefaultsSessionProfileId" Label="Session Profile">
+                                <MudSelectItem T="string" Value="@string.Empty">None</MudSelectItem>
+                                @foreach (var profile in _sessionProfiles.Where(x => x.Enabled))
+                                {
+                                    <MudSelectItem T="string" Value="@profile.Id">@profile.Name</MudSelectItem>
+                                }
+                            </MudSelect>
                         </MudItem>
                     </MudGrid>
                     <MudGrid Class="mt-2">
-                        <MudItem xs="12" md="4"><MudTextField @bind-Value="_taskCron" Label="Cron (if cron)" /></MudItem>
-                        <MudItem xs="12" md="6"><MudTextField @bind-Value="_taskCommand" Label="Shell Command" /></MudItem>
-                        <MudItem xs="12" md="2" Class="d-flex align-center"><MudSwitch @bind-Value="_taskAutoPr" Label="Auto PR" /></MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_taskDefaultsCron" Label="Cron Expression" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_taskDefaultsCommand" Label="Shell Command" />
+                        </MudItem>
+                        <MudItem xs="12" md="1" Class="d-flex align-center">
+                            <MudSwitch @bind-Value="_taskDefaultsAutoPr" Label="Auto PR" />
+                        </MudItem>
+                        <MudItem xs="12" md="1" Class="d-flex align-center">
+                            <MudSwitch @bind-Value="_taskDefaultsEnabled" Label="Enabled" />
+                        </MudItem>
                     </MudGrid>
+                    <MudStack Row Spacing="2" Class="mt-3">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   OnClick="SaveTaskDefaultsAsync"
+                                   Disabled="_isSavingTaskDefaults">
+                            @if (_isSavingTaskDefaults)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Saving...</span>
+                            }
+                            else
+                            {
+                                <span>Save Task Defaults</span>
+                            }
+                        </MudButton>
+                    </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-4 mb-3">
+                    <MudText Typo="Typo.h6" Class="mb-3">Create Task</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2">
+                        Enter prompt guidance and create. Name and runtime settings are resolved from repository defaults.
+                    </MudText>
                     <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">Prompt (Monaco)</MudText>
                     <div style="height: 420px;">
                         <StandaloneCodeEditor @ref="_taskPromptEditor"
@@ -151,32 +188,20 @@ else
                                               ConstructionOptions="EditorOptions" />
                     </div>
                     <MudStack Row Spacing="2" Class="mt-3">
-                        <MudButton Variant="Variant.Outlined"
-                                   Color="Color.Secondary"
-                                   StartIcon="@Icons.Material.Filled.AutoAwesome"
-                                   OnClick="GenerateTaskPromptAsync"
-                                   Disabled="@(_isGeneratingTaskPrompt || string.IsNullOrWhiteSpace(_taskName))">
-                            @if (_isGeneratingTaskPrompt)
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   OnClick="CreateTaskAsync"
+                                   Disabled="_isCreatingTask">
+                            @if (_isCreatingTask)
                             {
                                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                                <span>Generating...</span>
+                                <span>Creating...</span>
                             }
                             else
                             {
-                                <span>Generate Prompt (GLM-5)</span>
+                                <span>Create Task</span>
                             }
                         </MudButton>
-                    </MudStack>
-                    <MudStack Row Spacing="2" Class="mt-3">
-                        @if (_editingTaskId is not null)
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="CreateTaskAsync">Update Task</MudButton>
-                            <MudButton Variant="Variant.Outlined" OnClick="CancelEdit">Cancel</MudButton>
-                        }
-                        else
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateTaskAsync">Create Task</MudButton>
-                        }
                     </MudStack>
                 </MudPaper>
 
@@ -202,7 +227,6 @@ else
                         <MudTd>
                             <MudStack Row>
                                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="() => TriggerTaskAsync(context)">Run</MudButton>
-                                <MudButton Variant="Variant.Text" Color="Color.Secondary" Size="Size.Small" OnClick="() => StartEditTask(context)">Edit</MudButton>
                                 <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="() => DeleteTaskAsync(context)">Delete</MudButton>
                             </MudStack>
                         </MudTd>
@@ -358,30 +382,21 @@ else
     private readonly Dictionary<string, RunDocument?> _latestRunsByTaskId = new(StringComparer.Ordinal);
     private bool _taskStatusLoading;
     private List<TaskTemplateDocument> _templates = [];
+    private List<RunSessionProfileDocument> _sessionProfiles = [];
     private readonly List<PromptSkillDocument> _repositoryPromptSkills = [];
     private readonly List<PromptSkillDocument> _globalPromptSkills = [];
 
-    private string _taskName = string.Empty;
-    private TaskKind _taskKind = TaskKind.OneShot;
-    private string _taskHarness = "codex";
-    private string _taskCron = string.Empty;
     private string _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
-    private string _taskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
-    private HarnessExecutionMode _taskExecutionModeDefault = HarnessExecutionMode.Default;
-    private bool _taskAutoPr;
-    private bool _taskEnabled = true;
-    private string? _editingTaskId = null;
-    private int _taskRetryMaxAttempts = 1;
-    private int _taskExecutionTimeout = 600;
-    private int _taskOverallTimeout = 1800;
-    private double _taskCpuLimit = 1.5;
-    private string _taskMemoryLimit = "2g";
-    private bool _taskNetworkDisabled;
-    private bool _taskReadOnlyRootFs;
-    private int _taskMaxArtifacts = 50;
-    private long _taskMaxTotalSizeBytes = 104_857_600;
-    private List<string> _taskArtifactPatterns = [];
-    private List<string> _taskLinkedFailureRuns = [];
+    private TaskKind _taskDefaultsKind = TaskKind.OneShot;
+    private string _taskDefaultsHarness = "codex";
+    private HarnessExecutionMode _taskDefaultsExecutionMode = HarnessExecutionMode.Default;
+    private string _taskDefaultsSessionProfileId = string.Empty;
+    private string _taskDefaultsCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
+    private string _taskDefaultsCron = string.Empty;
+    private bool _taskDefaultsAutoPr;
+    private bool _taskDefaultsEnabled = true;
+    private bool _isSavingTaskDefaults;
+    private bool _isCreatingTask;
     private string _githubToken = string.Empty;
     private string _codexToken = string.Empty;
     private string _opencodeToken = string.Empty;
@@ -391,7 +406,6 @@ else
     private readonly Dictionary<int, StandaloneCodeEditor> _instructionEditors = [];
     private StandaloneCodeEditor? _taskPromptEditor;
     private string _instructionSaveMessage = string.Empty;
-    private bool _isGeneratingTaskPrompt;
     private string _promptSkillName = string.Empty;
     private string _promptSkillTrigger = string.Empty;
     private string _promptSkillDescription = string.Empty;
@@ -449,6 +463,8 @@ else
 
         await Store.TouchRepositoryAsync(_repository.Id, CancellationToken.None);
         _templates = await TemplateService.ListTemplatesAsync(CancellationToken.None);
+        _sessionProfiles = await Store.ListRunSessionProfilesAsync(_repository.Id, includeGlobal: true, CancellationToken.None);
+        ApplyRepositoryTaskDefaults(_repository);
         _taskPromptSkillAutocompleteBound = false;
         _taskPromptSkillAutocompleteSyncedVersion = -1;
         await LoadPromptSkillsAsync();
@@ -459,78 +475,7 @@ else
 
     private void ApplyTemplate(TaskTemplateDocument template)
     {
-        _taskName = template.Name;
-        _taskKind = template.Kind;
-        _taskHarness = template.Harness;
-        _taskCommand = template.Commands.Count > 0 ? string.Join(" && ", template.Commands) : string.Empty;
         _taskPrompt = template.Prompt;
-        _taskCron = template.CronExpression;
-        _taskExecutionModeDefault = HarnessExecutionMode.Default;
-        _taskEnabled = true;
-        _taskAutoPr = template.AutoCreatePullRequest;
-        _taskRetryMaxAttempts = template.RetryPolicy.MaxAttempts;
-        _taskExecutionTimeout = template.Timeouts.ExecutionSeconds;
-        _taskOverallTimeout = template.Timeouts.OverallSeconds;
-        _taskCpuLimit = template.SandboxProfile.CpuLimit;
-        _taskMemoryLimit = template.SandboxProfile.MemoryLimit;
-        _taskNetworkDisabled = template.SandboxProfile.NetworkDisabled;
-        _taskReadOnlyRootFs = template.SandboxProfile.ReadOnlyRootFs;
-        _taskMaxArtifacts = template.ArtifactPolicy.MaxArtifacts;
-        _taskMaxTotalSizeBytes = template.ArtifactPolicy.MaxTotalSizeBytes;
-        _taskArtifactPatterns = [.. template.ArtifactPatterns];
-        _taskLinkedFailureRuns = [.. template.LinkedFailureRuns];
-        _editingTaskId = null;
-        StateHasChanged();
-    }
-
-    private void StartEditTask(TaskDocument task)
-    {
-        _editingTaskId = task.Id;
-        _taskName = task.Name;
-        _taskKind = task.Kind;
-        _taskHarness = task.Harness;
-        _taskCommand = task.Command;
-        _taskPrompt = task.Prompt;
-        _taskCron = task.CronExpression;
-        _taskExecutionModeDefault = task.ExecutionModeDefault ?? HarnessExecutionMode.Default;
-        _taskEnabled = task.Enabled;
-        _taskAutoPr = task.AutoCreatePullRequest;
-        _taskRetryMaxAttempts = task.RetryPolicy.MaxAttempts;
-        _taskExecutionTimeout = task.Timeouts.ExecutionSeconds;
-        _taskOverallTimeout = task.Timeouts.OverallSeconds;
-        _taskCpuLimit = task.SandboxProfile.CpuLimit;
-        _taskMemoryLimit = task.SandboxProfile.MemoryLimit;
-        _taskNetworkDisabled = task.SandboxProfile.NetworkDisabled;
-        _taskReadOnlyRootFs = task.SandboxProfile.ReadOnlyRootFs;
-        _taskMaxArtifacts = task.ArtifactPolicy.MaxArtifacts;
-        _taskMaxTotalSizeBytes = task.ArtifactPolicy.MaxTotalSizeBytes;
-        _taskArtifactPatterns = [.. task.ArtifactPatterns];
-        _taskLinkedFailureRuns = [.. task.LinkedFailureRuns];
-        _ = SyncTaskPromptEditorAsync();
-        StateHasChanged();
-    }
-
-    private void CancelEdit()
-    {
-        _editingTaskId = null;
-        _taskName = string.Empty;
-        _taskCron = string.Empty;
-        _taskAutoPr = false;
-        _taskEnabled = true;
-        _taskExecutionModeDefault = HarnessExecutionMode.Default;
-        _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
-        _taskCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
-        _taskRetryMaxAttempts = 1;
-        _taskExecutionTimeout = 600;
-        _taskOverallTimeout = 1800;
-        _taskCpuLimit = 1.5;
-        _taskMemoryLimit = "2g";
-        _taskNetworkDisabled = false;
-        _taskReadOnlyRootFs = false;
-        _taskMaxArtifacts = 50;
-        _taskMaxTotalSizeBytes = 104_857_600;
-        _taskArtifactPatterns = [];
-        _taskLinkedFailureRuns = [];
         _ = SyncTaskPromptEditorAsync();
         StateHasChanged();
     }
@@ -736,142 +681,145 @@ else
         return (trigger?.Trim() ?? string.Empty).TrimStart('/').ToLowerInvariant();
     }
 
+    private void ApplyRepositoryTaskDefaults(RepositoryDocument repository)
+    {
+        var defaults = repository.TaskDefaults ?? new RepositoryTaskDefaultsConfig();
+        _taskDefaultsKind = defaults.Kind;
+        _taskDefaultsHarness = defaults.Harness;
+        _taskDefaultsExecutionMode = defaults.ExecutionModeDefault;
+        _taskDefaultsSessionProfileId = defaults.SessionProfileId;
+        _taskDefaultsCommand = defaults.Command;
+        _taskDefaultsCron = defaults.CronExpression;
+        _taskDefaultsAutoPr = defaults.AutoCreatePullRequest;
+        _taskDefaultsEnabled = defaults.Enabled;
+    }
+
+    private async Task SaveTaskDefaultsAsync()
+    {
+        if (_repository is null || _isSavingTaskDefaults)
+        {
+            return;
+        }
+
+        _isSavingTaskDefaults = true;
+
+        try
+        {
+            var request = new UpdateRepositoryTaskDefaultsRequest(
+                Kind: _taskDefaultsKind,
+                Harness: _taskDefaultsHarness,
+                ExecutionModeDefault: _taskDefaultsExecutionMode,
+                Command: _taskDefaultsCommand,
+                CronExpression: _taskDefaultsCron,
+                AutoCreatePullRequest: _taskDefaultsAutoPr,
+                Enabled: _taskDefaultsEnabled,
+                SessionProfileId: string.IsNullOrWhiteSpace(_taskDefaultsSessionProfileId) ? null : _taskDefaultsSessionProfileId);
+
+            var updated = await Store.UpdateRepositoryTaskDefaultsAsync(_repository.Id, request, CancellationToken.None);
+            if (updated is null)
+            {
+                Snackbar.Add("Repository not found.", Severity.Warning);
+                return;
+            }
+
+            _repository = updated;
+            ApplyRepositoryTaskDefaults(updated);
+            Snackbar.Add("Task defaults saved.", Severity.Success);
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save task defaults: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSavingTaskDefaults = false;
+        }
+    }
+
     private async Task CreateTaskAsync()
     {
-        if (_repository is null || string.IsNullOrWhiteSpace(_taskName))
+        if (_repository is null || _isCreatingTask)
         {
             return;
         }
 
         if (_taskPromptEditor is not null)
+        {
             _taskPrompt = await _taskPromptEditor.GetValue();
-
-        var retryPolicy = new RetryPolicyConfig(_taskRetryMaxAttempts);
-        var timeouts = new TimeoutConfig(_taskExecutionTimeout, _taskOverallTimeout);
-        var sandboxProfile = new SandboxProfileConfig(_taskCpuLimit, _taskMemoryLimit, _taskNetworkDisabled, _taskReadOnlyRootFs);
-        var artifactPolicy = new ArtifactPolicyConfig(_taskMaxArtifacts, _taskMaxTotalSizeBytes);
-
-        if (_editingTaskId is not null)
-        {
-            var updateRequest = new UpdateTaskRequest(
-                Name: _taskName.Trim(),
-                Kind: _taskKind,
-                Harness: _taskHarness,
-                Prompt: _taskPrompt,
-                Command: _taskCommand,
-                AutoCreatePullRequest: _taskAutoPr,
-                CronExpression: _taskCron,
-                Enabled: _taskEnabled,
-                RetryPolicy: retryPolicy,
-                Timeouts: timeouts,
-                SandboxProfile: sandboxProfile,
-                ArtifactPolicy: artifactPolicy,
-                ArtifactPatterns: _taskArtifactPatterns.Count > 0 ? _taskArtifactPatterns : null,
-                LinkedFailureRuns: _taskLinkedFailureRuns.Count > 0 ? _taskLinkedFailureRuns : null,
-                ExecutionModeDefault: _taskExecutionModeDefault);
-            await Store.UpdateTaskAsync(_editingTaskId, updateRequest, CancellationToken.None);
-            _editingTaskId = null;
-        }
-        else
-        {
-            var request = new CreateTaskRequest(
-                RepositoryId: _repository.Id,
-                Name: _taskName.Trim(),
-                Kind: _taskKind,
-                Harness: _taskHarness,
-                Prompt: _taskPrompt,
-                Command: _taskCommand,
-                AutoCreatePullRequest: _taskAutoPr,
-                CronExpression: _taskCron,
-                Enabled: _taskEnabled,
-                RetryPolicy: retryPolicy,
-                Timeouts: timeouts,
-                SandboxProfile: sandboxProfile,
-                ArtifactPolicy: artifactPolicy,
-                ArtifactPatterns: _taskArtifactPatterns.Count > 0 ? _taskArtifactPatterns : null,
-                LinkedFailureRuns: _taskLinkedFailureRuns.Count > 0 ? _taskLinkedFailureRuns : null,
-                ExecutionModeDefault: _taskExecutionModeDefault);
-
-            await Store.CreateTaskAsync(request, CancellationToken.None);
         }
 
-        _taskName = string.Empty;
-        _taskCron = string.Empty;
-        _taskAutoPr = false;
-        _taskArtifactPatterns = [];
-        _taskLinkedFailureRuns = [];
-
-        await RefreshAsync();
-    }
-
-    private async Task GenerateTaskPromptAsync()
-    {
-        if (_repository is null)
+        var prompt = _taskPrompt.Trim();
+        if (prompt.Length == 0)
         {
+            Snackbar.Add("Task prompt is required.", Severity.Warning);
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_taskName))
-        {
-            Snackbar.Add("Set a task name before generating a prompt.", Severity.Warning);
-            return;
-        }
-
-        _isGeneratingTaskPrompt = true;
-        StateHasChanged();
+        _isCreatingTask = true;
 
         try
         {
-            var llmTornadoSecret = await Store.GetProviderSecretAsync("global", "llmtornado", CancellationToken.None);
-            string? apiKey = null;
+            var title = await WorkspaceAiService.GenerateTaskTitleAsync(_repository.Id, prompt, CancellationToken.None);
+            var taskName = title.Success && !string.IsNullOrWhiteSpace(title.Text)
+                ? title.Text
+                : BuildFallbackTaskName(prompt);
 
-            if (llmTornadoSecret is not null && !string.IsNullOrWhiteSpace(llmTornadoSecret.EncryptedValue))
+            var request = new CreateTaskRequest(
+                RepositoryId: _repository.Id,
+                Prompt: prompt,
+                Name: taskName);
+
+            await Store.CreateTaskAsync(request, CancellationToken.None);
+
+            if (title.UsedFallback && !string.IsNullOrWhiteSpace(title.Message))
             {
-                apiKey = Crypto.Decrypt(llmTornadoSecret.EncryptedValue);
+                Snackbar.Add(title.Message, Severity.Warning);
             }
 
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                Snackbar.Add("Configure a global LlmTornado key in Provider Settings first.", Severity.Warning);
-                return;
-            }
-
-            var result = await LlmTornadoGateway.GenerateTaskPromptAsync(
-                new TaskPromptGenerationRequest(
-                    _repository.Name,
-                    _taskName.Trim(),
-                    _taskHarness,
-                    _taskKind.ToString(),
-                    _taskCommand,
-                    _taskCron),
-                apiKey,
-                CancellationToken.None);
-
-            if (!result.Success)
-            {
-                Snackbar.Add(result.Error ?? "Failed to generate prompt.", Severity.Error);
-                return;
-            }
-
-            _taskPrompt = result.Prompt;
+            _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
             await SyncTaskPromptEditorAsync();
-            Snackbar.Add("Prompt generated with GLM-5.", Severity.Success);
+            await RefreshAsync();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to generate prompt: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Failed to create task: {ex.Message}", Severity.Error);
         }
         finally
         {
-            _isGeneratingTaskPrompt = false;
-            StateHasChanged();
+            _isCreatingTask = false;
         }
     }
 
     private async Task SyncTaskPromptEditorAsync()
     {
         if (_taskPromptEditor is not null)
+        {
             await _taskPromptEditor.SetValue(_taskPrompt);
+        }
+    }
+
+    private static string BuildFallbackTaskName(string prompt)
+    {
+        var firstLine = prompt
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? string.Empty;
+
+        var normalized = string.Join(
+            " ",
+            firstLine.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+        if (normalized.Length == 0)
+        {
+            return $"Task {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+        }
+
+        return normalized.Length <= 80
+            ? normalized
+            : normalized[..80].TrimEnd();
     }
 
     private async Task DeleteTaskAsync(TaskDocument task)

@@ -108,7 +108,7 @@ public sealed class OrchestratorRuntimeSettingsProvider(
             MaxQueueDepth: ClampPositive(orchestrator.MaxQueueDepth, 1, 50000, 200),
             QueueWaitTimeoutSeconds: ClampPositive(orchestrator.QueueWaitTimeoutSeconds, 5, 7200, 300),
             TaskRuntimeImagePolicy: orchestrator.TaskRuntimeImagePolicy,
-            ContainerImage: string.IsNullOrWhiteSpace(taskRuntimeDefaults.ContainerImage) ? "agentsdashboard-task-runtime:latest" : taskRuntimeDefaults.ContainerImage,
+            ContainerImage: string.IsNullOrWhiteSpace(taskRuntimeDefaults.ContainerImage) ? "ghcr.io/mariogk/ai-harness:latest" : taskRuntimeDefaults.ContainerImage,
             ContainerNamePrefix: string.IsNullOrWhiteSpace(taskRuntimeDefaults.ContainerNamePrefix) ? "task-runtime" : taskRuntimeDefaults.ContainerNamePrefix,
             DockerNetwork: string.IsNullOrWhiteSpace(taskRuntimeDefaults.DockerNetwork) ? "agentsdashboard" : taskRuntimeDefaults.DockerNetwork,
             ConnectivityMode: taskRuntimeDefaults.ConnectivityMode,

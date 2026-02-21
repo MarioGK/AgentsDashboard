@@ -179,6 +179,33 @@ Do not include code fences.
             operationName: "context prompt generation");
     }
 
+    public Task<LlmTornadoTextResult> GenerateTaskTitleAsync(
+        string prompt,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return Task.FromResult(new LlmTornadoTextResult(false, string.Empty, "Prompt is required."));
+        }
+
+        return GenerateTextAsync(
+            """
+You create concise task titles for coding work items.
+Rules:
+- Output one single line.
+- Maximum 80 characters.
+- No markdown, quotes, bullets, or trailing punctuation.
+- Keep wording specific and action-oriented.
+""",
+            $"Prompt:\n{prompt}",
+            apiKey,
+            temperature: 0.2,
+            maxTokens: 120,
+            cancellationToken,
+            operationName: "task title generation");
+    }
+
     public Task<LlmTornadoTextResult> SummarizeRunOutputAsync(
         string outputJson,
         string runLogs,
