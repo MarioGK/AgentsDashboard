@@ -1,0 +1,184 @@
+@page "/settings/skills"
+@layout SettingsLayout
+@rendermode InteractiveServer
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
+@inject ISnackbar Snackbar
+@using AgentsDashboard.Contracts.Domain
+
+@namespace AgentsDashboard.ControlPlane.Components.Pages
+<PageTitle>Prompt Skills - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Global Prompt Skills</MudText>
+</MudStack>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.body2" Class="mb-3">
+        Global skills are available in every repository task prompt autocomplete when typing <code>/</code>.
+    </MudText>
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_name" Label="Skill Name" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_trigger" Label="Trigger (without /)" />
+        </MudItem>
+        <MudItem xs="12" md="4" Class="d-flex align-center">
+            <MudSwitch @bind-Value="_enabled" Label="Enabled" />
+        </MudItem>
+    </MudGrid>
+    <MudGrid Class="mt-2">
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_description" Label="Description" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_content" Label="Skill Content" Lines="6" />
+        </MudItem>
+    </MudGrid>
+    <MudStack Row Spacing="2" Class="mt-3">
+        @if (_editingSkillId is not null)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="SaveAsync">Update Skill</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="CancelEdit">Cancel</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">Create Skill</MudButton>
+        }
+    </MudStack>
+</MudPaper>
+
+<MudTable Items="_skills" Dense Hover>
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Trigger</MudTh>
+        <MudTh>Enabled</MudTh>
+        <MudTh>Updated</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">@context.Name</MudTd>
+        <MudTd DataLabel="Trigger"><code>@($"/{context.Trigger}")</code></MudTd>
+        <MudTd DataLabel="Enabled">@context.Enabled</MudTd>
+        <MudTd DataLabel="Updated">@context.UpdatedAtUtc.ToLocalTime().ToString("g")</MudTd>
+        <MudTd DataLabel="Actions">
+            <MudStack Row>
+                <MudButton Variant="Variant.Text" Color="Color.Secondary" Size="Size.Small" OnClick="() => StartEdit(context)">Edit</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="() => DeleteAsync(context)">Delete</MudButton>
+            </MudStack>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private const string GlobalRepositoryScope = "global";
+
+    private readonly List<PromptSkillDocument> _skills = [];
+    private string _name = string.Empty;
+    private string _trigger = string.Empty;
+    private string _description = string.Empty;
+    private string _content = string.Empty;
+    private bool _enabled = true;
+    private string? _editingSkillId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _skills.Clear();
+        _skills.AddRange(await Store.ListPromptSkillsAsync(GlobalRepositoryScope, includeGlobal: false, CancellationToken.None));
+    }
+
+    private async Task SaveAsync()
+    {
+        var trigger = NormalizeTrigger(_trigger);
+
+        try
+        {
+            if (_editingSkillId is not null)
+            {
+                var update = new UpdatePromptSkillRequest(
+                    _name,
+                    trigger,
+                    _content,
+                    _description,
+                    _enabled);
+                var updated = await Store.UpdatePromptSkillAsync(_editingSkillId, update, CancellationToken.None);
+                if (updated is null)
+                {
+                    Snackbar.Add("Skill not found.", Severity.Warning);
+                    return;
+                }
+            }
+            else
+            {
+                var create = new CreatePromptSkillRequest(
+                    GlobalRepositoryScope,
+                    _name,
+                    trigger,
+                    _content,
+                    _description,
+                    _enabled);
+                await Store.CreatePromptSkillAsync(create, CancellationToken.None);
+            }
+
+            CancelEdit();
+            await LoadAsync();
+            Snackbar.Add("Skill saved.", Severity.Success);
+        }
+        catch (ArgumentException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private void StartEdit(PromptSkillDocument skill)
+    {
+        _editingSkillId = skill.Id;
+        _name = skill.Name;
+        _trigger = skill.Trigger;
+        _description = skill.Description;
+        _content = skill.Content;
+        _enabled = skill.Enabled;
+    }
+
+    private void CancelEdit()
+    {
+        _editingSkillId = null;
+        _name = string.Empty;
+        _trigger = string.Empty;
+        _description = string.Empty;
+        _content = string.Empty;
+        _enabled = true;
+    }
+
+    private async Task DeleteAsync(PromptSkillDocument skill)
+    {
+        var deleted = await Store.DeletePromptSkillAsync(skill.Id, CancellationToken.None);
+        if (!deleted)
+        {
+            Snackbar.Add("Skill not found.", Severity.Warning);
+            return;
+        }
+
+        if (_editingSkillId == skill.Id)
+        {
+            CancelEdit();
+        }
+
+        await LoadAsync();
+        Snackbar.Add("Skill deleted.", Severity.Success);
+    }
+
+    private static string NormalizeTrigger(string trigger)
+    {
+        return (trigger?.Trim() ?? string.Empty).TrimStart('/').ToLowerInvariant();
+    }
+}

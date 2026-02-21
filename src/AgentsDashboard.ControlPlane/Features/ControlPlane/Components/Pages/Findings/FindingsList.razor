@@ -1,0 +1,139 @@
+@page "/settings/findings"
+@layout SettingsLayout
+@rendermode InteractiveServer
+
+@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
+
+@namespace AgentsDashboard.ControlPlane.Components.Pages
+<PageTitle>Findings - AgentsDashboard</PageTitle>
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Findings</MudText>
+    <MudSpacer />
+    <MudSelect T="string" Label="Severity" @bind-Value="_severityFilter" Variant="Variant.Outlined"
+               Margin="Margin.Dense" Style="max-width: 160px;" Clearable>
+        <MudSelectItem Value="@("All")">All</MudSelectItem>
+        <MudSelectItem Value="@("Low")">Low</MudSelectItem>
+        <MudSelectItem Value="@("Medium")">Medium</MudSelectItem>
+        <MudSelectItem Value="@("High")">High</MudSelectItem>
+        <MudSelectItem Value="@("Critical")">Critical</MudSelectItem>
+    </MudSelect>
+    <MudSelect T="string" Label="State" @bind-Value="_stateFilter" Variant="Variant.Outlined"
+               Margin="Margin.Dense" Style="max-width: 160px;" Clearable>
+        <MudSelectItem Value="@("All")">All</MudSelectItem>
+        <MudSelectItem Value="@("New")">New</MudSelectItem>
+        <MudSelectItem Value="@("Acknowledged")">Acknowledged</MudSelectItem>
+        <MudSelectItem Value="@("InProgress")">In Progress</MudSelectItem>
+        <MudSelectItem Value="@("Resolved")">Resolved</MudSelectItem>
+        <MudSelectItem Value="@("Ignored")">Ignored</MudSelectItem>
+    </MudSelect>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">
+        Refresh
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate />
+}
+else if (FilteredFindings.Count == 0)
+{
+    <MudAlert Severity="Severity.Success">No findings match your filters.</MudAlert>
+}
+else
+{
+    <MudPaper Elevation="2">
+        <MudTable Items="@FilteredFindings" Hover Dense Striped>
+            <HeaderContent>
+                <MudTh>ID</MudTh>
+                <MudTh>Title</MudTh>
+                <MudTh>Severity</MudTh>
+                <MudTh>State</MudTh>
+                <MudTh>Run</MudTh>
+                <MudTh>Created</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="ID">
+                    <MudLink Href="@($"/settings/findings/{context.Id}")">@context.Id[..8]</MudLink>
+                </MudTd>
+                <MudTd DataLabel="Title">@context.Title</MudTd>
+                <MudTd DataLabel="Severity">
+                    <MudChip T="string" Size="Size.Small" Color="@GetSeverityColor(context.Severity)">
+                        @context.Severity
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="State">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@context.State</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Run">
+                    <MudLink Href="@($"/settings/runs/{context.RunId}")">@context.RunId[..8]</MudLink>
+                </MudTd>
+                <MudTd DataLabel="Created">@context.CreatedAtUtc.ToString("g")</MudTd>
+                <MudTd DataLabel="Actions">
+                    @if (context.State == FindingState.New)
+                    {
+                        <MudTooltip Text="Acknowledge" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
+                                           OnClick="() => UpdateStateAsync(context, FindingState.Acknowledged)" />
+                        </MudTooltip>
+                    }
+                    @if (context.State is FindingState.New or FindingState.Acknowledged)
+                    {
+                        <MudTooltip Text="Resolve" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success"
+                                           OnClick="() => UpdateStateAsync(context, FindingState.Resolved)" />
+                        </MudTooltip>
+                        <MudTooltip Text="Ignore" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.VisibilityOff" Size="Size.Small"
+                                           OnClick="() => UpdateStateAsync(context, FindingState.Ignored)" />
+                        </MudTooltip>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private List<FindingDocument> _findings = [];
+    private bool _loading = true;
+    private string _severityFilter = "All";
+    private string _stateFilter = "All";
+
+    private List<FindingDocument> FilteredFindings => _findings
+        .Where(f => _severityFilter == "All" || f.Severity.ToString() == _severityFilter)
+        .Where(f => _stateFilter == "All" || f.State.ToString() == _stateFilter)
+        .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _findings = await Store.ListAllFindingsAsync(CancellationToken.None);
+        _loading = false;
+    }
+
+    private async Task UpdateStateAsync(FindingDocument finding, FindingState newState)
+    {
+        var updated = await Store.UpdateFindingStateAsync(finding.Id, newState, CancellationToken.None);
+        if (updated is not null)
+        {
+            var idx = _findings.FindIndex(f => f.Id == finding.Id);
+            if (idx >= 0) _findings[idx] = updated;
+        }
+    }
+
+    private static Color GetSeverityColor(FindingSeverity severity) => severity switch
+    {
+        FindingSeverity.Critical => Color.Error,
+        FindingSeverity.High => Color.Warning,
+        FindingSeverity.Medium => Color.Info,
+        FindingSeverity.Low => Color.Default,
+        _ => Color.Default,
+    };
+}

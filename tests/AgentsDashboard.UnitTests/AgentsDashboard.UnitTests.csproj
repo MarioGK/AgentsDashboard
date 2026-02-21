@@ -11,17 +11,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="ControlPlane/Services/RunDispatcherTests.cs" />
-    <Compile Remove="ControlPlane/Services/RunDispatcherTests_SutBuilder.cs" />
-    <Compile Remove="ControlPlane/Services/RunStructuredViewServiceTests.cs" />
-    <Compile Remove="ControlPlane/Services/TaskRetentionCleanupServiceTests.cs" />
-    <Compile Remove="ControlPlane/Services/TaskRetentionCleanupServiceTests_StaticTimeProvider.cs" />
-    <Compile Remove="ControlPlane/Services/RecoveryServiceTests.cs" />
-    <Compile Remove="ControlPlane/Services/RecoveryServiceTests_StaticTimeProvider.cs" />
-    <Compile Remove="ControlPlane/Services/LiteDbVectorSearchStatusServiceTests.cs" />
-    <Compile Remove="ControlPlane/Services/TaskRuntimeEventListenerServiceTests.cs" />
-    <Compile Remove="ControlPlane/Services/OrchestratorRuntimeSettingsProviderTests.cs" />
-    <Compile Remove="TaskRuntime/MagicOnion/TaskRuntimeServiceTests.cs" />
+    <Compile Remove="Features/ControlPlane/Services/RunDispatcherTests.cs" />
+    <Compile Remove="Features/ControlPlane/Services/RunDispatcherTests_SutBuilder.cs" />
+    <Compile Remove="Features/ControlPlane/Services/RunStructuredViewServiceTests.cs" />
+    <Compile Remove="Features/ControlPlane/Services/TaskRetentionCleanupServiceTests.cs" />
+    <Compile Remove="Features/ControlPlane/Services/TaskRetentionCleanupServiceTests_StaticTimeProvider.cs" />
+    <Compile Remove="Features/ControlPlane/Services/RecoveryServiceTests.cs" />
+    <Compile Remove="Features/ControlPlane/Services/RecoveryServiceTests_StaticTimeProvider.cs" />
+    <Compile Remove="Features/ControlPlane/Services/LiteDbVectorSearchStatusServiceTests.cs" />
+    <Compile Remove="Features/ControlPlane/Services/TaskRuntimeEventListenerServiceTests.cs" />
+    <Compile Remove="Features/ControlPlane/Services/OrchestratorRuntimeSettingsProviderTests.cs" />
+    <Compile Remove="Features/TaskRuntime/MagicOnion/TaskRuntimeServiceTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,587 @@
+@page "/search"
+@rendermode InteractiveServer
+@inject Data.IOrchestratorStore Store
+@inject Services.IGlobalSearchService SearchService
+@implements IAsyncDisposable
+@using AgentsDashboard.ControlPlane.Services
+
+@namespace AgentsDashboard.ControlPlane.Components.Pages
+<PageTitle>Search</PageTitle>
+
+<MudStack Class="search-page" Spacing="2">
+    <MudPaper Class="search-header" Elevation="0">
+        <MudStack Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h4">Global Search</MudText>
+                <MudSpacer />
+                @if (_result is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_result.TotalMatches matches</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_result.Hits.Count shown</MudChip>
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(_result.LiteDbVectorAvailable ? Color.Success : Color.Warning)">
+                        @(_result.LiteDbVectorAvailable ? "litedb-vector" : "lexical-fallback")
+                    </MudChip>
+                }
+            </MudStack>
+
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Search across repositories, tasks, runs, findings, and run logs with semantic + keyword ranking.
+            </MudText>
+
+            <MudGrid Class="search-filter-grid">
+                <MudItem xs="12" md="8">
+                    <MudTextField T="string"
+                                  Value="_query"
+                                  ValueChanged="OnQueryChanged"
+                                  OnKeyDown="OnQueryKeyDownAsync"
+                                  Label="Query"
+                                  Placeholder="error in deploy pipeline with failing tests"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" />
+                </MudItem>
+                <MudItem xs="12" md="4" Class="search-actions">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="SearchAsync"
+                               Disabled="@(_searching || string.IsNullOrWhiteSpace(_query) || _loadingFilters)">
+                        @if (_searching)
+                        {
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                            <span>Searching...</span>
+                        }
+                        else
+                        {
+                            <span>Search</span>
+                        }
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               OnClick="ResetFiltersAsync"
+                               Disabled="_searching">
+                        Reset
+                    </MudButton>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string"
+                               Value="_selectedRepositoryId"
+                               ValueChanged="OnRepositoryChangedAsync"
+                               Label="Repository"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Disabled="_loadingFilters">
+                        <MudSelectItem T="string" Value="@string.Empty">All repositories</MudSelectItem>
+                        @foreach (var repository in _repositories)
+                        {
+                            <MudSelectItem T="string" Value="@repository.Id">@repository.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string"
+                               Value="_selectedTaskId"
+                               ValueChanged="OnTaskChanged"
+                               Label="Task"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Disabled="_loadingFilters || string.IsNullOrWhiteSpace(_selectedRepositoryId)">
+                        <MudSelectItem T="string" Value="@string.Empty">All tasks</MudSelectItem>
+                        @foreach (var task in _repositoryTasks)
+                        {
+                            <MudSelectItem T="string" Value="@task.Id">@task.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudSelect T="SearchTimeWindow"
+                               @bind-Value="_timeWindow"
+                               Label="Time"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Disabled="_loadingFilters">
+                        <MudSelectItem T="SearchTimeWindow" Value="@SearchTimeWindow.All">All time</MudSelectItem>
+                        <MudSelectItem T="SearchTimeWindow" Value="@SearchTimeWindow.Last24Hours">Last 24 hours</MudSelectItem>
+                        <MudSelectItem T="SearchTimeWindow" Value="@SearchTimeWindow.Last7Days">Last 7 days</MudSelectItem>
+                        <MudSelectItem T="SearchTimeWindow" Value="@SearchTimeWindow.Last30Days">Last 30 days</MudSelectItem>
+                        <MudSelectItem T="SearchTimeWindow" Value="@SearchTimeWindow.Last90Days">Last 90 days</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudSelect T="RunState?"
+                               @bind-Value="_runStateFilter"
+                               Label="Run State"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Disabled="_loadingFilters">
+                        <MudSelectItem T="RunState?" Value="@((RunState?)null)">Any</MudSelectItem>
+                        @foreach (var state in Enum.GetValues<RunState>())
+                        {
+                            <MudSelectItem T="RunState?" Value="@((RunState?)state)">@state</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudSelect T="FindingState?"
+                               @bind-Value="_findingStateFilter"
+                               Label="Finding State"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Disabled="_loadingFilters">
+                        <MudSelectItem T="FindingState?" Value="@((FindingState?)null)">Any</MudSelectItem>
+                        @foreach (var state in Enum.GetValues<FindingState>())
+                        {
+                            <MudSelectItem T="FindingState?" Value="@((FindingState?)state)">@state</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudSelect T="int"
+                               @bind-Value="_limit"
+                               Label="Result Limit"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Disabled="_loadingFilters">
+                        <MudSelectItem T="int" Value="20">20</MudSelectItem>
+                        <MudSelectItem T="int" Value="50">50</MudSelectItem>
+                        <MudSelectItem T="int" Value="100">100</MudSelectItem>
+                        <MudSelectItem T="int" Value="150">150</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            <MudStack Row Spacing="2" Class="search-kind-row">
+                <MudCheckBox T="bool" @bind-Value="_includeTasks" Label="Tasks" />
+                <MudCheckBox T="bool" @bind-Value="_includeRuns" Label="Runs" />
+                <MudCheckBox T="bool" @bind-Value="_includeFindings" Label="Findings" />
+                <MudCheckBox T="bool" @bind-Value="_includeRunLogs" Label="Run Logs" />
+            </MudStack>
+
+            @if (_searching)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Info" />
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error">@_error</MudAlert>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_result?.LiteDbVectorDetail))
+            {
+                <MudAlert Severity="Severity.Info">@_result.LiteDbVectorDetail</MudAlert>
+            }
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="search-results-panel" Elevation="0">
+        <MudStack Spacing="1">
+            <MudStack Row AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Results</MudText>
+                <MudSpacer />
+                @if (_result is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Tasks @GetKindCount(GlobalSearchKind.Task)</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Runs @GetKindCount(GlobalSearchKind.Run)</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Findings @GetKindCount(GlobalSearchKind.Finding)</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Logs @GetKindCount(GlobalSearchKind.RunLog)</MudChip>
+                }
+            </MudStack>
+
+            @if (!_hasSearched)
+            {
+                <div class="search-empty-state">
+                    <MudText Typo="Typo.body1">Enter a query and run a search.</MudText>
+                </div>
+            }
+            else if (_result is null || _result.Hits.Count == 0)
+            {
+                <div class="search-empty-state">
+                    <MudText Typo="Typo.body1">No matching results found.</MudText>
+                </div>
+            }
+            else
+            {
+                <div class="search-result-list">
+                    @foreach (var hit in _result.Hits)
+                    {
+                        <MudPaper Class="search-hit" Elevation="0">
+                            <MudStack Row AlignItems="AlignItems.Center" Class="search-hit-header">
+                                <MudChip T="string" Size="Size.Small" Color="@GetKindColor(hit.Kind)">@FormatKind(hit.Kind)</MudChip>
+                                <MudText Typo="Typo.subtitle2">@hit.Title</MudText>
+                                <MudSpacer />
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@hit.RepositoryName</MudChip>
+                                @if (!string.IsNullOrWhiteSpace(hit.State))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@hit.State</MudChip>
+                                }
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@hit.TimestampUtc.ToLocalTime().ToString("g")</MudText>
+                            </MudStack>
+
+                            <MudText Typo="Typo.body2" Class="search-hit-snippet">@hit.Snippet</MudText>
+
+                            <MudStack Row AlignItems="AlignItems.Center" Class="search-hit-score-row">
+                                @if (!string.IsNullOrWhiteSpace(hit.TaskName))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@hit.TaskName</MudChip>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(hit.RunId))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Run @ShortId(hit.RunId)</MudChip>
+                                }
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Score @hit.Score.ToString("0.##")</MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Keyword @hit.KeywordScore.ToString("0.##")</MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Semantic @hit.SemanticScore.ToString("0.##")</MudChip>
+                                <MudSpacer />
+                                <MudButton Variant="Variant.Text"
+                                           Color="Color.Info"
+                                           Size="Size.Small"
+                                           EndIcon="@Icons.Material.Filled.OpenInNew"
+                                           Href="@BuildHitHref(hit)">
+                                    Open
+                                </MudButton>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                </div>
+            }
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
+    [SupplyParameterFromQuery(Name = "repo")]
+    public string? RepositoryId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "task")]
+    public string? TaskId { get; set; }
+
+    private readonly Dictionary<string, IReadOnlyList<TaskDocument>> _tasksByRepository = new(StringComparer.OrdinalIgnoreCase);
+    private List<RepositoryDocument> _repositories = [];
+    private IReadOnlyList<TaskDocument> _repositoryTasks = [];
+
+    private string _query = string.Empty;
+    private string _selectedRepositoryId = string.Empty;
+    private string _selectedTaskId = string.Empty;
+    private SearchTimeWindow _timeWindow = SearchTimeWindow.Last30Days;
+    private RunState? _runStateFilter;
+    private FindingState? _findingStateFilter;
+    private int _limit = 50;
+    private bool _includeTasks = true;
+    private bool _includeRuns = true;
+    private bool _includeFindings = true;
+    private bool _includeRunLogs = true;
+
+    private bool _loadingFilters = true;
+    private bool _searching;
+    private bool _hasSearched;
+    private string _error = string.Empty;
+    private GlobalSearchResult? _result;
+    private CancellationTokenSource? _searchCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _repositories = await Store.ListRepositoriesAsync(CancellationToken.None);
+            _repositories = _repositories
+                .OrderBy(repository => repository.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            _selectedRepositoryId = ResolveInitialRepositoryId();
+            await LoadTasksForSelectedRepositoryAsync(CancellationToken.None);
+            ApplyTaskFromRoute();
+
+            if (!string.IsNullOrWhiteSpace(Query))
+            {
+                _query = Query.Trim();
+                await SearchAsync();
+            }
+        }
+        finally
+        {
+            _loadingFilters = false;
+        }
+    }
+
+    private string ResolveInitialRepositoryId()
+    {
+        if (!string.IsNullOrWhiteSpace(RepositoryId) &&
+            _repositories.Any(repository => string.Equals(repository.Id, RepositoryId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return RepositoryId;
+        }
+
+        return string.Empty;
+    }
+
+    private void ApplyTaskFromRoute()
+    {
+        if (string.IsNullOrWhiteSpace(TaskId))
+        {
+            return;
+        }
+
+        if (_repositoryTasks.Any(task => string.Equals(task.Id, TaskId, StringComparison.OrdinalIgnoreCase)))
+        {
+            _selectedTaskId = TaskId;
+        }
+    }
+
+    private async Task LoadTasksForSelectedRepositoryAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_selectedRepositoryId))
+        {
+            _repositoryTasks = [];
+            _selectedTaskId = string.Empty;
+            return;
+        }
+
+        if (_tasksByRepository.TryGetValue(_selectedRepositoryId, out var cachedTasks))
+        {
+            _repositoryTasks = cachedTasks;
+            return;
+        }
+
+        var tasks = await Store.ListTasksAsync(_selectedRepositoryId, cancellationToken);
+        var orderedTasks = tasks
+            .OrderBy(task => task.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _tasksByRepository[_selectedRepositoryId] = orderedTasks;
+        _repositoryTasks = orderedTasks;
+    }
+
+    private void OnQueryChanged(string value)
+    {
+        _query = value ?? string.Empty;
+    }
+
+    private async Task OnQueryKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (string.Equals(args.Key, "Enter", StringComparison.OrdinalIgnoreCase))
+        {
+            await SearchAsync();
+        }
+    }
+
+    private async Task OnRepositoryChangedAsync(string repositoryId)
+    {
+        _selectedRepositoryId = repositoryId ?? string.Empty;
+        _selectedTaskId = string.Empty;
+        await LoadTasksForSelectedRepositoryAsync(CancellationToken.None);
+    }
+
+    private void OnTaskChanged(string taskId)
+    {
+        _selectedTaskId = taskId ?? string.Empty;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _query = string.Empty;
+        _selectedRepositoryId = string.Empty;
+        _selectedTaskId = string.Empty;
+        _timeWindow = SearchTimeWindow.Last30Days;
+        _runStateFilter = null;
+        _findingStateFilter = null;
+        _limit = 50;
+        _includeTasks = true;
+        _includeRuns = true;
+        _includeFindings = true;
+        _includeRunLogs = true;
+        _error = string.Empty;
+        _result = null;
+        _hasSearched = false;
+        await LoadTasksForSelectedRepositoryAsync(CancellationToken.None);
+    }
+
+    private async Task SearchAsync()
+    {
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            _error = "Enter query text to search.";
+            _hasSearched = false;
+            _result = null;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var kinds = BuildKinds();
+        if (kinds.Count == 0)
+        {
+            _error = "Select at least one kind.";
+            _hasSearched = false;
+            _result = null;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var (fromUtc, toUtc) = ResolveTimeRange(_timeWindow);
+        var request = new GlobalSearchRequest(
+            Query: _query.Trim(),
+            RepositoryId: string.IsNullOrWhiteSpace(_selectedRepositoryId) ? null : _selectedRepositoryId,
+            TaskId: string.IsNullOrWhiteSpace(_selectedTaskId) ? null : _selectedTaskId,
+            Kinds: kinds,
+            FromUtc: fromUtc,
+            ToUtc: toUtc,
+            RunStateFilter: _runStateFilter,
+            FindingStateFilter: _findingStateFilter,
+            Limit: _limit,
+            IncludeRunLogs: _includeRunLogs);
+
+        var cts = new CancellationTokenSource();
+        _searchCts = cts;
+
+        _searching = true;
+        _error = string.Empty;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            _result = await SearchService.SearchAsync(request, cts.Token);
+            _hasSearched = true;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _result = null;
+            _hasSearched = true;
+        }
+        finally
+        {
+            if (ReferenceEquals(_searchCts, cts))
+            {
+                _searching = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private List<GlobalSearchKind> BuildKinds()
+    {
+        var kinds = new List<GlobalSearchKind>(4);
+        if (_includeTasks)
+        {
+            kinds.Add(GlobalSearchKind.Task);
+        }
+
+        if (_includeRuns)
+        {
+            kinds.Add(GlobalSearchKind.Run);
+        }
+
+        if (_includeFindings)
+        {
+            kinds.Add(GlobalSearchKind.Finding);
+        }
+
+        if (_includeRunLogs)
+        {
+            kinds.Add(GlobalSearchKind.RunLog);
+        }
+
+        return kinds;
+    }
+
+    private static (DateTime? FromUtc, DateTime? ToUtc) ResolveTimeRange(SearchTimeWindow window)
+    {
+        var now = DateTime.UtcNow;
+        return window switch
+        {
+            SearchTimeWindow.Last24Hours => (now.AddHours(-24), now),
+            SearchTimeWindow.Last7Days => (now.AddDays(-7), now),
+            SearchTimeWindow.Last30Days => (now.AddDays(-30), now),
+            SearchTimeWindow.Last90Days => (now.AddDays(-90), now),
+            _ => (null, null)
+        };
+    }
+
+    private int GetKindCount(GlobalSearchKind kind)
+    {
+        if (_result is null)
+        {
+            return 0;
+        }
+
+        return _result.CountsByKind.FirstOrDefault(entry => entry.Kind == kind)?.Count ?? 0;
+    }
+
+    private static string FormatKind(GlobalSearchKind kind)
+    {
+        return kind switch
+        {
+            GlobalSearchKind.Task => "Task",
+            GlobalSearchKind.Run => "Run",
+            GlobalSearchKind.Finding => "Finding",
+            GlobalSearchKind.RunLog => "Run Log",
+            _ => "Result"
+        };
+    }
+
+    private static Color GetKindColor(GlobalSearchKind kind)
+    {
+        return kind switch
+        {
+            GlobalSearchKind.Task => Color.Info,
+            GlobalSearchKind.Run => Color.Primary,
+            GlobalSearchKind.Finding => Color.Warning,
+            GlobalSearchKind.RunLog => Color.Secondary,
+            _ => Color.Default
+        };
+    }
+
+    private static string BuildHitHref(GlobalSearchHit hit)
+    {
+        return hit.Kind switch
+        {
+            GlobalSearchKind.Finding => $"/settings/findings/{Uri.EscapeDataString(hit.Id)}",
+            GlobalSearchKind.Run => $"/settings/runs/{Uri.EscapeDataString(hit.RunId ?? hit.Id)}",
+            GlobalSearchKind.RunLog => string.IsNullOrWhiteSpace(hit.RunId)
+                ? $"/settings/repositories/{Uri.EscapeDataString(hit.RepositoryId)}"
+                : $"/settings/runs/{Uri.EscapeDataString(hit.RunId)}",
+            _ => $"/settings/repositories/{Uri.EscapeDataString(hit.RepositoryId)}"
+        };
+    }
+
+    private static string ShortId(string value)
+    {
+        return value.Length <= 8
+            ? value
+            : value[..8];
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    private enum SearchTimeWindow
+    {
+        All = 0,
+        Last24Hours = 1,
+        Last7Days = 2,
+        Last30Days = 3,
+        Last90Days = 4
+    }
+}
