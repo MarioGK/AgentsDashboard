@@ -152,7 +152,6 @@ public sealed class BackgroundWorkNotificationRelay(
                 BackgroundWorkKind.LiteDbVectorBootstrap => "Check LiteDB vector search configuration and restart the probe.",
                 BackgroundWorkKind.RepositoryGitRefresh => "Verify repository paths and credentials, then retry refresh.",
                 BackgroundWorkKind.Recovery => "Inspect recovery logs and run reconciliation from orchestrator settings.",
-                BackgroundWorkKind.TaskTemplateInit => "Review task template definitions and retry initialization.",
                 _ => "Review service logs and retry.",
             };
 

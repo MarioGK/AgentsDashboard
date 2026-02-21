@@ -13,6 +13,20 @@ Self-hosted AI orchestration platform on .NET 10. Blazor Server is the control p
 - Backward compatibility is not required; keep only intended current behavior.
 - We dont have to care about database lost of data and etc.
 
+## Project Structure (Vertical Slices)
+
+The codebase follows a **vertical slice architecture**. Each feature is self-contained in its own folder with all related code (services, models, gateways, components) colocated.
+
+### Placement Rules
+
+1. **Feature-specific code** goes in `Features/{FeatureName}/`
+2. **Shared infrastructure** (used by multiple features) goes in `Infrastructure/`
+3. **Layout components** stay in `Components/Layout/`
+4. **DI extensions** for the entire project stay in `Extensions/`
+5. **Gateway interfaces** live with the feature that *uses* them, not the feature that implements them
+6. **One primary type per file** - no multiple classes/records in a single file
+7. **Models subfolder** for domain models, DTOs, and snapshots specific to the feature
+
 ## Engineering Conventions
 
 ### Code Style
@@ -53,7 +67,7 @@ Self-hosted AI orchestration platform on .NET 10. Blazor Server is the control p
 - Build with `dotnet build src/AgentsDashboard.slnx -m --tl`.
 
 ## Local Run
-- LAN: `http://192.168.10.101:5266` (HTTP in local dev)
+- LAN: `https://192.168.10.101:5266`
 - Health: `/alive`, `/ready`, `/health`
 - Services must bind all interfaces (`0.0.0.0`) for LAN accessibility.
 - Runtime persistence/log/workspace paths resolve under repo-root `data/`.
@@ -61,7 +75,7 @@ Self-hosted AI orchestration platform on .NET 10. Blazor Server is the control p
 Preferred watch command:
 
 ```bash
-DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://0.0.0.0:5266 dotnet watch --no-launch-profile --project src/AgentsDashboard.ControlPlane
+DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development dotnet watch --project src/AgentsDashboard.ControlPlane
 ```
 
 ## Logging

@@ -77,7 +77,7 @@ public class TaskRuntimeRegistryService : ITaskRuntimeRegistryService
             try
             {
                 var client = _clientFactory.CreateTaskRuntimeService(runtime.TaskRuntimeId, runtime.GrpcEndpoint);
-                var result = await client.CheckHealthAsync(cancellationToken);
+                var result = await client.WithCancellationToken(cancellationToken).CheckHealthAsync();
                 if (!result.Success)
                 {
                     _logger.LogDebug("Status request health check returned failure for task runtime {TaskRuntimeId}: {Error}", runtime.TaskRuntimeId, result.ErrorMessage);

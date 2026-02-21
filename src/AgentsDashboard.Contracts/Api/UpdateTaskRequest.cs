@@ -20,7 +20,6 @@ public sealed record UpdateTaskRequest(
     string Prompt,
     string Command,
     bool AutoCreatePullRequest,
-    string CronExpression,
     bool Enabled,
     RetryPolicyConfig? RetryPolicy = null,
     TimeoutConfig? Timeouts = null,

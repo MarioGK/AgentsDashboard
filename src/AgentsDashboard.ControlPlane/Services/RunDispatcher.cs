@@ -31,8 +31,7 @@ public sealed class RunDispatcher(
         string multimodalFallbackPolicy = "auto-text-reference",
         string? sessionProfileId = null,
         string? instructionStackHash = null,
-        string? mcpConfigSnapshotJson = null,
-        string? automationRunId = null)
+        string? mcpConfigSnapshotJson = null)
     {
         logger.LogInformation(
             "Dispatch request repo={RepositoryId} task={TaskId} run={RunId} harness={Harness} mode={Mode} protocol={Protocol} sessionProfile={SessionProfileId} requireApproval={RequireApproval} linkedFailures={LinkedFailureRuns} artifactPatterns={ArtifactPatterns}",
@@ -246,11 +245,10 @@ public sealed class RunDispatcher(
             SessionProfileId = sessionProfileId?.Trim() ?? run.SessionProfileId ?? string.Empty,
             InstructionStackHash = instructionStackHash?.Trim() ?? run.InstructionStackHash ?? string.Empty,
             McpConfigSnapshotJson = mcpConfigSnapshotJson?.Trim() ?? run.McpConfigSnapshotJson ?? string.Empty,
-            AutomationRunId = automationRunId?.Trim() ?? run.AutomationRunId ?? string.Empty,
         };
 
         var workerClient = clientFactory.CreateTaskRuntimeService(workerLease.TaskRuntimeId, workerLease.GrpcEndpoint);
-        var response = await workerClient.DispatchJobAsync(request, cancellationToken);
+        var response = await workerClient.WithCancellationToken(cancellationToken).DispatchJobAsync(request);
 
         if (!response.Success)
         {
@@ -334,7 +332,7 @@ public sealed class RunDispatcher(
             }
 
             var workerClient = clientFactory.CreateTaskRuntimeService(worker.TaskRuntimeId, worker.GrpcEndpoint);
-            await workerClient.StopJobAsync(new StopJobRequest { RunId = runId }, cancellationToken);
+            await workerClient.WithCancellationToken(cancellationToken).StopJobAsync(new StopJobRequest { RunId = runId });
         }
         catch (Exception ex)
         {

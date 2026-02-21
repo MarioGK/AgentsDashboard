@@ -20,8 +20,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         IRepository<RunSessionProfileDocument> runSessionProfiles,
         IRepository<RunInstructionStackDocument> runInstructionStacks,
         IRepository<RunShareBundleDocument> runShareBundles,
-        IRepository<AutomationDefinitionDocument> automationDefinitions,
-        IRepository<AutomationExecutionDocument> automationExecutions,
         IRepository<FindingDocument> findings,
         IRepository<ProviderSecretDocument> providerSecrets,
         IRepository<TaskRuntimeRegistration> taskRuntimeRegistrations,
@@ -29,8 +27,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         IRepository<WebhookRegistration> webhooks,
         IRepository<SystemSettingsDocument> settings,
         IRepository<OrchestratorLeaseDocument> leases,
-        IRepository<WorkflowDocument> workflows,
-        IRepository<WorkflowExecutionDocument> workflowExecutions,
         IRepository<AlertRuleDocument> alertRules,
         IRepository<AlertEventDocument> alertEvents,
         IRepository<RepositoryInstructionDocument> repositoryInstructions,
@@ -52,8 +48,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         RunSessionProfiles = new TrackedRepositorySet<RunSessionProfileDocument>(runSessionProfiles);
         RunInstructionStacks = new TrackedRepositorySet<RunInstructionStackDocument>(runInstructionStacks);
         RunShareBundles = new TrackedRepositorySet<RunShareBundleDocument>(runShareBundles);
-        AutomationDefinitions = new TrackedRepositorySet<AutomationDefinitionDocument>(automationDefinitions);
-        AutomationExecutions = new TrackedRepositorySet<AutomationExecutionDocument>(automationExecutions);
         Findings = new TrackedRepositorySet<FindingDocument>(findings);
         ProviderSecrets = new TrackedRepositorySet<ProviderSecretDocument>(providerSecrets);
         TaskRuntimeRegistrations = new TrackedRepositorySet<TaskRuntimeRegistration>(taskRuntimeRegistrations);
@@ -61,8 +55,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         Webhooks = new TrackedRepositorySet<WebhookRegistration>(webhooks);
         Settings = new TrackedRepositorySet<SystemSettingsDocument>(settings);
         Leases = new TrackedRepositorySet<OrchestratorLeaseDocument>(leases);
-        Workflows = new TrackedRepositorySet<WorkflowDocument>(workflows);
-        WorkflowExecutions = new TrackedRepositorySet<WorkflowExecutionDocument>(workflowExecutions);
         AlertRules = new TrackedRepositorySet<AlertRuleDocument>(alertRules);
         AlertEvents = new TrackedRepositorySet<AlertEventDocument>(alertEvents);
         RepositoryInstructions = new TrackedRepositorySet<RepositoryInstructionDocument>(repositoryInstructions);
@@ -85,8 +77,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
             RunSessionProfiles,
             RunInstructionStacks,
             RunShareBundles,
-            AutomationDefinitions,
-            AutomationExecutions,
             Findings,
             ProviderSecrets,
             TaskRuntimeRegistrations,
@@ -94,8 +84,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
             Webhooks,
             Settings,
             Leases,
-            Workflows,
-            WorkflowExecutions,
             AlertRules,
             AlertEvents,
             RepositoryInstructions,
@@ -118,8 +106,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
     public TrackedRepositorySet<RunSessionProfileDocument> RunSessionProfiles { get; }
     public TrackedRepositorySet<RunInstructionStackDocument> RunInstructionStacks { get; }
     public TrackedRepositorySet<RunShareBundleDocument> RunShareBundles { get; }
-    public TrackedRepositorySet<AutomationDefinitionDocument> AutomationDefinitions { get; }
-    public TrackedRepositorySet<AutomationExecutionDocument> AutomationExecutions { get; }
     public TrackedRepositorySet<FindingDocument> Findings { get; }
     public TrackedRepositorySet<ProviderSecretDocument> ProviderSecrets { get; }
     public TrackedRepositorySet<TaskRuntimeRegistration> TaskRuntimeRegistrations { get; }
@@ -127,8 +113,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
     public TrackedRepositorySet<WebhookRegistration> Webhooks { get; }
     public TrackedRepositorySet<SystemSettingsDocument> Settings { get; }
     public TrackedRepositorySet<OrchestratorLeaseDocument> Leases { get; }
-    public TrackedRepositorySet<WorkflowDocument> Workflows { get; }
-    public TrackedRepositorySet<WorkflowExecutionDocument> WorkflowExecutions { get; }
     public TrackedRepositorySet<AlertRuleDocument> AlertRules { get; }
     public TrackedRepositorySet<AlertEventDocument> AlertEvents { get; }
     public TrackedRepositorySet<RepositoryInstructionDocument> RepositoryInstructions { get; }

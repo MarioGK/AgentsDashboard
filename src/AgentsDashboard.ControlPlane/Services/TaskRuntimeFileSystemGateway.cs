@@ -12,7 +12,7 @@ public sealed class TaskRuntimeFileSystemGateway(
         CancellationToken cancellationToken)
     {
         var client = await CreateClientAsync(taskRuntimeId, cancellationToken);
-        return await client.ListRuntimeFilesAsync(request, cancellationToken);
+        return await client.WithCancellationToken(cancellationToken).ListRuntimeFilesAsync(request);
     }
 
     public async Task<CreateRuntimeFileResult> CreateRuntimeFileAsync(
@@ -21,7 +21,7 @@ public sealed class TaskRuntimeFileSystemGateway(
         CancellationToken cancellationToken)
     {
         var client = await CreateClientAsync(taskRuntimeId, cancellationToken);
-        return await client.CreateRuntimeFileAsync(request, cancellationToken);
+        return await client.WithCancellationToken(cancellationToken).CreateRuntimeFileAsync(request);
     }
 
     public async Task<ReadRuntimeFileResult> ReadRuntimeFileAsync(
@@ -30,7 +30,7 @@ public sealed class TaskRuntimeFileSystemGateway(
         CancellationToken cancellationToken)
     {
         var client = await CreateClientAsync(taskRuntimeId, cancellationToken);
-        return await client.ReadRuntimeFileAsync(request, cancellationToken);
+        return await client.WithCancellationToken(cancellationToken).ReadRuntimeFileAsync(request);
     }
 
     public async Task<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(
@@ -39,7 +39,7 @@ public sealed class TaskRuntimeFileSystemGateway(
         CancellationToken cancellationToken)
     {
         var client = await CreateClientAsync(taskRuntimeId, cancellationToken);
-        return await client.DeleteRuntimeFileAsync(request, cancellationToken);
+        return await client.WithCancellationToken(cancellationToken).DeleteRuntimeFileAsync(request);
     }
 
     private async Task<ITaskRuntimeService> CreateClientAsync(string taskRuntimeId, CancellationToken cancellationToken)

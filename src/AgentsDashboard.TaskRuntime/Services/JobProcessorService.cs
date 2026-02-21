@@ -76,7 +76,7 @@ public class JobProcessorService(
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(serviceToken, queuedJob.CancellationSource.Token);
         var cancellationToken = linkedCts.Token;
         var request = queuedJob.Request;
-        var executionToken = string.IsNullOrWhiteSpace(request.AutomationRunId) ? request.RunId : request.AutomationRunId;
+        var executionToken = request.RunId;
         var parsedChunks = 0;
         long maxSequence = 0;
         var fallbackChunks = 0;

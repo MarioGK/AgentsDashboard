@@ -33,21 +33,13 @@ public interface IOrchestratorStore
     Task<RunSessionProfileDocument?> GetRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken);
     Task<RunSessionProfileDocument?> UpdateRunSessionProfileAsync(string sessionProfileId, UpdateRunSessionProfileRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken);
-    Task<AutomationDefinitionDocument> UpsertAutomationDefinitionAsync(string? automationId, UpsertAutomationDefinitionRequest request, CancellationToken cancellationToken);
-    Task<List<AutomationDefinitionDocument>> ListAutomationDefinitionsAsync(string repositoryId, CancellationToken cancellationToken);
-    Task<AutomationDefinitionDocument?> GetAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken);
-    Task<bool> DeleteAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken);
-    Task<AutomationExecutionDocument> CreateAutomationExecutionAsync(AutomationExecutionDocument execution, CancellationToken cancellationToken);
-    Task<List<AutomationExecutionDocument>> ListAutomationExecutionsAsync(string repositoryId, int limit, CancellationToken cancellationToken);
 
     Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken);
     Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<TaskDocument>> ListEventDrivenTasksAsync(string repositoryId, CancellationToken cancellationToken);
     Task<TaskDocument?> GetTaskAsync(string taskId, CancellationToken cancellationToken);
-    Task<List<TaskDocument>> ListScheduledTasksAsync(CancellationToken cancellationToken);
     Task<List<TaskDocument>> ListDueTasksAsync(DateTime utcNow, int limit, CancellationToken cancellationToken);
     Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken);
-    Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken);
     Task<TaskDocument?> UpdateTaskGitMetadataAsync(
         string taskId,
         DateTime? lastGitSyncAtUtc,
@@ -66,8 +58,7 @@ public interface IOrchestratorStore
         CancellationToken cancellationToken,
         int attempt = 1,
         HarnessExecutionMode? executionModeOverride = null,
-        string? sessionProfileId = null,
-        string? automationRunId = null);
+        string? sessionProfileId = null);
     Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken);
     Task<List<RepositoryDocument>> ListRepositoriesWithRecentTasksAsync(int limit, CancellationToken cancellationToken);
@@ -121,7 +112,6 @@ public interface IOrchestratorStore
     Task<StructuredRunDataPruneResult> PruneStructuredRunDataAsync(
         DateTime olderThanUtc,
         int maxRuns,
-        bool excludeWorkflowReferencedTasks,
         bool excludeTasksWithOpenFindings,
         CancellationToken cancellationToken);
     Task UpsertSemanticChunksAsync(string taskId, List<SemanticChunkDocument> chunks, CancellationToken cancellationToken);
@@ -163,24 +153,6 @@ public interface IOrchestratorStore
     Task<bool> TryAcquireLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken);
     Task<bool> RenewLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken);
     Task ReleaseLeaseAsync(string leaseName, string ownerId, CancellationToken cancellationToken);
-
-    Task<WorkflowDocument> CreateWorkflowAsync(WorkflowDocument workflow, CancellationToken cancellationToken);
-    Task<List<WorkflowDocument>> ListWorkflowsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
-    Task<List<WorkflowDocument>> ListAllWorkflowsAsync(CancellationToken cancellationToken);
-    Task<WorkflowDocument?> GetWorkflowAsync(string workflowId, CancellationToken cancellationToken);
-    Task<WorkflowDocument?> UpdateWorkflowAsync(string workflowId, WorkflowDocument workflow, CancellationToken cancellationToken);
-    Task<bool> DeleteWorkflowAsync(string workflowId, CancellationToken cancellationToken);
-
-    Task<WorkflowExecutionDocument> CreateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken);
-    Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsAsync(string workflowId, CancellationToken cancellationToken);
-    Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsByStateAsync(WorkflowExecutionState state, CancellationToken cancellationToken);
-    Task<WorkflowExecutionDocument?> GetWorkflowExecutionAsync(string executionId, CancellationToken cancellationToken);
-    Task<WorkflowExecutionDocument?> UpdateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken);
-    Task<WorkflowExecutionDocument?> MarkWorkflowExecutionCompletedAsync(string executionId, WorkflowExecutionState finalState, string failureReason, CancellationToken cancellationToken);
-    Task<WorkflowExecutionDocument?> MarkWorkflowExecutionPendingApprovalAsync(string executionId, string pendingApprovalStageId, CancellationToken cancellationToken);
-    Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(string executionId, string approvedBy, CancellationToken cancellationToken);
-    Task<WorkflowExecutionDocument?> GetWorkflowExecutionByRunIdAsync(string runId, CancellationToken cancellationToken);
-    Task<WorkflowDocument?> GetWorkflowForExecutionAsync(string workflowId, CancellationToken cancellationToken);
 
     Task<AlertRuleDocument> CreateAlertRuleAsync(AlertRuleDocument rule, CancellationToken cancellationToken);
     Task<List<AlertRuleDocument>> ListAlertRulesAsync(CancellationToken cancellationToken);

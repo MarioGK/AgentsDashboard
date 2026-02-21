@@ -8,14 +8,11 @@
 
   <ItemGroup>
     <PackageReference Include="TUnit" />
-    <PackageReference Include="Cronos" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="ControlPlane/Services/RunDispatcherTests.cs" />
     <Compile Remove="ControlPlane/Services/RunDispatcherTests_SutBuilder.cs" />
-    <Compile Remove="ControlPlane/Services/WorkflowExecutorTests.cs" />
-    <Compile Remove="ControlPlane/Services/WorkflowExecutorTests_StaticTimeProvider.cs" />
     <Compile Remove="ControlPlane/Services/RunStructuredViewServiceTests.cs" />
     <Compile Remove="ControlPlane/Services/TaskRetentionCleanupServiceTests.cs" />
     <Compile Remove="ControlPlane/Services/TaskRetentionCleanupServiceTests_StaticTimeProvider.cs" />

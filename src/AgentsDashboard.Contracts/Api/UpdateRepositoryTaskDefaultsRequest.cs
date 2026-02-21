@@ -7,7 +7,6 @@ public sealed record UpdateRepositoryTaskDefaultsRequest(
     string Harness,
     HarnessExecutionMode ExecutionModeDefault,
     string Command,
-    string CronExpression,
     bool AutoCreatePullRequest,
     bool Enabled,
     string? SessionProfileId = null);

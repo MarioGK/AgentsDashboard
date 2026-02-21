@@ -1,18 +1,17 @@
-using System.Threading;
 using MagicOnion;
 
 namespace AgentsDashboard.Contracts.TaskRuntime;
 
 public interface ITaskRuntimeService : IService<ITaskRuntimeService>
 {
-    UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request, CancellationToken cancellationToken);
-    UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request, CancellationToken cancellationToken);
-    UnaryResult<HealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken);
-    UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request, CancellationToken cancellationToken);
-    UnaryResult<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request, CancellationToken cancellationToken);
-    UnaryResult<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken);
-    UnaryResult<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request, CancellationToken cancellationToken);
-    UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request, CancellationToken cancellationToken);
-    UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request, CancellationToken cancellationToken);
-    UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request, CancellationToken cancellationToken);
+    UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request);
+    UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request);
+    UnaryResult<HealthCheckResult> CheckHealthAsync();
+    UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request);
+    UnaryResult<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request);
+    UnaryResult<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request);
+    UnaryResult<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request);
+    UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request);
+    UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request);
+    UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request);
 }

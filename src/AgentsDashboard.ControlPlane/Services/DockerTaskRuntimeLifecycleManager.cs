@@ -1327,7 +1327,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
     }
 
-    private async Task<bool> PullWorkerContainerImageAsync(
+        private async Task<bool> PullWorkerContainerImageAsync(
         string imageReference,
         OrchestratorRuntimeSettings runtime,
         IProgress<BackgroundWorkSnapshot>? progress,
@@ -1372,7 +1372,15 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to pull task runtime image {Image}", imageReference);
+            if (IsExpectedImagePullDenial(ex))
+            {
+                logger.LogDebug("Pull blocked by registry for task runtime image {Image}: {Reason}", imageReference, ex.Message);
+            }
+            else
+            {
+                logger.LogWarning(ex, "Failed to pull task runtime image {Image}", imageReference);
+            }
+
             ReportTaskRuntimeImageProgress(
                 progress,
                 $"Failed to pull task runtime image {imageReference}.",
@@ -1381,6 +1389,23 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 errorMessage: ex.Message);
             return false;
         }
+    }
+
+    private static bool IsExpectedImagePullDenial(Exception ex)
+    {
+        if (ex is not DockerApiException dockerApiException)
+        {
+            return false;
+        }
+
+        var message = dockerApiException.Message;
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        return message.Contains("error from registry", StringComparison.OrdinalIgnoreCase)
+               && message.Contains("denied", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<bool> BuildWorkerContainerImageAsync(
@@ -1887,7 +1912,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 try
                 {
                     var client = clientFactory.CreateTaskRuntimeService(state.TaskRuntimeId, state.GrpcEndpoint);
-                    var health = await client.CheckHealthAsync(cancellationToken);
+                    var health = await client.WithCancellationToken(cancellationToken).CheckHealthAsync();
                     if (!health.Success)
                     {
                         await Task.Delay(delay, cancellationToken);

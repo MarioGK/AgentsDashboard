@@ -131,7 +131,6 @@ public sealed class TaskRetentionCleanupService(
         var structuredPrune = await store.PruneStructuredRunDataAsync(
             ageOlderThanUtc,
             structuredPruneBatchSize,
-            settings.CleanupExcludeWorkflowReferencedTasks,
             settings.CleanupExcludeTasksWithOpenFindings,
             cancellationToken);
         totalDeletedRows += CountDeletedRows(structuredPrune);
@@ -147,7 +146,6 @@ public sealed class TaskRetentionCleanupService(
                 IncludeRetentionEligibility: true,
                 IncludeDisabledInactiveEligibility: includeDisabledInactiveEligibility,
                 DisabledInactiveOlderThanUtc: disabledInactiveOlderThanUtc,
-                ExcludeWorkflowReferencedTasks: settings.CleanupExcludeWorkflowReferencedTasks,
                 ExcludeTasksWithOpenFindings: settings.CleanupExcludeTasksWithOpenFindings),
             cancellationToken);
 
@@ -178,7 +176,6 @@ public sealed class TaskRetentionCleanupService(
                         IncludeRetentionEligibility: true,
                         IncludeDisabledInactiveEligibility: includeDisabledInactiveEligibility,
                         DisabledInactiveOlderThanUtc: disabledInactiveOlderThanUtc,
-                        ExcludeWorkflowReferencedTasks: settings.CleanupExcludeWorkflowReferencedTasks,
                         ExcludeTasksWithOpenFindings: settings.CleanupExcludeTasksWithOpenFindings),
                     cancellationToken);
 

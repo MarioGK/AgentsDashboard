@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using Cronos;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
@@ -99,22 +98,9 @@ public sealed class OrchestratorStore(
                 ExecutionModeDefault = request.ExecutionModeDefault,
                 SessionProfileId = request.SessionProfileId?.Trim() ?? string.Empty,
                 Command = request.Command,
-                CronExpression = request.CronExpression,
                 AutoCreatePullRequest = request.AutoCreatePullRequest,
                 Enabled = request.Enabled,
             });
-
-        if (taskDefaults.Kind == TaskKind.Cron && !string.IsNullOrWhiteSpace(taskDefaults.CronExpression))
-        {
-            try
-            {
-                _ = CronExpression.Parse(taskDefaults.CronExpression, CronFormat.Standard);
-            }
-            catch (Exception ex)
-            {
-                throw new ArgumentException($"Invalid cron expression '{taskDefaults.CronExpression}': {ex.Message}", nameof(request.CronExpression), ex);
-            }
-        }
 
         repository.TaskDefaults = taskDefaults;
         await db.SaveChangesAsync(cancellationToken);
@@ -522,113 +508,6 @@ public sealed class OrchestratorStore(
         return true;
     }
 
-    public async Task<AutomationDefinitionDocument> UpsertAutomationDefinitionAsync(
-        string? automationId,
-        UpsertAutomationDefinitionRequest request,
-        CancellationToken cancellationToken)
-    {
-        var repositoryId = NormalizePromptSkillScope(request.RepositoryId);
-        var taskId = NormalizeRequiredValue(request.TaskId, nameof(request.TaskId));
-        var name = NormalizeRequiredValue(request.Name, nameof(request.Name));
-        var triggerKind = NormalizeRequiredValue(request.TriggerKind, nameof(request.TriggerKind)).ToLowerInvariant();
-        var replayPolicy = NormalizeRequiredValue(request.ReplayPolicy, nameof(request.ReplayPolicy)).ToLowerInvariant();
-        var cronExpression = request.CronExpression?.Trim() ?? string.Empty;
-
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        AutomationDefinitionDocument automation;
-
-        if (string.IsNullOrWhiteSpace(automationId))
-        {
-            automation = new AutomationDefinitionDocument
-            {
-                RepositoryId = repositoryId,
-                TaskId = taskId,
-                Name = name,
-                TriggerKind = triggerKind,
-                ReplayPolicy = replayPolicy,
-                CronExpression = cronExpression,
-                Enabled = request.Enabled,
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow,
-                NextRunAtUtc = ComputeNextAutomationRun(triggerKind, cronExpression, request.Enabled, DateTime.UtcNow),
-            };
-            db.AutomationDefinitions.Add(automation);
-        }
-        else
-        {
-            automation = await db.AutomationDefinitions.FirstOrDefaultAsync(x => x.Id == automationId, cancellationToken)
-                ?? throw new InvalidOperationException("Automation definition not found.");
-            automation.RepositoryId = repositoryId;
-            automation.TaskId = taskId;
-            automation.Name = name;
-            automation.TriggerKind = triggerKind;
-            automation.ReplayPolicy = replayPolicy;
-            automation.CronExpression = cronExpression;
-            automation.Enabled = request.Enabled;
-            automation.NextRunAtUtc = ComputeNextAutomationRun(triggerKind, cronExpression, request.Enabled, DateTime.UtcNow);
-            automation.UpdatedAtUtc = DateTime.UtcNow;
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-        return automation;
-    }
-
-    public async Task<List<AutomationDefinitionDocument>> ListAutomationDefinitionsAsync(string repositoryId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var normalizedRepositoryId = NormalizePromptSkillScope(repositoryId);
-        return await db.AutomationDefinitions.AsNoTracking()
-            .Where(x => x.RepositoryId == normalizedRepositoryId)
-            .OrderBy(x => x.Name)
-            .ToListAsync(cancellationToken);
-    }
-
-    public async Task<AutomationDefinitionDocument?> GetAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.AutomationDefinitions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == automationId, cancellationToken);
-    }
-
-    public async Task<bool> DeleteAutomationDefinitionAsync(string automationId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var existing = await db.AutomationDefinitions.FirstOrDefaultAsync(x => x.Id == automationId, cancellationToken);
-        if (existing is null)
-        {
-            return false;
-        }
-
-        db.AutomationDefinitions.Remove(existing);
-        await db.SaveChangesAsync(cancellationToken);
-        return true;
-    }
-
-    public async Task<AutomationExecutionDocument> CreateAutomationExecutionAsync(AutomationExecutionDocument execution, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(execution.Id))
-        {
-            execution.Id = Guid.NewGuid().ToString("N");
-        }
-
-        execution.StartedAtUtc = execution.StartedAtUtc == default ? DateTime.UtcNow : execution.StartedAtUtc;
-        db.AutomationExecutions.Add(execution);
-        await db.SaveChangesAsync(cancellationToken);
-        return execution;
-    }
-
-    public async Task<List<AutomationExecutionDocument>> ListAutomationExecutionsAsync(string repositoryId, int limit, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var normalizedRepositoryId = NormalizePromptSkillScope(repositoryId);
-        var normalizedLimit = limit <= 0 ? 100 : Math.Clamp(limit, 1, 1000);
-        return await db.AutomationExecutions.AsNoTracking()
-            .Where(x => x.RepositoryId == normalizedRepositoryId)
-            .OrderByDescending(x => x.StartedAtUtc)
-            .Take(normalizedLimit)
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
@@ -660,7 +539,6 @@ public sealed class OrchestratorStore(
             Prompt = normalizedPrompt,
             Command = repository.TaskDefaults.Command,
             AutoCreatePullRequest = repository.TaskDefaults.AutoCreatePullRequest,
-            CronExpression = repository.TaskDefaults.CronExpression,
             Enabled = repository.TaskDefaults.Enabled,
             RetryPolicy = new RetryPolicyConfig(),
             Timeouts = new TimeoutConfig(),
@@ -700,20 +578,12 @@ public sealed class OrchestratorStore(
         return await db.Tasks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
     }
 
-    public async Task<List<TaskDocument>> ListScheduledTasksAsync(CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Tasks.AsNoTracking()
-            .Where(x => x.Enabled && x.Kind == TaskKind.Cron)
-            .OrderBy(x => x.NextRunAtUtc)
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<List<TaskDocument>> ListDueTasksAsync(DateTime utcNow, int limit, CancellationToken cancellationToken)
     {
+        _ = utcNow;
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Tasks.AsNoTracking()
-            .Where(x => x.Enabled && (x.Kind == TaskKind.OneShot || (x.Kind == TaskKind.Cron && x.NextRunAtUtc != null && x.NextRunAtUtc <= utcNow)))
+            .Where(x => x.Enabled && x.Kind == TaskKind.OneShot)
             .Take(limit)
             .ToListAsync(cancellationToken);
     }
@@ -726,17 +596,6 @@ public sealed class OrchestratorStore(
             return;
 
         task.Enabled = false;
-        await db.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task UpdateTaskNextRunAsync(string taskId, DateTime? nextRunAtUtc, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
-        if (task is null)
-            return;
-
-        task.NextRunAtUtc = nextRunAtUtc;
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -787,7 +646,6 @@ public sealed class OrchestratorStore(
         task.Prompt = request.Prompt;
         task.Command = request.Command;
         task.AutoCreatePullRequest = request.AutoCreatePullRequest;
-        task.CronExpression = request.CronExpression;
         task.Enabled = request.Enabled;
         task.RetryPolicy = request.RetryPolicy ?? new RetryPolicyConfig();
         task.Timeouts = request.Timeouts ?? new TimeoutConfig();
@@ -948,39 +806,6 @@ public sealed class OrchestratorStore(
         var logsByTask = logAggregates.ToDictionary(x => x.TaskId, x => x.TimestampUtc, StringComparer.Ordinal);
         var promptsByTask = promptAggregates.ToDictionary(x => x.TaskId, x => x.TimestampUtc, StringComparer.Ordinal);
         var summariesByTask = summaryAggregates.ToDictionary(x => x.TaskId, x => x.TimestampUtc, StringComparer.Ordinal);
-        var workflowReferencedTaskIds = new HashSet<string>(StringComparer.Ordinal);
-        if (query.ExcludeWorkflowReferencedTasks)
-        {
-            var repositoryIds = taskSeeds
-                .Select(x => x.RepositoryId)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-
-            if (repositoryIds.Count > 0)
-            {
-                var workflowStages = await db.Workflows.AsNoTracking()
-                    .Where(x => repositoryIds.Contains(x.RepositoryId))
-                    .Select(x => x.Stages)
-                    .ToListAsync(cancellationToken);
-
-                foreach (var stages in workflowStages)
-                {
-                    if (stages is null || stages.Count == 0)
-                    {
-                        continue;
-                    }
-
-                    foreach (var stage in stages)
-                    {
-                        if (!string.IsNullOrWhiteSpace(stage.TaskId))
-                        {
-                            workflowReferencedTaskIds.Add(stage.TaskId);
-                        }
-                    }
-                }
-            }
-        }
 
         var tasksWithOpenFindings = new HashSet<string>(StringComparer.Ordinal);
         if (query.ExcludeTasksWithOpenFindings)
@@ -1029,12 +854,6 @@ public sealed class OrchestratorStore(
                 continue;
             }
 
-            var isWorkflowReferenced = workflowReferencedTaskIds.Contains(task.TaskId);
-            if (query.ExcludeWorkflowReferencedTasks && isWorkflowReferenced)
-            {
-                continue;
-            }
-
             var hasOpenFindings = tasksWithOpenFindings.Contains(task.TaskId);
             if (query.ExcludeTasksWithOpenFindings && hasOpenFindings)
             {
@@ -1051,7 +870,6 @@ public sealed class OrchestratorStore(
                 runAggregate?.OldestRunAtUtc,
                 isRetentionEligible,
                 isDisabledInactiveEligible,
-                isWorkflowReferenced,
                 hasOpenFindings));
         }
 
@@ -1280,8 +1098,7 @@ public sealed class OrchestratorStore(
         CancellationToken cancellationToken,
         int attempt = 1,
         HarnessExecutionMode? executionModeOverride = null,
-        string? sessionProfileId = null,
-        string? automationRunId = null)
+        string? sessionProfileId = null)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = new RunDocument
@@ -1292,7 +1109,6 @@ public sealed class OrchestratorStore(
             ExecutionMode = executionModeOverride ?? task.ExecutionModeDefault ?? HarnessExecutionMode.Default,
             StructuredProtocol = "harness-structured-event-v2",
             SessionProfileId = sessionProfileId?.Trim() ?? task.SessionProfileId,
-            AutomationRunId = automationRunId?.Trim() ?? string.Empty,
             Summary = "Queued",
             Attempt = attempt,
         };
@@ -2435,7 +2251,6 @@ public sealed class OrchestratorStore(
     public async Task<StructuredRunDataPruneResult> PruneStructuredRunDataAsync(
         DateTime olderThanUtc,
         int maxRuns,
-        bool excludeWorkflowReferencedTasks,
         bool excludeTasksWithOpenFindings,
         CancellationToken cancellationToken)
     {
@@ -2465,7 +2280,7 @@ public sealed class OrchestratorStore(
         }
 
         var candidateRunSeeds = runSeeds;
-        if (excludeWorkflowReferencedTasks || excludeTasksWithOpenFindings)
+        if (excludeTasksWithOpenFindings)
         {
             var taskIds = candidateRunSeeds
                 .Select(x => x.TaskId)
@@ -2476,39 +2291,6 @@ public sealed class OrchestratorStore(
             if (taskIds.Count > 0)
             {
                 var excludedTaskIds = new HashSet<string>(StringComparer.Ordinal);
-                if (excludeWorkflowReferencedTasks)
-                {
-                    var repositoryIds = candidateRunSeeds
-                        .Select(x => x.RepositoryId)
-                        .Where(x => !string.IsNullOrWhiteSpace(x))
-                        .Distinct(StringComparer.Ordinal)
-                        .ToList();
-
-                    if (repositoryIds.Count > 0)
-                    {
-                        var workflowStages = await db.Workflows.AsNoTracking()
-                            .Where(x => repositoryIds.Contains(x.RepositoryId))
-                            .Select(x => x.Stages)
-                            .ToListAsync(cancellationToken);
-
-                        foreach (var stages in workflowStages)
-                        {
-                            if (stages is null || stages.Count == 0)
-                            {
-                                continue;
-                            }
-
-                            foreach (var stage in stages)
-                            {
-                                if (!string.IsNullOrWhiteSpace(stage.TaskId))
-                                {
-                                    excludedTaskIds.Add(stage.TaskId);
-                                }
-                            }
-                        }
-                    }
-                }
-
                 if (excludeTasksWithOpenFindings)
                 {
                     var taskIdsWithOpenFindings = await (
@@ -3033,155 +2815,6 @@ public sealed class OrchestratorStore(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<WorkflowDocument> CreateWorkflowAsync(WorkflowDocument workflow, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        db.Workflows.Add(workflow);
-        await db.SaveChangesAsync(cancellationToken);
-        return workflow;
-    }
-
-    public async Task<List<WorkflowDocument>> ListWorkflowsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Workflows.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-    }
-
-    public async Task<List<WorkflowDocument>> ListAllWorkflowsAsync(CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Workflows.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-    }
-
-    public async Task<WorkflowDocument?> GetWorkflowAsync(string workflowId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Workflows.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
-    }
-
-    public async Task<WorkflowDocument?> UpdateWorkflowAsync(string workflowId, WorkflowDocument workflow, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var existing = await db.Workflows.FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
-        if (existing is null)
-            return null;
-
-        workflow.Id = existing.Id;
-        db.Entry(existing).CurrentValues.SetValues(workflow);
-        await db.SaveChangesAsync(cancellationToken);
-        return existing;
-    }
-
-    public async Task<bool> DeleteWorkflowAsync(string workflowId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var workflow = await db.Workflows.FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
-        if (workflow is null)
-            return false;
-
-        db.Workflows.Remove(workflow);
-        await db.SaveChangesAsync(cancellationToken);
-        return true;
-    }
-
-    public async Task<WorkflowExecutionDocument> CreateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        db.WorkflowExecutions.Add(execution);
-        await db.SaveChangesAsync(cancellationToken);
-        return execution;
-    }
-
-    public async Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsAsync(string workflowId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.WorkflowExecutions.AsNoTracking()
-            .Where(x => x.WorkflowId == workflowId)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .Take(100)
-            .ToListAsync(cancellationToken);
-    }
-
-    public async Task<List<WorkflowExecutionDocument>> ListWorkflowExecutionsByStateAsync(WorkflowExecutionState state, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.WorkflowExecutions.AsNoTracking().Where(x => x.State == state).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-    }
-
-    public async Task<WorkflowExecutionDocument?> GetWorkflowExecutionAsync(string executionId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.WorkflowExecutions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
-    }
-
-    public async Task<WorkflowExecutionDocument?> UpdateWorkflowExecutionAsync(WorkflowExecutionDocument execution, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var existing = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == execution.Id, cancellationToken);
-        if (existing is null)
-            return null;
-
-        db.Entry(existing).CurrentValues.SetValues(execution);
-        await db.SaveChangesAsync(cancellationToken);
-        return existing;
-    }
-
-    public async Task<WorkflowExecutionDocument?> MarkWorkflowExecutionCompletedAsync(string executionId, WorkflowExecutionState finalState, string failureReason, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
-        if (execution is null)
-            return null;
-
-        execution.State = finalState;
-        execution.EndedAtUtc = DateTime.UtcNow;
-        execution.FailureReason = failureReason;
-        await db.SaveChangesAsync(cancellationToken);
-        return execution;
-    }
-
-    public async Task<WorkflowExecutionDocument?> MarkWorkflowExecutionPendingApprovalAsync(string executionId, string pendingApprovalStageId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(x => x.Id == executionId, cancellationToken);
-        if (execution is null)
-            return null;
-
-        execution.State = WorkflowExecutionState.PendingApproval;
-        execution.PendingApprovalStageId = pendingApprovalStageId;
-        await db.SaveChangesAsync(cancellationToken);
-        return execution;
-    }
-
-    public async Task<WorkflowExecutionDocument?> ApproveWorkflowStageAsync(string executionId, string approvedBy, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var execution = await db.WorkflowExecutions.FirstOrDefaultAsync(
-            x => x.Id == executionId && x.State == WorkflowExecutionState.PendingApproval,
-            cancellationToken);
-        if (execution is null)
-            return null;
-
-        execution.State = WorkflowExecutionState.Running;
-        execution.ApprovedBy = approvedBy;
-        execution.PendingApprovalStageId = string.Empty;
-        await db.SaveChangesAsync(cancellationToken);
-        return execution;
-    }
-
-    public async Task<WorkflowExecutionDocument?> GetWorkflowExecutionByRunIdAsync(string runId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var executions = await db.WorkflowExecutions.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(500).ToListAsync(cancellationToken);
-        return executions.FirstOrDefault(x => x.StageResults.Any(stage => stage.RunIds.Contains(runId)));
-    }
-
-    public async Task<WorkflowDocument?> GetWorkflowForExecutionAsync(string workflowId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Workflows.AsNoTracking().FirstOrDefaultAsync(x => x.Id == workflowId, cancellationToken);
-    }
-
     public async Task<AlertRuleDocument> CreateAlertRuleAsync(AlertRuleDocument rule, CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
@@ -3587,38 +3220,9 @@ public sealed class OrchestratorStore(
             ExecutionModeDefault = mode,
             SessionProfileId = taskDefaults?.SessionProfileId?.Trim() ?? string.Empty,
             Command = command,
-            CronExpression = taskDefaults?.CronExpression?.Trim() ?? string.Empty,
             AutoCreatePullRequest = taskDefaults?.AutoCreatePullRequest ?? false,
             Enabled = taskDefaults?.Enabled ?? true,
         };
-    }
-
-    private static DateTime? ComputeNextAutomationRun(string triggerKind, string cronExpression, bool enabled, DateTime nowUtc)
-    {
-        if (!enabled)
-        {
-            return null;
-        }
-
-        if (!string.Equals(triggerKind, "cron", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cronExpression))
-        {
-            return null;
-        }
-
-        try
-        {
-            var expression = CronExpression.Parse(cronExpression, CronFormat.Standard);
-            return expression.GetNextOccurrence(nowUtc, TimeZoneInfo.Utc);
-        }
-        catch (Exception ex)
-        {
-            throw new ArgumentException($"Invalid cron expression '{cronExpression}': {ex.Message}", nameof(cronExpression), ex);
-        }
     }
 
     private static string NormalizePromptSkillTrigger(string trigger)
@@ -3866,16 +3470,11 @@ public sealed class OrchestratorStore(
     public static DateTime? ComputeNextRun(TaskDocument task, DateTime nowUtc)
     {
         if (!task.Enabled)
+        {
             return null;
+        }
 
-        if (task.Kind == TaskKind.OneShot)
-            return nowUtc;
-
-        if (task.Kind != TaskKind.Cron || string.IsNullOrWhiteSpace(task.CronExpression))
-            return null;
-
-        var expression = CronExpression.Parse(task.CronExpression, CronFormat.Standard);
-        return expression.GetNextOccurrence(nowUtc, TimeZoneInfo.Utc);
+        return task.Kind == TaskKind.OneShot ? nowUtc : null;
     }
 
     private sealed record TaskCleanupSeed(

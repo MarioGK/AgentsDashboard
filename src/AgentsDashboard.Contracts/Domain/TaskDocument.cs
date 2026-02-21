@@ -76,7 +76,6 @@ public sealed class TaskDocument
     public string Prompt { get; set; } = string.Empty;
     public string Command { get; set; } = string.Empty;
     public bool AutoCreatePullRequest { get; set; }
-    public string CronExpression { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
     public DateTime? NextRunAtUtc { get; set; }
     public DateTime? LastGitSyncAtUtc { get; set; }

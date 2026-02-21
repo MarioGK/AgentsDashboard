@@ -57,29 +57,9 @@ public sealed record WorkspacePromptSubmissionRequest(
     bool ForceNewRun = false,
     string? UserMessage = null,
     HarnessExecutionMode? ModeOverride = null,
-    WorkspaceAgentTeamRequest? AgentTeam = null,
     IReadOnlyList<WorkspaceImageInput>? Images = null,
     bool PreferNativeMultimodal = true,
     string? SessionProfileId = null);
-
-public sealed record WorkspaceAgentTeamRequest(
-    IReadOnlyList<WorkspaceAgentTeamMemberRequest> Members,
-    WorkspaceAgentTeamSynthesisRequest? Synthesis = null);
-
-public sealed record WorkspaceAgentTeamMemberRequest(
-    string Harness,
-    HarnessExecutionMode Mode,
-    string RolePrompt,
-    string? ModelOverride = null,
-    int? TimeoutSeconds = null);
-
-public sealed record WorkspaceAgentTeamSynthesisRequest(
-    bool Enabled,
-    string Prompt,
-    string? Harness = null,
-    HarnessExecutionMode? Mode = null,
-    string? ModelOverride = null,
-    int? TimeoutSeconds = null);
 
 public sealed record WorkspacePromptSubmissionResult(
     bool Success,
@@ -87,10 +67,7 @@ public sealed record WorkspacePromptSubmissionResult(
     bool DispatchAccepted,
     string Message,
     TaskDocument? Task,
-    RunDocument? Run,
-    WorkflowExecutionDocument? WorkflowExecution = null,
-    int TeamMemberCount = 0,
-    bool TeamSynthesisEnabled = false);
+    RunDocument? Run);
 
 public sealed record WorkspaceSummaryRefreshResult(
     bool Success,
@@ -105,7 +82,6 @@ public sealed record WorkspaceSummaryRefreshResult(
 public sealed class WorkspaceService(
     IOrchestratorStore store,
     RunDispatcher dispatcher,
-    IWorkflowExecutor workflowExecutor,
     IHarnessOutputParserService parserService,
     IWorkspaceAiService workspaceAiService,
     IWorkspaceImageStorageService workspaceImageStorageService,
@@ -239,11 +215,6 @@ public sealed class WorkspaceService(
                     Task: task,
                     Run: null);
             }
-        }
-
-        if (request.AgentTeam is { Members.Count: > 0 })
-        {
-            return await SubmitAgentTeamRunAsync(repository, task, request, cancellationToken);
         }
 
         var requestedImages = request.Images?
@@ -397,8 +368,7 @@ public sealed class WorkspaceService(
             "auto-text-reference",
             sessionProfile?.Id,
             instructionStack.Hash,
-            mcpConfigSnapshotJson,
-            run.AutomationRunId);
+            mcpConfigSnapshotJson);
 
         NotifyRunEvent(run.Id, "created", DateTime.UtcNow);
 
@@ -434,179 +404,6 @@ public sealed class WorkspaceService(
                 : $"Run {run.Id} created and queued.",
             Task: task,
             Run: run);
-    }
-
-    private async Task<WorkspacePromptSubmissionResult> SubmitAgentTeamRunAsync(
-        RepositoryDocument repository,
-        TaskDocument task,
-        WorkspacePromptSubmissionRequest request,
-        CancellationToken cancellationToken)
-    {
-        var teamRequest = request.AgentTeam;
-        if (teamRequest is null || teamRequest.Members.Count == 0)
-        {
-            return new WorkspacePromptSubmissionResult(
-                Success: false,
-                CreatedRun: false,
-                DispatchAccepted: false,
-                Message: "Agent Team run requires at least one member.",
-                Task: task,
-                Run: null);
-        }
-
-        var command = string.IsNullOrWhiteSpace(request.Command)
-            ? task.Command
-            : request.Command.Trim();
-        if (string.IsNullOrWhiteSpace(command))
-        {
-            return new WorkspacePromptSubmissionResult(
-                Success: false,
-                CreatedRun: false,
-                DispatchAccepted: false,
-                Message: "Task command is required to start an Agent Team run.",
-                Task: task,
-                Run: null);
-        }
-
-        var prompt = string.IsNullOrWhiteSpace(request.Prompt)
-            ? task.Prompt
-            : request.Prompt.Trim();
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            return new WorkspacePromptSubmissionResult(
-                Success: false,
-                CreatedRun: false,
-                DispatchAccepted: false,
-                Message: "Prompt cannot be empty for an Agent Team run.",
-                Task: task,
-                Run: null);
-        }
-
-        if (request.Images is { Count: > 0 })
-        {
-            return new WorkspacePromptSubmissionResult(
-                Success: false,
-                CreatedRun: false,
-                DispatchAccepted: false,
-                Message: "Image attachments are not supported for Agent Team runs yet.",
-                Task: task,
-                Run: null);
-        }
-
-        var members = teamRequest.Members
-            .Select((member, index) => new WorkflowAgentTeamMemberConfig
-            {
-                Name = string.IsNullOrWhiteSpace(member.RolePrompt) ? $"Agent {index + 1}" : $"Agent {index + 1}",
-                Harness = NormalizeHarness(member.Harness, task.Harness),
-                Mode = member.Mode,
-                RolePrompt = member.RolePrompt?.Trim() ?? string.Empty,
-                ModelOverride = member.ModelOverride?.Trim() ?? string.Empty,
-                TimeoutSeconds = member.TimeoutSeconds,
-            })
-            .ToList();
-
-        members = members
-            .Where(member => !string.IsNullOrWhiteSpace(member.Harness))
-            .ToList();
-
-        if (members.Count == 0)
-        {
-            return new WorkspacePromptSubmissionResult(
-                Success: false,
-                CreatedRun: false,
-                DispatchAccepted: false,
-                Message: "Agent Team run members are invalid.",
-                Task: task,
-                Run: null);
-        }
-
-        var synthesis = BuildSynthesisConfig(teamRequest.Synthesis, task, request.ModeOverride);
-        var workflow = new WorkflowDocument
-        {
-            Id = Guid.NewGuid().ToString("N"),
-            RepositoryId = repository.Id,
-            Name = $"workspace-team-{DateTime.UtcNow:yyyyMMdd-HHmmss}",
-            Description = $"Ephemeral workspace team run for task {task.Name}",
-            Enabled = false,
-            Stages =
-            [
-                new WorkflowStageConfig
-                {
-                    Id = Guid.NewGuid().ToString("N"),
-                    Name = "Agent Team Parallel",
-                    Type = WorkflowStageType.Parallel,
-                    TaskId = task.Id,
-                    PromptOverride = prompt,
-                    CommandOverride = command,
-                    AgentTeamMembers = members,
-                    Synthesis = synthesis,
-                    Order = 0
-                }
-            ]
-        };
-
-        var execution = await workflowExecutor.ExecuteWorkflowAsync(workflow, cancellationToken);
-
-        if (!string.IsNullOrWhiteSpace(request.UserMessage))
-        {
-            await AppendUserPromptEntryAsync(
-                repository.Id,
-                task.Id,
-                execution.Id,
-                request.UserMessage,
-                [],
-                cancellationToken);
-        }
-
-        return new WorkspacePromptSubmissionResult(
-            Success: true,
-            CreatedRun: false,
-            DispatchAccepted: true,
-            Message: $"Agent Team run started with {members.Count} lane(s).",
-            Task: task,
-            Run: null,
-            WorkflowExecution: execution,
-            TeamMemberCount: members.Count,
-            TeamSynthesisEnabled: synthesis is { Enabled: true });
-    }
-
-    private static WorkflowSynthesisStageConfig? BuildSynthesisConfig(
-        WorkspaceAgentTeamSynthesisRequest? request,
-        TaskDocument task,
-        HarnessExecutionMode? fallbackMode)
-    {
-        if (request is null || !request.Enabled)
-        {
-            return null;
-        }
-
-        var prompt = request.Prompt?.Trim() ?? string.Empty;
-        if (prompt.Length == 0)
-        {
-            prompt = "Produce a final synthesis from all agent lanes, including risks, changed files, and next steps.";
-        }
-
-        return new WorkflowSynthesisStageConfig
-        {
-            Enabled = true,
-            Harness = NormalizeHarness(request.Harness, task.Harness),
-            Mode = request.Mode ?? fallbackMode ?? task.ExecutionModeDefault ?? HarnessExecutionMode.Default,
-            Prompt = prompt,
-            ModelOverride = request.ModelOverride?.Trim() ?? string.Empty,
-            TimeoutSeconds = request.TimeoutSeconds,
-        };
-    }
-
-    private static string NormalizeHarness(string? harness, string fallback)
-    {
-        if (!string.IsNullOrWhiteSpace(harness))
-        {
-            return harness.Trim().ToLowerInvariant();
-        }
-
-        return string.IsNullOrWhiteSpace(fallback)
-            ? "codex"
-            : fallback.Trim().ToLowerInvariant();
     }
 
     public void NotifyRunEvent(string runId, string eventType, DateTime eventTimestampUtc)
@@ -1101,7 +898,6 @@ public sealed class WorkspaceService(
             Prompt = source.Prompt,
             Command = source.Command,
             AutoCreatePullRequest = source.AutoCreatePullRequest,
-            CronExpression = source.CronExpression,
             Enabled = source.Enabled,
             NextRunAtUtc = source.NextRunAtUtc,
             RetryPolicy = source.RetryPolicy,

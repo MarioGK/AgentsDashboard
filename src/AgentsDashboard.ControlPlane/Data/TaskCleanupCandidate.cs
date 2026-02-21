@@ -15,5 +15,4 @@ public sealed record TaskCleanupCandidate(
     DateTime? OldestRunUtc,
     bool IsRetentionEligible = false,
     bool IsDisabledInactiveEligible = false,
-    bool IsWorkflowReferenced = false,
     bool HasOpenFindings = false);

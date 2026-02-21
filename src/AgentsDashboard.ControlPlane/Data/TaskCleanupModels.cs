@@ -15,5 +15,4 @@ public sealed record TaskCleanupQuery(
     bool IncludeRetentionEligibility = true,
     bool IncludeDisabledInactiveEligibility = false,
     DateTime DisabledInactiveOlderThanUtc = default,
-    bool ExcludeWorkflowReferencedTasks = false,
     bool ExcludeTasksWithOpenFindings = false);

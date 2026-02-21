@@ -13,7 +13,7 @@ public sealed class TaskRuntimeService(
     ILogger<TaskRuntimeService> logger)
     : ServiceBase<ITaskRuntimeService>, ITaskRuntimeService
 {
-    public async UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.RunId))
         {
@@ -35,7 +35,7 @@ public sealed class TaskRuntimeService(
             };
         }
 
-        await queue.EnqueueAsync(new QueuedJob { Request = request }, cancellationToken);
+        await queue.EnqueueAsync(new QueuedJob { Request = request }, CancellationToken.None);
 
         logger.LogInformation("Accepted run {RunId} using harness {Harness}", request.RunId, request.HarnessType);
 
@@ -47,10 +47,8 @@ public sealed class TaskRuntimeService(
         };
     }
 
-    public UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request, CancellationToken cancellationToken)
+    public UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
         if (string.IsNullOrWhiteSpace(request.RunId))
         {
             return UnaryResult.FromResult(new StopJobResult
@@ -69,10 +67,8 @@ public sealed class TaskRuntimeService(
         });
     }
 
-    public UnaryResult<HealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken)
+    public UnaryResult<HealthCheckResult> CheckHealthAsync()
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
         if (queue.ActiveSlots > queue.MaxSlots)
         {
             return UnaryResult.FromResult(new HealthCheckResult
@@ -91,38 +87,38 @@ public sealed class TaskRuntimeService(
         });
     }
 
-    public async UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request)
     {
-        return await commandService.StartCommandAsync(request, cancellationToken);
+        return await commandService.StartCommandAsync(request, CancellationToken.None);
     }
 
-    public async UnaryResult<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request)
     {
-        return await commandService.CancelCommandAsync(request, cancellationToken);
+        return await commandService.CancelCommandAsync(request, CancellationToken.None);
     }
 
-    public async UnaryResult<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request)
     {
-        return await commandService.GetCommandStatusAsync(request, cancellationToken);
+        return await commandService.GetCommandStatusAsync(request, CancellationToken.None);
     }
 
-    public async UnaryResult<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request)
     {
-        return await fileSystemService.ListRuntimeFilesAsync(request, cancellationToken);
+        return await fileSystemService.ListRuntimeFilesAsync(request, CancellationToken.None);
     }
 
-    public async UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request)
     {
-        return await fileSystemService.CreateRuntimeFileAsync(request, cancellationToken);
+        return await fileSystemService.CreateRuntimeFileAsync(request, CancellationToken.None);
     }
 
-    public async UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request)
     {
-        return await fileSystemService.ReadRuntimeFileAsync(request, cancellationToken);
+        return await fileSystemService.ReadRuntimeFileAsync(request, CancellationToken.None);
     }
 
-    public async UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request, CancellationToken cancellationToken)
+    public async UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request)
     {
-        return await fileSystemService.DeleteRuntimeFileAsync(request, cancellationToken);
+        return await fileSystemService.DeleteRuntimeFileAsync(request, CancellationToken.None);
     }
 }

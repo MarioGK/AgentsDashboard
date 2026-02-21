@@ -11,8 +11,7 @@ public sealed record TaskPromptGenerationRequest(
     string TaskName,
     string Harness,
     string Kind,
-    string Command,
-    string? CronExpression);
+    string Command);
 
 public sealed record TaskPromptGenerationResult(bool Success, string Prompt, string? Error);
 public sealed record LlmTornadoTextResult(bool Success, string Text, string? Error);
@@ -273,7 +272,6 @@ Task Name: {request.TaskName}
 Harness: {request.Harness}
 Kind: {request.Kind}
 Command: {request.Command}
-Cron: {request.CronExpression}
 
 Write the final task prompt.
 """)

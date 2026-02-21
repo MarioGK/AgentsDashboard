@@ -144,7 +144,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
         public ReadRuntimeFileRequest? LastReadRequest { get; private set; }
         public DeleteRuntimeFileRequest? LastDeleteRequest { get; private set; }
 
-        public UnaryResult<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request, CancellationToken cancellationToken)
+        public UnaryResult<ListRuntimeFilesResult> ListRuntimeFilesAsync(ListRuntimeFilesRequest request)
         {
             LastListRequest = request;
             return UnaryResult.FromResult(new ListRuntimeFilesResult
@@ -158,7 +158,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request, CancellationToken cancellationToken)
+        public UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request)
         {
             LastCreateRequest = request;
             return UnaryResult.FromResult(new CreateRuntimeFileResult
@@ -171,7 +171,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request, CancellationToken cancellationToken)
+        public UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request)
         {
             LastReadRequest = request;
             return UnaryResult.FromResult(new ReadRuntimeFileResult
@@ -187,7 +187,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request, CancellationToken cancellationToken)
+        public UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request)
         {
             LastDeleteRequest = request;
             return UnaryResult.FromResult(new DeleteRuntimeFileResult
@@ -200,7 +200,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request, CancellationToken cancellationToken)
+        public UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request)
         {
             return UnaryResult.FromResult(new DispatchJobResult
             {
@@ -210,7 +210,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request, CancellationToken cancellationToken)
+        public UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request)
         {
             return UnaryResult.FromResult(new StopJobResult
             {
@@ -219,7 +219,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<HealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken)
+        public UnaryResult<HealthCheckResult> CheckHealthAsync()
         {
             return UnaryResult.FromResult(new HealthCheckResult
             {
@@ -229,7 +229,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request, CancellationToken cancellationToken)
+        public UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request)
         {
             return UnaryResult.FromResult(new StartRuntimeCommandResult
             {
@@ -240,7 +240,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request, CancellationToken cancellationToken)
+        public UnaryResult<CancelRuntimeCommandResult> CancelCommandAsync(CancelRuntimeCommandRequest request)
         {
             return UnaryResult.FromResult(new CancelRuntimeCommandResult
             {
@@ -250,7 +250,7 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             });
         }
 
-        public UnaryResult<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request, CancellationToken cancellationToken)
+        public UnaryResult<RuntimeCommandStatusResult> GetCommandStatusAsync(GetRuntimeCommandStatusRequest request)
         {
             return UnaryResult.FromResult(new RuntimeCommandStatusResult
             {

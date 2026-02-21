@@ -12,7 +12,7 @@ public sealed class TaskRuntimeCommandGateway(
         CancellationToken cancellationToken)
     {
         var client = await CreateClientAsync(taskRuntimeId, cancellationToken);
-        return await client.StartCommandAsync(request, cancellationToken);
+        return await client.WithCancellationToken(cancellationToken).StartCommandAsync(request);
     }
 
     public async Task<CancelRuntimeCommandResult> CancelAsync(
@@ -21,7 +21,7 @@ public sealed class TaskRuntimeCommandGateway(
         CancellationToken cancellationToken)
     {
         var client = await CreateClientAsync(taskRuntimeId, cancellationToken);
-        return await client.CancelCommandAsync(request, cancellationToken);
+        return await client.WithCancellationToken(cancellationToken).CancelCommandAsync(request);
     }
 
     public async Task<RuntimeCommandStatusResult> GetStatusAsync(
@@ -30,7 +30,7 @@ public sealed class TaskRuntimeCommandGateway(
         CancellationToken cancellationToken)
     {
         var client = await CreateClientAsync(taskRuntimeId, cancellationToken);
-        return await client.GetCommandStatusAsync(request, cancellationToken);
+        return await client.WithCancellationToken(cancellationToken).GetCommandStatusAsync(request);
     }
 
     private async Task<ITaskRuntimeService> CreateClientAsync(string taskRuntimeId, CancellationToken cancellationToken)

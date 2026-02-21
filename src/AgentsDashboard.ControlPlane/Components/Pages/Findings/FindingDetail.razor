@@ -4,7 +4,6 @@
 
 @inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
 @inject AgentsDashboard.ControlPlane.Services.RunDispatcher Dispatcher
-@inject AgentsDashboard.ControlPlane.Services.TaskTemplateService TemplateService
 @inject NavigationManager Navigation
 
 <PageTitle>Finding @Id?[..8] - AgentsDashboard</PageTitle>
@@ -86,10 +85,6 @@ else
                        OnClick="() => _showTaskDialog = true">
                 Create Follow-up Task
             </MudButton>
-            <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Replay"
-                       OnClick="() => _showRegressionDialog = true">
-                Create Regression Replay
-            </MudButton>
         }
     </MudStack>
 }
@@ -105,29 +100,13 @@ else
     </DialogActions>
 </MudDialog>
 
-<MudDialog @bind-Visible="_showRegressionDialog">
-    <TitleContent>Create Regression Replay Task</TitleContent>
-    <DialogContent>
-        <MudAlert Severity="Severity.Info" Class="mb-3">
-            This will create a task linked to run <strong>@(_finding?.RunId?[..8])</strong> for regression replay.
-        </MudAlert>
-        <MudTextField @bind-Value="_regressionTaskPrompt" Label="Prompt" Lines="4" />
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="() => _showRegressionDialog = false">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="CreateRegressionReplayTaskAsync">Create</MudButton>
-    </DialogActions>
-</MudDialog>
-
 @code {
     [Parameter] public string? Id { get; set; }
 
     private FindingDocument? _finding;
     private string _assignee = string.Empty;
     private bool _showTaskDialog;
-    private bool _showRegressionDialog;
     private string _taskPrompt = string.Empty;
-    private string _regressionTaskPrompt = "Replay the linked failure, validate reproducibility, and summarize required fixes.";
 
     protected override async Task OnInitializedAsync()
     {
@@ -157,27 +136,6 @@ else
 
         var created = await CreateTaskFromFindingAsync(
             _taskPrompt.Trim(),
-            [_finding.RunId]);
-
-        if (created is not null)
-            Navigation.NavigateTo($"/settings/repositories/{_finding.RepositoryId}");
-    }
-
-    private async Task CreateRegressionReplayTaskAsync()
-    {
-        if (_finding is null) return;
-        _showRegressionDialog = false;
-
-        var template = await TemplateService.GetTemplateByTemplateIdAsync("regression-replay", CancellationToken.None);
-        if (template is null) return;
-
-        var prompt = string.IsNullOrWhiteSpace(_regressionTaskPrompt)
-            ? template.Prompt
-            : _regressionTaskPrompt.Trim();
-        if (string.IsNullOrWhiteSpace(prompt)) return;
-
-        var created = await CreateTaskFromFindingAsync(
-            prompt,
             [_finding.RunId]);
 
         if (created is not null)

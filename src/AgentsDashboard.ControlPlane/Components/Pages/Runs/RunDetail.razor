@@ -272,151 +272,6 @@ else
                     </MudPaper>
                 </MudTabPanel>
 
-                <MudTabPanel Text="Workflow" Icon="@Icons.Material.Filled.AccountTree">
-                    <MudPaper Class="pa-3">
-                        @if (_workflowExecution is null)
-                        {
-                            <MudText Color="Color.Secondary">Run is not attached to a workflow execution.</MudText>
-                        }
-                        else
-                        {
-                            <MudStack Row AlignItems="AlignItems.Center" Class="mb-2">
-                                <MudText Typo="Typo.h6">Workflow Execution</MudText>
-                                <MudChip T="string" Color="@GetWorkflowStateColor(_workflowExecution.State)">@_workflowExecution.State</MudChip>
-                                @if (!string.IsNullOrWhiteSpace(_workflow?.Name))
-                                {
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@_workflow.Name</MudText>
-                                }
-                            </MudStack>
-
-                            @foreach (var stageResult in _workflowExecution.StageResults.OrderBy(s => s.StartedAtUtc))
-                            {
-                                var hasSynthesis = stageResult.StageType == WorkflowStageType.Parallel &&
-                                                   stageResult.Summary.Contains("Synthesis", StringComparison.OrdinalIgnoreCase) &&
-                                                   stageResult.RunIds.Count > 1;
-                                var laneRuns = hasSynthesis ? stageResult.RunIds.Take(stageResult.RunIds.Count - 1).ToList() : stageResult.RunIds;
-                                var synthesisRunId = hasSynthesis ? stageResult.RunIds.LastOrDefault() : null;
-                                var agentTeamDiff = stageResult.AgentTeamDiff;
-
-                                <MudPaper Class="pa-2 mb-2" Elevation="0">
-                                    <MudStack Row AlignItems="AlignItems.Center">
-                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@stageResult.StageType</MudChip>
-                                        <MudText Typo="Typo.subtitle2">@stageResult.StageName</MudText>
-                                        <MudSpacer />
-                                        <MudChip T="string" Size="Size.Small" Color="@(stageResult.Succeeded ? Color.Success : Color.Error)">
-                                            @(stageResult.Succeeded ? "Succeeded" : "Failed")
-                                        </MudChip>
-                                    </MudStack>
-
-                                    <MudText Typo="Typo.body2">@stageResult.Summary</MudText>
-
-                                    @if (laneRuns.Count > 0)
-                                    {
-                                        <MudText Typo="Typo.caption" Class="mt-1">Parallel lanes</MudText>
-                                        <MudStack Row Spacing="1">
-                                            @foreach (var laneRunId in laneRuns)
-                                            {
-                                                var laneRun = GetRunById(laneRunId);
-                                                <MudChip T="string"
-                                                         Size="Size.Small"
-                                                         Color="@(laneRun is null ? Color.Default : GetRunStateColor(laneRun.State))"
-                                                         OnClick="@(() => Navigation.NavigateTo($"/settings/runs/{laneRunId}"))">
-                                                    @laneRunId[..Math.Min(8, laneRunId.Length)]
-                                                </MudChip>
-                                            }
-                                        </MudStack>
-                                    }
-
-                                    @if (!string.IsNullOrWhiteSpace(synthesisRunId))
-                                    {
-                                        var synthesisRun = GetRunById(synthesisRunId);
-                                        <MudDivider Class="my-1" />
-                                        <MudText Typo="Typo.caption">Synthesis output</MudText>
-                                        <MudText Typo="Typo.body2">@(synthesisRun?.Summary ?? "Synthesis run in progress")</MudText>
-                                    }
-
-                                    @if (agentTeamDiff is not null)
-                                    {
-                                        <MudDivider Class="my-2" />
-                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                                            <MudText Typo="Typo.caption">Merge inspection</MudText>
-                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@agentTeamDiff.MergedFiles merged</MudChip>
-                                            <MudChip T="string" Size="Size.Small" Color="@(agentTeamDiff.ConflictCount > 0 ? Color.Error : Color.Success)">
-                                                @agentTeamDiff.ConflictCount conflicts
-                                            </MudChip>
-                                            @if (!string.IsNullOrWhiteSpace(agentTeamDiff.MergedDiffStat))
-                                            {
-                                                <MudText Typo="Typo.caption">@agentTeamDiff.MergedDiffStat</MudText>
-                                            }
-                                            <MudSpacer />
-                                            @if (!string.IsNullOrWhiteSpace(agentTeamDiff.MergedPatch))
-                                            {
-                                                <MudButton Variant="Variant.Outlined"
-                                                           Size="Size.Small"
-                                                           StartIcon="@Icons.Material.Filled.ContentCopy"
-                                                           OnClick="@(() => CopyWorkflowPatchAsync(agentTeamDiff.MergedPatch))">
-                                                    Copy Merged Patch
-                                                </MudButton>
-                                            }
-                                        </MudStack>
-
-                                        @if (agentTeamDiff.LaneDiffs.Count > 0)
-                                        {
-                                            <MudSimpleTable Dense="true" Class="mt-1">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Lane</th>
-                                                        <th>Harness</th>
-                                                        <th>Run</th>
-                                                        <th>Files</th>
-                                                        <th>+/-</th>
-                                                        <th>Diff</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach (var laneDiff in agentTeamDiff.LaneDiffs)
-                                                    {
-                                                        <tr>
-                                                            <td>@laneDiff.LaneLabel</td>
-                                                            <td>@laneDiff.Harness</td>
-                                                            <td>@laneDiff.RunId[..Math.Min(8, laneDiff.RunId.Length)]</td>
-                                                            <td>@laneDiff.FilesChanged</td>
-                                                            <td>+@laneDiff.Additions / -@laneDiff.Deletions</td>
-                                                            <td>@laneDiff.DiffStat</td>
-                                                        </tr>
-                                                    }
-                                                </tbody>
-                                            </MudSimpleTable>
-                                        }
-
-                                        @if (agentTeamDiff.Conflicts.Count > 0)
-                                        {
-                                            <MudStack Spacing="1" Class="mt-2">
-                                                @foreach (var conflict in agentTeamDiff.Conflicts)
-                                                {
-                                                    <MudPaper Class="pa-1" Elevation="0">
-                                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                                                            <MudChip T="string" Size="Size.Small" Color="Color.Error">@conflict.FilePath</MudChip>
-                                                            <MudText Typo="Typo.caption">@conflict.Reason</MudText>
-                                                        </MudStack>
-                                                        @if (conflict.LaneLabels.Count > 0)
-                                                        {
-                                                            <MudText Typo="Typo.caption">Lanes: @string.Join(", ", conflict.LaneLabels)</MudText>
-                                                        }
-                                                        @if (conflict.HunkHeaders.Count > 0)
-                                                        {
-                                                            <MudText Typo="Typo.caption">Hunks: @string.Join(" | ", conflict.HunkHeaders)</MudText>
-                                                        }
-                                                    </MudPaper>
-                                                }
-                                            </MudStack>
-                                        }
-                                    }
-                                </MudPaper>
-                            }
-                        }
-                    </MudPaper>
-                </MudTabPanel>
             </MudTabs>
         </MudItem>
 
@@ -498,8 +353,6 @@ else
     private List<RunToolProjectionDocument> _toolProjections = [];
     private RunDiffSnapshotDocument? _diffSnapshot;
     private RunStructuredViewSnapshot _structuredView = new(string.Empty, 0, [], [], [], null, DateTime.UtcNow);
-    private WorkflowExecutionDocument? _workflowExecution;
-    private WorkflowDocument? _workflow;
 
     private IDisposable? _runLogSubscription;
     private IDisposable? _runStatusSubscription;
@@ -617,11 +470,6 @@ else
         _diffSnapshot = await Store.GetLatestRunDiffSnapshotAsync(_run.Id, CancellationToken.None);
         _structuredView = await RunStructuredViewService.GetViewAsync(_run.Id, CancellationToken.None);
 
-        _workflowExecution = await Store.GetWorkflowExecutionByRunIdAsync(_run.Id, CancellationToken.None);
-        _workflow = _workflowExecution is null
-            ? null
-            : await Store.GetWorkflowForExecutionAsync(_workflowExecution.WorkflowId, CancellationToken.None);
-
         _repositoryRuns = await Store.ListRunsByRepositoryAsync(_run.RepositoryId, CancellationToken.None);
         _runsById.Clear();
         foreach (var run in _repositoryRuns)
@@ -681,22 +529,6 @@ else
         if (_tasksById.TryGetValue(run.TaskId, out var task))
         {
             return task.Harness;
-        }
-
-        if (_workflowExecution is not null)
-        {
-            foreach (var stage in _workflowExecution.StageResults)
-            {
-                var laneMatch = stage.AgentTeamDiff?.LaneDiffs
-                    .FirstOrDefault(x =>
-                        string.Equals(x.RunId, run.Id, StringComparison.OrdinalIgnoreCase) &&
-                        !string.IsNullOrWhiteSpace(x.Harness));
-
-                if (laneMatch is not null)
-                {
-                    return laneMatch.Harness;
-                }
-            }
         }
 
         return "unknown";
@@ -849,11 +681,6 @@ else
         await CopyTextAsync(bundleJson, "Run share bundle copied.");
     }
 
-    private async Task CopyWorkflowPatchAsync(string patch)
-    {
-        await CopyTextAsync(patch, "Merged workflow patch copied.");
-    }
-
     private async Task CopyTextAsync(string text, string successMessage)
     {
         try
@@ -972,16 +799,6 @@ else
 
     private static Color GetRunStateColor(RunState state) => TaskRunStatusPresentation.FromRunState(state).Color;
     private static string GetRunStateLabel(RunState state) => TaskRunStatusPresentation.FromRunState(state).Label;
-
-    private static Color GetWorkflowStateColor(WorkflowExecutionState state) => state switch
-    {
-        WorkflowExecutionState.Running => Color.Info,
-        WorkflowExecutionState.Succeeded => Color.Success,
-        WorkflowExecutionState.Failed => Color.Error,
-        WorkflowExecutionState.Cancelled => Color.Warning,
-        WorkflowExecutionState.PendingApproval => Color.Secondary,
-        _ => Color.Default,
-    };
 
     public void Dispose()
     {

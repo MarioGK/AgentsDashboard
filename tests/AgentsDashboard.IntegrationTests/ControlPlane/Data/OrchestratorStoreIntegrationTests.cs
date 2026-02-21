@@ -61,11 +61,10 @@ public sealed class OrchestratorStoreIntegrationTests
         var updatedRepository = await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
-                Kind: TaskKind.Cron,
+                Kind: TaskKind.EventDriven,
                 Harness: "OpenCode",
                 ExecutionModeDefault: HarnessExecutionMode.Plan,
                 Command: "echo defaults",
-                CronExpression: "*/5 * * * *",
                 AutoCreatePullRequest: true,
                 Enabled: false,
                 SessionProfileId: "profile-1"),
@@ -77,11 +76,10 @@ public sealed class OrchestratorStoreIntegrationTests
             return;
         }
 
-        await Assert.That(updatedRepository.TaskDefaults.Kind).IsEqualTo(TaskKind.Cron);
+        await Assert.That(updatedRepository.TaskDefaults.Kind).IsEqualTo(TaskKind.EventDriven);
         await Assert.That(updatedRepository.TaskDefaults.Harness).IsEqualTo("opencode");
         await Assert.That(updatedRepository.TaskDefaults.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
         await Assert.That(updatedRepository.TaskDefaults.Command).IsEqualTo("echo defaults");
-        await Assert.That(updatedRepository.TaskDefaults.CronExpression).IsEqualTo("*/5 * * * *");
         await Assert.That(updatedRepository.TaskDefaults.AutoCreatePullRequest).IsTrue();
         await Assert.That(updatedRepository.TaskDefaults.Enabled).IsFalse();
         await Assert.That(updatedRepository.TaskDefaults.SessionProfileId).IsEqualTo("profile-1");
@@ -93,11 +91,10 @@ public sealed class OrchestratorStoreIntegrationTests
                 Name: "defaults task"),
             CancellationToken.None);
 
-        await Assert.That(task.Kind).IsEqualTo(TaskKind.Cron);
+        await Assert.That(task.Kind).IsEqualTo(TaskKind.EventDriven);
         await Assert.That(task.Harness).IsEqualTo("opencode");
         await Assert.That(task.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
         await Assert.That(task.Command).IsEqualTo("echo defaults");
-        await Assert.That(task.CronExpression).IsEqualTo("*/5 * * * *");
         await Assert.That(task.AutoCreatePullRequest).IsTrue();
         await Assert.That(task.Enabled).IsFalse();
         await Assert.That(task.SessionProfileId).IsEqualTo("profile-1");
@@ -123,7 +120,6 @@ public sealed class OrchestratorStoreIntegrationTests
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Default,
                 Command: "echo one-shot",
-                CronExpression: string.Empty,
                 AutoCreatePullRequest: false,
                 Enabled: true),
             CancellationToken.None);
@@ -138,20 +134,19 @@ public sealed class OrchestratorStoreIntegrationTests
         await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
-                Kind: TaskKind.Cron,
+                Kind: TaskKind.EventDriven,
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Default,
-                Command: "echo cron",
-                CronExpression: "* * * * *",
+                Command: "echo event",
                 AutoCreatePullRequest: false,
                 Enabled: true),
             CancellationToken.None);
 
-        var cronTask = await fixture.Store.CreateTaskAsync(
+        var eventTask = await fixture.Store.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
-                Prompt: "Do recurring thing",
-                Name: "Cron task"),
+                Prompt: "Handle webhook event",
+                Name: "Event task"),
             CancellationToken.None);
 
         await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
@@ -161,7 +156,6 @@ public sealed class OrchestratorStoreIntegrationTests
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Default,
                 Command: "echo disabled",
-                CronExpression: string.Empty,
                 AutoCreatePullRequest: false,
                 Enabled: false),
             CancellationToken.None);
@@ -173,14 +167,12 @@ public sealed class OrchestratorStoreIntegrationTests
                 Name: "Disabled task"),
             CancellationToken.None);
 
-        await fixture.Store.UpdateTaskNextRunAsync(cronTask.Id, DateTime.UtcNow.AddMinutes(-1), CancellationToken.None);
-
         var dueTaskIds = (await fixture.Store.ListDueTasksAsync(DateTime.UtcNow, limit: 10, CancellationToken.None))
             .Select(task => task.Id)
             .ToList();
 
         await Assert.That(dueTaskIds).Contains(oneShotTask.Id);
-        await Assert.That(dueTaskIds).Contains(cronTask.Id);
+        await Assert.That(dueTaskIds).DoesNotContain(eventTask.Id);
         await Assert.That(dueTaskIds).DoesNotContain(disabledTask.Id);
 
         await fixture.Store.MarkOneShotTaskConsumedAsync(oneShotTask.Id, CancellationToken.None);
@@ -191,20 +183,20 @@ public sealed class OrchestratorStoreIntegrationTests
 
         await Assert.That(dueTaskIdsAfterConsume).DoesNotContain(oneShotTask.Id);
 
-        var firstRun = await fixture.Store.CreateRunAsync(cronTask, CancellationToken.None);
+        var firstRun = await fixture.Store.CreateRunAsync(eventTask, CancellationToken.None);
         await fixture.Store.MarkRunStartedAsync(firstRun.Id, "worker-1", CancellationToken.None);
         await fixture.Store.MarkRunCompletedAsync(firstRun.Id, succeeded: false, summary: "failed", outputJson: "{}", CancellationToken.None);
 
-        var secondRun = await fixture.Store.CreateRunAsync(cronTask, CancellationToken.None);
+        var secondRun = await fixture.Store.CreateRunAsync(eventTask, CancellationToken.None);
         await fixture.Store.MarkRunStartedAsync(secondRun.Id, "worker-2", CancellationToken.None);
 
-        var latestStates = await fixture.Store.GetLatestRunStatesByTaskIdsAsync([cronTask.Id, oneShotTask.Id], CancellationToken.None);
+        var latestStates = await fixture.Store.GetLatestRunStatesByTaskIdsAsync([eventTask.Id, oneShotTask.Id], CancellationToken.None);
 
-        await Assert.That(latestStates.ContainsKey(cronTask.Id)).IsTrue();
-        await Assert.That(latestStates[cronTask.Id]).IsEqualTo(RunState.Running);
+        await Assert.That(latestStates.ContainsKey(eventTask.Id)).IsTrue();
+        await Assert.That(latestStates[eventTask.Id]).IsEqualTo(RunState.Running);
         await Assert.That(latestStates.ContainsKey(oneShotTask.Id)).IsFalse();
 
-        var activeRunCount = await fixture.Store.CountActiveRunsByTaskAsync(cronTask.Id, CancellationToken.None);
+        var activeRunCount = await fixture.Store.CountActiveRunsByTaskAsync(eventTask.Id, CancellationToken.None);
         await Assert.That(activeRunCount).IsEqualTo(1);
     }
 
@@ -314,7 +306,6 @@ public sealed class OrchestratorStoreIntegrationTests
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Plan,
                 Command: "echo mode",
-                CronExpression: string.Empty,
                 AutoCreatePullRequest: false,
                 Enabled: true),
             CancellationToken.None);
@@ -337,7 +328,6 @@ public sealed class OrchestratorStoreIntegrationTests
                 Prompt: task.Prompt,
                 Command: task.Command,
                 AutoCreatePullRequest: task.AutoCreatePullRequest,
-                CronExpression: task.CronExpression,
                 Enabled: task.Enabled,
                 ExecutionModeDefault: HarnessExecutionMode.Review),
             CancellationToken.None);
@@ -366,7 +356,6 @@ public sealed class OrchestratorStoreIntegrationTests
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Plan,
                 Command: "echo mode",
-                CronExpression: string.Empty,
                 AutoCreatePullRequest: false,
                 Enabled: true),
             CancellationToken.None);
@@ -482,7 +471,6 @@ public sealed class OrchestratorStoreIntegrationTests
         var prune = await fixture.Store.PruneStructuredRunDataAsync(
             DateTime.UtcNow.AddDays(1),
             maxRuns: 100,
-            excludeWorkflowReferencedTasks: false,
             excludeTasksWithOpenFindings: false,
             CancellationToken.None);
 
@@ -508,99 +496,4 @@ public sealed class OrchestratorStoreIntegrationTests
         await Assert.That(activeTools.Count()).IsEqualTo(1);
     }
 
-    [Test]
-    public async Task PruneStructuredRunDataAsync_WhenTaskIsWorkflowReferencedAndExcluded_PreservesStructuredRows()
-    {
-        await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
-
-        var repository = await fixture.Store.CreateRepositoryAsync(
-            new CreateRepositoryRequest(
-                Name: "Prune Exclusion Repository",
-                GitUrl: "https://example.com/org/prune-exclusion.git",
-                LocalPath: "/tmp/prune-exclusion-repository",
-                DefaultBranch: "main"),
-            CancellationToken.None);
-
-        var task = await fixture.Store.CreateTaskAsync(
-            new CreateTaskRequest(
-                RepositoryId: repository.Id,
-                Prompt: "prune exclusion",
-                Name: "Referenced task"),
-            CancellationToken.None);
-
-        await fixture.Store.CreateWorkflowAsync(
-            new WorkflowDocument
-            {
-                RepositoryId = repository.Id,
-                Name = "Workflow referencing task",
-                Description = "exclude referenced task",
-                Enabled = true,
-                Stages =
-                [
-                    new WorkflowStageConfig
-                    {
-                        Name = "Referenced stage",
-                        Type = WorkflowStageType.Task,
-                        TaskId = task.Id,
-                        Order = 0,
-                    }
-                ],
-            },
-            CancellationToken.None);
-
-        var run = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
-        await fixture.Store.MarkRunStartedAsync(run.Id, "worker-1", CancellationToken.None);
-        await fixture.Store.MarkRunCompletedAsync(run.Id, succeeded: true, summary: "done", outputJson: "{}", CancellationToken.None);
-
-        await fixture.Store.AppendRunStructuredEventAsync(
-            new RunStructuredEventDocument
-            {
-                RunId = run.Id,
-                RepositoryId = repository.Id,
-                TaskId = task.Id,
-                Sequence = 1,
-                EventType = "tool.lifecycle",
-                Category = "tool.lifecycle",
-                PayloadJson = "{\"toolCallId\":\"call-1\",\"toolName\":\"bash\",\"state\":\"completed\"}",
-                SchemaVersion = "harness-structured-event-v2",
-                TimestampUtc = DateTime.UtcNow,
-                CreatedAtUtc = DateTime.UtcNow,
-            },
-            CancellationToken.None);
-        await fixture.Store.UpsertRunDiffSnapshotAsync(
-            new RunDiffSnapshotDocument
-            {
-                RunId = run.Id,
-                RepositoryId = repository.Id,
-                TaskId = task.Id,
-                Sequence = 1,
-                Summary = "diff",
-                DiffStat = "1 file changed",
-                DiffPatch = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new",
-                SchemaVersion = "harness-structured-event-v2",
-                TimestampUtc = DateTime.UtcNow,
-                CreatedAtUtc = DateTime.UtcNow,
-            },
-            CancellationToken.None);
-
-        var prune = await fixture.Store.PruneStructuredRunDataAsync(
-            DateTime.UtcNow.AddDays(1),
-            maxRuns: 100,
-            excludeWorkflowReferencedTasks: true,
-            excludeTasksWithOpenFindings: false,
-            CancellationToken.None);
-
-        await Assert.That(prune.RunsScanned).IsEqualTo(0);
-        await Assert.That(prune.DeletedStructuredEvents).IsEqualTo(0);
-        await Assert.That(prune.DeletedDiffSnapshots).IsEqualTo(0);
-        await Assert.That(prune.DeletedToolProjections).IsEqualTo(0);
-
-        var events = await fixture.Store.ListRunStructuredEventsAsync(run.Id, 50, CancellationToken.None);
-        var diff = await fixture.Store.GetLatestRunDiffSnapshotAsync(run.Id, CancellationToken.None);
-        var tools = await fixture.Store.ListRunToolProjectionsAsync(run.Id, CancellationToken.None);
-
-        await Assert.That(events.Count()).IsEqualTo(1);
-        await Assert.That(diff).IsNotNull();
-        await Assert.That(tools.Count()).IsEqualTo(1);
-    }
 }

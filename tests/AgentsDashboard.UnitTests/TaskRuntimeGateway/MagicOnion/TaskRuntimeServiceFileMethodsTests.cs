@@ -27,8 +27,7 @@ public sealed class TaskRuntimeServiceFileMethodsTests
                     Content = "{}"u8.ToArray(),
                     CreateParentDirectories = true,
                     Overwrite = false,
-                },
-                CancellationToken.None);
+                });
 
             await Assert.That(create.Success).IsTrue();
 
@@ -39,8 +38,7 @@ public sealed class TaskRuntimeServiceFileMethodsTests
                     TaskId = "task-1",
                     RelativePath = "artifacts/output.json",
                     MaxBytes = 0,
-                },
-                CancellationToken.None);
+                });
 
             await Assert.That(read.Found).IsTrue();
             await Assert.That(read.IsDirectory).IsFalse();
@@ -52,8 +50,7 @@ public sealed class TaskRuntimeServiceFileMethodsTests
                     TaskId = "task-1",
                     RelativePath = "artifacts",
                     IncludeHidden = false,
-                },
-                CancellationToken.None);
+                });
 
             await Assert.That(list.Success).IsTrue();
             await Assert.That(list.Entries.Count).IsEqualTo(1);
@@ -66,8 +63,7 @@ public sealed class TaskRuntimeServiceFileMethodsTests
                     TaskId = "task-1",
                     RelativePath = "artifacts/output.json",
                     Recursive = false,
-                },
-                CancellationToken.None);
+                });
 
             await Assert.That(delete.Success).IsTrue();
             await Assert.That(delete.Deleted).IsTrue();
@@ -79,30 +75,23 @@ public sealed class TaskRuntimeServiceFileMethodsTests
     }
 
     [Test]
-    public async Task FileRpcMethods_PropagateCancellation()
+    public async Task FileRpcMethods_InvokeWithNoTransportCancellationToken()
     {
         var tempRoot = CreateTempDirectory();
 
         try
         {
             var service = CreateService(tempRoot);
-            using var cts = new CancellationTokenSource();
-            cts.Cancel();
+            var list = await service.ListRuntimeFilesAsync(
+                new ListRuntimeFilesRequest
+                {
+                    RepositoryId = "repo-1",
+                    TaskId = "task-1",
+                    RelativePath = ".",
+                    IncludeHidden = false,
+                });
 
-            Func<Task> action = async () =>
-            {
-                await service.ListRuntimeFilesAsync(
-                    new ListRuntimeFilesRequest
-                    {
-                        RepositoryId = "repo-1",
-                        TaskId = "task-1",
-                        RelativePath = ".",
-                        IncludeHidden = false,
-                    },
-                    cts.Token);
-            };
-
-            await Assert.That(action).Throws<OperationCanceledException>();
+            await Assert.That(list.Success).IsTrue();
         }
         finally
         {

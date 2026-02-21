@@ -3,8 +3,7 @@ namespace AgentsDashboard.Contracts.Domain;
 public enum TaskKind
 {
     OneShot = 0,
-    Cron = 1,
-    EventDriven = 2
+    EventDriven = 1
 }
 
 public enum RunState
@@ -87,7 +86,6 @@ public enum WebhookEventType
     PullRequest = 1,
     Issues = 2,
     Release = 3,
-    WorkflowRun = 4,
     Any = 99
 }
 
@@ -134,37 +132,6 @@ public enum AlertRuleType
     QueueBacklog = 2,
     RepeatedPrFailures = 3
 }
-
-public enum WorkflowStageType
-{
-    Task = 0,
-    Approval = 1,
-    Delay = 2,
-    Parallel = 3,
-}
-
-
-
-
-
-public enum WorkflowExecutionState
-{
-    Running = 0,
-    Succeeded = 1,
-    Failed = 2,
-    Cancelled = 3,
-    PendingApproval = 4
-}
-
-
-
-
-
-
-
-
-
-
 
 public sealed class ContainerMetrics
 {

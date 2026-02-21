@@ -7,7 +7,6 @@ public sealed class RepositoryTaskDefaultsConfig
     public HarnessExecutionMode ExecutionModeDefault { get; set; } = HarnessExecutionMode.Default;
     public string SessionProfileId { get; set; } = string.Empty;
     public string Command { get; set; } = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
-    public string CronExpression { get; set; } = string.Empty;
     public bool AutoCreatePullRequest { get; set; }
     public bool Enabled { get; set; } = true;
 }

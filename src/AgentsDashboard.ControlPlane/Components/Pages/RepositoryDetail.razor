@@ -5,7 +5,6 @@
 @inject Data.IOrchestratorStore Store
 @inject Services.RunDispatcher Dispatcher
 @inject Services.SecretCryptoService Crypto
-@inject Services.TaskTemplateService TemplateService
 @inject Services.IWorkspaceAiService WorkspaceAiService
 @inject Services.IGitWorkspaceService GitWorkspace
 @inject IJSRuntime JS
@@ -38,19 +37,6 @@ else
 
         <MudTabs Elevation="1" Rounded>
             <MudTabPanel Text="Tasks">
-                <MudPaper Class="pa-4 mb-3" Elevation="1">
-                    <MudText Typo="Typo.subtitle1" Class="mb-2">Quick Start from Template</MudText>
-                    <MudStack Row Spacing="2" Style="flex-wrap: wrap;">
-                        @foreach (var template in _templates)
-                        {
-                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
-                                       OnClick="() => ApplyTemplate(template)">
-                                @template.Name
-                            </MudButton>
-                        }
-                    </MudStack>
-                </MudPaper>
-
                 <MudPaper Class="pa-4 mb-3" Elevation="1">
                     <MudText Typo="Typo.subtitle1" Class="mb-2">Prompt Skills</MudText>
                     <MudText Typo="Typo.body2" Class="mb-3">
@@ -116,7 +102,6 @@ else
                         <MudItem xs="12" md="3">
                             <MudSelect T="TaskKind" @bind-Value="_taskDefaultsKind" Label="Kind">
                                 <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
-                                <MudSelectItem T="TaskKind" Value="@TaskKind.Cron">Cron</MudSelectItem>
                                 <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
                             </MudSelect>
                         </MudItem>
@@ -144,10 +129,7 @@ else
                         </MudItem>
                     </MudGrid>
                     <MudGrid Class="mt-2">
-                        <MudItem xs="12" md="4">
-                            <MudTextField @bind-Value="_taskDefaultsCron" Label="Cron Expression" />
-                        </MudItem>
-                        <MudItem xs="12" md="6">
+                        <MudItem xs="12" md="10">
                             <MudTextField @bind-Value="_taskDefaultsCommand" Label="Shell Command" />
                         </MudItem>
                         <MudItem xs="12" md="1" Class="d-flex align-center">
@@ -381,7 +363,6 @@ else
     private readonly List<FindingDocument> _findings = [];
     private readonly Dictionary<string, RunDocument?> _latestRunsByTaskId = new(StringComparer.Ordinal);
     private bool _taskStatusLoading;
-    private List<TaskTemplateDocument> _templates = [];
     private List<RunSessionProfileDocument> _sessionProfiles = [];
     private readonly List<PromptSkillDocument> _repositoryPromptSkills = [];
     private readonly List<PromptSkillDocument> _globalPromptSkills = [];
@@ -392,7 +373,6 @@ else
     private HarnessExecutionMode _taskDefaultsExecutionMode = HarnessExecutionMode.Default;
     private string _taskDefaultsSessionProfileId = string.Empty;
     private string _taskDefaultsCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
-    private string _taskDefaultsCron = string.Empty;
     private bool _taskDefaultsAutoPr;
     private bool _taskDefaultsEnabled = true;
     private bool _isSavingTaskDefaults;
@@ -462,7 +442,6 @@ else
         }
 
         await Store.TouchRepositoryAsync(_repository.Id, CancellationToken.None);
-        _templates = await TemplateService.ListTemplatesAsync(CancellationToken.None);
         _sessionProfiles = await Store.ListRunSessionProfilesAsync(_repository.Id, includeGlobal: true, CancellationToken.None);
         ApplyRepositoryTaskDefaults(_repository);
         _taskPromptSkillAutocompleteBound = false;
@@ -471,13 +450,6 @@ else
         await RefreshAsync();
         await LoadInstructionFilesAsync();
         await RefreshGitStatusAsync();
-    }
-
-    private void ApplyTemplate(TaskTemplateDocument template)
-    {
-        _taskPrompt = template.Prompt;
-        _ = SyncTaskPromptEditorAsync();
-        StateHasChanged();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -689,7 +661,6 @@ else
         _taskDefaultsExecutionMode = defaults.ExecutionModeDefault;
         _taskDefaultsSessionProfileId = defaults.SessionProfileId;
         _taskDefaultsCommand = defaults.Command;
-        _taskDefaultsCron = defaults.CronExpression;
         _taskDefaultsAutoPr = defaults.AutoCreatePullRequest;
         _taskDefaultsEnabled = defaults.Enabled;
     }
@@ -710,7 +681,6 @@ else
                 Harness: _taskDefaultsHarness,
                 ExecutionModeDefault: _taskDefaultsExecutionMode,
                 Command: _taskDefaultsCommand,
-                CronExpression: _taskDefaultsCron,
                 AutoCreatePullRequest: _taskDefaultsAutoPr,
                 Enabled: _taskDefaultsEnabled,
                 SessionProfileId: string.IsNullOrWhiteSpace(_taskDefaultsSessionProfileId) ? null : _taskDefaultsSessionProfileId);

@@ -122,7 +122,6 @@ public sealed class OrchestratorSettings
     public int TaskRetentionDays { get; set; } = 180;
     public int DisabledTaskInactivityDays { get; set; } = 30;
     public int CleanupProtectedDays { get; set; } = 14;
-    public bool CleanupExcludeWorkflowReferencedTasks { get; set; } = true;
     public bool CleanupExcludeTasksWithOpenFindings { get; set; } = true;
     public int DbSizeSoftLimitGb { get; set; } = 100;
     public int DbSizeTargetGb { get; set; } = 90;

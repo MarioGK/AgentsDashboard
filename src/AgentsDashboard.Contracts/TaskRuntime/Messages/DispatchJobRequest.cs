@@ -43,5 +43,4 @@ public record DispatchJobRequest
     [Key(33)] public string SessionProfileId { get; set; } = string.Empty;
     [Key(34)] public string InstructionStackHash { get; set; } = string.Empty;
     [Key(35)] public string McpConfigSnapshotJson { get; set; } = string.Empty;
-    [Key(36)] public string AutomationRunId { get; set; } = string.Empty;
 }

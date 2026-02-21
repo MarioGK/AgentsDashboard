@@ -76,7 +76,6 @@ public sealed class RunDocument
     public string SessionProfileId { get; set; } = string.Empty;
     public string InstructionStackHash { get; set; } = string.Empty;
     public string McpConfigSnapshotJson { get; set; } = string.Empty;
-    public string AutomationRunId { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
     public string OutputJson { get; set; } = string.Empty;
     public int Attempt { get; set; } = 1;

@@ -108,7 +108,6 @@ else
                 <MudNumericField T="int" Label="Task Retention (days)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRetentionDays" Min="1" Max="3650" Class="mb-2" />
                 <MudNumericField T="int" Label="Protected Window (days)" Variant="Variant.Outlined" @bind-Value="_settings.CleanupProtectedDays" Min="0" Max="3650" Class="mb-2" />
                 <MudNumericField T="int" Label="Disabled Task Inactivity (days, 0 disables)" Variant="Variant.Outlined" @bind-Value="_settings.DisabledTaskInactivityDays" Min="0" Max="3650" Class="mb-2" />
-                <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.CleanupExcludeWorkflowReferencedTasks" Label="Exclude Workflow-Referenced Tasks" Class="mb-2" />
                 <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.CleanupExcludeTasksWithOpenFindings" Label="Exclude Tasks With Open Findings" Class="mb-2" />
                 <MudNumericField T="int" Label="DB Size Soft Limit (GB)" Variant="Variant.Outlined" @bind-Value="_settings.DbSizeSoftLimitGb" Min="1" Max="16384" Class="mb-2" />
                 <MudNumericField T="int" Label="DB Size Target (GB)" Variant="Variant.Outlined" @bind-Value="_settings.DbSizeTargetGb" Min="1" Max="16384" Class="mb-2" />
@@ -435,7 +434,6 @@ else
             TaskRetentionDays = source.TaskRetentionDays,
             CleanupProtectedDays = source.CleanupProtectedDays,
             DisabledTaskInactivityDays = source.DisabledTaskInactivityDays,
-            CleanupExcludeWorkflowReferencedTasks = source.CleanupExcludeWorkflowReferencedTasks,
             CleanupExcludeTasksWithOpenFindings = source.CleanupExcludeTasksWithOpenFindings,
             DbSizeSoftLimitGb = source.DbSizeSoftLimitGb,
             DbSizeTargetGb = source.DbSizeTargetGb,

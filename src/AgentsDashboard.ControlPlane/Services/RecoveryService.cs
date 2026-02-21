@@ -73,8 +73,6 @@ public sealed class RecoveryService(
         {
             progress.Report(CreateProgress("Recovering orphaned runs.", 10));
             await RecoverOrphanedRunsAsync(cancellationToken);
-            progress.Report(CreateProgress("Recovering orphaned workflow executions.", 35));
-            await RecoverOrphanedWorkflowExecutionsAsync(cancellationToken);
             progress.Report(CreateProgress("Inspecting pending approval runs.", 55));
             await LogPendingApprovalRunsAsync(cancellationToken);
             progress.Report(CreateProgress("Inspecting queued runs.", 70));
@@ -340,39 +338,6 @@ public sealed class RecoveryService(
 
         if (recoveredCount > 0)
             logger.LogInformation("Recovery complete: {Count} orphaned runs marked as failed", recoveredCount);
-    }
-
-    private async Task RecoverOrphanedWorkflowExecutionsAsync(CancellationToken cancellationToken)
-    {
-        var runningExecutions = await store.ListWorkflowExecutionsByStateAsync(WorkflowExecutionState.Running, cancellationToken);
-        var recoveredCount = 0;
-
-        foreach (var execution in runningExecutions)
-        {
-            try
-            {
-                logger.LogWarning("Orphaned workflow execution detected: {ExecutionId} (Workflow: {WorkflowId}). Marking as failed",
-                    execution.Id, execution.WorkflowId);
-
-                var failed = await store.MarkWorkflowExecutionCompletedAsync(
-                    execution.Id,
-                    WorkflowExecutionState.Failed,
-                    "Workflow execution was still running when control plane restarted. Marked as failed.",
-                    cancellationToken);
-
-                if (failed is not null)
-                {
-                    recoveredCount++;
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to recover orphaned workflow execution {ExecutionId}", execution.Id);
-            }
-        }
-
-        if (recoveredCount > 0)
-            logger.LogInformation("Recovery complete: {Count} orphaned workflow executions marked as failed", recoveredCount);
     }
 
     private async Task LogPendingApprovalRunsAsync(CancellationToken cancellationToken)

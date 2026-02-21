@@ -27,7 +27,7 @@ else
 
             <MudTextField T="string"
                           @bind-Value="_commandText"
-                          Placeholder="Type a command like 'runs', 'findings', 'workflows stages', 'runtimes'"
+                          Placeholder="Type a command like 'runs', 'findings', 'runtimes', 'repositories'"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
                           Adornment="Adornment.Start"
@@ -507,11 +507,9 @@ else
     [
         new("Runs", "Inspect queues, active and finished runs", "/settings/runs", Icons.Material.Filled.PlayCircle),
         new("Findings", "Triage failures and quality issues", "/settings/findings", Icons.Material.Filled.BugReport),
-        new("Workflows", "Manage stage workflows", "/settings/workflows/stages", Icons.Material.Filled.AccountTree),
         new("Repositories", "Manage git-linked repositories", "/settings/repositories", Icons.Material.Filled.AccountTree),
         new("Session Profiles", "Manage per-run behavior presets", "/settings/session-profiles", Icons.Material.Filled.Person),
         new("Orchestrator", "Inspect task runtime status and queueing", "/settings/task-runtimes", Icons.Material.Filled.Engineering),
-        new("Automations", "Manage cron/webhook automation definitions", "/settings/automations", Icons.Material.Filled.AutoMode),
         new("MCP", "Configure model context protocol routing snapshot", "/settings/mcp", Icons.Material.Filled.Extension),
         new("Orchestrator Policy", "Tune task runtime reliability and scaling", "/settings/task-runtimes", Icons.Material.Filled.Memory),
         new("System", "Update retention and docker policies", "/settings/system", Icons.Material.Filled.Tune)
@@ -1313,15 +1311,11 @@ else
         if (normalized.Contains("finding")) return "/settings/findings";
         if (normalized.Contains("project") || normalized.Contains("repo")) return "/settings/repositories";
         if (normalized.Contains("session") || normalized.Contains("profile")) return "/settings/session-profiles";
-        if (normalized.Contains("automation")) return "/settings/automations";
         if (normalized.Contains("mcp")) return "/settings/mcp";
-        if (normalized.Contains("workflow") && normalized.Contains("stage")) return "/settings/workflows/stages";
-        if (normalized.Contains("workflow") || normalized.Contains("stage")) return "/settings/workflows/stages";
         if (normalized.Contains("provider")) return "/providers";
         if (normalized.Contains("tool")) return "/settings/task-runtimes";
         if (normalized.Contains("worker")) return "/settings/task-runtimes";
         if (normalized.Contains("runtime")) return "/settings/task-runtimes";
-        if (normalized.Contains("template")) return "/settings/templates";
         if (normalized.Contains("alert")) return "/settings/alerts";
         if (normalized.Contains("orchestrator")) return "/settings/task-runtimes";
         if (normalized.Contains("system") || normalized.Contains("settings")) return "/settings/system";
@@ -1367,7 +1361,7 @@ else
         return snapshots
             .Where(snapshot =>
                 snapshot.OperationKey.StartsWith("startup:", StringComparison.OrdinalIgnoreCase) ||
-                snapshot.Kind is BackgroundWorkKind.TaskRuntimeImageResolution or BackgroundWorkKind.LiteDbVectorBootstrap or BackgroundWorkKind.Recovery or BackgroundWorkKind.TaskTemplateInit)
+                snapshot.Kind is BackgroundWorkKind.TaskRuntimeImageResolution or BackgroundWorkKind.LiteDbVectorBootstrap or BackgroundWorkKind.Recovery)
             .OrderByDescending(snapshot => snapshot.UpdatedAt ?? snapshot.StartedAt ?? DateTimeOffset.MinValue)
             .Take(12)
             .ToArray();

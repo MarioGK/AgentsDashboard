@@ -24,7 +24,7 @@ All internal service-to-service communication is MagicOnion-based.
 ## Core Features
 
 - Repository -> Task -> Run orchestration model
-- Task kinds: `OneShot`, `Cron`, `EventDriven`
+- Task kinds: `OneShot`, `EventDriven`
 - Harnesses: `codex`, `opencode`
 - Run modes: `Default`, `Plan`, `Review`
 - Runtime lifecycle tracking (`Ready`, `Busy`, `Inactive`, `Failed`, etc.)
@@ -32,7 +32,7 @@ All internal service-to-service communication is MagicOnion-based.
   - `RunStructuredEventDocument`
   - `RunDiffSnapshotDocument`
   - `RunToolProjectionDocument`
-- Workflows, automations, schedules, alerts, templates, findings, session profiles, MCP settings
+- Alerts, findings, session profiles, skills, task runtimes, MCP settings
 - Semantic chunk indexing/search with LiteDB-backed storage and in-process cosine fallback
 
 ## Persistence
@@ -78,12 +78,11 @@ DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true \
 DOTNET_USE_POLLING_FILE_WATCHER=1 \
 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 \
 ASPNETCORE_ENVIRONMENT=Development \
-ASPNETCORE_URLS=http://0.0.0.0:5266 \
-dotnet watch --no-launch-profile --project src/AgentsDashboard.ControlPlane
+dotnet watch --project src/AgentsDashboard.ControlPlane
 ```
 
 - Replace `192.168.10.101` with your machine LAN IP when needed.
-- App URL (example LAN host): `http://192.168.10.101:5266`
+- App URL (example LAN host): `https://192.168.10.101:5266`
 - Health endpoints:
   - `/alive` (liveness)
   - `/ready` (readiness)
@@ -95,7 +94,7 @@ dotnet watch --no-launch-profile --project src/AgentsDashboard.ControlPlane
 dotnet run --project src/AgentsDashboard.ControlPlane
 ```
 
-Default launch profile URL is `http://localhost:5261` (or `https://localhost:7196` for https profile).
+Default launch profile URL is `https://0.0.0.0:5266`.
 
 ### Docker Compose
 

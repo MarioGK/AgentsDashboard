@@ -17,7 +17,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services
             .AddDataLayerServices(isDevelopment)
             .AddRuntimeOrchestrationServices()
-            .AddWorkflowServices()
+            .AddApplicationServices()
             .AddGatewayAndUiServices()
             .AddRpcClientServices();
 
@@ -68,8 +68,6 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddSingleton<IRunStructuredViewService, RunStructuredViewService>();
         services.AddSingleton<IOrchestratorMetrics, OrchestratorMetrics>();
         services.AddHostedService<RecoveryService>();
-        services.AddHostedService<CronSchedulerService>();
-        services.AddHostedService<AutomationSchedulerService>();
         services.AddHostedService<TaskRetentionCleanupService>();
         services.AddHostedService<TaskRuntimeEventListenerService>();
         services.AddHostedService<TaskRuntimeIdleShutdownService>();
@@ -80,11 +78,9 @@ internal static class ControlPlaneServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddWorkflowServices(this IServiceCollection services)
+    private static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddHttpClient();
-        services.AddSingleton<IWorkflowExecutor, WorkflowExecutor>();
-        services.AddSingleton<WorkflowExecutor>(sp => (WorkflowExecutor)sp.GetRequiredService<IWorkflowExecutor>());
         services.AddSingleton<LlmTornadoGatewayService>();
         services.AddSingleton<IHarnessOutputParserService, HarnessOutputParserService>();
         services.AddSingleton<IWorkspaceAiService, WorkspaceAiService>();
@@ -98,8 +94,6 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddSingleton<IHostFileExplorerService, HostFileExplorerService>();
         services.AddSingleton<ImageBuilderService>();
         services.AddSingleton<CredentialValidationService>();
-        services.AddSingleton<TaskTemplateService>();
-        services.AddHostedService<TaskTemplateInitializationService>();
         services.AddHostedService<RepositoryGitRefreshService>();
         services.AddSingleton<IContainerReaper, ContainerReaper>();
 

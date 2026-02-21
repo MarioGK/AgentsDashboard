@@ -542,78 +542,6 @@
                                                     OnKeyDown="OnComposerKeyDown"
                                                     OnValidationError="ShowComposerValidationAsync" />
 
-                                <MudExpansionPanels Elevation="0">
-                                    <MudExpansionPanel Text="Agent Team Configuration" Dense>
-                                        @{
-                                            var memberIndex = 1;
-                                        }
-
-                                        @foreach (var member in _agentTeamMembers)
-                                        {
-                                            <MudPaper Class="workspace-structured-section mb-1" Elevation="0">
-                                                <MudText Typo="Typo.caption">Member @memberIndex</MudText>
-                                                <MudGrid>
-                                                    <MudItem xs="12" md="2">
-                                                        <MudSelect T="string" @bind-Value="member.Harness" Label="Harness" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                                                            <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
-                                                            <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
-                                                        </MudSelect>
-                                                    </MudItem>
-                                                    <MudItem xs="12" md="2">
-                                                        <MudSelect T="HarnessExecutionMode" @bind-Value="member.Mode" Label="Mode" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                                                            <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
-                                                            <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
-                                                            <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
-                                                        </MudSelect>
-                                                    </MudItem>
-                                                    <MudItem xs="12" md="4">
-                                                        <MudTextField T="string" @bind-Value="member.RolePrompt" Label="Role Prompt" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                                    </MudItem>
-                                                    <MudItem xs="12" md="2">
-                                                        <MudTextField T="string" @bind-Value="member.ModelOverride" Label="Model Override" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                                    </MudItem>
-                                                    <MudItem xs="12" md="2">
-                                                        <MudNumericField T="int?" @bind-Value="member.TimeoutSeconds" Label="Timeout (sec)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
-                                                    </MudItem>
-                                                </MudGrid>
-                                            </MudPaper>
-
-                                            memberIndex++;
-                                        }
-
-                                        <MudPaper Class="workspace-structured-section mt-1" Elevation="0">
-                                            <MudText Typo="Typo.caption">Synthesis</MudText>
-                                            <MudGrid>
-                                                <MudItem xs="12" md="2" Class="d-flex align-center">
-                                                    <MudSwitch T="bool" @bind-Value="_agentTeamSynthesisEnabled" Label="Enabled" />
-                                                </MudItem>
-                                                <MudItem xs="12" md="2">
-                                                    <MudSelect T="string" @bind-Value="_agentTeamSynthesisHarness" Label="Harness" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                                                        <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
-                                                        <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
-                                                    </MudSelect>
-                                                </MudItem>
-                                                <MudItem xs="12" md="2">
-                                                    <MudSelect T="HarnessExecutionMode" @bind-Value="_agentTeamSynthesisMode" Label="Mode" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                                                        <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
-                                                        <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
-                                                        <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
-                                                    </MudSelect>
-                                                </MudItem>
-                                                <MudItem xs="12" md="3">
-                                                    <MudTextField T="string" @bind-Value="_agentTeamSynthesisModelOverride" Label="Model Override" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                                </MudItem>
-                                                <MudItem xs="12" md="3">
-                                                    <MudNumericField T="int?" @bind-Value="_agentTeamSynthesisTimeoutSeconds" Label="Timeout (sec)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
-                                                </MudItem>
-                                                <MudItem xs="12">
-                                                    <MudTextField T="string" @bind-Value="_agentTeamSynthesisPrompt" Label="Synthesis Prompt" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                                </MudItem>
-                                            </MudGrid>
-                                        </MudPaper>
-                                    </MudExpansionPanel>
-                                </MudExpansionPanels>
-
                                 <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">Composer guidance is submitted as follow-up prompt context.</MudText>
                                     <MudSelect T="string"
@@ -662,13 +590,6 @@
                                                OnClick="RunAgainWithEditsAsync"
                                                Disabled="@(_selectedRun is null || _isSubmittingComposer)">
                                         Run Again With Edits
-                                    </MudButton>
-                                    <MudButton Variant="Variant.Outlined"
-                                               Color="Color.Success"
-                                               StartIcon="@Icons.Material.Filled.Groups"
-                                               OnClick="SubmitDefaultAgentTeamAsync"
-                                               Disabled="@_isSubmittingComposer">
-                                        Agent Team Run
                                     </MudButton>
                                     <MudButton Variant="Variant.Outlined"
                                                Color="Color.Secondary"
@@ -919,33 +840,6 @@
     private string _historyStateFilter = "all";
     private string _historyModeFilter = "all";
     private string _historyHarnessFilter = "all";
-    private readonly List<WorkspaceTeamMemberDraft> _agentTeamMembers =
-    [
-        new()
-        {
-            Harness = "codex",
-            Mode = HarnessExecutionMode.Plan,
-            RolePrompt = "Planner. Produce an explicit implementation plan with ordered steps, risks, and validation checkpoints."
-        },
-        new()
-        {
-            Harness = "codex",
-            Mode = HarnessExecutionMode.Default,
-            RolePrompt = "Implementer. Execute the plan with concrete code changes and verification."
-        },
-        new()
-        {
-            Harness = "codex",
-            Mode = HarnessExecutionMode.Review,
-            RolePrompt = "Reviewer. Focus on defects, regressions, and missing tests. Return issue-first findings."
-        }
-    ];
-    private bool _agentTeamSynthesisEnabled = true;
-    private string _agentTeamSynthesisPrompt = "Synthesize planner, implementer, and reviewer outputs. Summarize consensus, conflicts, and the recommended final patch.";
-    private string _agentTeamSynthesisHarness = string.Empty;
-    private HarnessExecutionMode _agentTeamSynthesisMode = HarnessExecutionMode.Review;
-    private string _agentTeamSynthesisModelOverride = string.Empty;
-    private int? _agentTeamSynthesisTimeoutSeconds;
 
     private bool _promptDraftDialogOpen;
     private bool _isPromptDraftLoading;
@@ -1240,11 +1134,6 @@
         _composerModeOverride = null;
         _selectedSessionProfileId = ResolveSessionProfileForTask(task);
         _composerImages = [];
-        foreach (var member in _agentTeamMembers)
-        {
-            member.Harness = task.Harness;
-        }
-        _agentTeamSynthesisHarness = task.Harness;
         _selectedTaskPromptHistory = await Store.ListWorkspacePromptHistoryAsync(task.Id, 80, CancellationToken.None);
 
         var taskRuns = GetRunsForTask(task.Id);
@@ -1636,113 +1525,6 @@
         }
 
         await SubmitComposerAsync(forceNewRun: true);
-    }
-
-    private async Task SubmitDefaultAgentTeamAsync()
-    {
-        if (_selectedRepository is null || _selectedTask is null)
-        {
-            return;
-        }
-
-        if (_composerImages.Count > 0)
-        {
-            Snackbar.Add("Agent Team run does not support image attachments yet.", Severity.Warning);
-            return;
-        }
-
-        var composerText = _composerValue.Trim();
-        if (string.IsNullOrWhiteSpace(composerText))
-        {
-            Snackbar.Add("Enter prompt guidance first.", Severity.Info);
-            return;
-        }
-
-        _isSubmittingComposer = true;
-
-        try
-        {
-            var mergedPrompt = MergePrompt(_selectedTask.Prompt, composerText);
-            var harness = _selectedTask.Harness;
-            var teamMembers = _agentTeamMembers
-                .Select(member => new WorkspaceAgentTeamMemberRequest(
-                    Harness: string.IsNullOrWhiteSpace(member.Harness) ? harness : member.Harness,
-                    Mode: member.Mode,
-                    RolePrompt: string.IsNullOrWhiteSpace(member.RolePrompt) ? "Team member" : member.RolePrompt.Trim(),
-                    ModelOverride: string.IsNullOrWhiteSpace(member.ModelOverride) ? null : member.ModelOverride.Trim(),
-                    TimeoutSeconds: member.TimeoutSeconds))
-                .ToList();
-
-            if (teamMembers.Count == 0)
-            {
-                Snackbar.Add("Configure at least one team member.", Severity.Warning);
-                return;
-            }
-
-            var synthesisHarness = string.IsNullOrWhiteSpace(_agentTeamSynthesisHarness)
-                ? harness
-                : _agentTeamSynthesisHarness.Trim();
-            var teamRequest = new WorkspaceAgentTeamRequest(
-                Members: teamMembers,
-                Synthesis: new WorkspaceAgentTeamSynthesisRequest(
-                    Enabled: _agentTeamSynthesisEnabled,
-                    Prompt: string.IsNullOrWhiteSpace(_agentTeamSynthesisPrompt)
-                        ? "Synthesize team outputs and return the recommended final patch."
-                        : _agentTeamSynthesisPrompt.Trim(),
-                    Harness: synthesisHarness,
-                    Mode: _agentTeamSynthesisMode,
-                    ModelOverride: string.IsNullOrWhiteSpace(_agentTeamSynthesisModelOverride) ? null : _agentTeamSynthesisModelOverride.Trim(),
-                    TimeoutSeconds: _agentTeamSynthesisTimeoutSeconds));
-
-            var submission = await WorkspaceService.SubmitPromptAsync(
-                _selectedRepository.Id,
-                new WorkspacePromptSubmissionRequest(
-                    Prompt: mergedPrompt,
-                    TaskId: _selectedTask.Id,
-                    Harness: harness,
-                    Command: _selectedTask.Command,
-                    ForceNewRun: true,
-                    UserMessage: composerText,
-                    ModeOverride: _composerModeOverride,
-                    SessionProfileId: string.IsNullOrWhiteSpace(_selectedSessionProfileId) ? null : _selectedSessionProfileId,
-                    AgentTeam: teamRequest),
-                CancellationToken.None);
-
-            if (!submission.Success)
-            {
-                Snackbar.Add(submission.Message, Severity.Warning);
-                return;
-            }
-
-            if (submission.Task is not null)
-            {
-                _selectedTask = submission.Task;
-            }
-
-            _composerValue = string.Empty;
-            _composerImages = [];
-            _ = QueueComposerSuggestionAsync();
-            await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
-
-            if (submission.Run is not null)
-            {
-                await SelectRunAsync(submission.Run.Id);
-            }
-
-            var severity = submission.DispatchAccepted ? Severity.Success : Severity.Info;
-            var message = submission.WorkflowExecution is null
-                ? submission.Message
-                : $"Agent team run queued. Workflow {submission.WorkflowExecution.Id[..Math.Min(8, submission.WorkflowExecution.Id.Length)]}.";
-            Snackbar.Add(message, severity);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Team run submit failed: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _isSubmittingComposer = false;
-        }
     }
 
     private async Task OpenPromptDraftDialogAsync(PromptDraftMode mode)
@@ -2506,7 +2288,6 @@ Composer Focus:
             prompt,
             task.Command,
             task.AutoCreatePullRequest,
-            task.CronExpression,
             task.Enabled,
             task.RetryPolicy,
             task.Timeouts,
@@ -2614,15 +2395,6 @@ Composer Focus:
     }
 
     private sealed record RepositoryGroup(string Name, List<RepositoryDocument> Repositories);
-
-    private sealed class WorkspaceTeamMemberDraft
-    {
-        public string Harness { get; set; } = "codex";
-        public HarnessExecutionMode Mode { get; set; } = HarnessExecutionMode.Default;
-        public string RolePrompt { get; set; } = string.Empty;
-        public string ModelOverride { get; set; } = string.Empty;
-        public int? TimeoutSeconds { get; set; }
-    }
 
     private enum PromptDraftMode
     {
