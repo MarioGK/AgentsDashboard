@@ -1,0 +1,37 @@
+@namespace AgentsDashboard.ControlPlane.Components.Workspace
+@using AgentsDashboard.ControlPlane.Components.Workspace.Models
+
+<div class="workspace-chat-stream" data-testid="workspace-chat-stream">
+    @foreach (var message in Messages)
+    {
+        <div class="@GetBubbleClass(message.Kind)">
+            <MudStack Spacing="0">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                    <MudText Typo="Typo.caption">@message.Title</MudText>
+                    <MudSpacer />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@message.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</MudText>
+                </MudStack>
+                <MudText Typo="Typo.body2" Class="workspace-chat-message-content">@message.Content</MudText>
+                @if (!string.IsNullOrWhiteSpace(message.Meta))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@message.Meta</MudText>
+                }
+            </MudStack>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<WorkspaceChatMessage> Messages { get; set; } = [];
+
+    private static string GetBubbleClass(WorkspaceChatMessageKind kind)
+    {
+        return kind switch
+        {
+            WorkspaceChatMessageKind.User => "workspace-chat-bubble workspace-chat-bubble-user",
+            WorkspaceChatMessageKind.AssistantSummary => "workspace-chat-bubble workspace-chat-bubble-assistant",
+            WorkspaceChatMessageKind.Event => "workspace-chat-bubble workspace-chat-bubble-event",
+            _ => "workspace-chat-bubble workspace-chat-bubble-system",
+        };
+    }
+}

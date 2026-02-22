@@ -1,0 +1,36 @@
+@namespace AgentsDashboard.ControlPlane.Components.Workspace
+
+<div class="workspace-advanced-overlay @(IsOpen ? "workspace-advanced-overlay-open" : string.Empty)"
+     @onclick="OnOverlayClick">
+</div>
+
+<aside class="workspace-advanced-drawer @(IsOpen ? "workspace-advanced-drawer-open" : string.Empty)"
+       data-testid="workspace-history-panel">
+    <MudStack Row AlignItems="AlignItems.Center" Class="workspace-advanced-drawer-header">
+        <MudText Typo="Typo.subtitle1">Advanced</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                       Color="Color.Inherit"
+                       Size="Size.Small"
+                       OnClick="CloseRequested" />
+    </MudStack>
+    <div class="workspace-advanced-drawer-content" data-testid="workspace-advanced-drawer">
+        @ChildContent
+    </div>
+</aside>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback CloseRequested { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private Task OnOverlayClick()
+    {
+        if (!IsOpen)
+        {
+            return Task.CompletedTask;
+        }
+
+        return CloseRequested.InvokeAsync();
+    }
+}

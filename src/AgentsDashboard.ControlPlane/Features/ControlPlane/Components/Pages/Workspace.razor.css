@@ -1,0 +1,36 @@
+.workspace-chat-page {
+    width: 100%;
+}
+
+.workspace-chat-shell {
+    display: grid;
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+    min-height: calc(100vh - 112px);
+}
+
+.workspace-chat-shell-rail-collapsed {
+    grid-template-columns: 112px minmax(0, 1fr);
+}
+
+.workspace-chat-main-pane {
+    min-width: 0;
+}
+
+.workspace-create-task-chat-panel {
+    max-width: 980px;
+}
+
+.workspace-advanced-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.8rem;
+}
+
+@media (max-width: 1080px) {
+    .workspace-chat-shell,
+    .workspace-chat-shell-rail-collapsed {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,28 @@
+.workspace-thread-chat {
+    border-radius: 14px;
+    padding: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    min-height: calc(100vh - 140px);
+}
+
+.workspace-thread-chat-header {
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.workspace-thread-chat-body {
+    min-height: 0;
+}
+
+.workspace-thread-chat-composer {
+    border-top: 1px solid rgba(159, 177, 201, 0.18);
+    padding-top: 0.6rem;
+}
+
+@media (max-width: 1080px) {
+    .workspace-thread-chat {
+        min-height: auto;
+    }
+}

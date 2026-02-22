@@ -1,0 +1,15 @@
+.workspace-thread-composer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.workspace-thread-composer-actions {
+    flex-wrap: wrap;
+}
+
+@media (max-width: 1080px) {
+    .workspace-thread-composer-actions {
+        align-items: stretch;
+    }
+}

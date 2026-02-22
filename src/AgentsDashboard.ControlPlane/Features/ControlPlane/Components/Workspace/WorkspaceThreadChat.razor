@@ -1,0 +1,74 @@
+@namespace AgentsDashboard.ControlPlane.Components.Workspace
+
+<MudPaper Class="workspace-thread-chat" Elevation="0">
+    <MudStack Row AlignItems="AlignItems.Center" Class="workspace-thread-chat-header">
+        <MudText Typo="Typo.h6">@TaskName</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Harness</MudChip>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Kind</MudChip>
+        <MudChip T="string" Size="Size.Small" Color="@TaskStateColor">@TaskStateLabel</MudChip>
+        @if (!string.IsNullOrWhiteSpace(RunIdLabel))
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Run @RunIdLabel</MudChip>
+        }
+        @if (!string.IsNullOrWhiteSpace(RunStateLabel))
+        {
+            <MudChip T="string" Size="Size.Small" Color="@RunStateColor" data-testid="workspace-selected-run-state">@RunStateLabel</MudChip>
+        }
+        @if (IsRunActive)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+        }
+
+        <MudSpacer />
+
+        @if (CanRefreshSummary)
+        {
+            <MudTooltip Text="Refresh AI summary">
+                <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome"
+                               Color="Color.Inherit"
+                               OnClick="OnRefreshSummary" />
+            </MudTooltip>
+        }
+
+        <MudTooltip Text="Refresh runs and logs">
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                           Color="Color.Inherit"
+                           OnClick="OnRefreshRuns"
+                           data-testid="workspace-refresh-runs" />
+        </MudTooltip>
+
+        <MudTooltip Text="Toggle advanced drawer">
+            <MudIconButton Icon="@(IsAdvancedOpen ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                           Color="Color.Inherit"
+                           OnClick="OnToggleAdvanced"
+                           data-testid="workspace-advanced-toggle" />
+        </MudTooltip>
+    </MudStack>
+
+    <div class="workspace-thread-chat-body">
+        @MessageList
+    </div>
+
+    <div class="workspace-thread-chat-composer">
+        @Composer
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter] public string TaskName { get; set; } = string.Empty;
+    [Parameter] public string Harness { get; set; } = string.Empty;
+    [Parameter] public string Kind { get; set; } = string.Empty;
+    [Parameter] public string TaskStateLabel { get; set; } = string.Empty;
+    [Parameter] public Color TaskStateColor { get; set; }
+    [Parameter] public string RunIdLabel { get; set; } = string.Empty;
+    [Parameter] public string RunStateLabel { get; set; } = string.Empty;
+    [Parameter] public Color RunStateColor { get; set; }
+    [Parameter] public bool IsRunActive { get; set; }
+    [Parameter] public bool CanRefreshSummary { get; set; }
+    [Parameter] public bool IsAdvancedOpen { get; set; }
+    [Parameter] public EventCallback OnRefreshSummary { get; set; }
+    [Parameter] public EventCallback OnRefreshRuns { get; set; }
+    [Parameter] public EventCallback OnToggleAdvanced { get; set; }
+    [Parameter] public RenderFragment? MessageList { get; set; }
+    [Parameter] public RenderFragment? Composer { get; set; }
+}

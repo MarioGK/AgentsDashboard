@@ -1,0 +1,184 @@
+@namespace AgentsDashboard.ControlPlane.Components.Workspace
+@using AgentsDashboard.ControlPlane.Components.Workspace.Models
+
+<MudPaper Class="workspace-left-rail" Elevation="0">
+    <MudStack Spacing="1">
+        <MudStack Row AlignItems="AlignItems.Center">
+            @if (!IsCollapsed)
+            {
+                <MudText Typo="Typo.h6">Threads</MudText>
+            }
+            <MudSpacer />
+            <MudIconButton Icon="@(IsCollapsed ? Icons.Material.Filled.KeyboardDoubleArrowRight : Icons.Material.Filled.KeyboardDoubleArrowLeft)"
+                           Color="Color.Inherit"
+                           Size="Size.Small"
+                           OnClick="OnToggleCollapsed"
+                           data-testid="workspace-thread-rail-toggle" />
+            @if (!IsCollapsed)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           Size="Size.Small"
+                           OnClick="OnNewTask"
+                           Disabled="@NewTaskDisabled"
+                           data-testid="workspace-new-task">
+                    New Task
+                </MudButton>
+            }
+        </MudStack>
+
+        @if (!IsCollapsed)
+        {
+            <MudStack Row Spacing="1">
+                <MudSelect T="string"
+                           Value="@RepositoryFilter"
+                           ValueChanged="OnRepositoryFilterInternalAsync"
+                           Label="Repos"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="workspace-filter-select">
+                    <MudSelectItem T="string" Value='@("all")'>All</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("attention")'>Needs Attention</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("healthy")'>Healthy</MudSelectItem>
+                </MudSelect>
+
+                <MudSelect T="string"
+                           Value="@TaskFilter"
+                           ValueChanged="OnTaskFilterInternalAsync"
+                           Label="Tasks"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="workspace-filter-select">
+                    <MudSelectItem T="string" Value='@("all")'>All</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("running")'>Running/Queued</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("failed")'>Failed</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("succeeded")'>Succeeded</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("enabled")'>Enabled Only</MudSelectItem>
+                </MudSelect>
+            </MudStack>
+
+            <MudDivider Class="my-1" />
+
+            <MudText Typo="Typo.caption" Class="workspace-section-title">Repositories</MudText>
+            @if (RepositoryGroups.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">No repositories match filters.</MudText>
+            }
+            else
+            {
+                @foreach (var group in RepositoryGroups)
+                {
+                    <MudText Typo="Typo.caption" Class="workspace-group-label">@group.Name (@group.Repositories.Count)</MudText>
+                    @foreach (var repository in group.Repositories)
+                    {
+                        <MudPaper Class="@GetRepositoryClass(repository)"
+                                  Elevation="0"
+                                  @onclick="() => OnRepositorySelected.InvokeAsync(repository.Id)"
+                                  data-testid="@($"workspace-repository-card-{repository.Id}")">
+                            <MudStack Spacing="1">
+                                <MudStack Row AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.body2">@repository.Name</MudText>
+                                    <MudSpacer />
+                                    <MudChip T="string" Size="Size.Small" Color="@repository.HealthColor">@repository.HealthLabel</MudChip>
+                                </MudStack>
+                                <MudStack Row Spacing="1">
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@repository.BranchLabel</MudChip>
+                                </MudStack>
+                                <MudProgressLinear Value="@repository.Progress" Color="@repository.HealthColor" Size="Size.Small" />
+                            </MudStack>
+                        </MudPaper>
+                    }
+                }
+            }
+
+            <MudDivider Class="my-1" />
+        }
+
+        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            @if (!IsCollapsed)
+            {
+                <MudText Typo="Typo.subtitle2" Class="workspace-section-title">Tasks</MudText>
+            }
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Threads.Count</MudChip>
+        </MudStack>
+
+        @if (Threads.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">No tasks available.</MudText>
+        }
+        else
+        {
+            @foreach (var thread in Threads)
+            {
+                <MudPaper Class="@GetThreadClass(thread)"
+                          Elevation="0"
+                          @onclick="() => OnThreadSelected.InvokeAsync(thread.TaskId)"
+                          data-testid="@($"workspace-task-card-{thread.TaskId}")">
+                    <span class="workspace-visually-hidden" data-testid="@($"workspace-thread-item-{thread.TaskId}")"></span>
+                    <MudStack Spacing="0">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Color="@thread.LatestStateColor" />
+                            @if (!IsCollapsed)
+                            {
+                                <MudText Typo="Typo.body2">@thread.Title</MudText>
+                                <MudSpacer />
+                                @if (thread.HasUnread)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info">New</MudChip>
+                                }
+                            }
+                        </MudStack>
+                        @if (!IsCollapsed)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@thread.Harness · @thread.Kind · @thread.LatestStateLabel</MudText>
+                            @if (!string.IsNullOrWhiteSpace(thread.LatestRunHint))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@thread.LatestRunHint</MudText>
+                            }
+                        }
+                    </MudStack>
+                </MudPaper>
+            }
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter] public bool IsCollapsed { get; set; }
+    [Parameter] public string RepositoryFilter { get; set; } = string.Empty;
+    [Parameter] public string TaskFilter { get; set; } = string.Empty;
+    [Parameter] public bool NewTaskDisabled { get; set; }
+    [Parameter] public IReadOnlyList<WorkspaceRepositoryGroup> RepositoryGroups { get; set; } = [];
+    [Parameter] public IReadOnlyList<WorkspaceThreadState> Threads { get; set; } = [];
+    [Parameter] public EventCallback OnToggleCollapsed { get; set; }
+    [Parameter] public EventCallback<string> OnRepositoryFilterChanged { get; set; }
+    [Parameter] public EventCallback<string> OnTaskFilterChanged { get; set; }
+    [Parameter] public EventCallback<string> OnRepositorySelected { get; set; }
+    [Parameter] public EventCallback<string> OnThreadSelected { get; set; }
+    [Parameter] public EventCallback OnNewTask { get; set; }
+
+    private Task OnRepositoryFilterInternalAsync(string value)
+    {
+        return OnRepositoryFilterChanged.InvokeAsync(value);
+    }
+
+    private Task OnTaskFilterInternalAsync(string value)
+    {
+        return OnTaskFilterChanged.InvokeAsync(value);
+    }
+
+    private static string GetRepositoryClass(WorkspaceRepositoryListItem repository)
+    {
+        return repository.IsSelected
+            ? "workspace-repository-card workspace-repository-card-selected"
+            : "workspace-repository-card";
+    }
+
+    private static string GetThreadClass(WorkspaceThreadState thread)
+    {
+        return thread.IsSelected
+            ? "workspace-task-card workspace-task-card-selected"
+            : "workspace-task-card";
+    }
+}

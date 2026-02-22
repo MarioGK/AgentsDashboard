@@ -1,0 +1,113 @@
+@namespace AgentsDashboard.ControlPlane.Components.Workspace
+@using AgentsDashboard.ControlPlane.Services
+@using AgentsDashboard.Contracts.Domain
+@using AgentsDashboard.ControlPlane.Components.Shared
+
+<div class="workspace-thread-composer">
+    <TaskPromptComposer InputId="@ComposerInputId"
+                        Value="@ComposerValue"
+                        ValueChanged="OnComposerValueChanged"
+                        Images="@ComposerImages"
+                        ImagesChanged="OnComposerImagesChanged"
+                        Placeholder="Add run guidance, press Tab or ArrowRight to accept suggestion"
+                        HelperText="Submit follow-up guidance, with optional image context."
+                        Rows="6"
+                        ShowGhostSuggestion="true"
+                        GhostSuffix="@GhostSuffix"
+                        PasteBridgeKey="workspace-composer"
+                        Disabled="@IsSubmitting"
+                        OnKeyDown="OnComposerKeyDown"
+                        OnValidationError="OnValidationError" />
+
+    <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="workspace-thread-composer-actions">
+        <MudSelect T="string"
+                   Value="@SelectedSessionProfileId"
+                   ValueChanged="OnSessionProfileChanged"
+                   Label="Session Profile"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Dense="true"
+                   Class="workspace-filter-select">
+            <MudSelectItem T="string" Value="@string.Empty">Task/None</MudSelectItem>
+            @foreach (var profile in SessionProfiles.Where(x => x.Enabled))
+            {
+                <MudSelectItem T="string" Value="@profile.Id">@profile.Name</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="HarnessExecutionMode?"
+                   Value="@ModeOverride"
+                   ValueChanged="OnModeOverrideChanged"
+                   Label="Run Mode"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Dense="true"
+                   Class="workspace-filter-select">
+            <MudSelectItem T="HarnessExecutionMode?" Value="@((HarnessExecutionMode?)null)">Task Default</MudSelectItem>
+            <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
+            <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
+            <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
+        </MudSelect>
+
+        <MudSpacer />
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="OnSubmit"
+                   Disabled="@IsSubmitting"
+                   data-testid="workspace-composer-submit">
+            @if (IsSubmitting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Submitting...</span>
+            }
+            else
+            {
+                <span>Submit</span>
+            }
+        </MudButton>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Warning"
+                   OnClick="OnRunAgain"
+                   Disabled="@(IsSubmitting || !CanRunAgain)">
+            Run Again
+        </MudButton>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Secondary"
+                   StartIcon="@Icons.Material.Filled.Tune"
+                   OnClick="OnImprove">
+            Improve
+        </MudButton>
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Info"
+                   StartIcon="@Icons.Material.Filled.AutoAwesome"
+                   OnClick="OnGenerate">
+            Generate
+        </MudButton>
+    </MudStack>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string ComposerInputId { get; set; } = string.Empty;
+    [Parameter] public string ComposerValue { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> OnComposerValueChanged { get; set; }
+    [Parameter] public IReadOnlyList<WorkspaceImageInput> ComposerImages { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyList<WorkspaceImageInput>> OnComposerImagesChanged { get; set; }
+    [Parameter] public bool IsSubmitting { get; set; }
+    [Parameter] public string GhostSuffix { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<RunSessionProfileDocument> SessionProfiles { get; set; } = [];
+    [Parameter] public string SelectedSessionProfileId { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> OnSessionProfileChanged { get; set; }
+    [Parameter] public HarnessExecutionMode? ModeOverride { get; set; }
+    [Parameter] public EventCallback<HarnessExecutionMode?> OnModeOverrideChanged { get; set; }
+    [Parameter] public bool CanRunAgain { get; set; }
+    [Parameter] public EventCallback OnSubmit { get; set; }
+    [Parameter] public EventCallback OnRunAgain { get; set; }
+    [Parameter] public EventCallback OnImprove { get; set; }
+    [Parameter] public EventCallback OnGenerate { get; set; }
+    [Parameter] public EventCallback<KeyboardEventArgs> OnComposerKeyDown { get; set; }
+    [Parameter] public EventCallback<string> OnValidationError { get; set; }
+}
