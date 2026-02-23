@@ -5,8 +5,7 @@ namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class RunStore(
     IOrchestratorRepositorySessionFactory liteDbScopeFactory,
-    LiteDbExecutor liteDbExecutor,
-    LiteDbDatabase liteDbDatabase) : IRunStore
+    LiteDbExecutor liteDbExecutor) : IRunStore
 {
     private static readonly RunState[] ActiveStates = [RunState.Queued, RunState.Running, RunState.PendingApproval];
     private const string ArtifactFileStorageRoot = "$/run-artifacts";
@@ -1475,6 +1474,10 @@ public sealed class RunStore(
     }
 
     private static bool IsCompletionSuccessState(RunState state)
+    {
+        return IsCompletionState(state) && state == RunState.Succeeded;
+    }
+
 
     private static RunToolProjectionDocument? CreateToolProjection(RunStructuredEventDocument structuredEvent)
     {
@@ -1948,11 +1951,49 @@ public sealed class RunStore(
     }
 
     private static string ReadJsonRaw(JsonElement root, params string[] propertyNames)
+    {
+        if (root.ValueKind != JsonValueKind.Object || propertyNames.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (property.Value.ValueKind == JsonValueKind.Null)
+                {
+                    return string.Empty;
+                }
+
+                return property.Value.GetRawText();
+            }
+        }
+
+        return string.Empty;
+    }
 
     private static string NormalizeHarnessValue(string harness)
     {
         return NormalizeRequiredValue(harness, nameof(harness)).ToLowerInvariant();
     }
+
+    private static string NormalizeRequiredValue(string value, string parameterName)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (normalized.Length == 0)
+        {
+            throw new ArgumentException("Value is required.", parameterName);
+        }
+
+        return normalized;
+    }
+
 
     private static double[]? ParseEmbeddingPayload(string? payload)
     {
@@ -2032,7 +2073,6 @@ public sealed class RunStore(
         return dot / (Math.Sqrt(queryNorm) * Math.Sqrt(candidateNorm));
     }
 
-    private static DateTime MaxDateTime(params DateTime?[] values)
 
     private static string NormalizeArtifactFileName(string fileName)
     {
@@ -2051,5 +2091,13 @@ public sealed class RunStore(
     }
 
     private static string BuildArtifactFileStorageId(string runId, string fileName)
+    {
+        return $"{ArtifactFileStorageRoot}/{runId.Trim()}/{fileName}";
+    }
+
+    private sealed record RunPruneSeed(
+        string RunId,
+        string TaskId,
+        string RepositoryId);
 
 }

@@ -159,20 +159,42 @@
     padding-inline: 0.16rem;
 }
 
-.workspace-hidden-file-input {
+::deep(input.workspace-hidden-file-input) {
     position: absolute;
-    width: 0.1px;
-    height: 0.1px;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
     opacity: 0;
     overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    border: 0;
+    white-space: nowrap;
     z-index: -1;
+    pointer-events: none;
 }
 
-.workspace-composer-send-button {
+.workspace-composer-send-button-anchor {
     position: absolute;
     right: 0.58rem;
     bottom: 0.48rem;
     z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.workspace-composer-send-button {
+    position: static !important;
+    z-index: 4;
+    inset: auto !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    margin: 0;
+    padding: 0;
     border: none !important;
     background: transparent !important;
     color: #9fd3ff !important;

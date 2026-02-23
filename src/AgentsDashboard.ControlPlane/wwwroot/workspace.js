@@ -120,10 +120,12 @@ export function registerComposerKeyBridge(elementId, dotNetRef) {
             return;
         }
 
-        if (event.key === "Enter" && !event.shiftKey) {
+        if ((event.key === "Enter" || event.key === "NumpadEnter") && !event.shiftKey) {
+            event.preventDefault();
+            event.stopPropagation();
             const submitted = await dotNetRef.invokeMethodAsync("TrySubmitComposerFromJs");
             if (submitted) {
-                event.preventDefault();
+                return;
             }
         }
     };

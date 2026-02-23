@@ -161,6 +161,52 @@ public sealed class RuntimeStore(
     }
 
     public async Task<TaskRuntimeTelemetrySnapshot> GetTaskRuntimeTelemetryAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var runtimes = await db.TaskRuntimes.AsNoTracking().ToListAsync(cancellationToken);
+        if (runtimes.Count == 0)
+        {
+            return new TaskRuntimeTelemetrySnapshot(
+                TotalRuntimes: 0,
+                ReadyRuntimes: 0,
+                BusyRuntimes: 0,
+                InactiveRuntimes: 0,
+                FailedRuntimes: 0,
+                TotalColdStarts: 0,
+                AverageColdStartSeconds: 0,
+                LastColdStartSeconds: 0,
+                TotalInactiveTransitions: 0,
+                AverageInactiveSeconds: 0,
+                LastInactiveSeconds: 0);
+        }
+
+        var totalColdStarts = runtimes.Sum(x => x.ColdStartCount);
+        var totalColdStartDurationMs = runtimes.Sum(x => x.ColdStartDurationTotalMs);
+        var totalInactiveTransitions = runtimes.Sum(x => x.InactiveTransitionCount);
+        var totalInactiveDurationMs = runtimes.Sum(x => x.InactiveDurationTotalMs);
+        var lastColdStartSeconds = runtimes.Where(x => x.LastColdStartDurationMs > 0)
+            .Select(x => x.LastColdStartDurationMs / 1000d)
+            .DefaultIfEmpty(0)
+            .Average();
+        var lastInactiveSeconds = runtimes.Where(x => x.LastInactiveDurationMs > 0)
+            .Select(x => x.LastInactiveDurationMs / 1000d)
+            .DefaultIfEmpty(0)
+            .Average();
+
+        return new TaskRuntimeTelemetrySnapshot(
+            TotalRuntimes: runtimes.Count,
+            ReadyRuntimes: runtimes.Count(x => x.State == TaskRuntimeState.Ready),
+            BusyRuntimes: runtimes.Count(x => x.State == TaskRuntimeState.Busy),
+            InactiveRuntimes: runtimes.Count(x => x.State == TaskRuntimeState.Inactive),
+            FailedRuntimes: runtimes.Count(x => x.State == TaskRuntimeState.Failed),
+            TotalColdStarts: totalColdStarts,
+            AverageColdStartSeconds: totalColdStarts > 0 ? totalColdStartDurationMs / 1000d / totalColdStarts : 0,
+            LastColdStartSeconds: lastColdStartSeconds,
+            TotalInactiveTransitions: totalInactiveTransitions,
+            AverageInactiveSeconds: totalInactiveTransitions > 0 ? totalInactiveDurationMs / 1000d / totalInactiveTransitions : 0,
+            LastInactiveSeconds: lastInactiveSeconds);
+    }
+
 
     public async Task<bool> TryAcquireLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken)
     {
@@ -215,6 +261,21 @@ public sealed class RuntimeStore(
     }
 
     public async Task ReleaseLeaseAsync(string leaseName, string ownerId, CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var lease = await db.Leases.FirstOrDefaultAsync(
+            x => x.LeaseName == leaseName && x.OwnerId == ownerId,
+            cancellationToken);
+
+        if (lease is null)
+        {
+            return;
+        }
+
+        db.Leases.Remove(lease);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
 
     private static DateTime MaxDateTime(params DateTime?[] values)
     {
@@ -228,5 +289,12 @@ public sealed class RuntimeStore(
 
             if (value.Value > max)
             {
+                max = value.Value;
+            }
+        }
+
+        return max == DateTime.MinValue ? DateTime.UtcNow : max;
+    }
+
 
 }

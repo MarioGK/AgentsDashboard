@@ -482,6 +482,19 @@ public sealed class RepositoryStore(
     }
 
     public async Task<bool> DeleteRunSessionProfileAsync(string sessionProfileId, CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var existing = await db.RunSessionProfiles.FirstOrDefaultAsync(x => x.Id == sessionProfileId, cancellationToken);
+        if (existing is null)
+        {
+            return false;
+        }
+
+        db.RunSessionProfiles.Remove(existing);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
 
     public async Task UpsertProviderSecretAsync(string repositoryId, string provider, string encryptedValue, CancellationToken cancellationToken)
     {
@@ -515,6 +528,17 @@ public sealed class RepositoryStore(
     }
 
     public async Task<bool> DeleteProviderSecretAsync(string repositoryId, string provider, CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var secret = await db.ProviderSecrets.FirstOrDefaultAsync(x => x.RepositoryId == repositoryId && x.Provider == provider, cancellationToken);
+        if (secret is null)
+            return false;
+
+        db.ProviderSecrets.Remove(secret);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
 
     public async Task<WebhookRegistration> CreateWebhookAsync(CreateWebhookRequest request, CancellationToken cancellationToken)
     {
@@ -560,6 +584,17 @@ public sealed class RepositoryStore(
     }
 
     public async Task<bool> DeleteWebhookAsync(string webhookId, CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var webhook = await db.Webhooks.FirstOrDefaultAsync(x => x.Id == webhookId, cancellationToken);
+        if (webhook is null)
+            return false;
+
+        db.Webhooks.Remove(webhook);
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
 
     private static string NormalizePromptSkillScope(string repositoryId)
     {
@@ -652,5 +687,10 @@ public sealed class RepositoryStore(
         if (normalized.Length == 0)
         {
             throw new ArgumentException("Value is required.", parameterName);
+        }
+
+        return normalized;
+    }
+
 
 }

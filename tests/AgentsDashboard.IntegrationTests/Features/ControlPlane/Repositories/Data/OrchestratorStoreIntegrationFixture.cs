@@ -9,14 +9,25 @@ public sealed class OrchestratorStoreIntegrationFixture : IAsyncDisposable
     private readonly string _rootPath;
     private readonly ServiceProvider _serviceProvider;
 
-    private OrchestratorStoreIntegrationFixture(string rootPath, ServiceProvider serviceProvider, OrchestratorStore store)
+    private OrchestratorStoreIntegrationFixture(
+        string rootPath,
+        ServiceProvider serviceProvider,
+        IRepositoryStore repositoryStore,
+        ITaskStore taskStore,
+        IRunStore runStore)
     {
         _rootPath = rootPath;
         _serviceProvider = serviceProvider;
-        Store = store;
+        RepositoryStore = repositoryStore;
+        TaskStore = taskStore;
+        RunStore = runStore;
     }
 
-    public OrchestratorStore Store { get; }
+    public IRepositoryStore RepositoryStore { get; }
+
+    public ITaskStore TaskStore { get; }
+
+    public IRunStore RunStore { get; }
 
     public static async Task<OrchestratorStoreIntegrationFixture> CreateAsync()
     {
@@ -45,13 +56,20 @@ public sealed class OrchestratorStoreIntegrationFixture : IAsyncDisposable
         services.AddSingleton(typeof(IRepository<>), typeof(LiteDbRepository<>));
         services.AddSingleton<IOrchestratorRepositorySessionFactory, OrchestratorRepositorySessionFactory>();
         services.AddSingleton<IRunArtifactStorage, RunArtifactStorageRepository>();
-        services.AddSingleton<OrchestratorStore>();
+        services.AddSingleton<IRepositoryStore, RepositoryStore>();
+        services.AddSingleton<ITaskStore, TaskStore>();
+        services.AddSingleton<IRunStore, RunStore>();
+        services.AddSingleton<IRuntimeStore, RuntimeStore>();
+        services.AddSingleton<ISystemStore, SystemStore>();
 
         var serviceProvider = services.BuildServiceProvider();
-        var store = serviceProvider.GetRequiredService<OrchestratorStore>();
-        await store.InitializeAsync(CancellationToken.None);
+        var systemStore = serviceProvider.GetRequiredService<ISystemStore>();
+        await systemStore.InitializeAsync(CancellationToken.None);
+        var repositoryStore = serviceProvider.GetRequiredService<IRepositoryStore>();
+        var taskStore = serviceProvider.GetRequiredService<ITaskStore>();
+        var runStore = serviceProvider.GetRequiredService<IRunStore>();
 
-        return new OrchestratorStoreIntegrationFixture(rootPath, serviceProvider, store);
+        return new OrchestratorStoreIntegrationFixture(rootPath, serviceProvider, repositoryStore, taskStore, runStore);
     }
 
     public async ValueTask DisposeAsync()

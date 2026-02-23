@@ -2,14 +2,14 @@ namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class SystemStore(
     IOrchestratorRepositorySessionFactory liteDbScopeFactory,
-    LiteDbExecutor liteDbExecutor,
-    LiteDbDatabase liteDbDatabase) : ISystemStore, IAsyncDisposable
+    LiteDbExecutor liteDbExecutor) : ISystemStore, IAsyncDisposable
 {
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         await MigrateTaskKindFieldsAsync(cancellationToken);
     }
+
 
     public async Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken)
     {
@@ -254,11 +254,27 @@ public sealed class SystemStore(
     }
 
     public async Task<int> ResolveAlertEventsAsync(List<string> eventIds, CancellationToken cancellationToken)
+    {
+        if (eventIds.Count == 0)
+            return 0;
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var events = await db.AlertEvents.Where(x => eventIds.Contains(x.Id) && !x.Resolved).ToListAsync(cancellationToken);
+        foreach (var alertEvent in events)
+        {
+            alertEvent.Resolved = true;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return events.Count;
+    }
+
 
     public ValueTask DisposeAsync()
     {
         return ValueTask.CompletedTask;
     }
+
 
     private async Task MigrateTaskKindFieldsAsync(CancellationToken cancellationToken)
     {
@@ -318,5 +334,10 @@ public sealed class SystemStore(
             {
                 continue;
             }
+
+            document[nestedDocumentField] = nestedDocument;
+            collection.Update(document);
+        }
+    }
 
 }

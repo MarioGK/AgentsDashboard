@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class TaskStore(
@@ -540,6 +542,11 @@ public sealed class TaskStore(
     }
 
     public async Task VacuumAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("VACUUM;", cancellationToken);
+    }
+
 
     private static string BuildTaskNameFromPrompt(string prompt)
     {
@@ -558,83 +565,38 @@ public sealed class TaskStore(
             : normalized[..80].TrimEnd();
     }
 
-    private static double[]? ParseEmbeddingPayload(string? payload)
+    private static RepositoryTaskDefaultsConfig NormalizeRepositoryTaskDefaults(RepositoryTaskDefaultsConfig? taskDefaults)
     {
-        if (string.IsNullOrWhiteSpace(payload))
+        var mode = taskDefaults?.ExecutionModeDefault ?? HarnessExecutionMode.Default;
+        if (!Enum.IsDefined(mode))
         {
-            return null;
+            mode = HarnessExecutionMode.Default;
         }
 
-        var trimmed = payload.Trim();
-        if (trimmed.Length == 0)
+        var defaultCommand = new RepositoryTaskDefaultsConfig().Command;
+        var command = taskDefaults?.Command?.Trim() ?? string.Empty;
+        if (command.Length == 0)
         {
-            return null;
+            command = defaultCommand;
         }
 
-        if (trimmed.StartsWith("[", StringComparison.Ordinal))
+        var harness = taskDefaults?.Harness?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (harness.Length == 0)
         {
-            try
-            {
-                return System.Text.Json.JsonSerializer.Deserialize<double[]>(trimmed, (JsonSerializerOptions?)null);
-            }
-            catch (JsonException)
-            {
-                return null;
-            }
+            harness = "codex";
         }
 
-        var parts = trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0)
+        return new RepositoryTaskDefaultsConfig
         {
-            return null;
-        }
-
-        var result = new double[parts.Length];
-        for (var i = 0; i < parts.Length; i++)
-        {
-            if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
-            {
-                return null;
-            }
-
-            result[i] = parsed;
-        }
-
-        return result;
+            Harness = harness,
+            ExecutionModeDefault = mode,
+            SessionProfileId = taskDefaults?.SessionProfileId?.Trim() ?? string.Empty,
+            Command = command,
+            AutoCreatePullRequest = taskDefaults?.AutoCreatePullRequest ?? false,
+            Enabled = taskDefaults?.Enabled ?? true,
+        };
     }
 
-    private static double? ComputeCosineSimilarity(double[] queryEmbedding, double[]? candidateEmbedding)
-    {
-        if (candidateEmbedding is null || candidateEmbedding.Length == 0)
-        {
-            return null;
-        }
-
-        if (queryEmbedding.Length != candidateEmbedding.Length)
-        {
-            return null;
-        }
-
-        var dot = 0d;
-        var queryNorm = 0d;
-        var candidateNorm = 0d;
-
-        for (var i = 0; i < queryEmbedding.Length; i++)
-        {
-            var queryValue = queryEmbedding[i];
-            var candidateValue = candidateEmbedding[i];
-            dot += queryValue * candidateValue;
-            queryNorm += queryValue * queryValue;
-            candidateNorm += candidateValue * candidateValue;
-        }
-
-        if (queryNorm <= 0d || candidateNorm <= 0d)
-        {
-            return null;
-        }
-
-        return dot / (Math.Sqrt(queryNorm) * Math.Sqrt(candidateNorm));
-    }
 
     private static DateTime MaxDateTime(params DateTime?[] values)
     {
@@ -753,6 +715,7 @@ public sealed class TaskStore(
             cancellationToken);
     }
 
+
     public static DateTime? ComputeNextRun(TaskDocument task, DateTime nowUtc)
     {
         if (!task.Enabled)
@@ -763,11 +726,6 @@ public sealed class TaskStore(
         return nowUtc;
     }
 
-
-            document[nestedDocumentField] = nestedDocument;
-            collection.Update(document);
-        }
-    }
 
     private sealed record TaskCleanupSeed(
         string TaskId,
@@ -790,6 +748,5 @@ public sealed class TaskStore(
         string RunId,
         string TaskId,
         string RepositoryId);
-}
 
 }

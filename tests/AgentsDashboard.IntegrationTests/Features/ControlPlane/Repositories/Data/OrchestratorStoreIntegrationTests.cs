@@ -12,7 +12,7 @@ public sealed class OrchestratorStoreIntegrationTests
 
         const string repositoryId = "repo-a";
 
-        var repositorySkill = await fixture.Store.CreatePromptSkillAsync(
+        var repositorySkill = await fixture.RepositoryStore.CreatePromptSkillAsync(
             new CreatePromptSkillRequest(
                 RepositoryId: repositoryId,
                 Name: "Repository Skill",
@@ -21,7 +21,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 Description: "repository scoped"),
             CancellationToken.None);
 
-        var globalSkill = await fixture.Store.CreatePromptSkillAsync(
+        var globalSkill = await fixture.RepositoryStore.CreatePromptSkillAsync(
             new CreatePromptSkillRequest(
                 RepositoryId: "global",
                 Name: "Global Skill",
@@ -34,12 +34,12 @@ public sealed class OrchestratorStoreIntegrationTests
         await Assert.That(globalSkill.RepositoryId).IsEqualTo("global");
         await Assert.That(globalSkill.Trigger).IsEqualTo("global-skill");
 
-        var withGlobal = await fixture.Store.ListPromptSkillsAsync(repositoryId, includeGlobal: true, CancellationToken.None);
+        var withGlobal = await fixture.RepositoryStore.ListPromptSkillsAsync(repositoryId, includeGlobal: true, CancellationToken.None);
 
         await Assert.That(withGlobal.Select(skill => skill.RepositoryId).SequenceEqual(new[] { repositoryId, "global" })).IsTrue();
         await Assert.That(withGlobal.Select(skill => skill.Trigger).SequenceEqual(new[] { "repo-skill", "global-skill" })).IsTrue();
 
-        var repositoryOnly = await fixture.Store.ListPromptSkillsAsync(repositoryId, includeGlobal: false, CancellationToken.None);
+        var repositoryOnly = await fixture.RepositoryStore.ListPromptSkillsAsync(repositoryId, includeGlobal: false, CancellationToken.None);
 
         await Assert.That(repositoryOnly.Count()).IsEqualTo(1);
         await Assert.That(repositoryOnly[0].Trigger).IsEqualTo("repo-skill");
@@ -50,7 +50,7 @@ public sealed class OrchestratorStoreIntegrationTests
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
 
-        var repository = await fixture.Store.CreateRepositoryAsync(
+        var repository = await fixture.RepositoryStore.CreateRepositoryAsync(
             new CreateRepositoryRequest(
                 Name: "Defaults Repository",
                 GitUrl: "https://example.com/org/defaults.git",
@@ -58,7 +58,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
-        var updatedRepository = await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+        var updatedRepository = await fixture.RepositoryStore.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
                 Harness: "OpenCode",
@@ -82,7 +82,7 @@ public sealed class OrchestratorStoreIntegrationTests
         await Assert.That(updatedRepository.TaskDefaults.Enabled).IsFalse();
         await Assert.That(updatedRepository.TaskDefaults.SessionProfileId).IsEqualTo("profile-1");
 
-        var task = await fixture.Store.CreateTaskAsync(
+        var task = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "run defaults",
@@ -102,7 +102,7 @@ public sealed class OrchestratorStoreIntegrationTests
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
 
-        var repository = await fixture.Store.CreateRepositoryAsync(
+        var repository = await fixture.RepositoryStore.CreateRepositoryAsync(
             new CreateRepositoryRequest(
                 Name: "Test Repository",
                 GitUrl: "https://example.com/org/repo.git",
@@ -110,7 +110,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
-        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+        await fixture.RepositoryStore.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
                 Harness: "codex",
@@ -120,14 +120,14 @@ public sealed class OrchestratorStoreIntegrationTests
                 Enabled: true),
             CancellationToken.None);
 
-        var oneShotTask = await fixture.Store.CreateTaskAsync(
+        var oneShotTask = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "Do one thing",
                 Name: "One-shot task"),
             CancellationToken.None);
 
-        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+        await fixture.RepositoryStore.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
                 Harness: "codex",
@@ -137,14 +137,14 @@ public sealed class OrchestratorStoreIntegrationTests
                 Enabled: true),
             CancellationToken.None);
 
-        var eventTask = await fixture.Store.CreateTaskAsync(
+        var eventTask = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "Handle webhook event",
                 Name: "Event task"),
             CancellationToken.None);
 
-        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+        await fixture.RepositoryStore.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
                 Harness: "codex",
@@ -154,14 +154,14 @@ public sealed class OrchestratorStoreIntegrationTests
                 Enabled: false),
             CancellationToken.None);
 
-        var disabledTask = await fixture.Store.CreateTaskAsync(
+        var disabledTask = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "Disabled",
                 Name: "Disabled task"),
             CancellationToken.None);
 
-        var dueTaskIds = (await fixture.Store.ListDueTasksAsync(DateTime.UtcNow, limit: 10, CancellationToken.None))
+        var dueTaskIds = (await fixture.TaskStore.ListDueTasksAsync(DateTime.UtcNow, limit: 10, CancellationToken.None))
             .Select(task => task.Id)
             .ToList();
 
@@ -169,7 +169,7 @@ public sealed class OrchestratorStoreIntegrationTests
         await Assert.That(dueTaskIds).Contains(eventTask.Id);
         await Assert.That(dueTaskIds).DoesNotContain(disabledTask.Id);
 
-        var disabledOneShotTask = await fixture.Store.UpdateTaskAsync(
+        var disabledOneShotTask = await fixture.TaskStore.UpdateTaskAsync(
             oneShotTask.Id,
             new UpdateTaskRequest(
                 Name: oneShotTask.Name,
@@ -193,26 +193,26 @@ public sealed class OrchestratorStoreIntegrationTests
 
         await Assert.That(disabledOneShotTask).IsNotNull();
 
-        var dueTaskIdsAfterConsume = (await fixture.Store.ListDueTasksAsync(DateTime.UtcNow, limit: 10, CancellationToken.None))
+        var dueTaskIdsAfterConsume = (await fixture.TaskStore.ListDueTasksAsync(DateTime.UtcNow, limit: 10, CancellationToken.None))
             .Select(task => task.Id)
             .ToList();
 
         await Assert.That(dueTaskIdsAfterConsume).DoesNotContain(oneShotTask.Id);
 
-        var firstRun = await fixture.Store.CreateRunAsync(eventTask, CancellationToken.None);
-        await fixture.Store.MarkRunStartedAsync(firstRun.Id, "worker-1", CancellationToken.None);
-        await fixture.Store.MarkRunCompletedAsync(firstRun.Id, succeeded: false, summary: "failed", outputJson: "{}", CancellationToken.None);
+        var firstRun = await fixture.RunStore.CreateRunAsync(eventTask, CancellationToken.None);
+        await fixture.RunStore.MarkRunStartedAsync(firstRun.Id, "worker-1", CancellationToken.None);
+        await fixture.RunStore.MarkRunCompletedAsync(firstRun.Id, succeeded: false, summary: "failed", outputJson: "{}", CancellationToken.None);
 
-        var secondRun = await fixture.Store.CreateRunAsync(eventTask, CancellationToken.None);
-        await fixture.Store.MarkRunStartedAsync(secondRun.Id, "worker-2", CancellationToken.None);
+        var secondRun = await fixture.RunStore.CreateRunAsync(eventTask, CancellationToken.None);
+        await fixture.RunStore.MarkRunStartedAsync(secondRun.Id, "worker-2", CancellationToken.None);
 
-        var latestStates = await fixture.Store.GetLatestRunStatesByTaskIdsAsync([eventTask.Id, oneShotTask.Id], CancellationToken.None);
+        var latestStates = await fixture.RunStore.GetLatestRunStatesByTaskIdsAsync([eventTask.Id, oneShotTask.Id], CancellationToken.None);
 
         await Assert.That(latestStates.ContainsKey(eventTask.Id)).IsTrue();
         await Assert.That(latestStates[eventTask.Id]).IsEqualTo(RunState.Running);
         await Assert.That(latestStates.ContainsKey(oneShotTask.Id)).IsFalse();
 
-        var activeRunCount = await fixture.Store.CountActiveRunsByTaskAsync(eventTask.Id, CancellationToken.None);
+        var activeRunCount = await fixture.RunStore.CountActiveRunsByTaskAsync(eventTask.Id, CancellationToken.None);
         await Assert.That(activeRunCount).IsEqualTo(1);
     }
 
@@ -221,7 +221,7 @@ public sealed class OrchestratorStoreIntegrationTests
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
 
-        var repository = await fixture.Store.CreateRepositoryAsync(
+        var repository = await fixture.RepositoryStore.CreateRepositoryAsync(
             new CreateRepositoryRequest(
                 Name: "Structured Repository",
                 GitUrl: "https://example.com/org/structured.git",
@@ -229,16 +229,16 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
-        var task = await fixture.Store.CreateTaskAsync(
+        var task = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "stream structured output",
                 Name: "Structured task"),
             CancellationToken.None);
 
-        var run = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
+        var run = await fixture.RunStore.CreateRunAsync(task, CancellationToken.None);
 
-        await fixture.Store.AppendRunStructuredEventAsync(
+        await fixture.RunStore.AppendRunStructuredEventAsync(
             new RunStructuredEventDocument
             {
                 RunId = run.Id,
@@ -254,7 +254,7 @@ public sealed class OrchestratorStoreIntegrationTests
             },
             CancellationToken.None);
 
-        await fixture.Store.UpsertRunDiffSnapshotAsync(
+        await fixture.RunStore.UpsertRunDiffSnapshotAsync(
             new RunDiffSnapshotDocument
             {
                 RunId = run.Id,
@@ -270,7 +270,7 @@ public sealed class OrchestratorStoreIntegrationTests
             },
             CancellationToken.None);
 
-        await fixture.Store.UpsertRunDiffSnapshotAsync(
+        await fixture.RunStore.UpsertRunDiffSnapshotAsync(
             new RunDiffSnapshotDocument
             {
                 RunId = run.Id,
@@ -286,16 +286,16 @@ public sealed class OrchestratorStoreIntegrationTests
             },
             CancellationToken.None);
 
-        var events = await fixture.Store.ListRunStructuredEventsAsync(run.Id, 50, CancellationToken.None);
+        var events = await fixture.RunStore.ListRunStructuredEventsAsync(run.Id, 50, CancellationToken.None);
         await Assert.That(events.Count()).IsEqualTo(1);
         await Assert.That(events[0].Category).IsEqualTo("tool.lifecycle");
 
-        var toolProjections = await fixture.Store.ListRunToolProjectionsAsync(run.Id, CancellationToken.None);
+        var toolProjections = await fixture.RunStore.ListRunToolProjectionsAsync(run.Id, CancellationToken.None);
         await Assert.That(toolProjections.Count()).IsEqualTo(1);
         await Assert.That(toolProjections[0].ToolCallId).IsEqualTo("call-1");
         await Assert.That(toolProjections[0].ToolName).IsEqualTo("bash");
 
-        var latestDiff = await fixture.Store.GetLatestRunDiffSnapshotAsync(run.Id, CancellationToken.None);
+        var latestDiff = await fixture.RunStore.GetLatestRunDiffSnapshotAsync(run.Id, CancellationToken.None);
         await Assert.That(latestDiff).IsNotNull();
         await Assert.That(latestDiff!.Sequence).IsEqualTo(25);
         await Assert.That(latestDiff.Summary).IsEqualTo("latest diff");
@@ -307,7 +307,7 @@ public sealed class OrchestratorStoreIntegrationTests
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
 
-        var repository = await fixture.Store.CreateRepositoryAsync(
+        var repository = await fixture.RepositoryStore.CreateRepositoryAsync(
             new CreateRepositoryRequest(
                 Name: "Mode Repository",
                 GitUrl: "https://example.com/org/mode.git",
@@ -315,7 +315,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
-        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+        await fixture.RepositoryStore.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
                 Harness: "codex",
@@ -325,7 +325,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 Enabled: true),
             CancellationToken.None);
 
-        var task = await fixture.Store.CreateTaskAsync(
+        var task = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "mode prompt",
@@ -334,7 +334,7 @@ public sealed class OrchestratorStoreIntegrationTests
 
         await Assert.That(task.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
 
-        var updatedTask = await fixture.Store.UpdateTaskAsync(
+        var updatedTask = await fixture.TaskStore.UpdateTaskAsync(
             task.Id,
             new UpdateTaskRequest(
                 Name: task.Name,
@@ -355,7 +355,7 @@ public sealed class OrchestratorStoreIntegrationTests
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
 
-        var repository = await fixture.Store.CreateRepositoryAsync(
+        var repository = await fixture.RepositoryStore.CreateRepositoryAsync(
             new CreateRepositoryRequest(
                 Name: "Run Mode Repository",
                 GitUrl: "https://example.com/org/run-mode.git",
@@ -363,7 +363,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
-        await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
+        await fixture.RepositoryStore.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
                 Harness: "codex",
@@ -373,18 +373,18 @@ public sealed class OrchestratorStoreIntegrationTests
                 Enabled: true),
             CancellationToken.None);
 
-        var task = await fixture.Store.CreateTaskAsync(
+        var task = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "mode prompt",
                 Name: "Run mode task"),
             CancellationToken.None);
 
-        var defaultRun = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
+        var defaultRun = await fixture.RunStore.CreateRunAsync(task, CancellationToken.None);
         await Assert.That(defaultRun.ExecutionMode).IsEqualTo(HarnessExecutionMode.Plan);
         await Assert.That(defaultRun.StructuredProtocol).IsEqualTo("harness-structured-event-v2");
 
-        var overrideRun = await fixture.Store.CreateRunAsync(
+        var overrideRun = await fixture.RunStore.CreateRunAsync(
             task,
             CancellationToken.None,
             executionModeOverride: HarnessExecutionMode.Review);
@@ -397,7 +397,7 @@ public sealed class OrchestratorStoreIntegrationTests
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
 
-        var repository = await fixture.Store.CreateRepositoryAsync(
+        var repository = await fixture.RepositoryStore.CreateRepositoryAsync(
             new CreateRepositoryRequest(
                 Name: "Question Repository",
                 GitUrl: "https://example.com/org/questions.git",
@@ -405,19 +405,19 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
-        var task = await fixture.Store.CreateTaskAsync(
+        var task = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "answer follow-up questions",
                 Name: "Question task"),
             CancellationToken.None);
 
-        var run = await fixture.Store.CreateRunAsync(
+        var run = await fixture.RunStore.CreateRunAsync(
             task,
             CancellationToken.None,
             executionModeOverride: HarnessExecutionMode.Plan);
 
-        await fixture.Store.AppendRunStructuredEventAsync(
+        await fixture.RunStore.AppendRunStructuredEventAsync(
             new RunStructuredEventDocument
             {
                 RunId = run.Id,
@@ -452,7 +452,7 @@ public sealed class OrchestratorStoreIntegrationTests
             },
             CancellationToken.None);
 
-        var pending = await fixture.Store.ListPendingRunQuestionRequestsAsync(task.Id, run.Id, CancellationToken.None);
+        var pending = await fixture.RunStore.ListPendingRunQuestionRequestsAsync(task.Id, run.Id, CancellationToken.None);
         await Assert.That(pending.Count()).IsEqualTo(1);
         await Assert.That(pending[0].Status).IsEqualTo(RunQuestionRequestStatus.Pending);
         await Assert.That(pending[0].SourceToolName).IsEqualTo("request_user_input");
@@ -460,7 +460,7 @@ public sealed class OrchestratorStoreIntegrationTests
         await Assert.That(pending[0].Questions[0].Options.Count).IsEqualTo(2);
         await Assert.That(pending[0].Questions[0].Options[0].Value).IsEqualTo("fast");
 
-        var answered = await fixture.Store.MarkRunQuestionRequestAnsweredAsync(
+        var answered = await fixture.RunStore.MarkRunQuestionRequestAnsweredAsync(
             pending[0].Id,
             [
                 new RunQuestionAnswerDocument
@@ -485,7 +485,7 @@ public sealed class OrchestratorStoreIntegrationTests
         await Assert.That(answered.AnsweredRunId).IsEqualTo("follow-up-run-1");
         await Assert.That(answered.Answers.Count).IsEqualTo(1);
 
-        var pendingAfterAnswer = await fixture.Store.ListPendingRunQuestionRequestsAsync(task.Id, run.Id, CancellationToken.None);
+        var pendingAfterAnswer = await fixture.RunStore.ListPendingRunQuestionRequestsAsync(task.Id, run.Id, CancellationToken.None);
         await Assert.That(pendingAfterAnswer).IsEmpty();
     }
 
@@ -494,7 +494,7 @@ public sealed class OrchestratorStoreIntegrationTests
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
 
-        var repository = await fixture.Store.CreateRepositoryAsync(
+        var repository = await fixture.RepositoryStore.CreateRepositoryAsync(
             new CreateRepositoryRequest(
                 Name: "Prune Repository",
                 GitUrl: "https://example.com/org/prune.git",
@@ -502,21 +502,21 @@ public sealed class OrchestratorStoreIntegrationTests
                 DefaultBranch: "main"),
             CancellationToken.None);
 
-        var task = await fixture.Store.CreateTaskAsync(
+        var task = await fixture.TaskStore.CreateTaskAsync(
             new CreateTaskRequest(
                 RepositoryId: repository.Id,
                 Prompt: "prune structured rows",
                 Name: "Prune task"),
             CancellationToken.None);
 
-        var terminalRun = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
-        await fixture.Store.MarkRunStartedAsync(terminalRun.Id, "worker-terminal", CancellationToken.None);
-        await fixture.Store.MarkRunCompletedAsync(terminalRun.Id, succeeded: true, summary: "done", outputJson: "{}", CancellationToken.None);
+        var terminalRun = await fixture.RunStore.CreateRunAsync(task, CancellationToken.None);
+        await fixture.RunStore.MarkRunStartedAsync(terminalRun.Id, "worker-terminal", CancellationToken.None);
+        await fixture.RunStore.MarkRunCompletedAsync(terminalRun.Id, succeeded: true, summary: "done", outputJson: "{}", CancellationToken.None);
 
-        var activeRun = await fixture.Store.CreateRunAsync(task, CancellationToken.None);
-        await fixture.Store.MarkRunStartedAsync(activeRun.Id, "worker-active", CancellationToken.None);
+        var activeRun = await fixture.RunStore.CreateRunAsync(task, CancellationToken.None);
+        await fixture.RunStore.MarkRunStartedAsync(activeRun.Id, "worker-active", CancellationToken.None);
 
-        await fixture.Store.AppendRunStructuredEventAsync(
+        await fixture.RunStore.AppendRunStructuredEventAsync(
             new RunStructuredEventDocument
             {
                 RunId = terminalRun.Id,
@@ -531,7 +531,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 CreatedAtUtc = DateTime.UtcNow,
             },
             CancellationToken.None);
-        await fixture.Store.UpsertRunDiffSnapshotAsync(
+        await fixture.RunStore.UpsertRunDiffSnapshotAsync(
             new RunDiffSnapshotDocument
             {
                 RunId = terminalRun.Id,
@@ -547,7 +547,7 @@ public sealed class OrchestratorStoreIntegrationTests
             },
             CancellationToken.None);
 
-        await fixture.Store.AppendRunStructuredEventAsync(
+        await fixture.RunStore.AppendRunStructuredEventAsync(
             new RunStructuredEventDocument
             {
                 RunId = activeRun.Id,
@@ -562,7 +562,7 @@ public sealed class OrchestratorStoreIntegrationTests
                 CreatedAtUtc = DateTime.UtcNow,
             },
             CancellationToken.None);
-        await fixture.Store.UpsertRunDiffSnapshotAsync(
+        await fixture.RunStore.UpsertRunDiffSnapshotAsync(
             new RunDiffSnapshotDocument
             {
                 RunId = activeRun.Id,
@@ -578,7 +578,7 @@ public sealed class OrchestratorStoreIntegrationTests
             },
             CancellationToken.None);
 
-        var prune = await fixture.Store.PruneStructuredRunDataAsync(
+        var prune = await fixture.RunStore.PruneStructuredRunDataAsync(
             DateTime.UtcNow.AddDays(1),
             100,
             CancellationToken.None);
@@ -588,17 +588,17 @@ public sealed class OrchestratorStoreIntegrationTests
         await Assert.That(prune.DeletedDiffSnapshots).IsGreaterThan(0);
         await Assert.That(prune.DeletedToolProjections).IsGreaterThan(0);
 
-        var terminalEvents = await fixture.Store.ListRunStructuredEventsAsync(terminalRun.Id, 50, CancellationToken.None);
-        var terminalDiff = await fixture.Store.GetLatestRunDiffSnapshotAsync(terminalRun.Id, CancellationToken.None);
-        var terminalTools = await fixture.Store.ListRunToolProjectionsAsync(terminalRun.Id, CancellationToken.None);
+        var terminalEvents = await fixture.RunStore.ListRunStructuredEventsAsync(terminalRun.Id, 50, CancellationToken.None);
+        var terminalDiff = await fixture.RunStore.GetLatestRunDiffSnapshotAsync(terminalRun.Id, CancellationToken.None);
+        var terminalTools = await fixture.RunStore.ListRunToolProjectionsAsync(terminalRun.Id, CancellationToken.None);
 
         await Assert.That(terminalEvents).IsEmpty();
         await Assert.That(terminalDiff).IsNull();
         await Assert.That(terminalTools).IsEmpty();
 
-        var activeEvents = await fixture.Store.ListRunStructuredEventsAsync(activeRun.Id, 50, CancellationToken.None);
-        var activeDiff = await fixture.Store.GetLatestRunDiffSnapshotAsync(activeRun.Id, CancellationToken.None);
-        var activeTools = await fixture.Store.ListRunToolProjectionsAsync(activeRun.Id, CancellationToken.None);
+        var activeEvents = await fixture.RunStore.ListRunStructuredEventsAsync(activeRun.Id, 50, CancellationToken.None);
+        var activeDiff = await fixture.RunStore.GetLatestRunDiffSnapshotAsync(activeRun.Id, CancellationToken.None);
+        var activeTools = await fixture.RunStore.ListRunToolProjectionsAsync(activeRun.Id, CancellationToken.None);
 
         await Assert.That(activeEvents.Count()).IsEqualTo(1);
         await Assert.That(activeDiff).IsNotNull();

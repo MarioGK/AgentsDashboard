@@ -91,14 +91,16 @@
 
         @if (ShowSubmitButton && OnSubmit.HasDelegate)
         {
-            <MudTooltip Text="@SubmitTooltip">
-                <MudIconButton Icon="@Icons.Material.Filled.Send"
-                               Size="Size.Small"
-                               Class="workspace-composer-send-button"
-                               OnClick="SubmitAsync"
-                               Disabled="@(!CanSubmit)"
-                               data-testid="workspace-composer-send" />
-            </MudTooltip>
+            <div class="workspace-composer-send-button-anchor">
+                <MudTooltip Text="@SubmitTooltip">
+                    <MudIconButton Icon="@Icons.Material.Filled.Send"
+                                   Size="Size.Small"
+                                   Class="workspace-composer-send-button"
+                                   OnClick="SubmitAsync"
+                                   Disabled="@(!CanSubmit)"
+                                   data-testid="workspace-composer-send" />
+                </MudTooltip>
+            </div>
         }
     </div>
 

@@ -248,7 +248,7 @@ public sealed class TrackedRepositorySet<T>(IRepository<T> repository) : IEnumer
             return;
         }
 
-        var loaded = await repository.ListAsync(cancellationToken);
+        var loaded = await repository.ListAsync(cancellationToken).ConfigureAwait(false);
         lock (_sync)
         {
             _items ??= loaded;

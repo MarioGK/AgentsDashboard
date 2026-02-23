@@ -370,7 +370,12 @@ public partial class Workspace
     {
         if (_isSubmittingComposer)
         {
-            return true;
+            return false;
+        }
+
+        if (_selectedRepository is null)
+        {
+            return false;
         }
 
         await SubmitComposerAsync();
@@ -1018,25 +1023,44 @@ public partial class Workspace
             return;
         }
 
+        var persistedValue = _composerValue;
+        var persistedImages = _composerImages.ToList();
+        var persistedGhostSuggestion = _composerGhostSuggestion;
+        var persistedGhostSuffix = _composerGhostSuffix;
+        var submittedImages = _composerImages.ToList();
+
+        void RestoreComposerDraft()
+        {
+            _composerValue = persistedValue;
+            _composerImages = persistedImages;
+            _composerGhostSuggestion = persistedGhostSuggestion;
+            _composerGhostSuffix = persistedGhostSuffix;
+            UpdateActiveThreadCache();
+            _ = QueueComposerSuggestionAsync();
+        }
+
         _isSubmittingComposer = true;
         var optimisticMessageId = AddOptimisticUserMessage(composerText, _composerImages.Count);
 
         try
         {
+            _composerValue = string.Empty;
+            _composerImages = [];
+            _composerGhostSuggestion = string.Empty;
+            _composerGhostSuffix = string.Empty;
+            UpdateActiveThreadCache();
+
             if (_selectedTask is null)
             {
-                var createdTaskId = await CreateTaskFromComposerAsync(composerText, _composerImages);
+                var createdTaskId = await CreateTaskFromComposerAsync(composerText, submittedImages);
                 if (!string.IsNullOrWhiteSpace(createdTaskId))
                 {
-                    _composerValue = string.Empty;
-                    _composerImages = [];
-                    _composerGhostSuggestion = string.Empty;
-                    _composerGhostSuffix = string.Empty;
                     RemoveOptimisticUserMessage(optimisticMessageId);
                     _ = QueueComposerSuggestionAsync();
                 }
                 else
                 {
+                    RestoreComposerDraft();
                     RemoveOptimisticUserMessage(optimisticMessageId);
                 }
 
@@ -1053,12 +1077,13 @@ public partial class Workspace
                     ForceNewRun: true,
                     UserMessage: composerText,
                     ModeOverride: _composerModeOverride,
-                    Images: _composerImages.ToList(),
+                    Images: submittedImages,
                     SessionProfileId: null),
                 CancellationToken.None);
 
             if (!submission.Success)
             {
+                RestoreComposerDraft();
                 RemoveOptimisticUserMessage(optimisticMessageId);
                 Snackbar.Add(submission.Message, Severity.Warning);
                 return;
@@ -1069,9 +1094,6 @@ public partial class Workspace
                 _selectedTask = submission.Task;
             }
 
-            _composerValue = string.Empty;
-            _composerImages = [];
-            UpdateActiveThreadCache();
             _ = QueueComposerSuggestionAsync();
             RemoveOptimisticUserMessage(optimisticMessageId);
 
@@ -1086,6 +1108,7 @@ public partial class Workspace
         }
         catch (Exception ex)
         {
+            RestoreComposerDraft();
             RemoveOptimisticUserMessage(optimisticMessageId);
             Snackbar.Add($"Submit failed: {ex.Message}", Severity.Error);
         }

@@ -15,7 +15,7 @@ public sealed class LiteDbDatabase(IOptions<OrchestratorOptions> orchestratorOpt
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (_database is null)
@@ -36,7 +36,7 @@ public sealed class LiteDbDatabase(IOptions<OrchestratorOptions> orchestratorOpt
     {
         try
         {
-            await _gate.WaitAsync(cancellationToken);
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (ObjectDisposedException)
         {
@@ -57,7 +57,7 @@ public sealed class LiteDbDatabase(IOptions<OrchestratorOptions> orchestratorOpt
 
     public async Task<TResult> ExecuteAsync<TResult>(Func<LiteDatabase, TResult> operation, CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (_stopped)
