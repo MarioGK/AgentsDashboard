@@ -37,7 +37,8 @@
                            Label="Repos"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
-                           Class="workspace-filter-select">
+                           Class="workspace-filter-select"
+                           data-testid="workspace-repository-filter">
                     <MudSelectItem T="string" Value='@("all")'>All</MudSelectItem>
                     <MudSelectItem T="string" Value='@("attention")'>Needs Attention</MudSelectItem>
                     <MudSelectItem T="string" Value='@("healthy")'>Healthy</MudSelectItem>
@@ -49,7 +50,8 @@
                            Label="Tasks"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
-                           Class="workspace-filter-select">
+                           Class="workspace-filter-select"
+                           data-testid="workspace-task-filter">
                     <MudSelectItem T="string" Value='@("all")'>All</MudSelectItem>
                     <MudSelectItem T="string" Value='@("running")'>Running/Queued</MudSelectItem>
                     <MudSelectItem T="string" Value='@("failed")'>Failed</MudSelectItem>

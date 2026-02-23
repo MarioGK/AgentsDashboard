@@ -2,4 +2,6 @@
   <Project Path="AgentsDashboard.Contracts/AgentsDashboard.Contracts.csproj" />
   <Project Path="AgentsDashboard.ControlPlane/AgentsDashboard.ControlPlane.csproj" />
   <Project Path="AgentsDashboard.TaskRuntime/AgentsDashboard.TaskRuntime.csproj" />
+  <Project Path="../tests/AgentsDashboard.Workspace.ComponentTests/AgentsDashboard.Workspace.ComponentTests.csproj" />
+  <Project Path="../tests/AgentsDashboard.Workspace.IntegrationTests/AgentsDashboard.Workspace.IntegrationTests.csproj" />
 </Solution>

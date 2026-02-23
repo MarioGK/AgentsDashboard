@@ -53,6 +53,7 @@
                                         <button type="button"
                                                 class="@GetOptionClass(selected)"
                                                 @onclick="(() => SelectOption(request.Id, question.Id, option.Value))"
+                                                data-testid="@($"workspace-question-option-{request.Id}-{question.Id}-{option.Value}")"
                                                 disabled="@(Disabled || isSubmitting)">
                                             <span class="workspace-question-option-label">@option.Label</span>
                                             @if (!string.IsNullOrWhiteSpace(option.Description))
@@ -70,6 +71,7 @@
                                               Lines="2"
                                               Value="@GetAdditionalContext(request.Id, question.Id)"
                                               ValueChanged="value => SetAdditionalContext(request.Id, question.Id, value)"
+                                              data-testid="@($"workspace-question-context-{request.Id}-{question.Id}")"
                                               Disabled="@(Disabled || isSubmitting)" />
                             </MudStack>
                         </MudPaper>

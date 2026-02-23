@@ -73,7 +73,8 @@
                                    Size="Size.Small"
                                    Class="workspace-composer-action-button"
                                    OnClick="ClearComposerAsync"
-                                   Disabled="@(Disabled || !CanClearComposer)" />
+                                   Disabled="@(Disabled || !CanClearComposer)"
+                                   data-testid="workspace-composer-clear" />
                 </MudTooltip>
             </div>
         </div>
@@ -87,6 +88,7 @@
 
         <textarea id="@InputId"
                   class="workspace-composer-input"
+                  data-testid="workspace-composer-input"
                   rows="@Rows"
                   value="@Value"
                   @oninput="OnInputChangedAsync"
