@@ -38,3 +38,65 @@ test('workspace advanced drawer toggles when a thread is active', async ({ page 
     await advancedToggle.click();
     await expect(drawer).not.toHaveClass(/workspace-advanced-drawer-open/);
 });
+
+test('workspace composer upload input stays hidden and upload trigger opens chooser', async ({ page }) =>
+{
+    await page.goto('/workspace', { waitUntil: 'domcontentloaded' });
+
+    const composerInput = page.getByTestId('workspace-composer-file-input');
+
+    if (await composerInput.count() == 0)
+    {
+        const taskCards = page.locator('[data-testid^="workspace-task-card-"]');
+        const taskCount = await taskCards.count();
+        if (taskCount > 0)
+        {
+            await taskCards.first().click();
+        }
+        else
+        {
+            const newTaskButton = page.getByTestId('workspace-new-task');
+            if (await newTaskButton.isVisible() && await newTaskButton.isEnabled())
+            {
+                await newTaskButton.click();
+            }
+        }
+    }
+
+    if (await composerInput.count() == 0)
+    {
+        return;
+    }
+
+    await expect(composerInput).toBeHidden();
+
+    const hiddenStyles = await composerInput.evaluate((element) =>
+    {
+        const computed = window.getComputedStyle(element);
+        return {
+            position: computed.position,
+            width: computed.width,
+            height: computed.height,
+            opacity: computed.opacity,
+            pointerEvents: computed.pointerEvents,
+            clipPath: computed.clipPath
+        };
+    });
+
+    expect(hiddenStyles.position).toBe('absolute');
+    expect(hiddenStyles.width).toBe('1px');
+    expect(hiddenStyles.height).toBe('1px');
+    expect(hiddenStyles.opacity).toBe('0');
+    expect(hiddenStyles.pointerEvents).toBe('none');
+    expect(hiddenStyles.clipPath).not.toBe('none');
+
+    const uploadTrigger = page.getByTestId('workspace-composer-upload-trigger');
+    await expect(uploadTrigger).toBeVisible();
+
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await uploadTrigger.click();
+    const fileChooser = await fileChooserPromise;
+    const chooserInputTestId = await fileChooser.element().getAttribute('data-testid');
+
+    expect(chooserInputTestId).toBe('workspace-composer-file-input');
+});

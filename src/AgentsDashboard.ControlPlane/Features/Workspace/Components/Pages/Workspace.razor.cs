@@ -1050,30 +1050,47 @@ public partial class Workspace
             _composerGhostSuffix = string.Empty;
             UpdateActiveThreadCache();
 
-            if (_selectedTask is null)
+            var taskForSubmission = _selectedTask;
+            var promptForSubmission = string.Empty;
+            if (taskForSubmission is null)
             {
                 var createdTaskId = await CreateTaskFromComposerAsync(composerText, submittedImages);
-                if (!string.IsNullOrWhiteSpace(createdTaskId))
-                {
-                    RemoveOptimisticUserMessage(optimisticMessageId);
-                    _ = QueueComposerSuggestionAsync();
-                }
-                else
+                if (string.IsNullOrWhiteSpace(createdTaskId))
                 {
                     RestoreComposerDraft();
                     RemoveOptimisticUserMessage(optimisticMessageId);
+                    return;
                 }
 
-                return;
+                if (_selectedTask is null ||
+                    !string.Equals(_selectedTask.Id, createdTaskId, StringComparison.OrdinalIgnoreCase))
+                {
+                    await SelectTaskAsync(createdTaskId);
+                }
+
+                taskForSubmission = _selectedTask;
+                if (taskForSubmission is null)
+                {
+                    RestoreComposerDraft();
+                    RemoveOptimisticUserMessage(optimisticMessageId);
+                    Snackbar.Add("Task was created but could not be loaded for execution.", Severity.Warning);
+                    return;
+                }
+
+                promptForSubmission = taskForSubmission.Prompt;
+            }
+            else
+            {
+                promptForSubmission = MergePrompt(taskForSubmission.Prompt, composerText);
             }
 
             var submission = await WorkspaceService.SubmitPromptAsync(
                 _selectedRepository.Id,
                 new WorkspacePromptSubmissionRequest(
-                    Prompt: MergePrompt(_selectedTask.Prompt, composerText),
-                    TaskId: _selectedTask.Id,
-                    Harness: _selectedTask.Harness,
-                    Command: _selectedTask.Command,
+                    Prompt: promptForSubmission,
+                    TaskId: taskForSubmission.Id,
+                    Harness: taskForSubmission.Harness,
+                    Command: taskForSubmission.Command,
                     ForceNewRun: true,
                     UserMessage: composerText,
                     ModeOverride: _composerModeOverride,

@@ -14,13 +14,15 @@ public sealed class OrchestratorStoreIntegrationFixture : IAsyncDisposable
         ServiceProvider serviceProvider,
         IRepositoryStore repositoryStore,
         ITaskStore taskStore,
-        IRunStore runStore)
+        IRunStore runStore,
+        IRuntimeStore runtimeStore)
     {
         _rootPath = rootPath;
         _serviceProvider = serviceProvider;
         RepositoryStore = repositoryStore;
         TaskStore = taskStore;
         RunStore = runStore;
+        RuntimeStore = runtimeStore;
     }
 
     public IRepositoryStore RepositoryStore { get; }
@@ -28,6 +30,8 @@ public sealed class OrchestratorStoreIntegrationFixture : IAsyncDisposable
     public ITaskStore TaskStore { get; }
 
     public IRunStore RunStore { get; }
+
+    public IRuntimeStore RuntimeStore { get; }
 
     public static async Task<OrchestratorStoreIntegrationFixture> CreateAsync()
     {
@@ -68,8 +72,9 @@ public sealed class OrchestratorStoreIntegrationFixture : IAsyncDisposable
         var repositoryStore = serviceProvider.GetRequiredService<IRepositoryStore>();
         var taskStore = serviceProvider.GetRequiredService<ITaskStore>();
         var runStore = serviceProvider.GetRequiredService<IRunStore>();
+        var runtimeStore = serviceProvider.GetRequiredService<IRuntimeStore>();
 
-        return new OrchestratorStoreIntegrationFixture(rootPath, serviceProvider, repositoryStore, taskStore, runStore);
+        return new OrchestratorStoreIntegrationFixture(rootPath, serviceProvider, repositoryStore, taskStore, runStore, runtimeStore);
     }
 
     public async ValueTask DisposeAsync()

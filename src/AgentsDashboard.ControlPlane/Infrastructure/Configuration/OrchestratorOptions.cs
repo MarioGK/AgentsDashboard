@@ -86,5 +86,16 @@ public sealed class OrchestratorOptions : IValidatableObject
 
         if (TaskRuntimes.MemoryScaleOutThresholdPercent < 1 || TaskRuntimes.MemoryScaleOutThresholdPercent > 100)
             yield return new ValidationResult("TaskRuntimes.MemoryScaleOutThresholdPercent must be between 1 and 100", [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.MemoryScaleOutThresholdPercent)}"]);
+
+        if (!string.IsNullOrWhiteSpace(TaskRuntimes.GitSshCommandMode))
+        {
+            var normalizedGitSshMode = TaskRuntimes.GitSshCommandMode.Trim().ToLowerInvariant();
+            if (normalizedGitSshMode is not ("no" or "yes" or "accept-new"))
+            {
+                yield return new ValidationResult(
+                    "TaskRuntimes.GitSshCommandMode must be one of: no, yes, accept-new",
+                    [$"{nameof(TaskRuntimes)}.{nameof(TaskRuntimes.GitSshCommandMode)}"]);
+            }
+        }
     }
 }

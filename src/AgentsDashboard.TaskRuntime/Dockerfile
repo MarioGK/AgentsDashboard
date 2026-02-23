@@ -1,7 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY global.json ./
 COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY src/AgentsDashboard.slnx ./src/
@@ -18,7 +17,7 @@ COPY --from=build /app/publish .
 ARG TARGETARCH
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git gh ca-certificates \
+    && apt-get install -y --no-install-recommends git gh openssh-client ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/data
 

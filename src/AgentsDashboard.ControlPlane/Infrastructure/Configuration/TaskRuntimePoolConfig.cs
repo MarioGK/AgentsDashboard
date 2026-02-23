@@ -14,4 +14,8 @@ public sealed class TaskRuntimePoolConfig
     public int CpuScaleOutThresholdPercent { get; set; } = 85;
     public int MemoryScaleOutThresholdPercent { get; set; } = 85;
     public int PressureSampleWindowSeconds { get; set; } = 30;
+    public bool EnableHostSshPassthrough { get; set; } = true;
+    public string HostSshDirectory { get; set; } = string.Empty;
+    public string HostSshAgentSocketPath { get; set; } = string.Empty;
+    public string GitSshCommandMode { get; set; } = "no";
 }

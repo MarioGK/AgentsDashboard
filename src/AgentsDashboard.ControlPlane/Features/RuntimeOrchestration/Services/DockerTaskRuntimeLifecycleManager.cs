@@ -33,11 +33,16 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
     private const string MaxSlotsLabel = "orchestrator.max-slots";
     private const string SharedWorkspacesVolumeName = "agentsdashboard-workspaces";
     private const int WorkerGrpcPort = 5201;
+    private const string WorkerHomePath = "/home/agent";
+    private const string WorkerSshDirectoryPath = "/home/agent/.ssh";
+    private const string WorkerSshAgentSocketPath = "/ssh-agent.sock";
+    private const int MaxOrphanContainerPrunesPerTick = 16;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ScaleOutAttemptWindow = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan OfflineRegistrationPruneThreshold = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan NonRunningContainerPruneThreshold = TimeSpan.FromMinutes(15);
     private static readonly string[] TaskRuntimeBuildContextRequirements =
     [
-        "global.json",
         "Directory.Build.props",
         "Directory.Packages.props",
         Path.Combine("src", "AgentsDashboard.slnx"),
@@ -395,7 +400,17 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             return;
         }
 
+        var runtime = await runtimeSettingsProvider.GetAsync(cancellationToken);
+        if (runtime.EnableContainerAutoCleanup)
+        {
+            await CleanupOrphanedWorkerContainersAsync(runtime, cancellationToken);
+        }
+
         var workers = await ListTaskRuntimesAsync(cancellationToken);
+        var runningRuntimeIds = workers
+            .Where(worker => worker.IsRunning)
+            .Select(worker => worker.TaskRuntimeId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var worker in workers.Where(x => x.IsRunning))
         {
             await runtimeStore.UpsertTaskRuntimeRegistrationHeartbeatAsync(
@@ -424,6 +439,13 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         }
 
         await runtimeStore.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TimeSpan.FromMinutes(2), cancellationToken);
+        if (runtime.EnableContainerAutoCleanup)
+        {
+            await runtimeStore.PruneOfflineTaskRuntimeRegistrationsAsync(
+                OfflineRegistrationPruneThreshold,
+                runningRuntimeIds,
+                cancellationToken);
+        }
     }
 
     public Task SetScaleOutPausedAsync(bool paused, CancellationToken cancellationToken)
@@ -706,6 +728,36 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             if (string.IsNullOrWhiteSpace(codexApiKey))
                 codexApiKey = openAiApiKey;
 
+            var gitSshMode = NormalizeGitSshCommandMode(runtime.GitSshCommandMode);
+            var (sshBinds, sshEnvironment, sshDirectoryMounted, sshAgentMounted) = ResolveWorkerSshPassthrough(runtime, gitSshMode);
+            if (runtime.EnableHostSshPassthrough && (!sshDirectoryMounted || !sshAgentMounted))
+            {
+                logger.LogWarning(
+                    "Worker SSH passthrough is incomplete {@Data}",
+                    new
+                    {
+                        workerId,
+                        runtime.EnableHostSshPassthrough,
+                        sshDirectoryMounted,
+                        sshAgentMounted,
+                        runtime.HostSshDirectory,
+                        runtime.HostSshAgentSocketPath,
+                        GitSshMode = gitSshMode
+                    });
+            }
+
+            logger.LogInformation(
+                "Worker SSH passthrough resolved {@Data}",
+                new
+                {
+                    workerId,
+                    runtime.EnableHostSshPassthrough,
+                    sshDirectoryMounted,
+                    sshAgentMounted,
+                    GitSshMode = gitSshMode
+                });
+
+            var workerEnvironment = BuildWorkerEnvironment(workerId, maxSlots, codexApiKey, openAiApiKey, sshEnvironment);
             var connectivityMode = ResolveConnectivityMode(runtime);
             var useHostPort = connectivityMode == TaskRuntimeConnectivityMode.HostPortOnly ||
                               (connectivityMode == TaskRuntimeConnectivityMode.AutoDetect && !IsRunningInsideContainer());
@@ -724,20 +776,11 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                     [RepositoryIdLabel] = repositoryId,
                     [MaxSlotsLabel] = maxSlots.ToString(CultureInfo.InvariantCulture),
                 },
-                Env =
-                [
-                    $"TaskRuntime__TaskRuntimeId={workerId}",
-                    $"TaskRuntime__MaxSlots={Math.Clamp(maxSlots, 1, 64)}",
-                    $"CODEX_API_KEY={codexApiKey ?? string.Empty}",
-                    $"OPENAI_API_KEY={openAiApiKey ?? string.Empty}",
-                    $"OPENCODE_API_KEY={Environment.GetEnvironmentVariable("OPENCODE_API_KEY") ?? string.Empty}",
-                    $"ANTHROPIC_API_KEY={Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? string.Empty}",
-                    $"Z_AI_API_KEY={Environment.GetEnvironmentVariable("Z_AI_API_KEY") ?? string.Empty}",
-                ],
+                Env = workerEnvironment,
                 ExposedPorts = useHostPort
                     ? new Dictionary<string, EmptyStruct> { ["5201/tcp"] = default }
                     : null,
-                HostConfig = BuildHostConfig(runtime, useHostPort, workerId, taskId),
+                HostConfig = BuildHostConfig(runtime, useHostPort, workerId, taskId, sshBinds),
                 NetworkingConfig = new NetworkingConfig
                 {
                     EndpointsConfig = new Dictionary<string, EndpointSettings>
@@ -918,6 +961,92 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         return containers.FirstOrDefault(container =>
             container.Names?.Any(name =>
                 string.Equals(name.Trim('/'), containerName, StringComparison.OrdinalIgnoreCase)) == true);
+    }
+
+    private async Task CleanupOrphanedWorkerContainersAsync(
+        OrchestratorRuntimeSettings runtime,
+        CancellationToken cancellationToken)
+    {
+        var allContainers = await _dockerClient.Containers.ListContainersAsync(
+            new ContainersListParameters { All = true },
+            cancellationToken);
+        var cutoff = DateTime.UtcNow - NonRunningContainerPruneThreshold;
+        var pruneCandidates = allContainers
+            .Where(container =>
+                IsManagedWorkerContainer(container, runtime) &&
+                !string.Equals(container.State, "running", StringComparison.OrdinalIgnoreCase) &&
+                ResolveContainerCreatedAtUtc(container) < cutoff)
+            .OrderBy(container => container.Created)
+            .Take(MaxOrphanContainerPrunesPerTick)
+            .ToList();
+
+        if (pruneCandidates.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var container in pruneCandidates)
+        {
+            await RemoveOrphanedWorkerContainerAsync(container, cancellationToken);
+        }
+    }
+
+    private async Task RemoveOrphanedWorkerContainerAsync(
+        ContainerListResponse container,
+        CancellationToken cancellationToken)
+    {
+        var containerName = container.Names.FirstOrDefault()?.Trim('/') ?? container.ID[..Math.Min(12, container.ID.Length)];
+        var runtimeId = ResolveTaskRuntimeId(container, containerName);
+
+        try
+        {
+            await _dockerClient.Containers.RemoveContainerAsync(
+                container.ID,
+                new ContainerRemoveParameters { Force = true },
+                cancellationToken);
+
+            if (_workers.TryRemove(runtimeId, out var removed))
+            {
+                removed.IsRunning = false;
+                removed.ActiveSlots = 0;
+                removed.LifecycleState = TaskRuntimeLifecycleState.Stopped;
+                await PersistTaskRuntimeStateAsync(
+                    removed,
+                    cancellationToken,
+                    explicitState: TaskRuntimeState.Inactive,
+                    updateLastActivityUtc: false);
+            }
+
+            clientFactory.RemoveTaskRuntime(runtimeId);
+            logger.LogInformation(
+                "Removed stale non-running task runtime container {TaskRuntimeId} ({ContainerId})",
+                runtimeId,
+                container.ID[..Math.Min(12, container.ID.Length)]);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            if (_workers.TryRemove(runtimeId, out var removed))
+            {
+                removed.IsRunning = false;
+                removed.ActiveSlots = 0;
+                removed.LifecycleState = TaskRuntimeLifecycleState.Stopped;
+                await PersistTaskRuntimeStateAsync(
+                    removed,
+                    cancellationToken,
+                    explicitState: TaskRuntimeState.Inactive,
+                    updateLastActivityUtc: false);
+            }
+
+            clientFactory.RemoveTaskRuntime(runtimeId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(
+                ex,
+                "Failed to remove stale non-running task runtime container {TaskRuntimeId} ({ContainerId})",
+                runtimeId,
+                container.ID[..Math.Min(12, container.ID.Length)]);
+        }
     }
 
     private async Task<bool> StopWorkerAsync(
@@ -2106,11 +2235,16 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             .FirstOrDefault();
     }
 
-    private static HostConfig BuildHostConfig(OrchestratorRuntimeSettings runtime, bool useHostPort, string workerId, string taskId)
+    private static HostConfig BuildHostConfig(
+        OrchestratorRuntimeSettings runtime,
+        bool useHostPort,
+        string workerId,
+        string taskId,
+        IReadOnlyList<string> additionalBinds)
     {
         var hostConfig = new HostConfig
         {
-            Binds = BuildWorkerBinds(workerId, taskId),
+            Binds = BuildWorkerBinds(workerId, taskId, additionalBinds),
             RestartPolicy = new RestartPolicy { Name = RestartPolicyKind.No },
             PortBindings = useHostPort
                 ? new Dictionary<string, IList<PortBinding>>
@@ -2150,6 +2284,32 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         }
 
         return hostConfig;
+    }
+
+    private static List<string> BuildWorkerEnvironment(
+        string workerId,
+        int maxSlots,
+        string? codexApiKey,
+        string? openAiApiKey,
+        IReadOnlyList<string> additionalEnvironment)
+    {
+        var environment = new List<string>
+        {
+            $"TaskRuntime__TaskRuntimeId={workerId}",
+            $"TaskRuntime__MaxSlots={Math.Clamp(maxSlots, 1, 64)}",
+            $"CODEX_API_KEY={codexApiKey ?? string.Empty}",
+            $"OPENAI_API_KEY={openAiApiKey ?? string.Empty}",
+            $"OPENCODE_API_KEY={Environment.GetEnvironmentVariable("OPENCODE_API_KEY") ?? string.Empty}",
+            $"ANTHROPIC_API_KEY={Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? string.Empty}",
+            $"Z_AI_API_KEY={Environment.GetEnvironmentVariable("Z_AI_API_KEY") ?? string.Empty}",
+            $"HOME={WorkerHomePath}",
+        };
+
+        environment.AddRange(additionalEnvironment.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+        return environment
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static long ParseCpuLimitToNanoCpus(string cpuLimit)
@@ -2227,6 +2387,13 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         return value.Length > 60 ? value[..60] : value;
     }
 
+    private static DateTime ResolveContainerCreatedAtUtc(ContainerListResponse container)
+    {
+        return container.Created.Kind == DateTimeKind.Utc
+            ? container.Created
+            : container.Created.ToUniversalTime();
+    }
+
     private (string grpcEndpoint, string proxyEndpoint) ResolveWorkerEndpoints(ContainerListResponse container, string containerName, OrchestratorRuntimeSettings runtime)
     {
         var mode = ResolveConnectivityMode(runtime);
@@ -2274,12 +2441,75 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         return string.Equals(runningInContainer, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static List<string> BuildWorkerBinds(string workerId, string taskId)
+    private static (List<string> AdditionalBinds, List<string> AdditionalEnvironment, bool SshDirectoryMounted, bool SshAgentMounted)
+        ResolveWorkerSshPassthrough(OrchestratorRuntimeSettings runtime, string gitSshMode)
+    {
+        var additionalBinds = new List<string>();
+        var additionalEnvironment = new List<string>();
+
+        if (!runtime.EnableHostSshPassthrough)
+        {
+            additionalEnvironment.Add("AGENTSDASHBOARD_WORKER_SSH_AVAILABLE=false");
+            additionalEnvironment.Add($"AGENTSDASHBOARD_GIT_SSH_MODE={gitSshMode}");
+            return (additionalBinds, additionalEnvironment, false, false);
+        }
+
+        var sshDirectory = HostCredentialDiscovery.TryGetHostSshDirectory(runtime.HostSshDirectory);
+        var agentSocketPath = HostCredentialDiscovery.TryGetHostSshAgentSocketPath(runtime.HostSshAgentSocketPath);
+        var sshDirectoryMounted = !string.IsNullOrWhiteSpace(sshDirectory);
+        var sshAgentMounted = !string.IsNullOrWhiteSpace(agentSocketPath);
+
+        if (sshDirectoryMounted)
+        {
+            additionalBinds.Add($"{sshDirectory}:{WorkerSshDirectoryPath}:ro");
+        }
+
+        if (sshAgentMounted)
+        {
+            additionalBinds.Add($"{agentSocketPath}:{WorkerSshAgentSocketPath}");
+            additionalEnvironment.Add($"SSH_AUTH_SOCK={WorkerSshAgentSocketPath}");
+        }
+
+        additionalEnvironment.Add($"GIT_SSH_COMMAND={BuildGitSshCommand(gitSshMode)}");
+        additionalEnvironment.Add($"AGENTSDASHBOARD_WORKER_SSH_AVAILABLE={(sshDirectoryMounted || sshAgentMounted).ToString().ToLowerInvariant()}");
+        additionalEnvironment.Add($"AGENTSDASHBOARD_GIT_SSH_MODE={gitSshMode}");
+
+        return (additionalBinds, additionalEnvironment, sshDirectoryMounted, sshAgentMounted);
+    }
+
+    private static string NormalizeGitSshCommandMode(string? configuredMode)
+    {
+        if (string.IsNullOrWhiteSpace(configuredMode))
+        {
+            return "no";
+        }
+
+        var normalized = configuredMode.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "accept-new" => "accept-new",
+            "yes" => "yes",
+            "no" => "no",
+            _ => "no",
+        };
+    }
+
+    private static string BuildGitSshCommand(string mode)
+    {
+        return mode switch
+        {
+            "accept-new" => "ssh -o StrictHostKeyChecking=accept-new",
+            "yes" => "ssh -o StrictHostKeyChecking=yes",
+            _ => "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
+        };
+    }
+
+    private static List<string> BuildWorkerBinds(string workerId, string taskId, IReadOnlyList<string> additionalBinds)
     {
         var workerToken = NormalizeWorkerToken(workerId);
         var taskToken = NormalizeWorkerToken(taskId);
         var artifactsDefault = $"worker-artifacts-{workerToken}:/artifacts";
-        var runtimeHomeDefault = $"task-runtime-home-{taskToken}:/home/agent";
+        var runtimeHomeDefault = $"task-runtime-home-{taskToken}:{WorkerHomePath}";
         var workspacesBind = ResolveWorkspacesBind();
 
         var binds = new List<string>
@@ -2289,6 +2519,8 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             runtimeHomeDefault,
             workspacesBind,
         };
+
+        binds.AddRange(additionalBinds.Where(x => !string.IsNullOrWhiteSpace(x)));
 
         return binds
             .Where(x => !string.IsNullOrWhiteSpace(x))

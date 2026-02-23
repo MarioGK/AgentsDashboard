@@ -67,7 +67,11 @@ public sealed record OrchestratorRuntimeSettings(
     bool EnablePressureScaling,
     int CpuScaleOutThresholdPercent,
     int MemoryScaleOutThresholdPercent,
-    int PressureSampleWindowSeconds);
+    int PressureSampleWindowSeconds,
+    bool EnableHostSshPassthrough,
+    string HostSshDirectory,
+    string HostSshAgentSocketPath,
+    string GitSshCommandMode);
 
 public sealed class OrchestratorRuntimeSettingsProvider(
     ISystemStore store,
@@ -158,7 +162,11 @@ public sealed class OrchestratorRuntimeSettingsProvider(
             EnablePressureScaling: taskRuntimeDefaults.EnablePressureScaling,
             CpuScaleOutThresholdPercent: taskRuntimeDefaults.CpuScaleOutThresholdPercent,
             MemoryScaleOutThresholdPercent: taskRuntimeDefaults.MemoryScaleOutThresholdPercent,
-            PressureSampleWindowSeconds: taskRuntimeDefaults.PressureSampleWindowSeconds);
+            PressureSampleWindowSeconds: taskRuntimeDefaults.PressureSampleWindowSeconds,
+            EnableHostSshPassthrough: taskRuntimeDefaults.EnableHostSshPassthrough,
+            HostSshDirectory: taskRuntimeDefaults.HostSshDirectory?.Trim() ?? string.Empty,
+            HostSshAgentSocketPath: taskRuntimeDefaults.HostSshAgentSocketPath?.Trim() ?? string.Empty,
+            GitSshCommandMode: taskRuntimeDefaults.GitSshCommandMode?.Trim() ?? "no");
 
         lock (_cacheLock)
         {

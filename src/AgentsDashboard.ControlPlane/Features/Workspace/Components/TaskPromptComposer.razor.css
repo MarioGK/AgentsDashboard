@@ -159,7 +159,7 @@
     padding-inline: 0.16rem;
 }
 
-::deep(input.workspace-hidden-file-input) {
+::deep .workspace-hidden-file-input {
     position: absolute;
     width: 1px;
     height: 1px;

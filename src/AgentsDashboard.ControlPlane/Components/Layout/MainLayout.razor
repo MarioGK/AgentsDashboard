@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject IRunStore RunStore
 @inject IRuntimeStore RuntimeStore
+@inject ITaskRuntimeLifecycleManager TaskRuntimeLifecycleManager
 @inject IGlobalSelectionService SelectionService
 @inject IJSRuntime JS
 @inject IUiRealtimeBroker UiRealtimeBroker
@@ -337,9 +338,24 @@
 
     private async Task LoadCheckHealthAsync()
     {
-        var workers = await RuntimeStore.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
-        _totalWorkers = workers.Count;
-        _onlineWorkers = workers.Count(w => w.Online);
+        var runtimeInstances = await TaskRuntimeLifecycleManager.ListTaskRuntimesAsync(CancellationToken.None);
+        var runningRuntimeIds = runtimeInstances
+            .Where(runtime => runtime.IsRunning)
+            .Select(runtime => runtime.TaskRuntimeId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _totalWorkers = runningRuntimeIds.Count;
+        if (_totalWorkers == 0)
+        {
+            _onlineWorkers = 0;
+        }
+        else
+        {
+            var registrations = await RuntimeStore.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
+            _onlineWorkers = registrations.Count(registration =>
+                registration.Online &&
+                runningRuntimeIds.Contains(registration.RuntimeId));
+        }
 
         var runs = await RunStore.ListRecentRunsAsync(CancellationToken.None);
         _activeRuns = runs.Count(r => r.State is RunState.Running or RunState.Queued);

@@ -251,30 +251,6 @@ body,
     border-color: rgba(143, 209, 255, 0.48);
 }
 
-.overview-chart-surface {
-    position: relative;
-    margin-top: 0.55rem;
-    border-radius: 10px;
-    background: linear-gradient(170deg, rgba(14, 20, 30, 0.96), rgba(11, 14, 20, 0.92));
-    border: 1px solid rgba(150, 179, 208, 0.12);
-    padding: 0.35rem;
-    overflow: hidden;
-    box-shadow: inset 0 0 0 1px rgba(177, 203, 230, 0.08);
-    transition: box-shadow 0.2s ease;
-}
-
-.overview-chart-surface:hover {
-    box-shadow: 0 0 0 1px rgba(143, 209, 255, 0.2), inset 0 0 0 1px rgba(177, 203, 230, 0.2);
-}
-
-.overview-chart-surface .apexcharts-toolbar {
-    display: none !important;
-}
-
-.overview-chart-surface .apexcharts-legend {
-    display: none !important;
-}
-
 .overview-quick-action {
     border: 1px solid rgba(159, 177, 201, 0.14);
     border-radius: 10px;

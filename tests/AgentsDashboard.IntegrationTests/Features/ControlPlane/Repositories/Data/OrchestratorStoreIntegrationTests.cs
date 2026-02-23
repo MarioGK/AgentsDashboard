@@ -605,4 +605,36 @@ public sealed class OrchestratorStoreIntegrationTests
         await Assert.That(activeTools.Count()).IsEqualTo(1);
     }
 
+    [Test]
+    public async Task PruneOfflineTaskRuntimeRegistrationsAsync_WhenRuntimeIsNotActive_RemovesOnlyStaleOfflineRegistrations()
+    {
+        await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
+
+        await fixture.RuntimeStore.UpsertTaskRuntimeRegistrationHeartbeatAsync(
+            "runtime-active",
+            "http://127.0.0.1:5201",
+            0,
+            1,
+            CancellationToken.None);
+        await fixture.RuntimeStore.UpsertTaskRuntimeRegistrationHeartbeatAsync(
+            "runtime-offline",
+            "http://127.0.0.1:5202",
+            0,
+            1,
+            CancellationToken.None);
+
+        await fixture.RuntimeStore.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TimeSpan.Zero, CancellationToken.None);
+
+        var removed = await fixture.RuntimeStore.PruneOfflineTaskRuntimeRegistrationsAsync(
+            TimeSpan.Zero,
+            ["runtime-active"],
+            CancellationToken.None);
+
+        await Assert.That(removed).IsEqualTo(1);
+
+        var remaining = await fixture.RuntimeStore.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
+        await Assert.That(remaining.Count()).IsEqualTo(1);
+        await Assert.That(remaining[0].RuntimeId).IsEqualTo("runtime-active");
+    }
+
 }

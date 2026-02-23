@@ -8,6 +8,7 @@
     <div class="workspace-composer-wrap">
         <InputFile id="@_fileInputId"
                    class="workspace-hidden-file-input"
+                   data-testid="workspace-composer-file-input"
                    OnChange="OnFileUploadChangedAsync"
                    accept="image/png,image/jpeg,image/webp,image/gif"
                    multiple />
@@ -15,7 +16,9 @@
         <div class="workspace-composer-topbar">
             <div class="workspace-composer-topbar-left">
                 <MudTooltip Text="Upload image">
-                    <label for="@_fileInputId" class="workspace-composer-icon-action workspace-composer-icon-action-upload @(Disabled ? "workspace-composer-icon-action-disabled" : string.Empty)">
+                    <label for="@_fileInputId"
+                           class="workspace-composer-icon-action workspace-composer-icon-action-upload @(Disabled ? "workspace-composer-icon-action-disabled" : string.Empty)"
+                           data-testid="workspace-composer-upload-trigger">
                         <MudIcon Icon="@Icons.Material.Filled.Upload" Size="Size.Small" />
                     </label>
                 </MudTooltip>

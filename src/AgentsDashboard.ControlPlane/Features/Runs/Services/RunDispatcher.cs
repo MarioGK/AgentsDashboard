@@ -472,7 +472,11 @@ public sealed class RunDispatcher(
             EnablePressureScaling: options.TaskRuntimes.EnablePressureScaling,
             CpuScaleOutThresholdPercent: options.TaskRuntimes.CpuScaleOutThresholdPercent,
             MemoryScaleOutThresholdPercent: options.TaskRuntimes.MemoryScaleOutThresholdPercent,
-            PressureSampleWindowSeconds: options.TaskRuntimes.PressureSampleWindowSeconds);
+            PressureSampleWindowSeconds: options.TaskRuntimes.PressureSampleWindowSeconds,
+            EnableHostSshPassthrough: options.TaskRuntimes.EnableHostSshPassthrough,
+            HostSshDirectory: options.TaskRuntimes.HostSshDirectory,
+            HostSshAgentSocketPath: options.TaskRuntimes.HostSshAgentSocketPath,
+            GitSshCommandMode: options.TaskRuntimes.GitSshCommandMode);
     }
 
     private async Task<string> BuildLayeredPromptAsync(

@@ -52,6 +52,46 @@ public sealed class RuntimeStore(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<int> PruneOfflineTaskRuntimeRegistrationsAsync(
+        TimeSpan threshold,
+        IReadOnlyCollection<string> activeRuntimeIds,
+        CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var cutoff = DateTime.UtcNow - threshold;
+        var active = activeRuntimeIds.Count == 0
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : activeRuntimeIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var stale = await db.TaskRuntimeRegistrations
+            .Where(x => !x.Online && x.LastHeartbeatUtc < cutoff)
+            .ToListAsync(cancellationToken);
+        if (stale.Count == 0)
+        {
+            return 0;
+        }
+
+        var removed = 0;
+        foreach (var registration in stale)
+        {
+            if (active.Contains(registration.RuntimeId))
+            {
+                continue;
+            }
+
+            db.TaskRuntimeRegistrations.Remove(registration);
+            removed++;
+        }
+
+        if (removed == 0)
+        {
+            return 0;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return removed;
+    }
+
     public async Task<List<TaskRuntimeDocument>> ListTaskRuntimesAsync(CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);

@@ -38,6 +38,41 @@ public static class HostCredentialDiscovery
         }
     }
 
+    public static string? TryGetHostSshDirectory(string? configuredPath)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            var configuredFullPath = Path.GetFullPath(configuredPath.Trim());
+            return Directory.Exists(configuredFullPath) ? configuredFullPath : null;
+        }
+
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(userHome))
+        {
+            return null;
+        }
+
+        var defaultSshDirectory = Path.Combine(userHome, ".ssh");
+        return Directory.Exists(defaultSshDirectory) ? defaultSshDirectory : null;
+    }
+
+    public static string? TryGetHostSshAgentSocketPath(string? configuredPath)
+    {
+        var candidatePath = configuredPath;
+        if (string.IsNullOrWhiteSpace(candidatePath))
+        {
+            candidatePath = Environment.GetEnvironmentVariable("SSH_AUTH_SOCK");
+        }
+
+        if (string.IsNullOrWhiteSpace(candidatePath))
+        {
+            return null;
+        }
+
+        var normalizedPath = Path.GetFullPath(candidatePath.Trim());
+        return Path.Exists(normalizedPath) ? normalizedPath : null;
+    }
+
     private static string? GetCodexAuthPath()
     {
         var codexHome = Environment.GetEnvironmentVariable("CODEX_HOME");

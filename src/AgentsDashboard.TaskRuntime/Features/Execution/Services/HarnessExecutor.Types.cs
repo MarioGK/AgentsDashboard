@@ -22,6 +22,11 @@ public sealed partial class HarnessExecutor
         string StandardOutput,
         string StandardError);
 
+    private sealed record GitCommandOptions(
+        string CloneUrl,
+        IReadOnlyList<string> ArgumentPrefix,
+        IReadOnlyDictionary<string, string> EnvironmentVariables);
+
     private sealed class CallbackHarnessEventSink(
         Func<string, CancellationToken, Task> onLogChunk) : IHarnessEventSink
     {

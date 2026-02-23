@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 
 
 
@@ -121,6 +122,8 @@ public sealed partial class HarnessExecutor(
         var workspaceHostPath = request.WorkingDirectory ?? string.Empty;
         var gitLock = GetTaskLock(request.RepositoryId, request.TaskId);
         var gitLockAcquired = false;
+        var runtimeGitEnvironment = CaptureRuntimeGitEnvironment();
+        var gitCommandOptions = ResolveGitCommandOptions(request.CloneUrl, request.EnvironmentVars, runtimeGitEnvironment);
 
         if (!string.IsNullOrWhiteSpace(request.CloneUrl))
         {
@@ -129,7 +132,7 @@ public sealed partial class HarnessExecutor(
                 await gitLock.WaitAsync(cancellationToken);
                 gitLockAcquired = true;
 
-                workspaceContext = await PrepareWorkspaceAsync(request, cancellationToken);
+                workspaceContext = await PrepareWorkspaceAsync(request, gitCommandOptions, cancellationToken);
                 workspaceHostPath = workspaceContext.WorkspacePath;
                 logger.LogInformation(
                     "Workspace prepared for runtime execution {@Data}",
@@ -289,7 +292,7 @@ public sealed partial class HarnessExecutor(
 
             if (workspaceContext is not null)
             {
-                await FinalizeWorkspaceAfterRunAsync(request, workspaceContext, envelope, cancellationToken);
+                await FinalizeWorkspaceAfterRunAsync(request, workspaceContext, envelope, gitCommandOptions, cancellationToken);
             }
 
             IHarnessAdapter? adapter = null;
@@ -513,9 +516,12 @@ public sealed partial class HarnessExecutor(
         return "unsupported";
     }
 
-    private async Task<WorkspaceContext> PrepareWorkspaceAsync(DispatchJobRequest request, CancellationToken cancellationToken)
+    private async Task<WorkspaceContext> PrepareWorkspaceAsync(
+        DispatchJobRequest request,
+        GitCommandOptions gitCommandOptions,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.CloneUrl))
+        if (string.IsNullOrWhiteSpace(gitCommandOptions.CloneUrl))
         {
             throw new InvalidOperationException("Clone URL is required for workspace preparation.");
         }
@@ -528,9 +534,9 @@ public sealed partial class HarnessExecutor(
         Directory.CreateDirectory(repositoryPath);
         Directory.CreateDirectory(tasksPath);
 
-        await EnsureWorkspaceReadyAsync(request.CloneUrl, workspacePath, mainBranch, cancellationToken);
+        await EnsureWorkspaceReadyAsync(gitCommandOptions.CloneUrl, workspacePath, mainBranch, gitCommandOptions, cancellationToken);
 
-        var headBeforeRun = await GetHeadCommitAsync(workspacePath, cancellationToken);
+        var headBeforeRun = await GetHeadCommitAsync(workspacePath, gitCommandOptions, cancellationToken);
         return new WorkspaceContext(workspacePath, mainBranch, headBeforeRun);
     }
 
@@ -538,6 +544,7 @@ public sealed partial class HarnessExecutor(
         string cloneUrl,
         string workspacePath,
         string mainBranch,
+        GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
         var gitDirectory = Path.Combine(workspacePath, ".git");
@@ -548,7 +555,7 @@ public sealed partial class HarnessExecutor(
                 Directory.Delete(workspacePath, true);
             }
 
-            var cloneResult = await ExecuteGitAsync(["clone", cloneUrl, workspacePath], cancellationToken);
+            var cloneResult = await ExecuteGitAsync(["clone", cloneUrl, workspacePath], gitCommandOptions, cancellationToken);
             if (cloneResult.ExitCode != 0)
             {
                 throw new InvalidOperationException(BuildGitFailureMessage("clone task workspace", cloneResult));
@@ -559,26 +566,30 @@ public sealed partial class HarnessExecutor(
             workspacePath,
             ["remote", "set-url", "origin", cloneUrl],
             "set workspace origin URL",
+            gitCommandOptions,
             cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
             workspacePath,
             ["fetch", "--prune", "origin"],
             "fetch workspace origin",
+            gitCommandOptions,
             cancellationToken);
 
-        await EnsureMainBranchCheckedOutAsync(workspacePath, mainBranch, cancellationToken);
+        await EnsureMainBranchCheckedOutAsync(workspacePath, mainBranch, gitCommandOptions, cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
             workspacePath,
             ["reset", "--hard", $"origin/{mainBranch}"],
             "reset workspace to origin main branch",
+            gitCommandOptions,
             cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
             workspacePath,
             ["clean", "-fd"],
             "clean workspace",
+            gitCommandOptions,
             cancellationToken);
     }
 
@@ -586,6 +597,7 @@ public sealed partial class HarnessExecutor(
         DispatchJobRequest request,
         WorkspaceContext workspaceContext,
         HarnessResultEnvelope envelope,
+        GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
         if (!string.Equals(envelope.Status, "succeeded", StringComparison.OrdinalIgnoreCase))
@@ -597,18 +609,18 @@ public sealed partial class HarnessExecutor(
 
         try
         {
-            await EnsureMainBranchCheckedOutAsync(workspaceContext.WorkspacePath, workspaceContext.MainBranch, cancellationToken);
+            await EnsureMainBranchCheckedOutAsync(workspaceContext.WorkspacePath, workspaceContext.MainBranch, gitCommandOptions, cancellationToken);
 
-            var hasWorkspaceChanges = await HasWorkspaceChangesAsync(workspaceContext.WorkspacePath, cancellationToken);
+            var hasWorkspaceChanges = await HasWorkspaceChangesAsync(workspaceContext.WorkspacePath, gitCommandOptions, cancellationToken);
             if (!hasWorkspaceChanges)
             {
                 MarkRunAsObsolete(envelope, "no-diff");
                 return;
             }
 
-            await StageAndCommitWorkspaceChangesAsync(request, workspaceContext, cancellationToken);
+            await StageAndCommitWorkspaceChangesAsync(request, workspaceContext, gitCommandOptions, cancellationToken);
 
-            var headAfterRun = await GetHeadCommitAsync(workspaceContext.WorkspacePath, cancellationToken);
+            var headAfterRun = await GetHeadCommitAsync(workspaceContext.WorkspacePath, gitCommandOptions, cancellationToken);
             if (string.Equals(workspaceContext.HeadBeforeRun, headAfterRun, StringComparison.Ordinal))
             {
                 MarkRunAsObsolete(envelope, "no-diff");
@@ -619,6 +631,7 @@ public sealed partial class HarnessExecutor(
                 workspaceContext.WorkspacePath,
                 ["push", "origin", workspaceContext.MainBranch],
                 "push main branch to origin",
+                gitCommandOptions,
                 cancellationToken);
 
             envelope.Metadata["gitWorkflow"] = "main-pushed";
@@ -637,19 +650,22 @@ public sealed partial class HarnessExecutor(
     private async Task StageAndCommitWorkspaceChangesAsync(
         DispatchJobRequest request,
         WorkspaceContext workspaceContext,
+        GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
         await ExecuteGitOrThrowInPathAsync(
             workspaceContext.WorkspacePath,
             ["add", "-A"],
             "stage workspace changes",
+            gitCommandOptions,
             cancellationToken);
 
-        await EnsureCommitIdentityAsync(request, workspaceContext.WorkspacePath, cancellationToken);
+        await EnsureCommitIdentityAsync(request, workspaceContext.WorkspacePath, gitCommandOptions, cancellationToken);
 
         var commitResult = await ExecuteGitInPathAsync(
             workspaceContext.WorkspacePath,
             ["commit", "-m", BuildMainBranchCommitMessage(request)],
+            gitCommandOptions,
             cancellationToken);
 
         if (commitResult.ExitCode != 0 && !IsNothingToCommit(commitResult))
@@ -658,9 +674,13 @@ public sealed partial class HarnessExecutor(
         }
     }
 
-    private async Task EnsureMainBranchCheckedOutAsync(string workspacePath, string mainBranch, CancellationToken cancellationToken)
+    private async Task EnsureMainBranchCheckedOutAsync(
+        string workspacePath,
+        string mainBranch,
+        GitCommandOptions gitCommandOptions,
+        CancellationToken cancellationToken)
     {
-        var checkoutResult = await ExecuteGitInPathAsync(workspacePath, ["checkout", mainBranch], cancellationToken);
+        var checkoutResult = await ExecuteGitInPathAsync(workspacePath, ["checkout", mainBranch], gitCommandOptions, cancellationToken);
         if (checkoutResult.ExitCode == 0)
         {
             return;
@@ -670,12 +690,14 @@ public sealed partial class HarnessExecutor(
             workspacePath,
             ["checkout", "-B", mainBranch, $"origin/{mainBranch}"],
             "checkout or create main branch",
+            gitCommandOptions,
             cancellationToken);
     }
 
     private async Task EnsureCommitIdentityAsync(
         DispatchJobRequest request,
         string workspacePath,
+        GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
         var authorName = ResolveEnvValue(request.EnvironmentVars, "GIT_COMMITTER_NAME")
@@ -690,30 +712,212 @@ public sealed partial class HarnessExecutor(
             workspacePath,
             ["config", "user.name", authorName],
             "configure git user.name",
+            gitCommandOptions,
             cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
             workspacePath,
             ["config", "user.email", authorEmail],
             "configure git user.email",
+            gitCommandOptions,
             cancellationToken);
     }
 
-    private static string? ResolveEnvValue(Dictionary<string, string>? envVars, string key)
+    private static string? ResolveEnvValue(IReadOnlyDictionary<string, string>? envVars, string key)
     {
         if (envVars is null)
         {
             return null;
         }
 
-        return envVars.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
-            ? value.Trim()
-            : null;
+        foreach (var (currentKey, value) in envVars)
+        {
+            if (!string.Equals(currentKey, key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
     }
 
-    private async Task<string> GetHeadCommitAsync(string workspacePath, CancellationToken cancellationToken)
+    private static GitCommandOptions ResolveGitCommandOptions(
+        string cloneUrl,
+        IReadOnlyDictionary<string, string>? environmentVars,
+        IReadOnlyDictionary<string, string> runtimeEnvironment)
     {
-        var result = await ExecuteGitInPathAsync(workspacePath, ["rev-parse", "HEAD"], cancellationToken);
+        var githubToken = ResolveEnvValue(environmentVars, "GITHUB_TOKEN")
+            ?? ResolveEnvValue(environmentVars, "GH_TOKEN");
+        var hasSshCredentials = HasSshCredentialsAvailable(environmentVars, runtimeEnvironment);
+        var resolvedCloneUrl = ResolveCloneUrlForGitHubToken(cloneUrl, githubToken, hasSshCredentials);
+
+        var argumentPrefix = new List<string>();
+        if (!string.IsNullOrWhiteSpace(githubToken) && IsGitHubHttpsUrl(resolvedCloneUrl))
+        {
+            argumentPrefix.Add("-c");
+            argumentPrefix.Add($"http.https://github.com/.extraheader=Authorization: Basic {ToBasicAuthToken(githubToken)}");
+        }
+
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["GIT_TERMINAL_PROMPT"] = "0",
+        };
+
+        AddEnvironmentValueIfPresent(environment, runtimeEnvironment, "SSH_AUTH_SOCK");
+        AddEnvironmentValueIfPresent(environment, runtimeEnvironment, "GIT_SSH_COMMAND");
+
+        return new GitCommandOptions(
+            string.IsNullOrWhiteSpace(resolvedCloneUrl) ? cloneUrl : resolvedCloneUrl,
+            argumentPrefix,
+            environment);
+    }
+
+    private static IReadOnlyDictionary<string, string> CaptureRuntimeGitEnvironment()
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var sshAuthSock = Environment.GetEnvironmentVariable("SSH_AUTH_SOCK");
+        if (!string.IsNullOrWhiteSpace(sshAuthSock))
+        {
+            environment["SSH_AUTH_SOCK"] = sshAuthSock.Trim();
+        }
+
+        var gitSshCommand = Environment.GetEnvironmentVariable("GIT_SSH_COMMAND");
+        if (!string.IsNullOrWhiteSpace(gitSshCommand))
+        {
+            environment["GIT_SSH_COMMAND"] = gitSshCommand.Trim();
+        }
+
+        var home = Environment.GetEnvironmentVariable("HOME");
+        if (!string.IsNullOrWhiteSpace(home))
+        {
+            environment["HOME"] = home.Trim();
+        }
+
+        var workerSshAvailable = Environment.GetEnvironmentVariable("AGENTSDASHBOARD_WORKER_SSH_AVAILABLE");
+        if (!string.IsNullOrWhiteSpace(workerSshAvailable))
+        {
+            environment["AGENTSDASHBOARD_WORKER_SSH_AVAILABLE"] = workerSshAvailable.Trim();
+        }
+
+        return environment;
+    }
+
+    private static bool HasSshCredentialsAvailable(
+        IReadOnlyDictionary<string, string>? requestEnvironment,
+        IReadOnlyDictionary<string, string> runtimeEnvironment)
+    {
+        var sshAvailabilityFlag = ResolveEnvValue(runtimeEnvironment, "AGENTSDASHBOARD_WORKER_SSH_AVAILABLE");
+        if (string.Equals(sshAvailabilityFlag, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var sshAuthSock = ResolveEnvValue(runtimeEnvironment, "SSH_AUTH_SOCK")
+            ?? ResolveEnvValue(requestEnvironment, "SSH_AUTH_SOCK");
+        if (!string.IsNullOrWhiteSpace(sshAuthSock) && Path.Exists(sshAuthSock))
+        {
+            return true;
+        }
+
+        var home = ResolveEnvValue(runtimeEnvironment, "HOME")
+            ?? ResolveEnvValue(requestEnvironment, "HOME");
+        if (string.IsNullOrWhiteSpace(home))
+        {
+            return false;
+        }
+
+        try
+        {
+            var sshDirectory = Path.Combine(home, ".ssh");
+            if (!Directory.Exists(sshDirectory))
+            {
+                return false;
+            }
+
+            return Directory
+                .EnumerateFiles(sshDirectory, "id_*", SearchOption.TopDirectoryOnly)
+                .Any(path => !path.EndsWith(".pub", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void AddEnvironmentValueIfPresent(
+        Dictionary<string, string> destination,
+        IReadOnlyDictionary<string, string>? source,
+        string key)
+    {
+        var value = ResolveEnvValue(source, key);
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            destination[key] = value;
+        }
+    }
+
+    private static string ResolveCloneUrlForGitHubToken(string cloneUrl, string? githubToken, bool hasSshCredentials)
+    {
+        if (string.IsNullOrWhiteSpace(cloneUrl))
+        {
+            return cloneUrl;
+        }
+
+        var normalizedCloneUrl = cloneUrl.Trim();
+        if (string.IsNullOrWhiteSpace(githubToken) || hasSshCredentials)
+        {
+            return normalizedCloneUrl;
+        }
+
+        const string gitSshPrefix = "git@github.com:";
+        if (normalizedCloneUrl.StartsWith(gitSshPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"https://github.com/{normalizedCloneUrl[gitSshPrefix.Length..]}";
+        }
+
+        const string sshUrlPrefix = "ssh://git@github.com/";
+        if (normalizedCloneUrl.StartsWith(sshUrlPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return $"https://github.com/{normalizedCloneUrl[sshUrlPrefix.Length..]}";
+        }
+
+        return normalizedCloneUrl;
+    }
+
+    private static bool IsGitHubHttpsUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (!string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ToBasicAuthToken(string token)
+    {
+        var bytes = Encoding.UTF8.GetBytes($"x-access-token:{token}");
+        return Convert.ToBase64String(bytes);
+    }
+
+    private async Task<string> GetHeadCommitAsync(
+        string workspacePath,
+        GitCommandOptions gitCommandOptions,
+        CancellationToken cancellationToken)
+    {
+        var result = await ExecuteGitInPathAsync(workspacePath, ["rev-parse", "HEAD"], gitCommandOptions, cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(BuildGitFailureMessage("resolve HEAD commit", result));
@@ -722,9 +926,12 @@ public sealed partial class HarnessExecutor(
         return result.StandardOutput.Trim();
     }
 
-    private async Task<bool> HasWorkspaceChangesAsync(string workspacePath, CancellationToken cancellationToken)
+    private async Task<bool> HasWorkspaceChangesAsync(
+        string workspacePath,
+        GitCommandOptions gitCommandOptions,
+        CancellationToken cancellationToken)
     {
-        var result = await ExecuteGitInPathAsync(workspacePath, ["status", "--porcelain"], cancellationToken);
+        var result = await ExecuteGitInPathAsync(workspacePath, ["status", "--porcelain"], gitCommandOptions, cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(BuildGitFailureMessage("check workspace changes", result));
@@ -737,9 +944,10 @@ public sealed partial class HarnessExecutor(
         string workspacePath,
         IReadOnlyList<string> arguments,
         string operation,
+        GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
-        var result = await ExecuteGitInPathAsync(workspacePath, arguments, cancellationToken);
+        var result = await ExecuteGitInPathAsync(workspacePath, arguments, gitCommandOptions, cancellationToken);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(BuildGitFailureMessage(operation, result));
@@ -749,6 +957,7 @@ public sealed partial class HarnessExecutor(
     private async Task<GitCommandResult> ExecuteGitInPathAsync(
         string workspacePath,
         IReadOnlyList<string> arguments,
+        GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
         var fullArguments = new List<string>(arguments.Count + 2)
@@ -758,11 +967,12 @@ public sealed partial class HarnessExecutor(
         };
 
         fullArguments.AddRange(arguments);
-        return await ExecuteGitAsync(fullArguments, cancellationToken);
+        return await ExecuteGitAsync(fullArguments, gitCommandOptions, cancellationToken);
     }
 
     private static async Task<GitCommandResult> ExecuteGitAsync(
         IReadOnlyList<string> arguments,
+        GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
         using var process = new Process
@@ -776,6 +986,16 @@ public sealed partial class HarnessExecutor(
                 UseShellExecute = false,
             }
         };
+
+        foreach (var (key, value) in gitCommandOptions.EnvironmentVariables)
+        {
+            process.StartInfo.Environment[key] = value;
+        }
+
+        foreach (var argument in gitCommandOptions.ArgumentPrefix)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
 
         foreach (var argument in arguments)
         {
@@ -816,6 +1036,17 @@ public sealed partial class HarnessExecutor(
         if (string.IsNullOrWhiteSpace(details))
         {
             details = "unknown git error";
+        }
+        else
+        {
+            var lines = details.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (lines.Length > 0)
+            {
+                var fatalLine = lines.FirstOrDefault(line => line.Contains("fatal:", StringComparison.OrdinalIgnoreCase));
+                details = !string.IsNullOrWhiteSpace(fatalLine)
+                    ? fatalLine
+                    : string.Join(" | ", lines);
+            }
         }
 
         return $"{operation} failed (exit code {result.ExitCode}): {details}";

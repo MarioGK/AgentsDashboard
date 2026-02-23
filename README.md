@@ -67,7 +67,7 @@ deploy/
 
 ## Prerequisites
 
-- .NET SDK `10.0.100` (see `global.json`)
+- .NET SDK `10.0.3`
 - Docker (required for runtime container lifecycle in normal local orchestration)
 - Node.js 20+ (Playwright suite)
 - Local mkcert root CA for trusted HTTPS (see `docs/INSTALL_CA_CLIENT.md`)
