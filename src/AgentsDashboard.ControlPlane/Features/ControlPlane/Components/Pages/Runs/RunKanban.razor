@@ -10,29 +10,36 @@
 <PageTitle>Runs - AgentsDashboard</PageTitle>
 
 <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
-    <MudText Typo="Typo.h4">Runs</MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudText Typo="Typo.h4">Runs</MudText>
+        <SettingsHintIcon Text="Filter and inspect recent run executions across repositories." />
+    </MudStack>
     <MudSpacer />
-    <MudTextField T="string"
-                  @bind-Value="_query"
-                  Placeholder="Filter by run id, task id, or summary"
-                  Variant="Variant.Outlined"
-                  Margin="Margin.Dense"
-                  Immediate="true"
-                  Adornment="Adornment.Start"
-                  AdornmentIcon="@Icons.Material.Filled.Search"
-                  Style="min-width: 320px;" />
-    <MudSelect T="RunState?"
-               @bind-Value="_stateFilter"
-               Label="State"
-               Variant="Variant.Outlined"
-               Margin="Margin.Dense"
-               Style="min-width: 180px;">
-        <MudSelectItem T="RunState?" Value="@((RunState?)null)">All states</MudSelectItem>
-        @foreach (var state in _stateOrder)
-        {
-            <MudSelectItem T="RunState?" Value="@state">@GetRunStateLabel(state)</MudSelectItem>
-        }
-    </MudSelect>
+    <SettingsHintedField ContainerClass="" Hint="Search supports run ID, task ID, and summary text.">
+        <MudTextField T="string"
+                      @bind-Value="_query"
+                      Placeholder="Filter by run id, task id, or summary"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Immediate="true"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Style="min-width: 320px;" />
+    </SettingsHintedField>
+    <SettingsHintedField ContainerClass="" Hint="State filter narrows the list to a single lifecycle stage.">
+        <MudSelect T="RunState?"
+                   @bind-Value="_stateFilter"
+                   Label="State"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Style="min-width: 180px;">
+            <MudSelectItem T="RunState?" Value="@((RunState?)null)">All states</MudSelectItem>
+            @foreach (var state in _stateOrder)
+            {
+                <MudSelectItem T="RunState?" Value="@state">@GetRunStateLabel(state)</MudSelectItem>
+            }
+        </MudSelect>
+    </SettingsHintedField>
     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync">
         Refresh
     </MudButton>

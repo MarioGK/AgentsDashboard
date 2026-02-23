@@ -4,25 +4,37 @@
 <MudDialog>
     <DialogContent>
         <MudForm @ref="_form" @bind-IsValid="@_isValid">
-            <MudTextField @bind-Value="_name" Label="Rule Name" Required RequiredError="Name is required" />
+            <SettingsHintedField Hint="A clear operator-facing name used in alerts and event timeline.">
+                <MudTextField @bind-Value="_name" Label="Rule Name" Required RequiredError="Name is required" />
+            </SettingsHintedField>
 
-            <MudSelect @bind-Value="_ruleType" Label="Rule Type" Required>
-                <MudSelectItem Value="AlertRuleType.MissingHeartbeat">Missing Heartbeat</MudSelectItem>
-                <MudSelectItem Value="AlertRuleType.FailureRateSpike">Failure Rate Spike</MudSelectItem>
-                <MudSelectItem Value="AlertRuleType.QueueBacklog">Queue Backlog</MudSelectItem>
-                <MudSelectItem Value="AlertRuleType.RepeatedPrFailures">Repeated PR Failures</MudSelectItem>
-            </MudSelect>
+            <SettingsHintedField Hint="Select the condition family. Threshold meaning changes depending on this type.">
+                <MudSelect @bind-Value="_ruleType" Label="Rule Type" Required>
+                    <MudSelectItem Value="AlertRuleType.MissingHeartbeat">Missing Heartbeat</MudSelectItem>
+                    <MudSelectItem Value="AlertRuleType.FailureRateSpike">Failure Rate Spike</MudSelectItem>
+                    <MudSelectItem Value="AlertRuleType.QueueBacklog">Queue Backlog</MudSelectItem>
+                    <MudSelectItem Value="AlertRuleType.RepeatedPrFailures">Repeated PR Failures</MudSelectItem>
+                </MudSelect>
+            </SettingsHintedField>
 
-            <MudNumericField @bind-Value="_threshold" Label="Threshold" Required Min="1"
-                            HelperText="@GetThresholdHelperText()" />
+            <SettingsHintedField Hint="Numeric trigger threshold for the selected rule type.">
+                <MudNumericField @bind-Value="_threshold" Label="Threshold" Required Min="1"
+                                 HelperText="@GetThresholdHelperText()" />
+            </SettingsHintedField>
 
-            <MudNumericField @bind-Value="_windowMinutes" Label="Window (minutes)" Required Min="1" Max="1440"
-                            HelperText="Time window to evaluate the rule (1-1440 minutes)" />
+            <SettingsHintedField Hint="Rolling evaluation window. Smaller windows react faster but may be noisier.">
+                <MudNumericField @bind-Value="_windowMinutes" Label="Window (minutes)" Required Min="1" Max="1440"
+                                 HelperText="Time window to evaluate the rule (1-1440 minutes)" />
+            </SettingsHintedField>
 
-            <MudTextField @bind-Value="_webhookUrl" Label="Webhook URL (optional)"
-                         HelperText="HTTP endpoint to POST alert events to" />
+            <SettingsHintedField Hint="Optional HTTP endpoint that receives alert payloads when this rule fires.">
+                <MudTextField @bind-Value="_webhookUrl" Label="Webhook URL (optional)"
+                              HelperText="HTTP endpoint to POST alert events to" />
+            </SettingsHintedField>
 
-            <MudSwitch @bind-Value="_enabled" Label="Enabled" Color="Color.Primary" />
+            <SettingsHintedField ContainerClass="" Hint="Disabled rules remain stored but do not evaluate or fire alerts.">
+                <MudSwitch @bind-Value="_enabled" Label="Enabled" Color="Color.Primary" />
+            </SettingsHintedField>
         </MudForm>
     </DialogContent>
     <DialogActions>

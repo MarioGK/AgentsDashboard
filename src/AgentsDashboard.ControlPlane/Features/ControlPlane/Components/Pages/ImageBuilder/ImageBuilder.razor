@@ -13,7 +13,10 @@
 <PageTitle>Container Image Builder</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4">
-    <MudText Typo="Typo.h4" Class="mb-4">Container Image Builder</MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-3">
+        <MudText Typo="Typo.h4">Container Image Builder</MudText>
+        <SettingsHintIcon Text="Build and manage runtime images used by harness execution environments." />
+    </MudStack>
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
         Build custom Docker images for use with harness execution. Images are built on the local Docker daemon.
     </MudText>
@@ -26,21 +29,25 @@
                 </MudText>
                 <MudGrid Class="mt-2">
                 <MudItem xs="12">
-                    <MudTextField @bind-Value="_aiDescription"
-                                  Label="Describe your container requirements"
-                                  Variant="Variant.Outlined"
-                                  HelperText="E.g., 'Python 3.12 with Playwright and secure defaults for web testing'"
-                                  Lines="2" />
+                    <SettingsHintedField ContainerClass="" Hint="Natural language requirements used by template and AI generation flows.">
+                        <MudTextField @bind-Value="_aiDescription"
+                                      Label="Describe your container requirements"
+                                      Variant="Variant.Outlined"
+                                      HelperText="E.g., 'Python 3.12 with Playwright and secure defaults for web testing'"
+                                      Lines="2" />
+                    </SettingsHintedField>
                 </MudItem>
                 <MudItem xs="12" md="4">
-                    <MudSelect @bind-Value="_aiBaseImage" Label="Base Image" Variant="Variant.Outlined" T="string">
-                        <MudSelectItem Value="@("ubuntu:24.04")">Ubuntu 24.04</MudSelectItem>
-                        <MudSelectItem Value="@("alpine:3.19")">Alpine 3.19 (Minimal)</MudSelectItem>
-                        <MudSelectItem Value="@("node:20-slim")">Node 20 Slim</MudSelectItem>
-                        <MudSelectItem Value="@("python:3.12-slim")">Python 3.12 Slim</MudSelectItem>
-                        <MudSelectItem Value="@("mcr.microsoft.com/dotnet/sdk:10.0")">.NET 10 SDK</MudSelectItem>
-                        <MudSelectItem Value="@("golang:1.23-alpine")">Go 1.23 Alpine</MudSelectItem>
-                    </MudSelect>
+                    <SettingsHintedField ContainerClass="" Hint="Base image used as the starting point for generated Dockerfile.">
+                        <MudSelect @bind-Value="_aiBaseImage" Label="Base Image" Variant="Variant.Outlined" T="string">
+                            <MudSelectItem Value="@("ubuntu:24.04")">Ubuntu 24.04</MudSelectItem>
+                            <MudSelectItem Value="@("alpine:3.19")">Alpine 3.19 (Minimal)</MudSelectItem>
+                            <MudSelectItem Value="@("node:20-slim")">Node 20 Slim</MudSelectItem>
+                            <MudSelectItem Value="@("python:3.12-slim")">Python 3.12 Slim</MudSelectItem>
+                            <MudSelectItem Value="@("mcr.microsoft.com/dotnet/sdk:10.0")">.NET 10 SDK</MudSelectItem>
+                            <MudSelectItem Value="@("golang:1.23-alpine")">Go 1.23 Alpine</MudSelectItem>
+                        </MudSelect>
+                    </SettingsHintedField>
                 </MudItem>
                 <MudItem xs="12" md="4">
                     <MudSelect SelectedValues="_aiRuntimes" SelectedValuesChanged="v => _aiRuntimes = v.ToList()" Label="Runtimes" Variant="Variant.Outlined" T="string" MultiSelection="true">
@@ -150,13 +157,15 @@
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" md="6">
-                <MudTextField @bind-Value="_imageTag"
-                              Label="Image Tag"
-                              Variant="Variant.Outlined"
-                              Required="true"
-                              HelperText="Format: name:version (e.g., myharness:latest)"
-                              Class="mb-2" />
+                <MudItem xs="12" md="6">
+                <SettingsHintedField ContainerClass="" Hint="Final image reference used for push/pull and orchestrator selection.">
+                    <MudTextField @bind-Value="_imageTag"
+                                  Label="Image Tag"
+                                  Variant="Variant.Outlined"
+                                  Required="true"
+                                  HelperText="Format: name:version (e.g., myharness:latest)"
+                                  Class="mb-2" />
+                </SettingsHintedField>
             </MudItem>
         </MudGrid>
 

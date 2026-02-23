@@ -1,0 +1,69 @@
+@namespace AgentsDashboard.ControlPlane.Components.Shared
+
+<MudPaper Elevation="0" Class="@($"settings-action-bar {Class}")">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="settings-action-bar-inner">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudChip T="string" Color="@(IsDirty ? Color.Warning : Color.Success)" Variant="Variant.Outlined" Size="Size.Small">
+                @(IsDirty ? DirtyText : CleanText)
+            </MudChip>
+        </MudStack>
+
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudButton Variant="Variant.Outlined" OnClick="OnRevert" Disabled="@(!CanEdit || IsSaving)">
+                @RevertLabel
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="OnResetDefaults" Disabled="@(!CanEdit || IsSaving)">
+                @ResetDefaultsLabel
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="OnSave"
+                       Disabled="@(!CanEdit || !IsDirty || IsSaving)">
+                @if (IsSaving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                @SaveLabel
+            </MudButton>
+        </MudStack>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public bool IsDirty { get; set; }
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter]
+    public bool CanEdit { get; set; } = true;
+
+    [Parameter]
+    public string DirtyText { get; set; } = "Unsaved changes";
+
+    [Parameter]
+    public string CleanText { get; set; } = "All changes saved";
+
+    [Parameter]
+    public string SaveLabel { get; set; } = "Save Settings";
+
+    [Parameter]
+    public string RevertLabel { get; set; } = "Revert";
+
+    [Parameter]
+    public string ResetDefaultsLabel { get; set; } = "Reset Defaults";
+
+    [Parameter]
+    public string Class { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnRevert { get; set; }
+
+    [Parameter]
+    public EventCallback OnResetDefaults { get; set; }
+}

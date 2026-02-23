@@ -8,6 +8,9 @@
 <PageTitle>System Settings - AgentsDashboard</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-4">System Settings</MudText>
+<MudText Typo="Typo.body2" Class="mb-3">
+    Global operational defaults used across repositories and runs.
+</MudText>
 
 @if (_loading)
 {
@@ -15,47 +18,69 @@
 }
 else
 {
+    <SettingsActionBar IsDirty="@HasUnsavedChanges"
+                       IsSaving="_saving"
+                       SaveLabel="Save Settings"
+                       OnSave="SaveAsync"
+                       OnRevert="RevertChangesAsync"
+                       OnResetDefaults="ResetToDefaultsAsync" />
     <MudGrid>
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Docker Policy</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Docker Policy</MudText>
+                    <SettingsHintIcon Text="Restricts which Docker images can be used at runtime. One image reference per line." />
+                </MudStack>
                 <MudText Typo="Typo.body2" Class="mb-2">Allowed images (one per line)</MudText>
-                <MudTextField T="string" @bind-Value="_allowedImagesText" Lines="6" Variant="Variant.Outlined"
-                              Placeholder="e.g. mcr.microsoft.com/dotnet/sdk:10.0" />
+                <SettingsHintedField ContainerClass="" Hint="Use exact image tags where possible to avoid accidental changes from floating latest tags.">
+                    <MudTextField T="string" @bind-Value="_allowedImagesText" Lines="6" Variant="Variant.Outlined"
+                                  Placeholder="e.g. mcr.microsoft.com/dotnet/sdk:10.0" />
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Retention</MudText>
-                <MudNumericField T="int" @bind-Value="_retentionDaysLogs" Label="Log retention (days)"
-                                 Variant="Variant.Outlined" Min="1" Max="365" Class="mb-3" />
-                <MudNumericField T="int" @bind-Value="_retentionDaysRuns" Label="Run retention (days)"
-                                 Variant="Variant.Outlined" Min="1" Max="365" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Retention</MudText>
+                    <SettingsHintIcon Text="Controls how long logs and run records are kept before cleanup." />
+                </MudStack>
+                <SettingsHintedField Hint="Retention period for run logs. Lower values reduce storage use.">
+                    <MudNumericField T="int" @bind-Value="_retentionDaysLogs" Label="Log retention (days)"
+                                     Variant="Variant.Outlined" Min="1" Max="365" />
+                </SettingsHintedField>
+                <SettingsHintedField ContainerClass="" Hint="Retention period for run history and metadata.">
+                    <MudNumericField T="int" @bind-Value="_retentionDaysRuns" Label="Run retention (days)"
+                                     Variant="Variant.Outlined" Min="1" Max="365" />
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Observability</MudText>
-                <MudTextField T="string" @bind-Value="_victoriaMetricsEndpoint" Label="VictoriaMetrics Endpoint"
-                              Variant="Variant.Outlined" Class="mb-3" />
-                <MudTextField T="string" @bind-Value="_vmUiEndpoint" Label="VMUI Endpoint"
-                              Variant="Variant.Outlined" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Observability</MudText>
+                    <SettingsHintIcon Text="External endpoints used for metrics ingestion and UI navigation." />
+                </MudStack>
+                <SettingsHintedField Hint="VictoriaMetrics write/read endpoint used by observability integrations.">
+                    <MudTextField T="string" @bind-Value="_victoriaMetricsEndpoint" Label="VictoriaMetrics Endpoint"
+                                  Variant="Variant.Outlined" />
+                </SettingsHintedField>
+                <SettingsHintedField ContainerClass="" Hint="Optional direct link to VMUI for operators.">
+                    <MudTextField T="string" @bind-Value="_vmUiEndpoint" Label="VMUI Endpoint"
+                                  Variant="Variant.Outlined" />
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
     </MudGrid>
 
-    <MudStack Row Class="mt-2">
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
-                   OnClick="SaveAsync" Disabled="_saving">
-            @if (_saving)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
-            }
-            Save Settings
-        </MudButton>
-    </MudStack>
+    <SettingsActionBar IsDirty="@HasUnsavedChanges"
+                       IsSaving="_saving"
+                       SaveLabel="Save Settings"
+                       Class="mt-2"
+                       OnSave="SaveAsync"
+                       OnRevert="RevertChangesAsync"
+                       OnResetDefaults="ResetToDefaultsAsync" />
 }
 
 @code {
@@ -66,6 +91,17 @@ else
     private int _retentionDaysRuns = 90;
     private string _victoriaMetricsEndpoint = string.Empty;
     private string _vmUiEndpoint = string.Empty;
+    private string _savedAllowedImagesText = string.Empty;
+    private int _savedRetentionDaysLogs = 30;
+    private int _savedRetentionDaysRuns = 90;
+    private string _savedVictoriaMetricsEndpoint = string.Empty;
+    private string _savedVmUiEndpoint = string.Empty;
+    private bool HasUnsavedChanges =>
+        NormalizeAllowedImagesText(_allowedImagesText) != NormalizeAllowedImagesText(_savedAllowedImagesText) ||
+        _retentionDaysLogs != _savedRetentionDaysLogs ||
+        _retentionDaysRuns != _savedRetentionDaysRuns ||
+        _victoriaMetricsEndpoint != _savedVictoriaMetricsEndpoint ||
+        _vmUiEndpoint != _savedVmUiEndpoint;
 
     protected override async Task OnInitializedAsync()
     {
@@ -83,6 +119,7 @@ else
             _retentionDaysRuns = settings.RetentionDaysRuns;
             _victoriaMetricsEndpoint = settings.VictoriaMetricsEndpoint;
             _vmUiEndpoint = settings.VmUiEndpoint;
+            CaptureSavedState();
         }
         catch (Exception ex)
         {
@@ -112,6 +149,7 @@ else
             updated.UpdatedAtUtc = DateTime.UtcNow;
 
             await Store.UpdateSettingsAsync(updated, CancellationToken.None);
+            CaptureSavedState();
             Snackbar.Add("Settings saved", Severity.Success);
         }
         catch (Exception ex)
@@ -122,5 +160,43 @@ else
         {
             _saving = false;
         }
+    }
+
+    private Task RevertChangesAsync()
+    {
+        _allowedImagesText = _savedAllowedImagesText;
+        _retentionDaysLogs = _savedRetentionDaysLogs;
+        _retentionDaysRuns = _savedRetentionDaysRuns;
+        _victoriaMetricsEndpoint = _savedVictoriaMetricsEndpoint;
+        _vmUiEndpoint = _savedVmUiEndpoint;
+        return Task.CompletedTask;
+    }
+
+    private Task ResetToDefaultsAsync()
+    {
+        _allowedImagesText = string.Empty;
+        _retentionDaysLogs = 30;
+        _retentionDaysRuns = 90;
+        _victoriaMetricsEndpoint = string.Empty;
+        _vmUiEndpoint = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private void CaptureSavedState()
+    {
+        _savedAllowedImagesText = NormalizeAllowedImagesText(_allowedImagesText);
+        _allowedImagesText = _savedAllowedImagesText;
+        _savedRetentionDaysLogs = _retentionDaysLogs;
+        _savedRetentionDaysRuns = _retentionDaysRuns;
+        _savedVictoriaMetricsEndpoint = _victoriaMetricsEndpoint;
+        _savedVmUiEndpoint = _vmUiEndpoint;
+    }
+
+    private static string NormalizeAllowedImagesText(string value)
+    {
+        return string.Join(
+            "\n",
+            (value ?? string.Empty)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 }

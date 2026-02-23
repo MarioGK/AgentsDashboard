@@ -9,12 +9,17 @@
 <PageTitle>Alert Settings - AgentsDashboard</PageTitle>
 
 <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
-    <MudText Typo="Typo.h4">Alert Settings</MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudText Typo="Typo.h4">Alert Settings</MudText>
+        <SettingsHintIcon Text="Configure threshold-driven alert rules and review recent alert activity." />
+    </MudStack>
     <MudSpacer />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-               OnClick="OpenAddRuleDialog">
-        New Alert Rule
-    </MudButton>
+    <MudTooltip Text="Create a new rule that can trigger notifications or webhook calls.">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenAddRuleDialog">
+            New Alert Rule
+        </MudButton>
+    </MudTooltip>
 </MudStack>
 
 <MudPaper Elevation="2" Class="mb-4">
@@ -56,10 +61,14 @@
                 </MudChip>
             </MudTd>
             <MudTd DataLabel="Actions">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                               OnClick="() => OpenEditRuleDialog(context)" />
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                               OnClick="() => DeleteRule(context.Id)" />
+                <MudTooltip Text="Edit this rule">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="() => OpenEditRuleDialog(context)" />
+                </MudTooltip>
+                <MudTooltip Text="Delete this rule">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   OnClick="() => DeleteRule(context.Id)" />
+                </MudTooltip>
             </MudTd>
         </RowTemplate>
         <PagerContent>

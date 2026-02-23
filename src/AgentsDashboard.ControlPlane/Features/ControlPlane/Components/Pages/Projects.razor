@@ -17,33 +17,45 @@
 
 <MudStack Spacing="2">
     <MudStack Row AlignItems="AlignItems.Center">
-        <MudText Typo="Typo.h4">Repositories</MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudText Typo="Typo.h4">Repositories</MudText>
+            <SettingsHintIcon Text="Register git repositories used by orchestration tasks and runtime workflows." />
+        </MudStack>
     </MudStack>
 
     <MudPaper Class="pa-4">
-        <MudText Typo="Typo.h6" Class="mb-3">Create Repository</MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-3">
+            <MudText Typo="Typo.h6">Create Repository</MudText>
+            <SettingsHintIcon Text="Create validates workspace clone/fetch, then stores repository metadata and optional GitHub token." />
+        </MudStack>
 
         <MudGrid>
             <MudItem xs="12" md="3">
-                <MudTextField @bind-Value="_newRepositoryName"
-                              Label="Repository Name"
-                              Placeholder="Repository Name"
-                              Required="true"
-                              data-testid="repo-create-name" />
+                <SettingsHintedField ContainerClass="" Hint="Friendly name shown throughout the dashboard.">
+                    <MudTextField @bind-Value="_newRepositoryName"
+                                  Label="Repository Name"
+                                  Placeholder="Repository Name"
+                                  Required="true"
+                                  data-testid="repo-create-name" />
+                </SettingsHintedField>
             </MudItem>
             <MudItem xs="12" md="5">
-                <MudTextField @bind-Value="_newRepositoryGitUrl"
-                              Label="Git URL"
-                              Placeholder="https://github.com/org/repo.git"
-                              Required="true"
-                              data-testid="repo-create-git-url" />
+                <SettingsHintedField ContainerClass="" Hint="Clone/fetch source URL. HTTPS and SSH remotes are supported if credentials are available.">
+                    <MudTextField @bind-Value="_newRepositoryGitUrl"
+                                  Label="Git URL"
+                                  Placeholder="https://github.com/org/repo.git"
+                                  Required="true"
+                                  data-testid="repo-create-git-url" />
+                </SettingsHintedField>
             </MudItem>
             <MudItem xs="12" md="2">
-                <MudTextField @bind-Value="_newRepositoryDefaultBranch"
-                              Label="Default Branch"
-                              Placeholder="main"
-                              Required="true"
-                              data-testid="repo-create-default-branch" />
+                <SettingsHintedField ContainerClass="" Hint="Initial branch used for workspace checkout and task defaults.">
+                    <MudTextField @bind-Value="_newRepositoryDefaultBranch"
+                                  Label="Default Branch"
+                                  Placeholder="main"
+                                  Required="true"
+                                  data-testid="repo-create-default-branch" />
+                </SettingsHintedField>
             </MudItem>
             <MudItem xs="12" md="2" Class="d-flex align-center">
                 <MudButton Variant="Variant.Filled"
@@ -66,11 +78,13 @@
 
         <MudGrid Class="mt-2">
             <MudItem xs="12" md="8">
-                <MudTextField @bind-Value="_newRepositoryLocalPath"
-                              Label="Local Folder"
-                              Placeholder="/absolute/path"
-                              Required="true"
-                              data-testid="repo-create-local-path" />
+                <SettingsHintedField ContainerClass="" Hint="Absolute filesystem path where repository will be cloned or refreshed.">
+                    <MudTextField @bind-Value="_newRepositoryLocalPath"
+                                  Label="Local Folder"
+                                  Placeholder="/absolute/path"
+                                  Required="true"
+                                  data-testid="repo-create-local-path" />
+                </SettingsHintedField>
             </MudItem>
             <MudItem xs="12" md="4" Class="d-flex align-center">
                 <MudButton Variant="Variant.Outlined" Color="Color.Info" OnClick="OpenFolderDialogAsync" Class="mr-2">Browse</MudButton>
@@ -78,10 +92,12 @@
         </MudGrid>
         <MudGrid Class="mt-2">
             <MudItem xs="12" md="8">
-                <MudTextField @bind-Value="_newRepositoryGithubToken"
-                              Label="GitHub Token (optional)"
-                              InputType="InputType.Password"
-                              data-testid="repo-create-github-token" />
+                <SettingsHintedField ContainerClass="" Hint="Optional token used for private repository access and persisted as encrypted provider secret.">
+                    <MudTextField @bind-Value="_newRepositoryGithubToken"
+                                  Label="GitHub Token (optional)"
+                                  InputType="InputType.Password"
+                                  data-testid="repo-create-github-token" />
+                </SettingsHintedField>
             </MudItem>
         </MudGrid>
     </MudPaper>

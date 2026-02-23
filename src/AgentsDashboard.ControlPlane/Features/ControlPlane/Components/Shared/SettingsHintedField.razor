@@ -1,0 +1,25 @@
+@namespace AgentsDashboard.ControlPlane.Components.Shared
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="@ContainerClass">
+    <div class="settings-hinted-field-content">
+        @ChildContent
+    </div>
+    <SettingsHintIcon Text="@Hint" Placement="@Placement" DataTestId="@DataTestId" />
+</MudStack>
+
+@code {
+    [Parameter]
+    public required RenderFragment ChildContent { get; set; }
+
+    [Parameter]
+    public string Hint { get; set; } = string.Empty;
+
+    [Parameter]
+    public Placement Placement { get; set; } = Placement.Right;
+
+    [Parameter]
+    public string ContainerClass { get; set; } = "mb-2";
+
+    [Parameter]
+    public string? DataTestId { get; set; }
+}

@@ -8,6 +8,9 @@
 <PageTitle>Sound Settings - AgentsDashboard</PageTitle>
 
 <MudText Typo="Typo.h4" Class="mb-4">Sound Settings</MudText>
+<MudText Typo="Typo.body2" Class="mb-3">
+    Configure completion audio behavior for succeeded, failed, and cancelled runs.
+</MudText>
 
 @if (_loading)
 {
@@ -15,30 +18,46 @@
 }
 else
 {
+    <SettingsActionBar IsDirty="@HasUnsavedChanges"
+                       IsSaving="_saving"
+                       SaveLabel="Save Settings"
+                       OnSave="SaveAsync"
+                       OnRevert="RevertChangesAsync"
+                       OnResetDefaults="ResetToDefaultsAsync" />
     <MudGrid>
         <MudItem xs="12" md="6" lg="4">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Audio Engine</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                    <MudText Typo="Typo.h6">Audio Engine</MudText>
+                    <SettingsHintIcon Text="Global toggle and engine metadata for run completion audio." />
+                </MudStack>
                 <MudText Typo="Typo.body2" Class="mb-2">Version</MudText>
                 <MudChip T="string" Color="Color.Info" Variant="Variant.Text">@_info?.Version</MudChip>
-                <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.Enabled" Class="mt-3">
-                    Play sound when a task ends
-                </MudSwitch>
+                <SettingsHintedField ContainerClass="mt-3" Hint="Master switch for all run completion sounds.">
+                    <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.Enabled">
+                        Play sound when a task ends
+                    </MudSwitch>
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6" lg="4">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Profile</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                    <MudText Typo="Typo.h6">Profile</MudText>
+                    <SettingsHintIcon Text="Profile defines tone style for all completion sounds." />
+                </MudStack>
                 <MudText Typo="Typo.body2" Class="mb-2">Choose a tone profile.</MudText>
-                <MudSelect T="string" Label="Profile" Variant="Variant.Outlined"
-                           @bind-Value="_settings.SelectedProfile"
-                           Class="mud-width-full mb-3">
-                    @foreach (var profile in _info?.Profiles ?? [])
-                    {
-                        <MudSelectItem Value="@profile.Id">@profile.Label</MudSelectItem>
-                    }
-                </MudSelect>
+                <SettingsHintedField ContainerClass="" Hint="Switch profile to change the sound character without changing trigger states.">
+                    <MudSelect T="string" Label="Profile" Variant="Variant.Outlined"
+                               @bind-Value="_settings.SelectedProfile"
+                               Class="mud-width-full mb-3">
+                        @foreach (var profile in _info?.Profiles ?? [])
+                        {
+                            <MudSelectItem Value="@profile.Id">@profile.Label</MudSelectItem>
+                        }
+                    </MudSelect>
+                </SettingsHintedField>
 
                 <MudText Typo="Typo.body2" Class="mb-2">
                     @(_info?.Profiles.FirstOrDefault(p => string.Equals(p.Id, _settings.SelectedProfile, StringComparison.OrdinalIgnoreCase))?.Description)
@@ -48,20 +67,28 @@ else
 
         <MudItem xs="12" md="6" lg="4">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Volume</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                    <MudText Typo="Typo.h6">Volume</MudText>
+                    <SettingsHintIcon Text="Volume applies to generated completion tones only." />
+                </MudStack>
                 <MudText Typo="Typo.body2" Class="mb-2">Current volume: @Math.Round(_settings.Volume * 100, 0)%</MudText>
-                <MudSlider T="double" Min="0"
-                                 Max="1"
-                                 Step="0.01"
-                                 @bind-Value="_settings.Volume"
-                                 Class="mud-width-full" />
+                <SettingsHintedField ContainerClass="" Hint="0 is mute and 1 is maximum output volume.">
+                    <MudSlider T="double" Min="0"
+                                     Max="1"
+                                     Step="0.01"
+                                     @bind-Value="_settings.Volume"
+                                     Class="mud-width-full" />
+                </SettingsHintedField>
                 <MudText Typo="Typo.caption" Class="d-block mt-1">0% muted, 100% max.</MudText>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6" lg="4">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Play State</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                    <MudText Typo="Typo.h6">Play State</MudText>
+                    <SettingsHintIcon Text="Choose which terminal run states trigger playback." />
+                </MudStack>
                 <MudText Typo="Typo.body2" Class="mb-2">Pick which run completion states should trigger audio.</MudText>
                 <MudStack Spacing="1">
                     <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.PlaySucceeded">Succeeded</MudSwitch>
@@ -73,16 +100,21 @@ else
 
         <MudItem xs="12" md="6" lg="4">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Sound Preview</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                    <MudText Typo="Typo.h6">Sound Preview</MudText>
+                    <SettingsHintIcon Text="Preview verifies browser audio permissions and the selected profile/state behavior." />
+                </MudStack>
                 <MudText Typo="Typo.body2" Class="mb-2">Play a sample without waiting for a run.</MudText>
-                <MudSelect T="string" Label="Preview state" Variant="Variant.Outlined"
-                           @bind-Value="_previewState"
-                           Class="mud-width-full mb-3">
-                    @foreach (var state in _previewStateOptions)
-                    {
-                        <MudSelectItem Value="@state">@state</MudSelectItem>
-                    }
-                </MudSelect>
+                <SettingsHintedField ContainerClass="" Hint="Preview uses selected profile and current sound settings for this state.">
+                    <MudSelect T="string" Label="Preview state" Variant="Variant.Outlined"
+                               @bind-Value="_previewState"
+                               Class="mud-width-full mb-3">
+                        @foreach (var state in _previewStateOptions)
+                        {
+                            <MudSelectItem Value="@state">@state</MudSelectItem>
+                        }
+                    </MudSelect>
+                </SettingsHintedField>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
                            OnClick="TestAsync" Disabled="_testing">
                     @if (_testing)
@@ -95,16 +127,13 @@ else
         </MudItem>
 
         <MudItem xs="12">
-            <MudStack Row Spacing="2">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
-                           OnClick="SaveAsync" Disabled="_saving">
-                    @if (_saving)
-                    {
-                        <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
-                    }
-                    Save Settings
-                </MudButton>
-            </MudStack>
+            <SettingsActionBar IsDirty="@HasUnsavedChanges"
+                               IsSaving="_saving"
+                               SaveLabel="Save Settings"
+                               Class="mt-2"
+                               OnSave="SaveAsync"
+                               OnRevert="RevertChangesAsync"
+                               OnResetDefaults="ResetToDefaultsAsync" />
         </MudItem>
     </MudGrid>
 }
@@ -117,7 +146,9 @@ else
     private bool _testing;
     private string _previewState = "succeeded";
     private RunCompletionAudioSettings _settings = new();
+    private RunCompletionAudioSettings _savedSettings = new();
     private RunCompletionAudioInfo? _info;
+    private bool HasUnsavedChanges => !AreSettingsEqual(_settings, _savedSettings);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -137,12 +168,14 @@ else
             _info = await JS.InvokeAsync<RunCompletionAudioInfo>("agentsDashboard.getRunCompletionAudioInfo");
             var settings = await JS.InvokeAsync<RunCompletionAudioSettings>("agentsDashboard.getRunCompletionAudioSettings");
             _settings = Normalize(settings ?? new RunCompletionAudioSettings(), _info);
+            _savedSettings = CloneSettings(_settings);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Failed to load sound settings: {ex.Message}", Severity.Error);
             _info = GetFallbackInfo();
             _settings = Normalize(_settings, _info);
+            _savedSettings = CloneSettings(_settings);
         }
         finally
         {
@@ -160,6 +193,7 @@ else
         {
             _settings = Normalize(_settings, _info ?? GetFallbackInfo());
             _settings = await JS.InvokeAsync<RunCompletionAudioSettings>("agentsDashboard.setRunCompletionAudioSettings", _settings);
+            _savedSettings = CloneSettings(_settings);
             Snackbar.Add("Sound settings saved", Severity.Success);
         }
         catch (Exception ex)
@@ -192,6 +226,18 @@ else
             _testing = false;
             StateHasChanged();
         }
+    }
+
+    private Task RevertChangesAsync()
+    {
+        _settings = CloneSettings(_savedSettings);
+        return Task.CompletedTask;
+    }
+
+    private Task ResetToDefaultsAsync()
+    {
+        _settings = Normalize(new RunCompletionAudioSettings(), _info ?? GetFallbackInfo());
+        return Task.CompletedTask;
     }
 
     private static RunCompletionAudioSettings Normalize(RunCompletionAudioSettings settings, RunCompletionAudioInfo? info = null)
@@ -246,5 +292,28 @@ else
         public bool PlaySucceeded { get; set; } = true;
         public bool PlayFailed { get; set; } = true;
         public bool PlayCancelled { get; set; } = true;
+    }
+
+    private static RunCompletionAudioSettings CloneSettings(RunCompletionAudioSettings source)
+    {
+        return new RunCompletionAudioSettings
+        {
+            Enabled = source.Enabled,
+            Volume = source.Volume,
+            SelectedProfile = source.SelectedProfile,
+            PlaySucceeded = source.PlaySucceeded,
+            PlayFailed = source.PlayFailed,
+            PlayCancelled = source.PlayCancelled
+        };
+    }
+
+    private static bool AreSettingsEqual(RunCompletionAudioSettings left, RunCompletionAudioSettings right)
+    {
+        return left.Enabled == right.Enabled
+            && Math.Abs(left.Volume - right.Volume) < 0.0001
+            && string.Equals(left.SelectedProfile, right.SelectedProfile, StringComparison.Ordinal)
+            && left.PlaySucceeded == right.PlaySucceeded
+            && left.PlayFailed == right.PlayFailed
+            && left.PlayCancelled == right.PlayCancelled;
     }
 }

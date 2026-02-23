@@ -99,3 +99,39 @@ for (const setting of settingsSideNavTests)
     await expect(page.getByRole('heading', { name: setting.heading })).toBeVisible();
   });
 }
+
+const settingsHintPages = [
+  '/settings/task-runtimes',
+  '/settings/system',
+  '/settings/mcp',
+  '/settings/sounds',
+  '/settings/skills',
+  '/settings/repositories',
+  '/settings/alerts',
+  '/settings/findings',
+  '/settings/runs',
+  '/settings/image-builder'
+];
+
+for (const path of settingsHintPages)
+{
+  test(`settings hints render on ${path}`, async ({ page }) =>
+  {
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.settings-hint-icon').first()).toBeVisible();
+  });
+}
+
+test('system settings action bar tracks dirty and revert state', async ({ page }) =>
+{
+  await page.goto('/settings/system', { waitUntil: 'domcontentloaded' });
+
+  const retentionInput = page.getByLabel('Log retention (days)');
+  await expect(retentionInput).toBeVisible();
+
+  await retentionInput.fill('31');
+  await expect(page.getByText('Unsaved changes').first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Revert' }).first().click();
+  await expect(page.getByText('All changes saved').first()).toBeVisible();
+});

@@ -1,0 +1,21 @@
+@namespace AgentsDashboard.ControlPlane.Components.Shared
+
+<MudTooltip Text="@Text" Placement="@Placement">
+    <MudIconButton Icon="@Icons.Material.Filled.Info"
+                   Size="Size.Small"
+                   Color="Color.Info"
+                   Class="settings-hint-icon"
+                   aria-label="More information"
+                   data-testid="@DataTestId" />
+</MudTooltip>
+
+@code {
+    [Parameter]
+    public string Text { get; set; } = string.Empty;
+
+    [Parameter]
+    public Placement Placement { get; set; } = Placement.Right;
+
+    [Parameter]
+    public string? DataTestId { get; set; }
+}

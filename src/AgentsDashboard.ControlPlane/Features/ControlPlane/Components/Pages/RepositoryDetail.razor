@@ -23,7 +23,10 @@
 else
 {
     <MudStack Spacing="2">
-        <MudText Typo="Typo.h4">@_repository.Name</MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudText Typo="Typo.h4">@_repository.Name</MudText>
+            <SettingsHintIcon Text="Repository-level control center for task defaults, skills, instructions, and secrets." />
+        </MudStack>
         <MudText Typo="Typo.subtitle2">@_repository.GitUrl</MudText>
         <MudText Typo="Typo.caption">@_repository.LocalPath</MudText>
 
@@ -39,27 +42,40 @@ else
         <MudTabs Elevation="1" Rounded>
             <MudTabPanel Text="Tasks">
                 <MudPaper Class="pa-4 mb-3" Elevation="1">
-                    <MudText Typo="Typo.subtitle1" Class="mb-2">Prompt Skills</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                        <MudText Typo="Typo.subtitle1">Prompt Skills</MudText>
+                        <SettingsHintIcon Text="Repository prompt skills supplement global skills and are available via slash autocomplete." />
+                    </MudStack>
                     <MudText Typo="Typo.body2" Class="mb-3">
                         Type <code>/</code> in the task prompt editor to autocomplete repository and global skills.
                     </MudText>
                     <MudGrid>
                         <MudItem xs="12" md="4">
-                            <MudTextField @bind-Value="_promptSkillName" Label="Skill Name" />
+                            <SettingsHintedField ContainerClass="" Hint="Display name used in the repository skills table.">
+                                <MudTextField @bind-Value="_promptSkillName" Label="Skill Name" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="4">
-                            <MudTextField @bind-Value="_promptSkillTrigger" Label="Trigger (without /)" />
+                            <SettingsHintedField ContainerClass="" Hint="Slash trigger entered without '/' (for example 'handoff').">
+                                <MudTextField @bind-Value="_promptSkillTrigger" Label="Trigger (without /)" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="4" Class="d-flex align-center">
-                            <MudSwitch @bind-Value="_promptSkillEnabled" Label="Enabled" />
+                            <SettingsHintedField ContainerClass="" Hint="Disabled skills stay in storage but are excluded from autocomplete.">
+                                <MudSwitch @bind-Value="_promptSkillEnabled" Label="Enabled" />
+                            </SettingsHintedField>
                         </MudItem>
                     </MudGrid>
                     <MudGrid Class="mt-2">
                         <MudItem xs="12">
-                            <MudTextField @bind-Value="_promptSkillDescription" Label="Description" />
+                            <SettingsHintedField ContainerClass="" Hint="Short description shown to operators when selecting the skill.">
+                                <MudTextField @bind-Value="_promptSkillDescription" Label="Description" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12">
-                            <MudTextField @bind-Value="_promptSkillContent" Label="Skill Content" Lines="6" />
+                            <SettingsHintedField ContainerClass="" Hint="Prompt payload injected when this skill is selected.">
+                                <MudTextField @bind-Value="_promptSkillContent" Label="Skill Content" Lines="6" />
+                            </SettingsHintedField>
                         </MudItem>
                     </MudGrid>
                     <MudStack Row Spacing="2" Class="mt-3">
@@ -98,37 +114,52 @@ else
                 </MudPaper>
 
                 <MudPaper Class="pa-4 mb-3">
-                    <MudText Typo="Typo.h6" Class="mb-3">Task Defaults</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-3">
+                        <MudText Typo="Typo.h6">Task Defaults</MudText>
+                        <SettingsHintIcon Text="Defaults are applied when creating new repository tasks and can still be overridden per task." />
+                    </MudStack>
                     <MudGrid>
                         <MudItem xs="12" md="3">
-                            <MudSelect T="TaskKind" @bind-Value="_taskDefaultsKind" Label="Kind">
-                                <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
-                                <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
-                            </MudSelect>
+                            <SettingsHintedField ContainerClass="" Hint="One Shot runs on demand, Event Driven can be scheduled or triggered by events.">
+                                <MudSelect T="TaskKind" @bind-Value="_taskDefaultsKind" Label="Kind">
+                                    <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
+                                    <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
+                                </MudSelect>
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="3">
-                            <MudSelect T="string" @bind-Value="_taskDefaultsHarness" Label="Harness">
-                                <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
-                                <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
-                            </MudSelect>
+                            <SettingsHintedField ContainerClass="" Hint="Execution harness used by default for tasks in this repository.">
+                                <MudSelect T="string" @bind-Value="_taskDefaultsHarness" Label="Harness">
+                                    <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
+                                    <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
+                                </MudSelect>
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="3">
-                            <MudSelect T="HarnessExecutionMode" @bind-Value="_taskDefaultsExecutionMode" Label="Default Mode">
-                                <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
-                                <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
-                                <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
-                            </MudSelect>
+                            <SettingsHintedField ContainerClass="" Hint="Default execution mode for newly created tasks.">
+                                <MudSelect T="HarnessExecutionMode" @bind-Value="_taskDefaultsExecutionMode" Label="Default Mode">
+                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
+                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
+                                    <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
+                                </MudSelect>
+                            </SettingsHintedField>
                         </MudItem>
                     </MudGrid>
                     <MudGrid Class="mt-2">
                         <MudItem xs="12" md="10">
-                            <MudTextField @bind-Value="_taskDefaultsCommand" Label="Shell Command" />
+                            <SettingsHintedField ContainerClass="" Hint="Command template executed by the task runtime.">
+                                <MudTextField @bind-Value="_taskDefaultsCommand" Label="Shell Command" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="1" Class="d-flex align-center">
-                            <MudSwitch @bind-Value="_taskDefaultsAutoPr" Label="Auto PR" />
+                            <SettingsHintedField ContainerClass="" Hint="Automatically open PR when task result includes patch output.">
+                                <MudSwitch @bind-Value="_taskDefaultsAutoPr" Label="Auto PR" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="1" Class="d-flex align-center">
-                            <MudSwitch @bind-Value="_taskDefaultsEnabled" Label="Enabled" />
+                            <SettingsHintedField ContainerClass="" Hint="Disable to keep default template stored without applying it to new tasks.">
+                                <MudSwitch @bind-Value="_taskDefaultsEnabled" Label="Enabled" />
+                            </SettingsHintedField>
                         </MudItem>
                     </MudGrid>
                     <MudStack Row Spacing="2" Class="mt-3">
@@ -312,19 +343,30 @@ else
 
             <MudTabPanel Text="Secrets & Webhooks">
                 <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.h6" Class="mb-3">Repository Secrets</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-3">
+                        <MudText Typo="Typo.h6">Repository Secrets</MudText>
+                        <SettingsHintIcon Text="Secrets are encrypted at rest and injected into runtime environments for this repository." />
+                    </MudStack>
                         <MudGrid>
                         <MudItem xs="12" md="6">
-                            <MudTextField @bind-Value="_githubToken" Label="GitHub Token (GH_TOKEN)" InputType="InputType.Password" />
+                            <SettingsHintedField ContainerClass="" Hint="Used for git operations against private repositories and API actions.">
+                                <MudTextField @bind-Value="_githubToken" Label="GitHub Token (GH_TOKEN)" InputType="InputType.Password" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="6">
-                            <MudTextField @bind-Value="_codexToken" Label="Codex API Key" InputType="InputType.Password" />
+                            <SettingsHintedField ContainerClass="" Hint="API key passed to Codex harness executions.">
+                                <MudTextField @bind-Value="_codexToken" Label="Codex API Key" InputType="InputType.Password" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="6">
-                            <MudTextField @bind-Value="_opencodeToken" Label="OpenCode API Key" InputType="InputType.Password" />
+                            <SettingsHintedField ContainerClass="" Hint="API key passed to OpenCode harness executions.">
+                                <MudTextField @bind-Value="_opencodeToken" Label="OpenCode API Key" InputType="InputType.Password" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="6">
-                            <MudTextField @bind-Value="_llmTornadoToken" Label="LlmTornado Key (ANTHROPIC_AUTH_TOKEN)" InputType="InputType.Password" />
+                            <SettingsHintedField ContainerClass="" Hint="Key used by LlmTornado-backed features requiring Anthropic auth.">
+                                <MudTextField @bind-Value="_llmTornadoToken" Label="LlmTornado Key (ANTHROPIC_AUTH_TOKEN)" InputType="InputType.Password" />
+                            </SettingsHintedField>
                         </MudItem>
                     </MudGrid>
                     <MudButton Variant="Variant.Filled"

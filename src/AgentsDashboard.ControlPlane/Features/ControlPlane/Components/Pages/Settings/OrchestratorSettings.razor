@@ -21,6 +21,9 @@
         Refresh
     </MudButton>
 </MudStack>
+<MudText Typo="Typo.body2" Class="mb-3">
+    Controls how runtimes are admitted, scaled, recycled, and cleaned up. Hover the info icons for operational impact.
+</MudText>
 
 @if (_loading)
 {
@@ -28,112 +31,258 @@
 }
 else
 {
+    <SettingsActionBar IsDirty="@HasUnsavedChanges"
+                       IsSaving="_saving"
+                       SaveLabel="Save Task Runtime Settings"
+                       OnSave="SaveAsync"
+                       OnRevert="RevertChangesAsync"
+                       OnResetDefaults="ResetToDefaults" />
     <MudGrid>
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Capacity & Admission</MudText>
-                <MudNumericField T="int" Label="Max Active Task Runtimes" Variant="Variant.Outlined" @bind-Value="_settings.MaxActiveTaskRuntimes" Min="1" Max="512" Class="mb-2" />
-                <MudNumericField T="int" Label="Default Task Parallel Runs" Variant="Variant.Outlined" @bind-Value="_settings.DefaultTaskParallelRuns" Min="1" Max="64" Class="mb-2" />
-                <MudNumericField T="int" Label="Task Runtime Inactive Timeout (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeInactiveTimeoutMinutes" Min="1" Max="1440" Class="mb-2" />
-                <MudNumericField T="int" Label="Max Queue Depth" Variant="Variant.Outlined" @bind-Value="_settings.MaxQueueDepth" Min="1" Max="50000" Class="mb-2" />
-                <MudNumericField T="int" Label="Queue Wait Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.QueueWaitTimeoutSeconds" Min="5" Max="7200" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Capacity & Admission</MudText>
+                    <SettingsHintIcon Text="Admission limits protect the orchestrator from overload. Higher values increase throughput and resource pressure." />
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mb-3 d-block">Set queue and runtime limits before tuning scaling behavior.</MudText>
+                <SettingsHintedField Hint="Hard cap for runtimes allowed at once. Increase only if host CPU and memory have headroom.">
+                    <MudNumericField T="int" Label="Max Active Task Runtimes" Variant="Variant.Outlined" @bind-Value="_settings.MaxActiveTaskRuntimes" Min="1" Max="512" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Default parallel runs for tasks that do not define their own value.">
+                    <MudNumericField T="int" Label="Default Task Parallel Runs" Variant="Variant.Outlined" @bind-Value="_settings.DefaultTaskParallelRuns" Min="1" Max="64" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="How long an idle runtime can stay alive before it is considered inactive. Lower values free resources faster.">
+                    <MudNumericField T="int" Label="Task Runtime Inactive Timeout (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeInactiveTimeoutMinutes" Min="1" Max="1440" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum queued work items waiting for runtime capacity. New work is rejected once this is reached.">
+                    <MudNumericField T="int" Label="Max Queue Depth" Variant="Variant.Outlined" @bind-Value="_settings.MaxQueueDepth" Min="1" Max="50000" />
+                </SettingsHintedField>
+                <SettingsHintedField ContainerClass="" Hint="How long a queued run can wait for a slot before timing out.">
+                    <MudNumericField T="int" Label="Queue Wait Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.QueueWaitTimeoutSeconds" Min="5" Max="7200" />
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Image Lifecycle</MudText>
-                <MudSelect T="TaskRuntimeImagePolicy" Label="Task Runtime Image Policy" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeImagePolicy" Class="mb-2">
-                    @foreach (var policy in Enum.GetValues<TaskRuntimeImagePolicy>())
-                    {
-                        <MudSelectItem T="TaskRuntimeImagePolicy" Value="@policy">@policy</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudTextField T="string" Label="Image Registry (optional)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeImageRegistry" Class="mb-2" />
-                <MudTextField T="string" Label="Canary Image (optional)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeCanaryImage" Class="mb-2" />
-                <MudTextField T="string" Label="Dockerfile Path (optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerDockerfilePath" Class="mb-2" />
-                <MudTextField T="string" Label="Build Context Path (optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerDockerBuildContextPath" Class="mb-2" />
-                <MudNumericField T="int" Label="Max Concurrent Pulls" Variant="Variant.Outlined" @bind-Value="_settings.MaxConcurrentPulls" Min="1" Max="16" Class="mb-2" />
-                <MudNumericField T="int" Label="Max Concurrent Builds" Variant="Variant.Outlined" @bind-Value="_settings.MaxConcurrentBuilds" Min="1" Max="8" Class="mb-2" />
-                <MudNumericField T="int" Label="Pull Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.ImagePullTimeoutSeconds" Min="10" Max="3600" Class="mb-2" />
-                <MudNumericField T="int" Label="Build Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.ImageBuildTimeoutSeconds" Min="30" Max="7200" Class="mb-2" />
-                <MudNumericField T="int" Label="Image Failure Cooldown (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.ImageFailureCooldownMinutes" Min="1" Max="240" Class="mb-2" />
-                <MudNumericField T="int" Label="Canary Percent" Variant="Variant.Outlined" @bind-Value="_settings.CanaryPercent" Min="0" Max="100" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Image Lifecycle</MudText>
+                    <SettingsHintIcon Text="These settings control how runtime images are selected, pulled, built, and rolled out." />
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mb-3 d-block">Use conservative concurrency/timeouts if registry or Docker host is unstable.</MudText>
+                <SettingsHintedField Hint="Policy used to decide whether local cache or remote images are preferred.">
+                    <MudSelect T="TaskRuntimeImagePolicy" Label="Task Runtime Image Policy" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeImagePolicy">
+                        @foreach (var policy in Enum.GetValues<TaskRuntimeImagePolicy>())
+                        {
+                            <MudSelectItem T="TaskRuntimeImagePolicy" Value="@policy">@policy</MudSelectItem>
+                        }
+                    </MudSelect>
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Optional registry prefix used for runtime image resolution. Leave empty to rely on defaults.">
+                    <MudTextField T="string" Label="Image Registry (optional)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeImageRegistry" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Optional canary image tag used for staged rollout testing.">
+                    <MudTextField T="string" Label="Canary Image (optional)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRuntimeCanaryImage" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Optional Dockerfile path used when the orchestrator needs to build the runtime image.">
+                    <MudTextField T="string" Label="Dockerfile Path (optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerDockerfilePath" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Optional build context path paired with the Dockerfile path.">
+                    <MudTextField T="string" Label="Build Context Path (optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerDockerBuildContextPath" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum simultaneous image pulls. Too high can overload registry/network.">
+                    <MudNumericField T="int" Label="Max Concurrent Pulls" Variant="Variant.Outlined" @bind-Value="_settings.MaxConcurrentPulls" Min="1" Max="16" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum simultaneous image builds. Increase carefully on shared Docker hosts.">
+                    <MudNumericField T="int" Label="Max Concurrent Builds" Variant="Variant.Outlined" @bind-Value="_settings.MaxConcurrentBuilds" Min="1" Max="8" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum time allowed for one pull operation.">
+                    <MudNumericField T="int" Label="Pull Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.ImagePullTimeoutSeconds" Min="10" Max="3600" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum time allowed for one build operation.">
+                    <MudNumericField T="int" Label="Build Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.ImageBuildTimeoutSeconds" Min="30" Max="7200" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Cooldown before retrying image resolution after a failure.">
+                    <MudNumericField T="int" Label="Image Failure Cooldown (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.ImageFailureCooldownMinutes" Min="1" Max="240" />
+                </SettingsHintedField>
+                <SettingsHintedField ContainerClass="" Hint="Traffic share for canary image when canary mode is active.">
+                    <MudNumericField T="int" Label="Canary Percent" Variant="Variant.Outlined" @bind-Value="_settings.CanaryPercent" Min="0" Max="100" />
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Reliability Budgets</MudText>
-                <MudNumericField T="int" Label="Max Start Attempts / 10m" Variant="Variant.Outlined" @bind-Value="_settings.MaxWorkerStartAttemptsPer10Min" Min="1" Max="1000" Class="mb-2" />
-                <MudNumericField T="int" Label="Max Failed Starts / 10m" Variant="Variant.Outlined" @bind-Value="_settings.MaxFailedStartsPer10Min" Min="1" Max="1000" Class="mb-2" />
-                <MudNumericField T="int" Label="Cooldown Minutes" Variant="Variant.Outlined" @bind-Value="_settings.CooldownMinutes" Min="1" Max="240" Class="mb-2" />
-                <MudNumericField T="int" Label="Container Start Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.ContainerStartTimeoutSeconds" Min="5" Max="600" Class="mb-2" />
-                <MudNumericField T="int" Label="Container Stop Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.ContainerStopTimeoutSeconds" Min="1" Max="600" Class="mb-2" />
-                <MudNumericField T="int" Label="Health Probe Interval (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.HealthProbeIntervalSeconds" Min="1" Max="300" Class="mb-2" />
-                <MudNumericField T="int" Label="Container Restart Limit" Variant="Variant.Outlined" @bind-Value="_settings.ContainerRestartLimit" Min="0" Max="100" Class="mb-2" />
-                <MudSelect T="ContainerUnhealthyAction" Label="Unhealthy Action" Variant="Variant.Outlined" @bind-Value="_settings.ContainerUnhealthyAction" Class="mb-2">
-                    @foreach (var action in Enum.GetValues<ContainerUnhealthyAction>())
-                    {
-                        <MudSelectItem T="ContainerUnhealthyAction" Value="@action">@action</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudNumericField T="int" Label="Error Burst Threshold" Variant="Variant.Outlined" @bind-Value="_settings.OrchestratorErrorBurstThreshold" Min="1" Max="10000" Class="mb-2" />
-                <MudNumericField T="int" Label="Error Cooldown Minutes" Variant="Variant.Outlined" @bind-Value="_settings.OrchestratorErrorCoolDownMinutes" Min="1" Max="240" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Reliability Budgets</MudText>
+                    <SettingsHintIcon Text="Failure budgets and health timing guardrails that prevent runaway restart loops." />
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mb-3 d-block">If aggressive values block scale-out, inspect health snapshot and failed starts counters.</MudText>
+                <SettingsHintedField Hint="Maximum runtime start attempts allowed in a rolling 10 minute window.">
+                    <MudNumericField T="int" Label="Max Start Attempts / 10m" Variant="Variant.Outlined" @bind-Value="_settings.MaxWorkerStartAttemptsPer10Min" Min="1" Max="1000" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum failed starts allowed in 10 minutes before cooldown protections apply.">
+                    <MudNumericField T="int" Label="Max Failed Starts / 10m" Variant="Variant.Outlined" @bind-Value="_settings.MaxFailedStartsPer10Min" Min="1" Max="1000" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Global cooldown after reliability budget is exceeded.">
+                    <MudNumericField T="int" Label="Cooldown Minutes" Variant="Variant.Outlined" @bind-Value="_settings.CooldownMinutes" Min="1" Max="240" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum wait for container startup readiness checks.">
+                    <MudNumericField T="int" Label="Container Start Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.ContainerStartTimeoutSeconds" Min="5" Max="600" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Grace period for clean container shutdown before force actions.">
+                    <MudNumericField T="int" Label="Container Stop Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.ContainerStopTimeoutSeconds" Min="1" Max="600" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Interval between runtime health probes. Lower intervals detect issues sooner but increase probing load.">
+                    <MudNumericField T="int" Label="Health Probe Interval (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.HealthProbeIntervalSeconds" Min="1" Max="300" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="How many restart attempts are allowed before unhealthy action is applied.">
+                    <MudNumericField T="int" Label="Container Restart Limit" Variant="Variant.Outlined" @bind-Value="_settings.ContainerRestartLimit" Min="0" Max="100" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Action taken when runtime remains unhealthy after restart attempts.">
+                    <MudSelect T="ContainerUnhealthyAction" Label="Unhealthy Action" Variant="Variant.Outlined" @bind-Value="_settings.ContainerUnhealthyAction">
+                        @foreach (var action in Enum.GetValues<ContainerUnhealthyAction>())
+                        {
+                            <MudSelectItem T="ContainerUnhealthyAction" Value="@action">@action</MudSelectItem>
+                        }
+                    </MudSelect>
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Error count threshold used to trigger orchestrator-level cooldown behavior.">
+                    <MudNumericField T="int" Label="Error Burst Threshold" Variant="Variant.Outlined" @bind-Value="_settings.OrchestratorErrorBurstThreshold" Min="1" Max="10000" />
+                </SettingsHintedField>
+                <SettingsHintedField ContainerClass="" Hint="How long orchestrator remains in cooldown after crossing burst threshold.">
+                    <MudNumericField T="int" Label="Error Cooldown Minutes" Variant="Variant.Outlined" @bind-Value="_settings.OrchestratorErrorCoolDownMinutes" Min="1" Max="240" />
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Lifecycle & Guardrails</MudText>
-                <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableDraining" Label="Enable Draining" Class="mb-1" />
-                <MudNumericField T="int" Label="Drain Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.DrainTimeoutSeconds" Min="5" Max="7200" Class="mb-2" />
-                <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableAutoRecycle" Label="Enable Auto Recycle" Class="mb-1" />
-                <MudNumericField T="int" Label="Recycle After Runs" Variant="Variant.Outlined" @bind-Value="_settings.RecycleAfterRuns" Min="1" Max="100000" Class="mb-2" />
-                <MudNumericField T="int" Label="Recycle After Uptime (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.RecycleAfterUptimeMinutes" Min="10" Max="10080" Class="mb-2" />
-                <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableContainerAutoCleanup" Label="Enable Container Auto Cleanup" Class="mb-2" />
-                <MudTextField T="string" Label="Worker CPU Limit (cores, optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerCpuLimit" Class="mb-2" />
-                <MudNumericField T="int" Label="Worker Memory Limit (MB, 0=unlimited)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerMemoryLimitMb" Min="0" Max="1048576" Class="mb-2" />
-                <MudNumericField T="int" Label="Worker PIDs Limit (0=unlimited)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerPidsLimit" Min="0" Max="100000" Class="mb-2" />
-                <MudNumericField T="int" Label="Worker FD Limit (0=unlimited)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerFileDescriptorLimit" Min="0" Max="1048576" Class="mb-2" />
-                <MudNumericField T="int" Label="Run Hard Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.RunHardTimeoutSeconds" Min="30" Max="86400" Class="mb-2" />
-                <MudNumericField T="int" Label="Max Run Log Size (MB)" Variant="Variant.Outlined" @bind-Value="_settings.MaxRunLogMb" Min="1" Max="10240" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Lifecycle & Guardrails</MudText>
+                    <SettingsHintIcon Text="Lifecycle controls for draining, recycling, and hard runtime resource caps." />
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mb-3 d-block">Use these values to control runtime churn and protect host stability.</MudText>
+                <SettingsHintedField Hint="When enabled, runtimes can be marked for drain and stop receiving new work.">
+                    <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableDraining" Label="Enable Draining" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum time a runtime has to complete draining before forced handling.">
+                    <MudNumericField T="int" Label="Drain Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.DrainTimeoutSeconds" Min="5" Max="7200" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Enable periodic automatic runtime recycling.">
+                    <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableAutoRecycle" Label="Enable Auto Recycle" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Recycle a runtime after this many completed runs.">
+                    <MudNumericField T="int" Label="Recycle After Runs" Variant="Variant.Outlined" @bind-Value="_settings.RecycleAfterRuns" Min="1" Max="100000" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Recycle a runtime after this uptime even if run count threshold is not hit.">
+                    <MudNumericField T="int" Label="Recycle After Uptime (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.RecycleAfterUptimeMinutes" Min="10" Max="10080" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Automatically clean up container resources after runtime shutdown.">
+                    <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableContainerAutoCleanup" Label="Enable Container Auto Cleanup" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Optional CPU quota in cores (for example 1, 1.5, 2). Empty means no explicit CPU cap.">
+                    <MudTextField T="string" Label="Worker CPU Limit (cores, optional)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerCpuLimit" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Container memory limit in MB. Zero means unlimited.">
+                    <MudNumericField T="int" Label="Worker Memory Limit (MB, 0=unlimited)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerMemoryLimitMb" Min="0" Max="1048576" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Process count limit inside the container. Zero means unlimited.">
+                    <MudNumericField T="int" Label="Worker PIDs Limit (0=unlimited)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerPidsLimit" Min="0" Max="100000" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="File descriptor limit inside the container. Zero means unlimited.">
+                    <MudNumericField T="int" Label="Worker FD Limit (0=unlimited)" Variant="Variant.Outlined" @bind-Value="_settings.WorkerFileDescriptorLimit" Min="0" Max="1048576" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Absolute run timeout. Run is terminated once this limit is reached.">
+                    <MudNumericField T="int" Label="Run Hard Timeout (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.RunHardTimeoutSeconds" Min="30" Max="86400" />
+                </SettingsHintedField>
+                <SettingsHintedField ContainerClass="" Hint="Maximum log size retained per run. Large values increase storage pressure.">
+                    <MudNumericField T="int" Label="Max Run Log Size (MB)" Variant="Variant.Outlined" @bind-Value="_settings.MaxRunLogMb" Min="1" Max="10240" />
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12" md="6">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Data Retention & Cleanup</MudText>
-                <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableTaskAutoCleanup" Label="Enable Task Auto Cleanup" Class="mb-2" />
-                <MudNumericField T="int" Label="Cleanup Interval (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.CleanupIntervalMinutes" Min="1" Max="1440" Class="mb-2" />
-                <MudNumericField T="int" Label="Task Retention (days)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRetentionDays" Min="1" Max="3650" Class="mb-2" />
-                <MudNumericField T="int" Label="Protected Window (days)" Variant="Variant.Outlined" @bind-Value="_settings.CleanupProtectedDays" Min="0" Max="3650" Class="mb-2" />
-                <MudNumericField T="int" Label="Disabled Task Inactivity (days, 0 disables)" Variant="Variant.Outlined" @bind-Value="_settings.DisabledTaskInactivityDays" Min="0" Max="3650" Class="mb-2" />
-                <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.CleanupExcludeTasksWithOpenFindings" Label="Exclude Tasks With Open Findings" Class="mb-2" />
-                <MudNumericField T="int" Label="DB Size Soft Limit (GB)" Variant="Variant.Outlined" @bind-Value="_settings.DbSizeSoftLimitGb" Min="1" Max="16384" Class="mb-2" />
-                <MudNumericField T="int" Label="DB Size Target (GB)" Variant="Variant.Outlined" @bind-Value="_settings.DbSizeTargetGb" Min="1" Max="16384" Class="mb-2" />
-                <MudNumericField T="int" Label="Max Tasks Deleted Per Tick" Variant="Variant.Outlined" @bind-Value="_settings.MaxTasksDeletedPerTick" Min="1" Max="2000" Class="mb-2" />
-                <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableVacuumAfterPressureCleanup" Label="Enable VACUUM After Pressure Cleanup" Class="mb-2" />
-                <MudNumericField T="int" Label="VACUUM Minimum Deleted Rows" Variant="Variant.Outlined" @bind-Value="_settings.VacuumMinDeletedRows" Min="1" Max="50000000" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Data Retention & Cleanup</MudText>
+                    <SettingsHintIcon Text="Automated cleanup policy for old tasks and database pressure. These settings can delete data." />
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mb-3 d-block">Keep target size lower than soft limit and ensure protected window is not greater than retention.</MudText>
+                <SettingsHintedField Hint="Turns on scheduled deletion of old task data based on retention policy.">
+                    <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableTaskAutoCleanup" Label="Enable Task Auto Cleanup" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Frequency for running cleanup checks.">
+                    <MudNumericField T="int" Label="Cleanup Interval (minutes)" Variant="Variant.Outlined" @bind-Value="_settings.CleanupIntervalMinutes" Min="1" Max="1440" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum age for task data before it becomes eligible for deletion.">
+                    <MudNumericField T="int" Label="Task Retention (days)" Variant="Variant.Outlined" @bind-Value="_settings.TaskRetentionDays" Min="1" Max="3650" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Always retain the most recent N days, even if retention or pressure cleanup would remove them.">
+                    <MudNumericField T="int" Label="Protected Window (days)" Variant="Variant.Outlined" @bind-Value="_settings.CleanupProtectedDays" Min="0" Max="3650" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Delete disabled tasks after this inactivity period. Set to 0 to disable this specific rule.">
+                    <MudNumericField T="int" Label="Disabled Task Inactivity (days, 0 disables)" Variant="Variant.Outlined" @bind-Value="_settings.DisabledTaskInactivityDays" Min="0" Max="3650" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Prevents cleanup from deleting tasks that still have unresolved findings.">
+                    <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.CleanupExcludeTasksWithOpenFindings" Label="Exclude Tasks With Open Findings" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Database size threshold that triggers pressure cleanup.">
+                    <MudNumericField T="int" Label="DB Size Soft Limit (GB)" Variant="Variant.Outlined" @bind-Value="_settings.DbSizeSoftLimitGb" Min="1" Max="16384" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Target size after pressure cleanup. Must remain below soft limit.">
+                    <MudNumericField T="int" Label="DB Size Target (GB)" Variant="Variant.Outlined" @bind-Value="_settings.DbSizeTargetGb" Min="1" Max="16384" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Maximum number of tasks cleanup can delete in one cycle.">
+                    <MudNumericField T="int" Label="Max Tasks Deleted Per Tick" Variant="Variant.Outlined" @bind-Value="_settings.MaxTasksDeletedPerTick" Min="1" Max="2000" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Runs VACUUM after pressure cleanup. Use if you need to reclaim disk space immediately.">
+                    <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.EnableVacuumAfterPressureCleanup" Label="Enable VACUUM After Pressure Cleanup" />
+                </SettingsHintedField>
+                <SettingsHintedField ContainerClass="" Hint="Minimum deleted-row threshold before VACUUM is triggered.">
+                    <MudNumericField T="int" Label="VACUUM Minimum Deleted Rows" Variant="Variant.Outlined" @bind-Value="_settings.VacuumMinDeletedRows" Min="1" Max="50000000" />
+                </SettingsHintedField>
             </MudPaper>
         </MudItem>
 
         <MudItem xs="12">
             <MudPaper Elevation="2" Class="pa-4 mb-4">
-                <MudText Typo="Typo.h6" Class="mb-3">Operator Action Center</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Operator Action Center</MudText>
+                    <SettingsHintIcon Text="Manual controls for immediate operational intervention. These actions apply instantly and are not tied to Save." />
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="mb-3 d-block">Use these actions for incidents or controlled maintenance windows.</MudText>
                 <MudStack Row="true" Spacing="2" Class="mb-3">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="PauseScaleOutAsync">Pause Scale-Out</MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Success" OnClick="ResumeScaleOutAsync">Resume Scale-Out</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="ClearCooldownAsync">Clear Cooldown</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="EnsureImageAsync">Ensure Runtime Image</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="RecyclePoolAsync">Recycle Task Runtime Pool</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="RunReconciliationAsync">Run Reconciliation</MudButton>
+                    <MudTooltip Text="Stop creating additional runtimes until resumed.">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="PauseScaleOutAsync">Pause Scale-Out</MudButton>
+                    </MudTooltip>
+                    <MudTooltip Text="Allow scale-out decisions again after a pause.">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Success" OnClick="ResumeScaleOutAsync">Resume Scale-Out</MudButton>
+                    </MudTooltip>
+                    <MudTooltip Text="Clear active cooldown state from reliability budgets.">
+                        <MudButton Variant="Variant.Outlined" OnClick="ClearCooldownAsync">Clear Cooldown</MudButton>
+                    </MudTooltip>
+                    <MudTooltip Text="Force a runtime image ensure operation immediately.">
+                        <MudButton Variant="Variant.Outlined" OnClick="EnsureImageAsync">Ensure Runtime Image</MudButton>
+                    </MudTooltip>
+                    <MudTooltip Text="Mark all runtimes for recycle in the pool.">
+                        <MudButton Variant="Variant.Outlined" OnClick="RecyclePoolAsync">Recycle Task Runtime Pool</MudButton>
+                    </MudTooltip>
+                    <MudTooltip Text="Run orchestrator reconciliation now instead of waiting for the background loop.">
+                        <MudButton Variant="Variant.Outlined" OnClick="RunReconciliationAsync">Run Reconciliation</MudButton>
+                    </MudTooltip>
                 </MudStack>
 
                 <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-3">
-                    <MudTextField T="string" Label="Task Runtime ID" Variant="Variant.Outlined" @bind-Value="_workerActionId" Immediate="true" />
-                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="@string.IsNullOrWhiteSpace(_workerActionId)" OnClick="DrainWorkerAsync">Drain Runtime</MudButton>
-                    <MudButton Variant="Variant.Outlined" Disabled="@string.IsNullOrWhiteSpace(_workerActionId)" OnClick="RecycleTaskRuntimeAsync">Recycle Runtime</MudButton>
+                    <SettingsHintedField ContainerClass="mb-0" Hint="Target runtime identifier for per-runtime actions.">
+                        <MudTextField T="string" Label="Task Runtime ID" Variant="Variant.Outlined" @bind-Value="_workerActionId" Immediate="true" />
+                    </SettingsHintedField>
+                    <MudTooltip Text="Mark only the selected runtime as draining.">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="@string.IsNullOrWhiteSpace(_workerActionId)" OnClick="DrainWorkerAsync">Drain Runtime</MudButton>
+                    </MudTooltip>
+                    <MudTooltip Text="Recycle only the selected runtime by ID.">
+                        <MudButton Variant="Variant.Outlined" Disabled="@string.IsNullOrWhiteSpace(_workerActionId)" OnClick="RecycleTaskRuntimeAsync">Recycle Runtime</MudButton>
+                    </MudTooltip>
                 </MudStack>
 
                 @if (_health is not null)
@@ -184,16 +333,13 @@ else
         </MudItem>
     </MudGrid>
 
-    <MudStack Row="true" Class="mt-2">
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
-                   OnClick="SaveAsync" Disabled="_saving">
-            @if (_saving)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
-            Save Task Runtime Settings
-        </MudButton>
-    </MudStack>
+    <SettingsActionBar IsDirty="@HasUnsavedChanges"
+                       IsSaving="_saving"
+                       SaveLabel="Save Task Runtime Settings"
+                       Class="mt-2"
+                       OnSave="SaveAsync"
+                       OnRevert="RevertChangesAsync"
+                       OnResetDefaults="ResetToDefaults" />
 }
 
 @code {
@@ -201,10 +347,12 @@ else
     private bool _saving;
     private SystemSettingsDocument _document = new();
     private OrchestratorConfig _settings = new();
+    private OrchestratorConfig _savedSettings = new();
     private OrchestratorHealthSnapshot? _health;
     private string _workerActionId = string.Empty;
     private IReadOnlyList<BackgroundWorkSnapshot> _imageBackgroundWork = [];
     private Action<BackgroundWorkSnapshot>? _backgroundWorkHandler;
+    private bool HasUnsavedChanges => !AreSettingsEqual(_settings, _savedSettings);
 
     protected override async Task OnInitializedAsync()
     {
@@ -220,6 +368,7 @@ else
         {
             _document = await Store.GetSettingsAsync(CancellationToken.None);
             _settings = CloneOrchestratorSettings(_document.Orchestrator);
+            _savedSettings = CloneOrchestratorSettings(_settings);
             _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
             RefreshImageBackgroundWork();
         }
@@ -244,6 +393,7 @@ else
 
             await Store.UpdateSettingsAsync(_document, CancellationToken.None);
             RuntimeSettingsProvider.Invalidate();
+            _savedSettings = CloneOrchestratorSettings(_settings);
 
             _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
             Snackbar.Add("Orchestrator settings saved", Severity.Success);
@@ -256,6 +406,18 @@ else
         {
             _saving = false;
         }
+    }
+
+    private Task RevertChangesAsync()
+    {
+        _settings = CloneOrchestratorSettings(_savedSettings);
+        return Task.CompletedTask;
+    }
+
+    private Task ResetToDefaults()
+    {
+        _settings = new OrchestratorConfig();
+        return Task.CompletedTask;
     }
 
     private async Task PauseScaleOutAsync()
@@ -442,6 +604,11 @@ else
             EnableVacuumAfterPressureCleanup = source.EnableVacuumAfterPressureCleanup,
             VacuumMinDeletedRows = source.VacuumMinDeletedRows,
         };
+    }
+
+    private static bool AreSettingsEqual(OrchestratorConfig left, OrchestratorConfig right)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(left) == System.Text.Json.JsonSerializer.Serialize(right);
     }
 
     private static void ValidateSettings(OrchestratorConfig settings)

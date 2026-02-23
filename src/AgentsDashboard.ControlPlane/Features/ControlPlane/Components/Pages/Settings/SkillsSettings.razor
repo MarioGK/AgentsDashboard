@@ -9,7 +9,10 @@
 <PageTitle>Prompt Skills - AgentsDashboard</PageTitle>
 
 <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
-    <MudText Typo="Typo.h4">Global Prompt Skills</MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudText Typo="Typo.h4">Global Prompt Skills</MudText>
+        <SettingsHintIcon Text="Global skills are available across repositories and appear in slash-command autocomplete." />
+    </MudStack>
 </MudStack>
 
 <MudPaper Class="pa-4 mb-4">
@@ -18,21 +21,31 @@
     </MudText>
     <MudGrid>
         <MudItem xs="12" md="4">
-            <MudTextField @bind-Value="_name" Label="Skill Name" />
+            <SettingsHintedField ContainerClass="" Hint="Operator-friendly display name shown in the skills list.">
+                <MudTextField @bind-Value="_name" Label="Skill Name" />
+            </SettingsHintedField>
         </MudItem>
         <MudItem xs="12" md="4">
-            <MudTextField @bind-Value="_trigger" Label="Trigger (without /)" />
+            <SettingsHintedField ContainerClass="" Hint="Slash trigger entered without '/' (for example 'review').">
+                <MudTextField @bind-Value="_trigger" Label="Trigger (without /)" />
+            </SettingsHintedField>
         </MudItem>
         <MudItem xs="12" md="4" Class="d-flex align-center">
-            <MudSwitch @bind-Value="_enabled" Label="Enabled" />
+            <SettingsHintedField ContainerClass="" Hint="Disabled skills stay saved but no longer appear in autocomplete.">
+                <MudSwitch @bind-Value="_enabled" Label="Enabled" />
+            </SettingsHintedField>
         </MudItem>
     </MudGrid>
     <MudGrid Class="mt-2">
         <MudItem xs="12">
-            <MudTextField @bind-Value="_description" Label="Description" />
+            <SettingsHintedField ContainerClass="" Hint="Short description shown to users selecting this skill.">
+                <MudTextField @bind-Value="_description" Label="Description" />
+            </SettingsHintedField>
         </MudItem>
         <MudItem xs="12">
-            <MudTextField @bind-Value="_content" Label="Skill Content" Lines="6" />
+            <SettingsHintedField ContainerClass="" Hint="Prompt content injected when this skill is selected.">
+                <MudTextField @bind-Value="_content" Label="Skill Content" Lines="6" />
+            </SettingsHintedField>
         </MudItem>
     </MudGrid>
     <MudStack Row Spacing="2" Class="mt-3">

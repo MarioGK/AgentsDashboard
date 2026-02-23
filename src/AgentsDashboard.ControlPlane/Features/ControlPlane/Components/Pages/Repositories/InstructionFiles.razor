@@ -21,7 +21,10 @@ else
         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
             <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                 <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack" Class="instruction-back-button" />
-                <MudText Typo="Typo.h4">Instruction Files</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudText Typo="Typo.h4">Instruction Files</MudText>
+                    <SettingsHintIcon Text="Instruction files are layered into repository prompts based on priority order." />
+                </MudStack>
             </MudStack>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddInstruction">
                 Add Instruction
@@ -51,13 +54,19 @@ else
                     <MudText Typo="Typo.h6" Class="mb-3">@instruction.Name</MudText>
                     <MudGrid>
                         <MudItem xs="12" md="5">
-                            <MudTextField @bind-Value="instruction.Name" Label="Name" Variant="Variant.Outlined" />
+                            <SettingsHintedField ContainerClass="" Hint="Human-readable instruction name for operators.">
+                                <MudTextField @bind-Value="instruction.Name" Label="Name" Variant="Variant.Outlined" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="3">
-                            <MudNumericField @bind-Value="instruction.Priority" Label="Priority" Min="0" Variant="Variant.Outlined" />
+                            <SettingsHintedField ContainerClass="" Hint="Lower value is applied earlier in instruction layering.">
+                                <MudNumericField @bind-Value="instruction.Priority" Label="Priority" Min="0" Variant="Variant.Outlined" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="2" Class="d-flex align-center">
-                            <MudSwitch @bind-Value="instruction.Enabled" Label="Enabled" Color="Color.Success" />
+                            <SettingsHintedField ContainerClass="" Hint="Disabled instruction is stored but excluded from prompt composition.">
+                                <MudSwitch @bind-Value="instruction.Enabled" Label="Enabled" Color="Color.Success" />
+                            </SettingsHintedField>
                         </MudItem>
                         <MudItem xs="12" md="2" Class="d-flex align-center justify-end">
                             <MudTooltip Text="Save" Placement="Placement.Top">
@@ -72,6 +81,7 @@ else
                     <MudTextField @bind-Value="instruction.Content"
                                   Label="Content (Markdown)"
                                   Variant="Variant.Outlined"
+                                  HelperText="Markdown content injected into repository prompt context."
                                   Lines="12"
                                   AutoGrow="true"
                                   Class="mt-2" />

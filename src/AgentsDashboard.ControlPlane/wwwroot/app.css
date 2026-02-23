@@ -325,6 +325,36 @@ body,
 .settings-home-link {
     display: inline-flex;
     align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.settings-home-link-detail {
+    color: #8ea3bf;
+    font-size: 0.78rem;
+}
+
+.settings-hint-icon.mud-icon-button {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+}
+
+.settings-hinted-field-content {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.settings-action-bar {
+    border: 1px solid rgba(159, 177, 201, 0.22);
+    border-radius: 12px;
+    padding: 0.55rem 0.7rem;
+    background: rgba(12, 18, 28, 0.84);
+}
+
+.settings-action-bar-inner {
+    flex-wrap: wrap;
+    gap: 0.55rem;
 }
 
 .search-page {
