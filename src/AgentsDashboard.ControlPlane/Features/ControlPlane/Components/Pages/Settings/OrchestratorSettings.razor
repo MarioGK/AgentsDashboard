@@ -136,6 +136,21 @@ else
                 <SettingsHintedField Hint="Interval between runtime health probes. Lower intervals detect issues sooner but increase probing load.">
                     <MudNumericField T="int" Label="Health Probe Interval (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.HealthProbeIntervalSeconds" Min="1" Max="300" />
                 </SettingsHintedField>
+                <SettingsHintedField Hint="Heartbeat age after which a runtime is considered stale.">
+                    <MudNumericField T="int" Label="Heartbeat Stale Threshold (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.RuntimeHeartbeatStaleSeconds" Min="10" Max="600" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Consecutive failed health probes required before runtime is marked unhealthy.">
+                    <MudNumericField T="int" Label="Probe Failure Threshold" Variant="Variant.Outlined" @bind-Value="_settings.RuntimeProbeFailureThreshold" Min="1" Max="20" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Minimum delay between automatic remediation attempts for the same runtime.">
+                    <MudNumericField T="int" Label="Remediation Cooldown (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.RuntimeRemediationCooldownSeconds" Min="5" Max="600" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="How long degradation must persist before /ready is marked unhealthy.">
+                    <MudNumericField T="int" Label="Readiness Degrade Duration (seconds)" Variant="Variant.Outlined" @bind-Value="_settings.RuntimeReadinessDegradeSeconds" Min="10" Max="900" />
+                </SettingsHintedField>
+                <SettingsHintedField Hint="Percent of runtimes that must be unhealthy/offline before readiness blocking can start.">
+                    <MudNumericField T="int" Label="Readiness Failure Ratio (%)" Variant="Variant.Outlined" @bind-Value="_settings.RuntimeReadinessFailureRatioPercent" Min="1" Max="100" />
+                </SettingsHintedField>
                 <SettingsHintedField Hint="How many restart attempts are allowed before unhealthy action is applied.">
                     <MudNumericField T="int" Label="Container Restart Limit" Variant="Variant.Outlined" @bind-Value="_settings.ContainerRestartLimit" Min="0" Max="100" />
                 </SettingsHintedField>
@@ -576,6 +591,11 @@ else
             ContainerStartTimeoutSeconds = source.ContainerStartTimeoutSeconds,
             ContainerStopTimeoutSeconds = source.ContainerStopTimeoutSeconds,
             HealthProbeIntervalSeconds = source.HealthProbeIntervalSeconds,
+            RuntimeHeartbeatStaleSeconds = source.RuntimeHeartbeatStaleSeconds,
+            RuntimeProbeFailureThreshold = source.RuntimeProbeFailureThreshold,
+            RuntimeRemediationCooldownSeconds = source.RuntimeRemediationCooldownSeconds,
+            RuntimeReadinessDegradeSeconds = source.RuntimeReadinessDegradeSeconds,
+            RuntimeReadinessFailureRatioPercent = source.RuntimeReadinessFailureRatioPercent,
             ContainerRestartLimit = source.ContainerRestartLimit,
             ContainerUnhealthyAction = source.ContainerUnhealthyAction,
             OrchestratorErrorBurstThreshold = source.OrchestratorErrorBurstThreshold,
@@ -651,6 +671,31 @@ else
         if (settings.MaxConcurrentPulls < 1 || settings.MaxConcurrentBuilds < 1)
         {
             throw new InvalidOperationException("Concurrent pull/build limits must be at least 1");
+        }
+
+        if (settings.RuntimeHeartbeatStaleSeconds < 10 || settings.RuntimeHeartbeatStaleSeconds > 600)
+        {
+            throw new InvalidOperationException("RuntimeHeartbeatStaleSeconds must be between 10 and 600");
+        }
+
+        if (settings.RuntimeProbeFailureThreshold < 1 || settings.RuntimeProbeFailureThreshold > 20)
+        {
+            throw new InvalidOperationException("RuntimeProbeFailureThreshold must be between 1 and 20");
+        }
+
+        if (settings.RuntimeRemediationCooldownSeconds < 5 || settings.RuntimeRemediationCooldownSeconds > 600)
+        {
+            throw new InvalidOperationException("RuntimeRemediationCooldownSeconds must be between 5 and 600");
+        }
+
+        if (settings.RuntimeReadinessDegradeSeconds < 10 || settings.RuntimeReadinessDegradeSeconds > 900)
+        {
+            throw new InvalidOperationException("RuntimeReadinessDegradeSeconds must be between 10 and 900");
+        }
+
+        if (settings.RuntimeReadinessFailureRatioPercent < 1 || settings.RuntimeReadinessFailureRatioPercent > 100)
+        {
+            throw new InvalidOperationException("RuntimeReadinessFailureRatioPercent must be between 1 and 100");
         }
 
         if (settings.MaxQueueDepth < 1)

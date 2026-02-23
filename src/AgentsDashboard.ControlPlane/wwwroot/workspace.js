@@ -1,10 +1,12 @@
 const viewportListeners = new Map();
 const composerBridges = new Map();
 const composerImagePasteBridges = new Map();
+const chatAutoScrollControllers = new Map();
 
 let viewportCounter = 0;
 let composerCounter = 0;
 let composerImagePasteCounter = 0;
+let chatAutoScrollCounter = 0;
 
 export function getViewportHeight() {
     return window.innerHeight || document.documentElement.clientHeight || 0;
@@ -23,6 +25,23 @@ export function getInputSelection(elementId) {
     const start = typeof element.selectionStart === "number" ? element.selectionStart : 0;
     const end = typeof element.selectionEnd === "number" ? element.selectionEnd : start;
     return [start, end];
+}
+
+export function autoSizeTextarea(elementId, maxHeightPx) {
+    if (!elementId) {
+        return;
+    }
+
+    const element = document.getElementById(elementId);
+    if (!element) {
+        return;
+    }
+
+    const maxHeight = Number.isFinite(maxHeightPx) && maxHeightPx > 0 ? maxHeightPx : 240;
+    element.style.height = "0px";
+    const desiredHeight = Math.min(element.scrollHeight, maxHeight);
+    element.style.height = `${desiredHeight}px`;
+    element.style.overflowY = element.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 export function registerViewportListener(dotNetRef) {
@@ -192,6 +211,178 @@ export function unregisterComposerImagePasteBridge(id) {
 
     entry.element.removeEventListener("paste", entry.handler);
     composerImagePasteBridges.delete(id);
+}
+
+export function registerChatAutoScroll(elementId, dotNetRef) {
+    if (!elementId || !dotNetRef) {
+        return null;
+    }
+
+    const element = document.getElementById(elementId);
+    if (!element) {
+        return null;
+    }
+
+    const id = `chat-autoscroll-${++chatAutoScrollCounter}`;
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const state = {
+        sticky: true,
+        pending: 0,
+        animationFrame: 0,
+        suppressScrollEvent: false
+    };
+
+    const atBottomThreshold = 72;
+
+    const cancelAnimation = () => {
+        if (state.animationFrame !== 0) {
+            window.cancelAnimationFrame(state.animationFrame);
+            state.animationFrame = 0;
+        }
+    };
+
+    const distanceFromBottom = () => Math.max(0, element.scrollHeight - element.clientHeight - element.scrollTop);
+    const isNearBottom = () => distanceFromBottom() <= atBottomThreshold;
+
+    const notify = () => {
+        dotNetRef.invokeMethodAsync("OnChatAutoScrollStateChanged", state.sticky, state.pending);
+    };
+
+    const setSticky = sticky => {
+        if (state.sticky === sticky) {
+            return;
+        }
+
+        state.sticky = sticky;
+        notify();
+    };
+
+    const setPending = pending => {
+        if (state.pending === pending) {
+            return;
+        }
+
+        state.pending = pending;
+        notify();
+    };
+
+    const easeOutCubic = value => 1 - Math.pow(1 - value, 3);
+
+    const animateToBottom = force => {
+        const target = Math.max(0, element.scrollHeight - element.clientHeight);
+        const start = element.scrollTop;
+        const distance = target - start;
+        if (Math.abs(distance) < 2) {
+            element.scrollTop = target;
+            return;
+        }
+
+        if (prefersReducedMotion) {
+            element.scrollTop = target;
+            return;
+        }
+
+        cancelAnimation();
+        const duration = force
+            ? Math.min(220, Math.max(140, Math.abs(distance) * 0.12))
+            : Math.min(180, Math.max(120, Math.abs(distance) * 0.1));
+        const startTime = performance.now();
+        state.suppressScrollEvent = true;
+
+        const step = now => {
+            const elapsed = now - startTime;
+            const progress = Math.min(1, elapsed / duration);
+            const eased = easeOutCubic(progress);
+            element.scrollTop = start + (distance * eased);
+            if (progress >= 1) {
+                state.animationFrame = 0;
+                state.suppressScrollEvent = false;
+                return;
+            }
+
+            state.animationFrame = window.requestAnimationFrame(step);
+        };
+
+        state.animationFrame = window.requestAnimationFrame(step);
+    };
+
+    const onContentChanged = () => {
+        if (state.sticky || isNearBottom()) {
+            setSticky(true);
+            setPending(0);
+            animateToBottom(false);
+            return;
+        }
+
+        setPending(state.pending + 1);
+    };
+
+    const onScroll = () => {
+        if (state.suppressScrollEvent) {
+            return;
+        }
+
+        if (isNearBottom()) {
+            setSticky(true);
+            setPending(0);
+            return;
+        }
+
+        setSticky(false);
+    };
+
+    const mutationObserver = new MutationObserver(onContentChanged);
+    mutationObserver.observe(element, { childList: true, subtree: true, characterData: true });
+
+    const resizeObserver = new ResizeObserver(onContentChanged);
+    resizeObserver.observe(element);
+
+    element.addEventListener("scroll", onScroll, { passive: true });
+
+    const jumpToLatest = () => {
+        setSticky(true);
+        setPending(0);
+        animateToBottom(true);
+    };
+
+    const controller = {
+        element,
+        mutationObserver,
+        resizeObserver,
+        onScroll,
+        jumpToLatest,
+        dispose: () => {
+            cancelAnimation();
+            element.removeEventListener("scroll", onScroll);
+            mutationObserver.disconnect();
+            resizeObserver.disconnect();
+        }
+    };
+
+    chatAutoScrollControllers.set(id, controller);
+    jumpToLatest();
+    notify();
+
+    return id;
+}
+
+export function unregisterChatAutoScroll(id) {
+    const controller = chatAutoScrollControllers.get(id);
+    if (!controller) {
+        return;
+    }
+
+    controller.dispose();
+    chatAutoScrollControllers.delete(id);
+}
+
+export function scrollChatToLatest(id) {
+    const controller = chatAutoScrollControllers.get(id);
+    if (!controller) {
+        return;
+    }
+
+    controller.jumpToLatest();
 }
 
 async function readClipboardImage(file) {

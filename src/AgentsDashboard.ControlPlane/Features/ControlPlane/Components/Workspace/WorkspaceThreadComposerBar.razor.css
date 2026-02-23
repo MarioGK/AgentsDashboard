@@ -8,10 +8,6 @@
     justify-content: flex-end;
 }
 
-.workspace-thread-composer-mode-select {
-    min-width: 220px;
-}
-
 .workspace-thread-composer-status-chip {
     display: inline-flex;
     align-items: center;
@@ -20,10 +16,5 @@
 @media (max-width: 1080px) {
     .workspace-thread-composer-actions {
         justify-content: flex-start;
-    }
-
-    .workspace-thread-composer-mode-select {
-        width: 100%;
-        min-width: 0;
     }
 }

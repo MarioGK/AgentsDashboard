@@ -41,6 +41,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddSingleton<IOrchestratorRepositorySessionFactory, OrchestratorRepositorySessionFactory>();
         services.AddSingleton<OrchestratorStore>();
         services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<OrchestratorStore>());
+        services.AddHostedService<OrchestratorStoreInitializationService>();
         services.AddSingleton<ILiteDbVectorSearchStatusService, LiteDbVectorSearchStatusService>();
         services.AddSingleton<ILiteDbVectorBootstrapService>(sp =>
             (LiteDbVectorSearchStatusService)sp.GetRequiredService<ILiteDbVectorSearchStatusService>());
@@ -59,6 +60,8 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddSingleton<IOrchestratorRuntimeSettingsProvider, OrchestratorRuntimeSettingsProvider>();
         services.AddSingleton<ILeaseCoordinator, LeaseCoordinator>();
         services.AddSingleton<ITaskRuntimeLifecycleManager, DockerTaskRuntimeLifecycleManager>();
+        services.AddSingleton<TaskRuntimeHealthSupervisorService>();
+        services.AddHostedService(sp => sp.GetRequiredService<TaskRuntimeHealthSupervisorService>());
         services.AddHostedService<TaskRuntimeImageBootstrapService>();
         services.AddSingleton<ISecretCryptoService, SecretCryptoService>();
         services.AddSingleton<SecretCryptoService>(sp => (SecretCryptoService)sp.GetRequiredService<ISecretCryptoService>());

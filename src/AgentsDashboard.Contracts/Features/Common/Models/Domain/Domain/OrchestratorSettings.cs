@@ -99,6 +99,11 @@ public sealed class OrchestratorSettings
     public int ContainerStartTimeoutSeconds { get; set; } = 60;
     public int ContainerStopTimeoutSeconds { get; set; } = 30;
     public int HealthProbeIntervalSeconds { get; set; } = 10;
+    public int RuntimeHeartbeatStaleSeconds { get; set; } = 60;
+    public int RuntimeProbeFailureThreshold { get; set; } = 2;
+    public int RuntimeRemediationCooldownSeconds { get; set; } = 30;
+    public int RuntimeReadinessDegradeSeconds { get; set; } = 45;
+    public int RuntimeReadinessFailureRatioPercent { get; set; } = 30;
     public int ContainerRestartLimit { get; set; } = 3;
     public ContainerUnhealthyAction ContainerUnhealthyAction { get; set; } = ContainerUnhealthyAction.Recreate;
     public int OrchestratorErrorBurstThreshold { get; set; } = 20;

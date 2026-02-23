@@ -1,3 +1,9 @@
+.workspace-chat-stream-host {
+    position: relative;
+    width: 100%;
+    min-height: 0;
+}
+
 .workspace-chat-stream {
     display: flex;
     flex-direction: column;
@@ -52,6 +58,23 @@
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.42;
+}
+
+.workspace-chat-jump-latest {
+    position: absolute !important;
+    right: 1rem;
+    bottom: 1rem;
+    border: 1px solid rgba(125, 188, 255, 0.52) !important;
+    background: linear-gradient(180deg, rgba(34, 58, 92, 0.92) 0%, rgba(25, 44, 72, 0.94) 100%) !important;
+    color: #eef6ff !important;
+    box-shadow: 0 8px 20px rgba(8, 18, 32, 0.45);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.workspace-chat-jump-latest:hover {
+    transform: translateY(-1px);
+    border-color: rgba(165, 214, 255, 0.82) !important;
+    box-shadow: 0 12px 24px rgba(8, 18, 32, 0.56);
 }
 
 @media (max-width: 1080px) {

@@ -1043,7 +1043,6 @@ public sealed class WorkspaceService(
             Id = source.Id,
             RepositoryId = source.RepositoryId,
             Name = source.Name,
-            Kind = source.Kind,
             Harness = source.Harness,
             ExecutionModeDefault = source.ExecutionModeDefault,
             SessionProfileId = source.SessionProfileId,

@@ -15,7 +15,6 @@ namespace AgentsDashboard.Contracts.Api;
 
 public sealed record UpdateTaskRequest(
     string Name,
-    TaskKind Kind,
     string Harness,
     string Prompt,
     string Command,

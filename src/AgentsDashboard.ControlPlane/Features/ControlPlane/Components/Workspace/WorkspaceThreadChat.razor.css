@@ -13,6 +13,16 @@
     flex-wrap: wrap;
 }
 
+.workspace-thread-chat-plan-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding-inline: 0.15rem;
+}
+
+.workspace-thread-chat-plan-toggle .mud-switch {
+    margin: 0;
+}
+
 .workspace-thread-chat-body {
     min-height: 0;
     display: flex;

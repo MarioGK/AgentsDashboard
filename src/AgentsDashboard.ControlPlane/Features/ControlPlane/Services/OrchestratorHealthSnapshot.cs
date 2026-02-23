@@ -5,7 +5,12 @@ public sealed record OrchestratorHealthSnapshot(
     int ReadyTaskRuntimes,
     int BusyTaskRuntimes,
     int DrainingTaskRuntimes,
+    int DegradedTaskRuntimes,
+    int UnhealthyTaskRuntimes,
     bool ScaleOutPaused,
     DateTime? ScaleOutCooldownUntilUtc,
     int StartAttemptsInWindow,
-    int FailedStartsInWindow);
+    int FailedStartsInWindow,
+    DateTime? LastRemediationAtUtc,
+    int RecentRemediationFailures,
+    bool ReadinessBlocked);

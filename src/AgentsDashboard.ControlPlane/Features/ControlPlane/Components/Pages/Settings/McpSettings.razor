@@ -10,244 +10,332 @@
 @namespace AgentsDashboard.ControlPlane.Components.Pages
 <PageTitle>MCP Settings - AgentsDashboard</PageTitle>
 
-<MudStack Spacing="2">
-    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-            <MudText Typo="Typo.h4">MCP Settings</MudText>
-            <SettingsHintIcon Text="Model Context Protocol server discovery and JSON configuration for run dispatch." />
-        </MudStack>
-        <MudStack Row Spacing="1">
-            <MudButton Variant="Variant.Outlined" OnClick="ReloadAllAsync">Reload</MudButton>
-            <MudButton Variant="Variant.Outlined" OnClick="RefreshCatalogAsync" Disabled="@_catalogLoading">Refresh Catalog</MudButton>
-        </MudStack>
-    </MudStack>
-    <MudText Typo="Typo.body2">
-        Use catalog for quick onboarding, then validate JSON before saving production changes.
-    </MudText>
-
-    <MudTabs Elevation="0" Rounded="true" PanelClass="pa-4">
-        <MudTabPanel Text="Catalog">
-            <MudStack Spacing="2">
+<MudStack Spacing="2" Class="mcp-page-shell">
+    <MudPaper Class="mcp-hero-panel">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mcp-hero-row">
+            <MudStack Spacing="0">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                    <MudText Typo="Typo.body2">Search official + popular MCP servers and add prefilled templates to your system MCP config.</MudText>
-                    <SettingsHintIcon Text="Add inserts a server template into system JSON. Review command/args before saving." />
+                    <MudText Typo="Typo.h4">MCP Settings</MudText>
+                    <SettingsHintIcon Text="Search across multiple MCP registries, add servers, and keep JSON configuration in sync." />
                 </MudStack>
-                <MudGrid>
-                    <MudItem xs="12" md="8">
-                        <SettingsHintedField ContainerClass="" Hint="Search by server name, source, package identifier, or description.">
-                            <MudTextField T="string"
-                                          @bind-Value="_catalogSearch"
-                                          Placeholder="Search by name, package, source"
-                                          Variant="Variant.Outlined"
-                                          Margin="Margin.Dense"
-                                          Immediate="true" />
-                        </SettingsHintedField>
-                    </MudItem>
-                    <MudItem xs="12" md="4">
-                        <MudChipSet T="string">
-                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">@($"Entries: {_catalogEntries.Count}")</MudChip>
-                            <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined">@($"Filtered: {FilteredCatalog.Count}")</MudChip>
-                        </MudChipSet>
-                    </MudItem>
-                </MudGrid>
-
-                <MudTable Items="FilteredCatalog" Dense Hover Height="500px" FixedHeader>
-                    <HeaderContent>
-                        <MudTh>Server</MudTh>
-                        <MudTh>Source</MudTh>
-                        <MudTh>Package</MudTh>
-                        <MudTh>Transport</MudTh>
-                        <MudTh>Install</MudTh>
-                        <MudTh></MudTh>
-                    </HeaderContent>
-                    <RowTemplate>
-                        <MudTd>
-                            <MudStack Spacing="0">
-                                <MudText Typo="Typo.subtitle2">@context.DisplayName</MudText>
-                                <MudText Typo="Typo.caption">@context.ServerName</MudText>
-                                @if (!string.IsNullOrWhiteSpace(context.Description))
-                                {
-                                    <MudText Typo="Typo.caption">@context.Description</MudText>
-                                }
-                            </MudStack>
-                        </MudTd>
-                        <MudTd>@context.Source</MudTd>
-                        <MudTd>@context.PackageIdentifier</MudTd>
-                        <MudTd>@context.TransportType</MudTd>
-                        <MudTd>
-                            @if (string.IsNullOrWhiteSpace(context.InstallCommand))
-                            {
-                                <MudText Typo="Typo.caption">N/A</MudText>
-                            }
-                            else
-                            {
-                                <MudText Typo="Typo.caption">@context.InstallCommand</MudText>
-                            }
-                        </MudTd>
-                        <MudTd>
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => AddServerAsync(context)">Add</MudButton>
-                        </MudTd>
-                    </RowTemplate>
-                </MudTable>
+                <MudText Typo="Typo.body2" Class="mcp-hero-subtitle">
+                    Search-first MCP onboarding with top servers loaded by default.
+                </MudText>
             </MudStack>
-        </MudTabPanel>
 
-        <MudTabPanel Text="Configured Servers">
-            <MudStack Spacing="2">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                    <MudText Typo="Typo.body2">Current servers defined under <code>mcpServers</code> in the system config snapshot.</MudText>
-                    <SettingsHintIcon Text="Remove updates only in-memory JSON until saved in JSON Editor." />
+            <MudStack Row="true" Spacing="1" Class="mcp-hero-actions">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllAsync">Reload</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Sync" OnClick="RefreshCatalogAsync" Disabled="@_catalogSearching">Refresh Registries</MudButton>
+            </MudStack>
+        </MudStack>
+
+        <MudStack Row="true" Spacing="1" Class="mcp-hero-metrics">
+            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined">@($"Results: {_catalogResults.Count}")</MudChip>
+            <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined">@($"Configured: {_settingsValidation.Servers.Count}")</MudChip>
+            <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined">@($"Active Registries: {_selectedSources.Count}")</MudChip>
+            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined">@ActiveSearchLabel</MudChip>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="mcp-search-panel">
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudTextField T="string"
+                              @bind-Value="_catalogQuery"
+                              Label="Search MCP Servers"
+                              Placeholder="Try: github, postgres, browser, filesystem"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.TravelExplore"
+                              OnKeyDown="HandleCatalogSearchKeyDown" />
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudStack Spacing="0" Class="mcp-registry-picks">
+                    <MudText Typo="Typo.caption">Registries</MudText>
+                    <MudStack Row="true" Class="mcp-registry-checks">
+                        @foreach (var option in RegistrySourceOptions)
+                        {
+                            <MudCheckBox T="bool"
+                                         Dense="true"
+                                         Label="@option.Label"
+                                         Value="@IsSourceSelected(option.Key)"
+                                         ValueChanged="@((selected) => UpdateSourceSelection(option.Key, selected))" />
+                        }
+                    </MudStack>
+                </MudStack>
+            </MudItem>
+
+            <MudItem xs="12" md="2">
+                <MudStack Spacing="1" Class="mcp-search-actions">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Search"
+                               OnClick="SearchCatalogAsync"
+                               Disabled="@_catalogSearching">
+                        Search
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Info"
+                               StartIcon="@Icons.Material.Filled.LocalFireDepartment"
+                               OnClick="LoadTopCatalogAsync"
+                               Disabled="@_catalogSearching">
+                        Top MCP
+                    </MudButton>
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudGrid>
+        <MudItem xs="12" lg="8">
+            <MudPaper Class="mcp-results-panel">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                    <MudText Typo="Typo.h6">@ActiveResultsTitle</MudText>
+                    @if (_catalogSearching)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    }
+                </MudStack>
+
+                @if (_catalogResults.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info">No MCP servers matched this search across selected registries.</MudAlert>
+                }
+                else
+                {
+                    <MudGrid Class="mcp-results-grid">
+                        @foreach (var entry in _catalogResults)
+                        {
+                            <MudItem xs="12" md="6">
+                                <MudPaper Class="mcp-result-card">
+                                    <MudStack Spacing="1">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.subtitle1" Class="mcp-result-title">@entry.DisplayName</MudText>
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">@FormatSourceLabel(entry.Source)</MudChip>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.caption" Class="mcp-result-key">@entry.ServerName</MudText>
+
+                                        @if (!string.IsNullOrWhiteSpace(entry.Description))
+                                        {
+                                            <MudText Typo="Typo.body2" Class="mcp-result-description">@entry.Description</MudText>
+                                        }
+
+                                        <MudStack Row="true" Spacing="1" Class="mcp-result-meta">
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@entry.RegistryType</MudChip>
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@entry.TransportType</MudChip>
+                                            @if (!string.IsNullOrWhiteSpace(entry.PackageIdentifier))
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Truncate(entry.PackageIdentifier, 28)</MudChip>
+                                            }
+                                        </MudStack>
+
+                                        @if (!string.IsNullOrWhiteSpace(BuildCommandPreview(entry)))
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mcp-result-command">@BuildCommandPreview(entry)</MudText>
+                                        }
+
+                                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudButton Variant="Variant.Filled"
+                                                       Size="Size.Small"
+                                                       Color="Color.Primary"
+                                                       OnClick="() => AddServerAsync(entry)">
+                                                Add To Config
+                                            </MudButton>
+                                            @if (!string.IsNullOrWhiteSpace(entry.RepositoryUrl))
+                                            {
+                                                <MudButton Variant="Variant.Text"
+                                                           Size="Size.Small"
+                                                           Color="Color.Info"
+                                                           Href="@entry.RepositoryUrl"
+                                                           Target="_blank">
+                                                    Repository
+                                                </MudButton>
+                                            }
+                                        </MudStack>
+                                    </MudStack>
+                                </MudPaper>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="mcp-configured-panel">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                    <MudText Typo="Typo.h6">Configured Servers</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_settingsValidation.Servers.Count</MudChip>
                 </MudStack>
 
                 @if (_settingsValidation.Servers.Count == 0)
                 {
-                    <MudAlert Severity="Severity.Info">No configured MCP servers yet. Add from Catalog or edit JSON manually.</MudAlert>
+                    <MudAlert Severity="Severity.Info">No configured servers yet.</MudAlert>
                 }
                 else
                 {
-                    <MudTable Items="_settingsValidation.Servers" Dense Hover>
-                        <HeaderContent>
-                            <MudTh>Key</MudTh>
-                            <MudTh>Transport</MudTh>
-                            <MudTh>Command / URL</MudTh>
-                            <MudTh>Args</MudTh>
-                            <MudTh></MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd>@context.Key</MudTd>
-                            <MudTd>@context.TransportType</MudTd>
-                            <MudTd>@(string.IsNullOrWhiteSpace(context.Command) ? context.Url : context.Command)</MudTd>
-                            <MudTd>@string.Join(" ", context.Args)</MudTd>
-                            <MudTd>
-                                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="() => RemoveServerAsync(context.Key)">Remove</MudButton>
-                            </MudTd>
-                        </RowTemplate>
-                    </MudTable>
+                    <MudStack Spacing="1" Class="mcp-configured-list">
+                        @foreach (var server in _settingsValidation.Servers.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <MudPaper Class="mcp-configured-item">
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.subtitle2">@server.Key</MudText>
+                                    <MudText Typo="Typo.caption">@server.TransportType</MudText>
+                                    <MudText Typo="Typo.caption">@(string.IsNullOrWhiteSpace(server.Command) ? server.Url : server.Command)</MudText>
+                                    @if (server.Args.Count > 0)
+                                    {
+                                        <MudText Typo="Typo.caption">@string.Join(" ", server.Args)</MudText>
+                                    }
+                                </MudStack>
+                                <MudButton Variant="Variant.Text"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="() => RemoveServerAsync(server.Key)">
+                                    Remove
+                                </MudButton>
+                            </MudPaper>
+                        }
+                    </MudStack>
                 }
-            </MudStack>
-        </MudTabPanel>
-
-        <MudTabPanel Text="JSON Editor">
-            <MudStack Spacing="2">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                    <MudText Typo="Typo.body2">Edit and save the system MCP snapshot JSON used during run dispatch.</MudText>
-                    <SettingsHintIcon Text="Changes here affect global MCP behavior when profile overrides are absent." />
-                </MudStack>
-                <SettingsHintedField ContainerClass="" Hint="Validate and format before saving to reduce runtime dispatch errors.">
-                    <MudTextField T="string"
-                                  @bind-Value="_settingsJson"
-                                  Label="System MCP JSON"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Lines="20"
-                                  Immediate="true" />
-                </SettingsHintedField>
-                <MudStack Row Spacing="1">
-                    <MudButton Variant="Variant.Outlined" OnClick="ValidateSystemJson">Validate</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="FormatSystemJson">Format</MudButton>
-                </MudStack>
-                <SettingsActionBar IsDirty="@HasSystemJsonChanges"
-                                   IsSaving="_systemSaving"
-                                   SaveLabel="Save System JSON"
-                                   OnSave="SaveSystemJsonAsync"
-                                   OnRevert="RevertSystemJsonAsync"
-                                   OnResetDefaults="ResetSystemJsonAsync" />
 
                 @if (_settingsValidation.Errors.Count > 0)
                 {
-                    <MudAlert Severity="Severity.Error">
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">
                         @foreach (var error in _settingsValidation.Errors)
                         {
                             <MudText Typo="Typo.caption">@error</MudText>
                         }
                     </MudAlert>
                 }
-            </MudStack>
-        </MudTabPanel>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 
-        <MudTabPanel Text="File">
-            <MudStack Spacing="2">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                    <MudText Typo="Typo.body2">File-backed MCP config for direct JSON file editing and sync with DB settings.</MudText>
-                    <SettingsHintIcon Text="This tab edits the physical MCP settings file. Keep DB and file in sync when needed." />
+    <MudGrid>
+        <MudItem xs="12" xl="6">
+            <MudPaper Class="mcp-editor-panel">
+                <MudStack Spacing="2">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudText Typo="Typo.h6">System JSON</MudText>
+                        <SettingsHintIcon Text="Global MCP JSON snapshot used during dispatch." />
+                    </MudStack>
+
+                    <MudTextField T="string"
+                                  @bind-Value="_settingsJson"
+                                  Label="System MCP JSON"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Lines="18" />
+
+                    <MudStack Row="true" Spacing="1">
+                        <MudButton Variant="Variant.Outlined" OnClick="ValidateSystemJson">Validate</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="FormatSystemJson">Format</MudButton>
+                    </MudStack>
+
+                    <SettingsActionBar IsDirty="@HasSystemJsonChanges"
+                                       IsSaving="_systemSaving"
+                                       SaveLabel="Save System JSON"
+                                       OnSave="SaveSystemJsonAsync"
+                                       OnRevert="RevertSystemJsonAsync"
+                                       OnResetDefaults="ResetSystemJsonAsync" />
                 </MudStack>
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                    <MudText Typo="Typo.caption">@_filePath</MudText>
-                    <SettingsHintIcon Text="Path to the MCP configuration file used by file-based workflows." />
-                </MudStack>
-                <SettingsHintedField ContainerClass="" Hint="Validate file JSON before Save File.">
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" xl="6">
+            <MudPaper Class="mcp-editor-panel">
+                <MudStack Spacing="2">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudText Typo="Typo.h6">File JSON</MudText>
+                        <SettingsHintIcon Text="Physical MCP settings file with two-way sync to system settings." />
+                    </MudStack>
+
+                    <MudText Typo="Typo.caption" Class="mcp-file-path">@_filePath</MudText>
+
                     <MudTextField T="string"
                                   @bind-Value="_fileJson"
                                   Label="MCP Settings File JSON"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
-                                  Lines="20"
-                                  Immediate="true" />
-                </SettingsHintedField>
-                <MudStack Row Spacing="1" Class="flex-wrap">
-                    <MudButton Variant="Variant.Outlined" OnClick="ValidateFileJson">Validate</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="FormatFileJson">Format</MudButton>
-                    <MudButton Variant="Variant.Outlined" OnClick="LoadFileJsonAsync">Reload File</MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="SyncFileToSettingsAsync">Sync File → Settings</MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="SyncSettingsToFileAsync">Sync Settings → File</MudButton>
-                </MudStack>
-                <SettingsActionBar IsDirty="@HasFileJsonChanges"
-                                   IsSaving="_fileSaving"
-                                   SaveLabel="Save File JSON"
-                                   OnSave="SaveFileJsonAsync"
-                                   OnRevert="RevertFileJsonAsync"
-                                   OnResetDefaults="ResetFileJsonAsync" />
+                                  Lines="18" />
 
-                @if (_fileValidation.Errors.Count > 0)
-                {
-                    <MudAlert Severity="Severity.Error">
-                        @foreach (var error in _fileValidation.Errors)
-                        {
-                            <MudText Typo="Typo.caption">@error</MudText>
-                        }
-                    </MudAlert>
-                }
-            </MudStack>
-        </MudTabPanel>
-    </MudTabs>
+                    <MudStack Row="true" Spacing="1" Class="mcp-file-actions">
+                        <MudButton Variant="Variant.Outlined" OnClick="ValidateFileJson">Validate</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="FormatFileJson">Format</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="LoadFileJsonAsync">Reload File</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="SyncFileToSettingsAsync">File → Settings</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="SyncSettingsToFileAsync">Settings → File</MudButton>
+                    </MudStack>
+
+                    <SettingsActionBar IsDirty="@HasFileJsonChanges"
+                                       IsSaving="_fileSaving"
+                                       SaveLabel="Save File JSON"
+                                       OnSave="SaveFileJsonAsync"
+                                       OnRevert="RevertFileJsonAsync"
+                                       OnResetDefaults="ResetFileJsonAsync" />
+
+                    @if (_fileValidation.Errors.Count > 0)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true">
+                            @foreach (var error in _fileValidation.Errors)
+                            {
+                                <MudText Typo="Typo.caption">@error</MudText>
+                            }
+                        </MudAlert>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 </MudStack>
 
 @code {
+    private static readonly IReadOnlyList<(string Key, string Label)> RegistrySourceOptions =
+    [
+        ("official-registry", "Official Registry"),
+        ("mcp.so", "MCP.so Directory"),
+        ("awesome-mcp-servers", "Awesome MCP")
+    ];
+
     private string _settingsJson = string.Empty;
     private string _fileJson = string.Empty;
     private string _savedSettingsJson = string.Empty;
     private string _savedFileJson = string.Empty;
     private string _filePath = string.Empty;
-    private string _catalogSearch = string.Empty;
-    private bool _catalogLoading;
+    private string _catalogQuery = string.Empty;
+    private string _activeCatalogQuery = string.Empty;
+    private bool _catalogSearching;
     private bool _systemSaving;
     private bool _fileSaving;
 
     private McpConfigValidationResult _settingsValidation = new();
     private McpConfigValidationResult _fileValidation = new();
-    private List<McpCatalogEntry> _catalogEntries = [];
+    private List<McpCatalogEntry> _catalogResults = [];
+    private HashSet<string> _selectedSources = new(StringComparer.OrdinalIgnoreCase);
+
     private bool HasSystemJsonChanges => NormalizeJson(_settingsJson) != NormalizeJson(_savedSettingsJson);
     private bool HasFileJsonChanges => NormalizeJson(_fileJson) != NormalizeJson(_savedFileJson);
-
-    private List<McpCatalogEntry> FilteredCatalog =>
-        _catalogEntries
-            .Where(MatchesCatalogSearch)
-            .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .Take(300)
-            .ToList();
+    private string ActiveSearchLabel => string.IsNullOrWhiteSpace(_activeCatalogQuery) ? "Top MCP" : _activeCatalogQuery;
+    private string ActiveResultsTitle => string.IsNullOrWhiteSpace(_activeCatalogQuery)
+        ? "Top MCP Servers"
+        : $"Results for '{_activeCatalogQuery}'";
 
     protected override async Task OnInitializedAsync()
     {
+        _selectedSources = new HashSet<string>(RegistrySourceOptions.Select(x => x.Key), StringComparer.OrdinalIgnoreCase);
         _filePath = McpSettingsManager.GetSystemFilePath();
         await ReloadAllAsync();
     }
 
     private async Task ReloadAllAsync()
     {
-        await LoadSystemJsonAsync();
-        await LoadFileJsonAsync();
-        await LoadCatalogAsync(forceRefresh: false);
+        await Task.WhenAll(
+            LoadSystemJsonAsync(),
+            LoadFileJsonAsync(),
+            RunCatalogSearchAsync(string.Empty, false, false));
     }
 
     private async Task LoadSystemJsonAsync()
@@ -263,7 +351,7 @@
         _systemSaving = true;
         try
         {
-        var result = await McpSettingsManager.SaveSystemConfigAsync(_settingsJson, CancellationToken.None);
+            var result = await McpSettingsManager.SaveSystemConfigAsync(_settingsJson, CancellationToken.None);
             _settingsValidation = result;
             _settingsJson = result.FormattedJson;
 
@@ -286,13 +374,9 @@
     {
         var result = McpJson.ValidateAndFormat(_settingsJson);
         _settingsValidation = result;
-        if (result.IsValid)
-        {
-            Snackbar.Add("System MCP JSON is valid.", Severity.Success);
-            return;
-        }
-
-        Snackbar.Add("System MCP JSON has validation errors.", Severity.Warning);
+        Snackbar.Add(
+            result.IsValid ? "System MCP JSON is valid." : "System MCP JSON has validation errors.",
+            result.IsValid ? Severity.Success : Severity.Warning);
     }
 
     private void FormatSystemJson()
@@ -315,7 +399,7 @@
         _fileSaving = true;
         try
         {
-        var result = await McpSettingsManager.SaveSystemFileAsync(_fileJson, CancellationToken.None);
+            var result = await McpSettingsManager.SaveSystemFileAsync(_fileJson, CancellationToken.None);
             _fileValidation = result;
             _fileJson = result.FormattedJson;
 
@@ -338,13 +422,9 @@
     {
         var result = McpJson.ValidateAndFormat(_fileJson);
         _fileValidation = result;
-        if (result.IsValid)
-        {
-            Snackbar.Add("MCP settings file JSON is valid.", Severity.Success);
-            return;
-        }
-
-        Snackbar.Add("MCP settings file JSON has validation errors.", Severity.Warning);
+        Snackbar.Add(
+            result.IsValid ? "MCP settings file JSON is valid." : "MCP settings file JSON has validation errors.",
+            result.IsValid ? Severity.Success : Severity.Warning);
     }
 
     private void FormatFileJson()
@@ -382,35 +462,87 @@
         Snackbar.Add("Synced system settings JSON into file.", Severity.Success);
     }
 
-    private async Task LoadCatalogAsync(bool forceRefresh)
+    private async Task SearchCatalogAsync()
     {
-        _catalogLoading = true;
-        try
-        {
-            _catalogEntries = (await RegistryCatalog.GetCatalogAsync(forceRefresh, CancellationToken.None)).ToList();
-        }
-        finally
-        {
-            _catalogLoading = false;
-        }
+        await RunCatalogSearchAsync(_catalogQuery, false, true);
+    }
+
+    private async Task LoadTopCatalogAsync()
+    {
+        _catalogQuery = string.Empty;
+        await RunCatalogSearchAsync(string.Empty, false, true);
     }
 
     private async Task RefreshCatalogAsync()
     {
-        _catalogLoading = true;
+        await RunCatalogSearchAsync(_activeCatalogQuery, true, true);
+    }
+
+    private async Task RunCatalogSearchAsync(string? query, bool forceRefresh, bool showNotification)
+    {
+        if (_selectedSources.Count == 0)
+        {
+            Snackbar.Add("Select at least one registry before searching.", Severity.Warning);
+            return;
+        }
+
+        _catalogSearching = true;
         try
         {
-            _catalogEntries = (await RegistryCatalog.RefreshCatalogAsync(CancellationToken.None)).ToList();
-            Snackbar.Add("MCP catalog refreshed.", Severity.Success);
+            var normalizedQuery = query?.Trim() ?? string.Empty;
+            _catalogResults = (await RegistryCatalog.SearchCatalogAsync(
+                    normalizedQuery,
+                    _selectedSources.ToList(),
+                    forceRefresh,
+                    limit: 120,
+                    CancellationToken.None))
+                .ToList();
+
+            _activeCatalogQuery = normalizedQuery;
+
+            if (showNotification)
+            {
+                Snackbar.Add(
+                    _catalogResults.Count == 0
+                        ? "No MCP servers matched the search."
+                        : $"Loaded {_catalogResults.Count} MCP servers.",
+                    _catalogResults.Count == 0 ? Severity.Info : Severity.Success);
+            }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"MCP catalog refresh failed: {ex.Message}", Severity.Warning);
+            Snackbar.Add($"Catalog search failed: {ex.Message}", Severity.Error);
         }
         finally
         {
-            _catalogLoading = false;
+            _catalogSearching = false;
         }
+    }
+
+    private async Task HandleCatalogSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (!string.Equals(args.Key, "Enter", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await SearchCatalogAsync();
+    }
+
+    private bool IsSourceSelected(string sourceKey)
+    {
+        return _selectedSources.Contains(sourceKey);
+    }
+
+    private void UpdateSourceSelection(string sourceKey, bool selected)
+    {
+        if (selected)
+        {
+            _selectedSources.Add(sourceKey);
+            return;
+        }
+
+        _selectedSources.Remove(sourceKey);
     }
 
     private async Task AddServerAsync(McpCatalogEntry entry)
@@ -420,26 +552,11 @@
         await SaveSystemJsonAsync();
     }
 
-    private void RemoveServerAsync(string key)
+    private async Task RemoveServerAsync(string key)
     {
         _settingsJson = McpJson.RemoveServer(_settingsJson, key);
         _settingsValidation = McpJson.ValidateAndFormat(_settingsJson);
-        Snackbar.Add($"Removed MCP server '{key}' from system JSON.", Severity.Info);
-    }
-
-    private bool MatchesCatalogSearch(McpCatalogEntry entry)
-    {
-        if (string.IsNullOrWhiteSpace(_catalogSearch))
-        {
-            return true;
-        }
-
-        var search = _catalogSearch.Trim();
-        return entry.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
-            || entry.ServerName.Contains(search, StringComparison.OrdinalIgnoreCase)
-            || entry.PackageIdentifier.Contains(search, StringComparison.OrdinalIgnoreCase)
-            || entry.Source.Contains(search, StringComparison.OrdinalIgnoreCase)
-            || entry.Description.Contains(search, StringComparison.OrdinalIgnoreCase);
+        await SaveSystemJsonAsync();
     }
 
     private Task RevertSystemJsonAsync()
@@ -468,6 +585,44 @@
         _fileJson = "{}";
         _fileValidation = McpJson.ValidateAndFormat(_fileJson);
         return Task.CompletedTask;
+    }
+
+    private static string FormatSourceLabel(string source)
+    {
+        return source switch
+        {
+            "official-registry" => "Official",
+            "mcp.so" => "MCP.so",
+            "awesome-mcp-servers" => "Awesome",
+            _ => source,
+        };
+    }
+
+    private static string BuildCommandPreview(McpCatalogEntry entry)
+    {
+        if (!string.IsNullOrWhiteSpace(entry.Command))
+        {
+            var args = entry.CommandArgs.Count == 0 ? string.Empty : $" {string.Join(" ", entry.CommandArgs)}";
+            return $"{entry.Command}{args}".Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.PackageIdentifier) &&
+            Uri.TryCreate(entry.PackageIdentifier, UriKind.Absolute, out _))
+        {
+            return entry.PackageIdentifier;
+        }
+
+        return string.Empty;
+    }
+
+    private static string Truncate(string value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return $"{value[..maxLength]}...";
     }
 
     private static string NormalizeJson(string value)

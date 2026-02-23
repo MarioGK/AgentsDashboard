@@ -17,6 +17,7 @@ public interface ITaskRuntimeLifecycleManager
     Task RecordDispatchActivityAsync(string runtimeId, CancellationToken cancellationToken);
     Task ScaleDownIdleTaskRuntimesAsync(CancellationToken cancellationToken);
     Task SetTaskRuntimeDrainingAsync(string runtimeId, bool draining, CancellationToken cancellationToken);
+    Task<bool> RestartTaskRuntimeAsync(string runtimeId, CancellationToken cancellationToken);
     Task RecycleTaskRuntimeAsync(string runtimeId, CancellationToken cancellationToken);
     Task RecycleTaskRuntimePoolAsync(CancellationToken cancellationToken);
     Task RunReconciliationAsync(CancellationToken cancellationToken);

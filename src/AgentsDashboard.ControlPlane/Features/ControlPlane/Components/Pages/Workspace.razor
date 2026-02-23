@@ -117,7 +117,6 @@
                 {
                     <WorkspaceThreadChat TaskName="@_selectedTask.Name"
                                          Harness="@_selectedTask.Harness"
-                                         Kind="@_selectedTask.Kind.ToString()"
                                          TaskStateLabel="@GetTaskStateLabel(_selectedTask)"
                                          TaskStateColor="@GetTaskStateColor(_selectedTask)"
                                          RunIdLabel="@GetSelectedRunShortId()"
@@ -1762,7 +1761,6 @@
         return $"""
 Task: {_selectedTask?.Name}
 Harness: {_selectedTask?.Harness}
-Kind: {_selectedTask?.Kind}
 Command: {_selectedTask?.Command}
 Existing Prompt:
 {_selectedTask?.Prompt}
@@ -1992,7 +1990,6 @@ Composer Focus:
             TaskId: task.Id,
             Title: task.Name,
             Harness: task.Harness,
-            Kind: task.Kind.ToString(),
             LatestStateLabel: latestStateLabel,
             LatestStateColor: latestStateColor,
             IsSelected: string.Equals(task.Id, _selectedTask?.Id, StringComparison.OrdinalIgnoreCase),
@@ -2515,7 +2512,6 @@ Composer Focus:
     {
         return new UpdateTaskRequest(
             task.Name,
-            task.Kind,
             task.Harness,
             prompt,
             task.Command,

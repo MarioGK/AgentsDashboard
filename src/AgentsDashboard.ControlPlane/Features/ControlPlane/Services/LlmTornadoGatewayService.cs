@@ -10,7 +10,6 @@ public sealed record TaskPromptGenerationRequest(
     string RepositoryName,
     string TaskName,
     string Harness,
-    string Kind,
     string Command);
 
 public sealed record TaskPromptGenerationResult(bool Success, string Prompt, string? Error);
@@ -270,7 +269,6 @@ Do not include code fences.
 Repository: {request.RepositoryName}
 Task Name: {request.TaskName}
 Harness: {request.Harness}
-Kind: {request.Kind}
 Command: {request.Command}
 
 Write the final task prompt.

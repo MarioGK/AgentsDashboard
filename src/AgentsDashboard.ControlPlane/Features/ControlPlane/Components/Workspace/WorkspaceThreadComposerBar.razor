@@ -1,6 +1,5 @@
 @namespace AgentsDashboard.ControlPlane.Components.Workspace
 @using AgentsDashboard.ControlPlane.Services
-@using AgentsDashboard.Contracts.Domain
 @using AgentsDashboard.ControlPlane.Components.Shared
 
 <div class="workspace-thread-composer">
@@ -9,33 +8,21 @@
                         ValueChanged="OnComposerValueChanged"
                         Images="@ComposerImages"
                         ImagesChanged="OnComposerImagesChanged"
-                        Placeholder="Ask for edits, follow-ups, and fixes"
                         HelperText="Enter to send. Shift+Enter inserts a new line. Paste or upload images."
                         Rows="7"
                         ShowGhostSuggestion="true"
                         GhostSuffix="@GhostSuffix"
                         PasteBridgeKey="workspace-composer"
                         Disabled="@IsSubmitting"
+                        ShowSubmitButton="true"
+                        SubmitTooltip="Send"
+                        OnSubmit="SubmitRequested"
                         OnImprove="OnImprove"
                         OnGenerate="OnGenerate"
                         OnKeyDown="OnComposerKeyDown"
                         OnValidationError="OnValidationError" />
 
     <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="workspace-thread-composer-actions">
-        <MudSelect T="HarnessExecutionMode?"
-                   Value="@ModeOverride"
-                   ValueChanged="OnModeOverrideChanged"
-                   Label="Run Mode"
-                   Variant="Variant.Outlined"
-                   Margin="Margin.Dense"
-                   Dense="true"
-                   Class="workspace-filter-select workspace-thread-composer-mode-select">
-            <MudSelectItem T="HarnessExecutionMode?" Value="@((HarnessExecutionMode?)null)">Task Default</MudSelectItem>
-            <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Default">Default</MudSelectItem>
-            <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Plan">Plan</MudSelectItem>
-            <MudSelectItem T="HarnessExecutionMode?" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
-        </MudSelect>
-
         @if (IsSubmitting)
         {
             <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined" Class="workspace-thread-composer-status-chip">
@@ -54,8 +41,7 @@
     [Parameter] public EventCallback<IReadOnlyList<WorkspaceImageInput>> OnComposerImagesChanged { get; set; }
     [Parameter] public bool IsSubmitting { get; set; }
     [Parameter] public string GhostSuffix { get; set; } = string.Empty;
-    [Parameter] public HarnessExecutionMode? ModeOverride { get; set; }
-    [Parameter] public EventCallback<HarnessExecutionMode?> OnModeOverrideChanged { get; set; }
+    [Parameter] public EventCallback SubmitRequested { get; set; }
     [Parameter] public EventCallback OnImprove { get; set; }
     [Parameter] public EventCallback OnGenerate { get; set; }
     [Parameter] public EventCallback<KeyboardEventArgs> OnComposerKeyDown { get; set; }

@@ -334,7 +334,6 @@ public sealed class TaskSemanticEmbeddingService(
             .AppendLine($"Task {task.Id}")
             .AppendLine($"Name: {task.Name}")
             .AppendLine($"Harness: {task.Harness}")
-            .AppendLine($"Kind: {task.Kind}")
             .AppendLine("Prompt:")
             .AppendLine(task.Prompt)
             .AppendLine("Command:")

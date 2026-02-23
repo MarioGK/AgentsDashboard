@@ -69,7 +69,6 @@ public sealed class TaskDocument
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string RepositoryId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public TaskKind Kind { get; set; }
     public string Harness { get; set; } = "codex";
     public HarnessExecutionMode? ExecutionModeDefault { get; set; }
     public string SessionProfileId { get; set; } = string.Empty;

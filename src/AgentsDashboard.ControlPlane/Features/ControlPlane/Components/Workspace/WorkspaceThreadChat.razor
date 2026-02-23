@@ -4,7 +4,6 @@
     <MudStack Row AlignItems="AlignItems.Center" Class="workspace-thread-chat-header">
         <MudText Typo="Typo.h6">@TaskName</MudText>
         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Harness</MudChip>
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Kind</MudChip>
         <MudChip T="string" Size="Size.Small" Color="@TaskStateColor">@TaskStateLabel</MudChip>
         @if (!string.IsNullOrWhiteSpace(RunIdLabel))
         {
@@ -37,6 +36,17 @@
                            data-testid="workspace-refresh-runs" />
         </MudTooltip>
 
+        <div class="workspace-thread-chat-plan-toggle">
+            <MudTooltip Text="Toggle plan mode for the next submission">
+                <MudSwitch T="bool"
+                           Value="@IsPlanModeEnabled"
+                           ValueChanged="OnPlanModeChanged"
+                           Label="Plan Mode"
+                           Color="Color.Info"
+                           data-testid="workspace-plan-mode-toggle" />
+            </MudTooltip>
+        </div>
+
         <MudTooltip Text="Toggle advanced drawer">
             <MudIconButton Icon="@(IsAdvancedOpen ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
                            Color="Color.Inherit"
@@ -64,17 +74,18 @@
 @code {
     [Parameter] public string TaskName { get; set; } = string.Empty;
     [Parameter] public string Harness { get; set; } = string.Empty;
-    [Parameter] public string Kind { get; set; } = string.Empty;
     [Parameter] public string TaskStateLabel { get; set; } = string.Empty;
     [Parameter] public Color TaskStateColor { get; set; }
     [Parameter] public string RunIdLabel { get; set; } = string.Empty;
     [Parameter] public string RunStateLabel { get; set; } = string.Empty;
     [Parameter] public Color RunStateColor { get; set; }
     [Parameter] public bool IsRunActive { get; set; }
+    [Parameter] public bool IsPlanModeEnabled { get; set; }
     [Parameter] public bool CanRefreshSummary { get; set; }
     [Parameter] public bool IsAdvancedOpen { get; set; }
     [Parameter] public EventCallback OnRefreshSummary { get; set; }
     [Parameter] public EventCallback OnRefreshRuns { get; set; }
+    [Parameter] public EventCallback<bool> OnPlanModeChanged { get; set; }
     [Parameter] public EventCallback OnToggleAdvanced { get; set; }
     [Parameter] public RenderFragment? MessageList { get; set; }
     [Parameter] public RenderFragment? ContextPanel { get; set; }

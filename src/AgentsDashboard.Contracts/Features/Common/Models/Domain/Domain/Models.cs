@@ -1,11 +1,5 @@
 namespace AgentsDashboard.Contracts.Domain;
 
-public enum TaskKind
-{
-    OneShot = 0,
-    EventDriven = 1
-}
-
 public enum RunState
 {
     Queued = 0,

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
+using LiteDB;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
@@ -18,7 +19,10 @@ public sealed class OrchestratorStore(
     private const string TaskWorkspacesRootPath = "/workspaces/repos";
     private const string ArtifactFileStorageRoot = "$/run-artifacts";
 
-    public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        await MigrateTaskKindFieldsAsync(cancellationToken);
+    }
 
     public async Task<RepositoryDocument> CreateRepositoryAsync(CreateRepositoryRequest request, CancellationToken cancellationToken)
     {
@@ -93,7 +97,6 @@ public sealed class OrchestratorStore(
         var taskDefaults = NormalizeRepositoryTaskDefaults(
             new RepositoryTaskDefaultsConfig
             {
-                Kind = request.Kind,
                 Harness = request.Harness,
                 ExecutionModeDefault = request.ExecutionModeDefault,
                 SessionProfileId = request.SessionProfileId?.Trim() ?? string.Empty,
@@ -532,7 +535,6 @@ public sealed class OrchestratorStore(
         {
             RepositoryId = request.RepositoryId,
             Name = normalizedName,
-            Kind = repository.TaskDefaults.Kind,
             Harness = repository.TaskDefaults.Harness,
             ExecutionModeDefault = repository.TaskDefaults.ExecutionModeDefault,
             SessionProfileId = repository.TaskDefaults.SessionProfileId,
@@ -563,15 +565,6 @@ public sealed class OrchestratorStore(
         return await db.Tasks.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderBy(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
-    public async Task<List<TaskDocument>> ListEventDrivenTasksAsync(string repositoryId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Tasks.AsNoTracking()
-            .Where(x => x.RepositoryId == repositoryId && x.Enabled && x.Kind == TaskKind.EventDriven)
-            .OrderBy(x => x.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<TaskDocument?> GetTaskAsync(string taskId, CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
@@ -583,20 +576,10 @@ public sealed class OrchestratorStore(
         _ = utcNow;
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         return await db.Tasks.AsNoTracking()
-            .Where(x => x.Enabled && x.Kind == TaskKind.OneShot)
+            .Where(x => x.Enabled)
+            .OrderBy(x => x.CreatedAtUtc)
             .Take(limit)
             .ToListAsync(cancellationToken);
-    }
-
-    public async Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var task = await db.Tasks.FirstOrDefaultAsync(x => x.Id == taskId, cancellationToken);
-        if (task is null)
-            return;
-
-        task.Enabled = false;
-        await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<TaskDocument?> UpdateTaskGitMetadataAsync(
@@ -639,7 +622,6 @@ public sealed class OrchestratorStore(
             return null;
 
         task.Name = request.Name;
-        task.Kind = request.Kind;
         task.Harness = request.Harness.Trim().ToLowerInvariant();
         task.ExecutionModeDefault = request.ExecutionModeDefault;
         task.SessionProfileId = request.SessionProfileId?.Trim() ?? string.Empty;
@@ -3773,12 +3755,6 @@ public sealed class OrchestratorStore(
 
     private static RepositoryTaskDefaultsConfig NormalizeRepositoryTaskDefaults(RepositoryTaskDefaultsConfig? taskDefaults)
     {
-        var kind = taskDefaults?.Kind ?? TaskKind.OneShot;
-        if (!Enum.IsDefined(kind))
-        {
-            kind = TaskKind.OneShot;
-        }
-
         var mode = taskDefaults?.ExecutionModeDefault ?? HarnessExecutionMode.Default;
         if (!Enum.IsDefined(mode))
         {
@@ -3800,7 +3776,6 @@ public sealed class OrchestratorStore(
 
         return new RepositoryTaskDefaultsConfig
         {
-            Kind = kind,
             Harness = harness,
             ExecutionModeDefault = mode,
             SessionProfileId = taskDefaults?.SessionProfileId?.Trim() ?? string.Empty,
@@ -4059,7 +4034,71 @@ public sealed class OrchestratorStore(
             return null;
         }
 
-        return task.Kind == TaskKind.OneShot ? nowUtc : null;
+        return nowUtc;
+    }
+
+    private async Task MigrateTaskKindFieldsAsync(CancellationToken cancellationToken)
+    {
+        await liteDbExecutor.ExecuteAsync(
+            db =>
+            {
+                RemoveTaskKindFields(db.GetCollection("tasks"), "Kind", "kind");
+                RemoveNestedTaskDefaultsKindFields(db.GetCollection("repositories"), "TaskDefaults", "Kind", "kind");
+            },
+            cancellationToken);
+    }
+
+    private static void RemoveTaskKindFields(ILiteCollection<BsonDocument> collection, params string[] fieldNames)
+    {
+        foreach (var document in collection.FindAll())
+        {
+            var changed = false;
+            foreach (var fieldName in fieldNames)
+            {
+                if (document.Remove(fieldName))
+                {
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                collection.Update(document);
+            }
+        }
+    }
+
+    private static void RemoveNestedTaskDefaultsKindFields(
+        ILiteCollection<BsonDocument> collection,
+        string nestedDocumentField,
+        params string[] fieldNames)
+    {
+        foreach (var document in collection.FindAll())
+        {
+            if (!document.TryGetValue(nestedDocumentField, out var nestedValue) || !nestedValue.IsDocument)
+            {
+                continue;
+            }
+
+            var nestedDocument = nestedValue.AsDocument;
+            var changed = false;
+
+            foreach (var fieldName in fieldNames)
+            {
+                if (nestedDocument.Remove(fieldName))
+                {
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+            {
+                continue;
+            }
+
+            document[nestedDocumentField] = nestedDocument;
+            collection.Update(document);
+        }
     }
 
     private sealed record TaskCleanupSeed(

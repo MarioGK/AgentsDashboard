@@ -36,10 +36,8 @@ public interface IOrchestratorStore
 
     Task<TaskDocument> CreateTaskAsync(CreateTaskRequest request, CancellationToken cancellationToken);
     Task<List<TaskDocument>> ListTasksAsync(string repositoryId, CancellationToken cancellationToken);
-    Task<List<TaskDocument>> ListEventDrivenTasksAsync(string repositoryId, CancellationToken cancellationToken);
     Task<TaskDocument?> GetTaskAsync(string taskId, CancellationToken cancellationToken);
     Task<List<TaskDocument>> ListDueTasksAsync(DateTime utcNow, int limit, CancellationToken cancellationToken);
-    Task MarkOneShotTaskConsumedAsync(string taskId, CancellationToken cancellationToken);
     Task<TaskDocument?> UpdateTaskGitMetadataAsync(
         string taskId,
         DateTime? lastGitSyncAtUtc,

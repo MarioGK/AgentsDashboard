@@ -61,7 +61,6 @@ public sealed class OrchestratorStoreIntegrationTests
         var updatedRepository = await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
-                Kind: TaskKind.EventDriven,
                 Harness: "OpenCode",
                 ExecutionModeDefault: HarnessExecutionMode.Plan,
                 Command: "echo defaults",
@@ -76,7 +75,6 @@ public sealed class OrchestratorStoreIntegrationTests
             return;
         }
 
-        await Assert.That(updatedRepository.TaskDefaults.Kind).IsEqualTo(TaskKind.EventDriven);
         await Assert.That(updatedRepository.TaskDefaults.Harness).IsEqualTo("opencode");
         await Assert.That(updatedRepository.TaskDefaults.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
         await Assert.That(updatedRepository.TaskDefaults.Command).IsEqualTo("echo defaults");
@@ -91,7 +89,6 @@ public sealed class OrchestratorStoreIntegrationTests
                 Name: "defaults task"),
             CancellationToken.None);
 
-        await Assert.That(task.Kind).IsEqualTo(TaskKind.EventDriven);
         await Assert.That(task.Harness).IsEqualTo("opencode");
         await Assert.That(task.ExecutionModeDefault).IsEqualTo(HarnessExecutionMode.Plan);
         await Assert.That(task.Command).IsEqualTo("echo defaults");
@@ -116,7 +113,6 @@ public sealed class OrchestratorStoreIntegrationTests
         await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
-                Kind: TaskKind.OneShot,
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Default,
                 Command: "echo one-shot",
@@ -134,7 +130,6 @@ public sealed class OrchestratorStoreIntegrationTests
         await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
-                Kind: TaskKind.EventDriven,
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Default,
                 Command: "echo event",
@@ -152,7 +147,6 @@ public sealed class OrchestratorStoreIntegrationTests
         await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
-                Kind: TaskKind.OneShot,
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Default,
                 Command: "echo disabled",
@@ -172,10 +166,32 @@ public sealed class OrchestratorStoreIntegrationTests
             .ToList();
 
         await Assert.That(dueTaskIds).Contains(oneShotTask.Id);
-        await Assert.That(dueTaskIds).DoesNotContain(eventTask.Id);
+        await Assert.That(dueTaskIds).Contains(eventTask.Id);
         await Assert.That(dueTaskIds).DoesNotContain(disabledTask.Id);
 
-        await fixture.Store.MarkOneShotTaskConsumedAsync(oneShotTask.Id, CancellationToken.None);
+        var disabledOneShotTask = await fixture.Store.UpdateTaskAsync(
+            oneShotTask.Id,
+            new UpdateTaskRequest(
+                Name: oneShotTask.Name,
+                Harness: oneShotTask.Harness,
+                Prompt: oneShotTask.Prompt,
+                Command: oneShotTask.Command,
+                AutoCreatePullRequest: oneShotTask.AutoCreatePullRequest,
+                Enabled: false,
+                RetryPolicy: oneShotTask.RetryPolicy,
+                Timeouts: oneShotTask.Timeouts,
+                SandboxProfile: oneShotTask.SandboxProfile,
+                ArtifactPolicy: oneShotTask.ArtifactPolicy,
+                ApprovalProfile: oneShotTask.ApprovalProfile,
+                ConcurrencyLimit: oneShotTask.ConcurrencyLimit,
+                InstructionFiles: oneShotTask.InstructionFiles,
+                ArtifactPatterns: oneShotTask.ArtifactPatterns,
+                LinkedFailureRuns: oneShotTask.LinkedFailureRuns,
+                ExecutionModeDefault: oneShotTask.ExecutionModeDefault,
+                SessionProfileId: oneShotTask.SessionProfileId),
+            CancellationToken.None);
+
+        await Assert.That(disabledOneShotTask).IsNotNull();
 
         var dueTaskIdsAfterConsume = (await fixture.Store.ListDueTasksAsync(DateTime.UtcNow, limit: 10, CancellationToken.None))
             .Select(task => task.Id)
@@ -302,7 +318,6 @@ public sealed class OrchestratorStoreIntegrationTests
         await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
-                Kind: TaskKind.OneShot,
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Plan,
                 Command: "echo mode",
@@ -323,7 +338,6 @@ public sealed class OrchestratorStoreIntegrationTests
             task.Id,
             new UpdateTaskRequest(
                 Name: task.Name,
-                Kind: task.Kind,
                 Harness: task.Harness,
                 Prompt: task.Prompt,
                 Command: task.Command,
@@ -352,7 +366,6 @@ public sealed class OrchestratorStoreIntegrationTests
         await fixture.Store.UpdateRepositoryTaskDefaultsAsync(
             repository.Id,
             new UpdateRepositoryTaskDefaultsRequest(
-                Kind: TaskKind.OneShot,
                 Harness: "codex",
                 ExecutionModeDefault: HarnessExecutionMode.Plan,
                 Command: "echo mode",

@@ -120,14 +120,6 @@ else
                     </MudStack>
                     <MudGrid>
                         <MudItem xs="12" md="3">
-                            <SettingsHintedField ContainerClass="" Hint="One Shot runs on demand, Event Driven can be scheduled or triggered by events.">
-                                <MudSelect T="TaskKind" @bind-Value="_taskDefaultsKind" Label="Kind">
-                                    <MudSelectItem T="TaskKind" Value="@TaskKind.OneShot">One Shot</MudSelectItem>
-                                    <MudSelectItem T="TaskKind" Value="@TaskKind.EventDriven">Event Driven</MudSelectItem>
-                                </MudSelect>
-                            </SettingsHintedField>
-                        </MudItem>
-                        <MudItem xs="12" md="3">
                             <SettingsHintedField ContainerClass="" Hint="Execution harness used by default for tasks in this repository.">
                                 <MudSelect T="string" @bind-Value="_taskDefaultsHarness" Label="Harness">
                                     <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
@@ -214,7 +206,6 @@ else
                     <HeaderContent>
                         <MudTh>Name</MudTh>
                         <MudTh>Status</MudTh>
-                        <MudTh>Kind</MudTh>
                         <MudTh>Harness</MudTh>
                         <MudTh>Enabled</MudTh>
                         <MudTh>Next Run</MudTh>
@@ -225,7 +216,6 @@ else
                         <MudTd>
                             <TaskStatusChip Task="context" LatestRun="@GetLatestRunForTask(context.Id)" IsLoading="_taskStatusLoading" />
                         </MudTd>
-                        <MudTd>@context.Kind</MudTd>
                         <MudTd>@context.Harness</MudTd>
                         <MudTd>@context.Enabled</MudTd>
                         <MudTd>@(context.NextRunAtUtc?.ToLocalTime().ToString("g") ?? "-")</MudTd>
@@ -401,7 +391,6 @@ else
     private readonly List<PromptSkillDocument> _globalPromptSkills = [];
 
     private string _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
-    private TaskKind _taskDefaultsKind = TaskKind.OneShot;
     private string _taskDefaultsHarness = "codex";
     private HarnessExecutionMode _taskDefaultsExecutionMode = HarnessExecutionMode.Default;
     private string _taskDefaultsCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
@@ -687,7 +676,6 @@ else
     private void ApplyRepositoryTaskDefaults(RepositoryDocument repository)
     {
         var defaults = repository.TaskDefaults ?? new RepositoryTaskDefaultsConfig();
-        _taskDefaultsKind = defaults.Kind;
         _taskDefaultsHarness = defaults.Harness;
         _taskDefaultsExecutionMode = defaults.ExecutionModeDefault;
         _taskDefaultsCommand = defaults.Command;
@@ -707,7 +695,6 @@ else
         try
         {
             var request = new UpdateRepositoryTaskDefaultsRequest(
-                Kind: _taskDefaultsKind,
                 Harness: _taskDefaultsHarness,
                 ExecutionModeDefault: _taskDefaultsExecutionMode,
                 Command: _taskDefaultsCommand,

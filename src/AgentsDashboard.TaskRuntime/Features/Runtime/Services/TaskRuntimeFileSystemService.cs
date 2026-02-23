@@ -57,6 +57,19 @@ public sealed class TaskRuntimeFileSystemService(
 
         if (!Directory.Exists(workspacePath))
         {
+            if (string.Equals(normalizedRelativePath, ".", StringComparison.Ordinal))
+            {
+                return ValueTask.FromResult(new ListRuntimeFilesResult
+                {
+                    Success = true,
+                    Found = true,
+                    IsDirectory = true,
+                    Reason = null,
+                    ResolvedRelativePath = ".",
+                    Entries = [],
+                });
+            }
+
             return ValueTask.FromResult(new ListRuntimeFilesResult
             {
                 Success = false,

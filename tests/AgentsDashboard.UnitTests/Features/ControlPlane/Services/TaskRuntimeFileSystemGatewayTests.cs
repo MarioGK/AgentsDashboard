@@ -355,6 +355,11 @@ public sealed class TaskRuntimeFileSystemGatewayTests
             throw new NotSupportedException();
         }
 
+        public Task<bool> RestartTaskRuntimeAsync(string runtimeId, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task RecycleTaskRuntimeAsync(string runtimeId, CancellationToken cancellationToken)
         {
             throw new NotSupportedException();

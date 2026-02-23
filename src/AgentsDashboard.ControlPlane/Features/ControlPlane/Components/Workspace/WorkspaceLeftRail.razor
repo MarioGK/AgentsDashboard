@@ -140,7 +140,7 @@
                         </MudStack>
                         @if (!IsCollapsed)
                         {
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@thread.Harness · @thread.Kind · @thread.LatestStateLabel</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@thread.Harness · @thread.LatestStateLabel</MudText>
                             @if (!string.IsNullOrWhiteSpace(thread.LatestRunHint))
                             {
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">@thread.LatestRunHint</MudText>

@@ -88,6 +88,18 @@
                   @onkeydown="OnKeyDownAsync"
                   placeholder="@Placeholder"
                   disabled="@Disabled"></textarea>
+
+        @if (ShowSubmitButton && OnSubmit.HasDelegate)
+        {
+            <MudTooltip Text="@SubmitTooltip">
+                <MudIconButton Icon="@Icons.Material.Filled.Send"
+                               Size="Size.Small"
+                               Class="workspace-composer-send-button"
+                               OnClick="SubmitAsync"
+                               Disabled="@(!CanSubmit)"
+                               data-testid="workspace-composer-send" />
+            </MudTooltip>
+        }
     </div>
 
     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="workspace-composer-helper-text">@HelperText</MudText>
@@ -107,11 +119,15 @@
     [Parameter] public string GhostSuffix { get; set; } = string.Empty;
     [Parameter] public string Placeholder { get; set; } = string.Empty;
     [Parameter] public string HelperText { get; set; } = "Enter to send. Shift+Enter inserts a new line. Paste or upload images.";
+    [Parameter] public bool ShowSubmitButton { get; set; }
+    [Parameter] public string SubmitTooltip { get; set; } = "Send";
+    [Parameter] public EventCallback OnSubmit { get; set; }
     [Parameter] public int Rows { get; set; } = 6;
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public string PasteBridgeKey { get; set; } = string.Empty;
     [Parameter] public int MaxImages { get; set; } = 6;
     [Parameter] public long MaxImageBytes { get; set; } = 8L * 1024L * 1024L;
+    [Parameter] public int MaxAutoHeightPx { get; set; } = 240;
 
     private static readonly HashSet<string> s_allowedMimeTypes =
     [
@@ -128,6 +144,7 @@
     private string? _pasteBridgeHandle;
 
     private bool CanClearComposer => !string.IsNullOrEmpty(Value) || _images.Count > 0;
+    private bool CanSubmit => !Disabled && (!string.IsNullOrWhiteSpace(Value) || _images.Count > 0);
 
     protected override void OnParametersSet()
     {
@@ -153,11 +170,14 @@
                 _dotNetRef,
                 PasteBridgeKey);
         }
+
+        await AdjustInputHeightAsync();
     }
 
     private async Task OnInputChangedAsync(ChangeEventArgs args)
     {
         await ValueChanged.InvokeAsync(args.Value?.ToString() ?? string.Empty);
+        await AdjustInputHeightAsync();
     }
 
     private async Task OnKeyDownAsync(KeyboardEventArgs args)
@@ -201,6 +221,8 @@
             _images.Clear();
             await ImagesChanged.InvokeAsync(_images.ToList());
         }
+
+        await AdjustInputHeightAsync();
     }
 
     private async Task OnFileUploadChangedAsync(InputFileChangeEventArgs args)
@@ -312,6 +334,7 @@
 
         _images.AddRange(accepted);
         await ImagesChanged.InvokeAsync(_images.ToList());
+        await AdjustInputHeightAsync();
     }
 
     private async Task RemoveImageAsync(string imageId)
@@ -325,7 +348,28 @@
         if (removed > 0)
         {
             await ImagesChanged.InvokeAsync(_images.ToList());
+            await AdjustInputHeightAsync();
         }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!CanSubmit || !OnSubmit.HasDelegate)
+        {
+            return;
+        }
+
+        await OnSubmit.InvokeAsync();
+    }
+
+    private async Task AdjustInputHeightAsync()
+    {
+        if (_workspaceJsModule is null || string.IsNullOrWhiteSpace(InputId))
+        {
+            return;
+        }
+
+        await _workspaceJsModule.InvokeVoidAsync("autoSizeTextarea", InputId, MaxAutoHeightPx);
     }
 
     private async Task NotifyValidationErrorAsync(string message)

@@ -425,7 +425,6 @@ public sealed class GlobalSearchService(
                     .AppendLine($"Repository: {repositoryName}")
                     .AppendLine($"Task: {task.Name}")
                     .AppendLine($"Harness: {task.Harness}")
-                    .AppendLine($"Kind: {task.Kind}")
                     .AppendLine($"Enabled: {task.Enabled}")
                     .AppendLine("Prompt:")
                     .AppendLine(TruncateForIndex(task.Prompt, MaxTaskPromptLength))

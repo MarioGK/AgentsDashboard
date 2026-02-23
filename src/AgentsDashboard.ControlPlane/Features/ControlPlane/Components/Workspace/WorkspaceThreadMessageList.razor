@@ -1,28 +1,88 @@
 @namespace AgentsDashboard.ControlPlane.Components.Workspace
+@implements IAsyncDisposable
 @using AgentsDashboard.ControlPlane.Components.Workspace.Models
+@inject IJSRuntime JS
 
-<div class="workspace-chat-stream" data-testid="workspace-chat-stream">
-    @foreach (var message in Messages)
-    {
-        <div class="@GetBubbleClass(message.Kind)">
-            <MudStack Spacing="0">
-                <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                    <MudText Typo="Typo.caption">@message.Title</MudText>
-                    <MudSpacer />
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@message.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</MudText>
+<div class="workspace-chat-stream-host">
+    <div id="@_streamElementId" class="workspace-chat-stream" data-testid="workspace-chat-stream">
+        @foreach (var message in Messages)
+        {
+            <div class="@GetBubbleClass(message.Kind)">
+                <MudStack Spacing="0">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                        <MudText Typo="Typo.caption">@message.Title</MudText>
+                        <MudSpacer />
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@message.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Class="workspace-chat-message-content">@message.Content</MudText>
+                    @if (!string.IsNullOrWhiteSpace(message.Meta))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@message.Meta</MudText>
+                    }
                 </MudStack>
-                <MudText Typo="Typo.body2" Class="workspace-chat-message-content">@message.Content</MudText>
-                @if (!string.IsNullOrWhiteSpace(message.Meta))
-                {
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@message.Meta</MudText>
-                }
-            </MudStack>
-        </div>
+            </div>
+        }
+    </div>
+
+    @if (_showJumpToLatest)
+    {
+        <MudTooltip Text="Jump to latest">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward"
+                           Class="workspace-chat-jump-latest"
+                           OnClick="JumpToLatestAsync"
+                           data-testid="workspace-chat-jump-latest" />
+        </MudTooltip>
     }
 </div>
 
 @code {
     [Parameter] public IReadOnlyList<WorkspaceChatMessage> Messages { get; set; } = [];
+
+    private readonly string _streamElementId = $"workspace-chat-stream-{Guid.NewGuid():N}";
+    private IJSObjectReference? _workspaceJsModule;
+    private DotNetObjectReference<WorkspaceThreadMessageList>? _dotNetRef;
+    private string? _autoScrollHandle;
+    private bool _showJumpToLatest;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_workspaceJsModule is null)
+        {
+            _workspaceJsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./workspace.js");
+            _dotNetRef = DotNetObjectReference.Create(this);
+        }
+
+        if (_workspaceJsModule is not null && _dotNetRef is not null && _autoScrollHandle is null)
+        {
+            _autoScrollHandle = await _workspaceJsModule.InvokeAsync<string?>(
+                "registerChatAutoScroll",
+                _streamElementId,
+                _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public Task OnChatAutoScrollStateChanged(bool isSticky, int pendingCount)
+    {
+        var shouldShow = !isSticky && pendingCount > 0;
+        if (_showJumpToLatest != shouldShow)
+        {
+            _showJumpToLatest = shouldShow;
+            _ = InvokeAsync(StateHasChanged);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task JumpToLatestAsync()
+    {
+        if (_workspaceJsModule is null || _autoScrollHandle is null)
+        {
+            return;
+        }
+
+        await _workspaceJsModule.InvokeVoidAsync("scrollChatToLatest", _autoScrollHandle);
+    }
 
     private static string GetBubbleClass(WorkspaceChatMessageKind kind)
     {
@@ -33,5 +93,31 @@
             WorkspaceChatMessageKind.Event => "workspace-chat-bubble workspace-chat-bubble-event",
             _ => "workspace-chat-bubble workspace-chat-bubble-system",
         };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_workspaceJsModule is not null && _autoScrollHandle is not null)
+            {
+                await _workspaceJsModule.InvokeVoidAsync("unregisterChatAutoScroll", _autoScrollHandle);
+            }
+        }
+        catch
+        {
+        }
+
+        _dotNetRef?.Dispose();
+        if (_workspaceJsModule is not null)
+        {
+            try
+            {
+                await _workspaceJsModule.DisposeAsync();
+            }
+            catch
+            {
+            }
+        }
     }
 }

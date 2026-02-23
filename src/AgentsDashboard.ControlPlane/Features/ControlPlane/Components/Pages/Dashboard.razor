@@ -3,6 +3,7 @@
 @inject Data.IOrchestratorStore Store
 @inject Services.IGlobalSelectionService SelectionService
 @inject Services.ITaskRuntimeLifecycleManager WorkerLifecycle
+@inject Services.TaskRuntimeHealthSupervisorService TaskRuntimeHealthSupervisor
 @inject Services.IBackgroundWorkCoordinator BackgroundWorkCoordinator
 @inject Microsoft.Extensions.Options.IOptions<Configuration.OrchestratorOptions> OrchestratorOptions
 @inject NavigationManager NavigationManager
@@ -120,6 +121,10 @@ else
                     @if (!string.IsNullOrWhiteSpace(_orchestratorHealthError))
                     {
                         <MudAlert Severity="Severity.Warning" Variant="Variant.Text" Dense="true" Class="mb-2">@_orchestratorHealthError</MudAlert>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_taskRuntimeHealthError))
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Text" Dense="true" Class="mb-2">@_taskRuntimeHealthError</MudAlert>
                     }
 
                     <MudGrid>
@@ -285,6 +290,23 @@ else
 
                         <MudItem xs="12" lg="4">
                             <MudPaper Class="overview-card" Elevation="0">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                                    <MudText Typo="Typo.h6">Runtime Health</MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="@GetRuntimePoolHealthColor()">
+                                        @(_taskRuntimeHealth.ReadinessBlocked ? "Readiness Blocked" : "Ready")
+                                    </MudChip>
+                                </MudStack>
+                                <MudText Typo="Typo.caption">Healthy: @_taskRuntimeHealth.HealthyRuntimes · Degraded: @_taskRuntimeHealth.DegradedRuntimes</MudText>
+                                <MudText Typo="Typo.caption">Unhealthy: @_taskRuntimeHealth.UnhealthyRuntimes · Recovering: @_taskRuntimeHealth.RecoveringRuntimes</MudText>
+                                <MudText Typo="Typo.caption">Offline: @_taskRuntimeHealth.OfflineRuntimes · Quarantined: @_taskRuntimeHealth.QuarantinedRuntimes</MudText>
+                                <MudText Typo="Typo.caption">Remediation failures: @_taskRuntimeHealth.RecentRemediationFailures</MudText>
+                                <MudText Typo="Typo.caption">@GetRuntimeRemediationText()</MudText>
+                                <MudText Typo="Typo.caption">@GetRuntimeReadinessWindowText()</MudText>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" lg="4">
+                            <MudPaper Class="overview-card" Elevation="0">
                                 <MudText Typo="Typo.h6" Class="mb-2">Worker State Distribution</MudText>
                                 <MudText Typo="Typo.caption">Breakout of worker lifecycle states for quick tuning.</MudText>
                                 <MudText Typo="Typo.caption">Ready: @_workerReadyCount · Busy: @_workerBusyCount · Offline: @_workerOfflineCount · Draining: @_workerDrainingCount</MudText>
@@ -298,6 +320,35 @@ else
                                                          YValue="point => point.Value" />
                                     </ApexChart>
                                 </div>
+                            </MudPaper>
+                        </MudItem>
+
+                        <MudItem xs="12" lg="8">
+                            <MudPaper Class="overview-card" Elevation="0">
+                                <MudText Typo="Typo.h6" Class="mb-2">Runtime Incident Timeline</MudText>
+                                @if (_taskRuntimeHealth.Incidents.Count == 0)
+                                {
+                                    <MudText Typo="Typo.caption">No runtime incidents recorded.</MudText>
+                                }
+                                else
+                                {
+                                    <MudStack Spacing="1">
+                                        @foreach (var incident in _taskRuntimeHealth.Incidents.Take(10))
+                                        {
+                                            <MudPaper Elevation="0" Class="overview-stat-card">
+                                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                                    <MudText Typo="Typo.caption">@incident.RuntimeId</MudText>
+                                                    <MudChip T="string" Size="Size.Small" Color="@MapRuntimeHealthColor(incident.Status)">
+                                                        @incident.Status
+                                                    </MudChip>
+                                                </MudStack>
+                                                <MudText Typo="Typo.caption">@incident.Action · @(incident.Success ? "success" : "pending/failure")</MudText>
+                                                <MudText Typo="Typo.caption">@incident.Reason</MudText>
+                                                <MudText Typo="Typo.caption">@incident.TimestampUtc.ToLocalTime().ToString("g")</MudText>
+                                            </MudPaper>
+                                        }
+                                    </MudStack>
+                                }
                             </MudPaper>
                         </MudItem>
 
@@ -583,6 +634,8 @@ else
 
     private OrchestratorHealthSnapshot? _orchestratorHealth;
     private string? _orchestratorHealthError;
+    private TaskRuntimeHealthSnapshot _taskRuntimeHealth = TaskRuntimeHealthSnapshot.Empty;
+    private string? _taskRuntimeHealthError;
     private TaskRuntimeTelemetrySnapshot _taskRuntimeTelemetry = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     private bool _hostDiskAvailable;
@@ -659,6 +712,7 @@ else
     {
         await LoadWorkerMetricsAsync();
         await LoadOrchestratorCheckHealthAsync();
+        await LoadTaskRuntimeHealthAsync();
         await LoadStorageSnapshotAsync();
         LoadControlPlaneMetrics();
         LoadHostSystemMetrics();
@@ -680,6 +734,23 @@ else
         {
             _orchestratorHealthError = "Orchestrator health snapshot unavailable";
         }
+    }
+
+    private Task LoadTaskRuntimeHealthAsync()
+    {
+        _taskRuntimeHealthError = null;
+
+        try
+        {
+            _taskRuntimeHealth = TaskRuntimeHealthSupervisor.GetSnapshot();
+        }
+        catch
+        {
+            _taskRuntimeHealth = TaskRuntimeHealthSnapshot.Empty;
+            _taskRuntimeHealthError = "Task runtime health snapshot unavailable";
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task LoadWorkerMetricsAsync()
@@ -1326,6 +1397,54 @@ else
     private static string GetRunStateLabel(RunState state) => TaskRunStatusPresentation.FromRunState(state).Label;
 
     private static bool IsOpenFinding(FindingDocument finding) => finding.State is FindingState.New or FindingState.Acknowledged or FindingState.InProgress;
+
+    private static Color MapRuntimeHealthColor(TaskRuntimeHealthStatus status)
+    {
+        return status switch
+        {
+            TaskRuntimeHealthStatus.Healthy => Color.Success,
+            TaskRuntimeHealthStatus.Degraded => Color.Warning,
+            TaskRuntimeHealthStatus.Unhealthy => Color.Error,
+            TaskRuntimeHealthStatus.Recovering => Color.Info,
+            TaskRuntimeHealthStatus.Offline => Color.Dark,
+            TaskRuntimeHealthStatus.Quarantined => Color.Secondary,
+            _ => Color.Default,
+        };
+    }
+
+    private Color GetRuntimePoolHealthColor()
+    {
+        if (_taskRuntimeHealth.ReadinessBlocked)
+        {
+            return Color.Error;
+        }
+
+        if (_taskRuntimeHealth.UnhealthyRuntimes > 0 || _taskRuntimeHealth.QuarantinedRuntimes > 0)
+        {
+            return Color.Warning;
+        }
+
+        if (_taskRuntimeHealth.DegradedRuntimes > 0 || _taskRuntimeHealth.RecoveringRuntimes > 0)
+        {
+            return Color.Info;
+        }
+
+        return Color.Success;
+    }
+
+    private string GetRuntimeRemediationText()
+    {
+        return _taskRuntimeHealth.LastRemediationAtUtc.HasValue
+            ? $"Last remediation: {_taskRuntimeHealth.LastRemediationAtUtc.Value.ToLocalTime():g}"
+            : "No remediation actions yet";
+    }
+
+    private string GetRuntimeReadinessWindowText()
+    {
+        return _taskRuntimeHealth.ReadinessBlockedSinceUtc.HasValue
+            ? $"Degradation window started: {_taskRuntimeHealth.ReadinessBlockedSinceUtc.Value.ToLocalTime():g}"
+            : "No active readiness degradation window";
+    }
 
     private void OnBackgroundWorkUpdated(BackgroundWorkSnapshot snapshot)
     {

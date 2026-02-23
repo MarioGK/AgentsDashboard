@@ -300,6 +300,67 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
     }
 
+    public async Task<bool> RestartTaskRuntimeAsync(string runtimeId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId))
+        {
+            return false;
+        }
+
+        var runtime = await runtimeSettingsProvider.GetAsync(cancellationToken);
+        var worker = await GetTaskRuntimeAsync(runtimeId, cancellationToken);
+        if (worker is null || string.IsNullOrWhiteSpace(worker.ContainerId))
+        {
+            return false;
+        }
+
+        if (_workers.TryGetValue(runtimeId, out var state))
+        {
+            state.LifecycleState = TaskRuntimeLifecycleState.Starting;
+            await PersistTaskRuntimeStateAsync(
+                state,
+                cancellationToken,
+                explicitState: TaskRuntimeState.Starting,
+                updateLastActivityUtc: false,
+                clearInactiveAfterUtc: true);
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(5, runtime.ContainerStartTimeoutSeconds)));
+
+        try
+        {
+            await _dockerClient.Containers.RestartContainerAsync(
+                worker.ContainerId,
+                new ContainerRestartParameters(),
+                timeoutCts.Token);
+
+            await RefreshWorkersAsync(runtime, cancellationToken);
+            var ready = await WaitForWorkerReadyAsync(runtimeId, runtime, cancellationToken);
+            return ready is not null;
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            if (_workers.TryGetValue(runtimeId, out var failedState))
+            {
+                failedState.LifecycleState = TaskRuntimeLifecycleState.FailedStart;
+                await PersistTaskRuntimeStateAsync(
+                    failedState,
+                    cancellationToken,
+                    explicitState: TaskRuntimeState.Failed,
+                    updateLastActivityUtc: false,
+                    lastError: ex.Message);
+            }
+
+            logger.LogWarning(ex, "Failed to restart worker {TaskRuntimeId}", runtimeId);
+            return false;
+        }
+    }
+
     public async Task RecycleTaskRuntimeAsync(string runtimeId, CancellationToken cancellationToken)
     {
         var runtime = await runtimeSettingsProvider.GetAsync(cancellationToken);
@@ -397,10 +458,15 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 ReadyTaskRuntimes: workers.Count(x => x.IsRunning && x.LifecycleState == TaskRuntimeLifecycleState.Ready),
                 BusyTaskRuntimes: workers.Count(x => x.IsRunning && x.LifecycleState == TaskRuntimeLifecycleState.Busy),
                 DrainingTaskRuntimes: workers.Count(x => x.IsRunning && x.IsDraining),
+                DegradedTaskRuntimes: workers.Count(x => x.IsRunning && x.LifecycleState == TaskRuntimeLifecycleState.Starting),
+                UnhealthyTaskRuntimes: workers.Count(x => x.LifecycleState is TaskRuntimeLifecycleState.FailedStart or TaskRuntimeLifecycleState.Quarantined),
                 ScaleOutPaused: _scaleOutPaused,
                 ScaleOutCooldownUntilUtc: _scaleOutCooldownUntilUtc,
                 StartAttemptsInWindow: _startAttemptsInWindow,
-                FailedStartsInWindow: _failedStartsInWindow);
+                FailedStartsInWindow: _failedStartsInWindow,
+                LastRemediationAtUtc: null,
+                RecentRemediationFailures: 0,
+                ReadinessBlocked: false);
         }
     }
 

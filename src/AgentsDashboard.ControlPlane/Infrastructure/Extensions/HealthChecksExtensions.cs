@@ -15,6 +15,9 @@ internal static class HealthChecksExtensions
             .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
             .AddCheck<DatabaseReadyHealthCheck>(
                 "database",
+                tags: ["ready"])
+            .AddCheck<TaskRuntimePoolReadyHealthCheck>(
+                "task-runtime-pool",
                 tags: ["ready"]);
 
         return services;
