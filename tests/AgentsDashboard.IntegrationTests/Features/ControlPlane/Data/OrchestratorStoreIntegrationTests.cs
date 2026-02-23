@@ -380,6 +380,103 @@ public sealed class OrchestratorStoreIntegrationTests
     }
 
     [Test]
+    public async Task RunQuestionRequests_WhenPlanModeToolPayloadArrives_PersistsPendingAndMarksAnswered()
+    {
+        await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();
+
+        var repository = await fixture.Store.CreateRepositoryAsync(
+            new CreateRepositoryRequest(
+                Name: "Question Repository",
+                GitUrl: "https://example.com/org/questions.git",
+                LocalPath: "/tmp/question-repository",
+                DefaultBranch: "main"),
+            CancellationToken.None);
+
+        var task = await fixture.Store.CreateTaskAsync(
+            new CreateTaskRequest(
+                RepositoryId: repository.Id,
+                Prompt: "answer follow-up questions",
+                Name: "Question task"),
+            CancellationToken.None);
+
+        var run = await fixture.Store.CreateRunAsync(
+            task,
+            CancellationToken.None,
+            executionModeOverride: HarnessExecutionMode.Plan);
+
+        await fixture.Store.AppendRunStructuredEventAsync(
+            new RunStructuredEventDocument
+            {
+                RunId = run.Id,
+                RepositoryId = repository.Id,
+                TaskId = task.Id,
+                Sequence = 12,
+                EventType = "tool.lifecycle",
+                Category = "tool.lifecycle",
+                PayloadJson = """
+                              {
+                                "toolName": "request_user_input",
+                                "toolCallId": "call-plan-1",
+                                "state": "running",
+                                "input": {
+                                  "questions": [
+                                    {
+                                      "id": "mode",
+                                      "header": "Mode",
+                                      "question": "Select execution mode",
+                                      "options": [
+                                        { "value": "fast", "label": "Fast", "description": "Lower checks" },
+                                        { "value": "safe", "label": "Safe", "description": "Run full validation" }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                              """,
+                SchemaVersion = "harness-structured-event-v2",
+                TimestampUtc = DateTime.UtcNow,
+                CreatedAtUtc = DateTime.UtcNow,
+            },
+            CancellationToken.None);
+
+        var pending = await fixture.Store.ListPendingRunQuestionRequestsAsync(task.Id, run.Id, CancellationToken.None);
+        await Assert.That(pending.Count()).IsEqualTo(1);
+        await Assert.That(pending[0].Status).IsEqualTo(RunQuestionRequestStatus.Pending);
+        await Assert.That(pending[0].SourceToolName).IsEqualTo("request_user_input");
+        await Assert.That(pending[0].Questions.Count).IsEqualTo(1);
+        await Assert.That(pending[0].Questions[0].Options.Count).IsEqualTo(2);
+        await Assert.That(pending[0].Questions[0].Options[0].Value).IsEqualTo("fast");
+
+        var answered = await fixture.Store.MarkRunQuestionRequestAnsweredAsync(
+            pending[0].Id,
+            [
+                new RunQuestionAnswerDocument
+                {
+                    QuestionId = "mode",
+                    SelectedOptionValue = "safe",
+                    SelectedOptionLabel = "Safe",
+                    SelectedOptionDescription = "Run full validation",
+                    AdditionalContext = "Prefer reliability over speed.",
+                }
+            ],
+            answeredRunId: "follow-up-run-1",
+            CancellationToken.None);
+
+        await Assert.That(answered).IsNotNull();
+        if (answered is null)
+        {
+            return;
+        }
+
+        await Assert.That(answered.Status).IsEqualTo(RunQuestionRequestStatus.Answered);
+        await Assert.That(answered.AnsweredRunId).IsEqualTo("follow-up-run-1");
+        await Assert.That(answered.Answers.Count).IsEqualTo(1);
+
+        var pendingAfterAnswer = await fixture.Store.ListPendingRunQuestionRequestsAsync(task.Id, run.Id, CancellationToken.None);
+        await Assert.That(pendingAfterAnswer).IsEmpty();
+    }
+
+    [Test]
     public async Task PruneStructuredRunDataAsync_WhenPruningTerminalRuns_DeletesOnlyEligibleStructuredRows()
     {
         await using var fixture = await OrchestratorStoreIntegrationFixture.CreateAsync();

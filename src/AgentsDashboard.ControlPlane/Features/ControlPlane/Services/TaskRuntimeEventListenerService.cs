@@ -556,7 +556,13 @@ public sealed class TaskRuntimeEventListenerService(
 
         await Task.Delay(TimeSpan.FromSeconds(Math.Min(delaySeconds, 300)));
 
-        var retryRun = await store.CreateRunAsync(task, CancellationToken.None, nextAttempt);
+        var retryRun = await store.CreateRunAsync(
+            task,
+            CancellationToken.None,
+            nextAttempt,
+            executionModeOverride: failedRun.ExecutionMode,
+            sessionProfileId: failedRun.SessionProfileId,
+            mcpConfigSnapshotJson: failedRun.McpConfigSnapshotJson);
         await dispatcher.DispatchAsync(repo, task, retryRun, CancellationToken.None);
     }
 

@@ -1,0 +1,97 @@
+.workspace-question-inbox {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    border: 1px solid rgba(255, 209, 102, 0.24);
+    background:
+        radial-gradient(circle at 88% -24%, rgba(255, 209, 102, 0.16) 0%, rgba(255, 209, 102, 0) 64%),
+        linear-gradient(155deg, rgba(13, 24, 38, 0.84), rgba(9, 16, 25, 0.94));
+    border-radius: 12px;
+    padding: 0.85rem;
+}
+
+.workspace-question-inbox-header-row {
+    border-bottom: 1px solid rgba(255, 209, 102, 0.2);
+    padding-bottom: 0.5rem;
+}
+
+.workspace-question-request-card {
+    border-radius: 10px;
+    border: 1px solid rgba(159, 177, 201, 0.2);
+    background: linear-gradient(180deg, rgba(19, 34, 52, 0.9), rgba(9, 17, 28, 0.96));
+    padding: 0.75rem;
+}
+
+.workspace-question-request-head {
+    border-bottom: 1px solid rgba(159, 177, 201, 0.16);
+    padding-bottom: 0.45rem;
+}
+
+.workspace-question-item-card {
+    border-radius: 10px;
+    border: 1px solid rgba(159, 177, 201, 0.18);
+    background: rgba(3, 10, 19, 0.52);
+    padding: 0.6rem;
+}
+
+.workspace-question-options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.45rem;
+}
+
+.workspace-question-option {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    text-align: left;
+    border: 1px solid rgba(159, 177, 201, 0.25);
+    border-radius: 9px;
+    padding: 0.52rem 0.58rem;
+    background: rgba(9, 18, 29, 0.66);
+    color: rgba(228, 236, 248, 0.96);
+    transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+    cursor: pointer;
+}
+
+.workspace-question-option:hover:not(:disabled) {
+    border-color: rgba(255, 209, 102, 0.54);
+    background: rgba(30, 48, 70, 0.86);
+    transform: translateY(-1px);
+}
+
+.workspace-question-option:disabled {
+    cursor: default;
+    opacity: 0.68;
+}
+
+.workspace-question-option-selected {
+    border-color: rgba(255, 209, 102, 0.8);
+    background: linear-gradient(160deg, rgba(255, 209, 102, 0.3), rgba(44, 63, 90, 0.92));
+}
+
+.workspace-question-option-label {
+    font-size: 0.84rem;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.workspace-question-option-description {
+    font-size: 0.73rem;
+    color: rgba(203, 216, 233, 0.9);
+    line-height: 1.22;
+}
+
+.workspace-question-request-actions {
+    margin-top: 0.2rem;
+}
+
+@media (max-width: 860px) {
+    .workspace-question-inbox {
+        padding: 0.72rem;
+    }
+
+    .workspace-question-options-grid {
+        grid-template-columns: 1fr;
+    }
+}

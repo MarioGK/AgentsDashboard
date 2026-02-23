@@ -7,6 +7,9 @@ EVENT_TS=""
 ERROR_LINE=""
 FIX_COOLDOWN_SECONDS="${FIX_COOLDOWN_SECONDS:-10}"
 EVENT_KIND="runtime-log"
+FAILURE_TAXONOMY="runtime"
+FAILURE_SEVERITY="medium"
+FAILURE_SIGNATURE=""
 CONTEXT_FILE=""
 CONTEXT_LINES="${AUTOFIX_CONTEXT_LINES:-120}"
 UNIFIED_ERROR_LOG=""
@@ -53,6 +56,18 @@ while [[ $# -gt 0 ]]; do
       EVENT_KIND="$2"
       shift 2
       ;;
+    --failure-taxonomy)
+      FAILURE_TAXONOMY="$2"
+      shift 2
+      ;;
+    --failure-severity)
+      FAILURE_SEVERITY="$2"
+      shift 2
+      ;;
+    --failure-signature)
+      FAILURE_SIGNATURE="$2"
+      shift 2
+      ;;
     --context-file)
       CONTEXT_FILE="$2"
       shift 2
@@ -72,7 +87,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$REPO_ROOT" || -z "$SOURCE_FILE" || -z "$EVENT_TS" || -z "$ERROR_LINE" ]]; then
-  echo "Usage: fix-dispatcher.sh --repo-root <path> --source <file> --timestamp <ts> --line <line>" >&2
+  echo "Usage: fix-dispatcher.sh --repo-root <path> --source <file> --timestamp <ts> --line <line> [--failure-taxonomy <runtime|compile|startup|health>] [--failure-severity <high|medium|low>] [--failure-signature <token>]" >&2
   exit 2
 fi
 
@@ -90,12 +105,20 @@ mkdir -p "$(dirname "$AUTOFIX_DISPATCH_LOG")"
 touch "$AUTOFIX_DISPATCH_LOG"
 touch "$AUTOFIX_STATE_FILE"
 
+if [[ -z "$FAILURE_SIGNATURE" ]]; then
+  if command -v sha256sum >/dev/null 2>&1; then
+    FAILURE_SIGNATURE="$(printf '%s' "$ERROR_LINE" | sha256sum | awk '{print $1}')"
+  else
+    FAILURE_SIGNATURE="$(printf '%s' "$ERROR_LINE" | cksum | awk '{print $1}')"
+  fi
+fi
+
 if command -v sha256sum >/dev/null 2>&1; then
   ERROR_HASH="$(printf '%s' "$ERROR_LINE" | sha256sum | awk '{print $1}')"
 else
   ERROR_HASH="$(printf '%s' "$ERROR_LINE" | cksum | awk '{print $1}')"
 fi
-ERROR_KEY="${EVENT_KIND}|${SOURCE_FILE}|${ERROR_HASH}"
+ERROR_KEY="${EVENT_KIND}|${FAILURE_TAXONOMY}|${FAILURE_SEVERITY}|${SOURCE_FILE}|${FAILURE_SIGNATURE}|${ERROR_HASH}"
 CODEx_EXIT_CODE=0
 FIX_OUTPUT=""
 CONTEXT_SNIPPET="  <no context data>"
@@ -113,10 +136,13 @@ log_dispatch() {
   local output="$2"
   local output_line="${output//$'\n'/ }"
 
-  printf '%s | source=%s | kind=%s | status=%s | line_hash=%s | exit=%s | output=%s\n' \
+  printf '%s | source=%s | kind=%s | taxonomy=%s | severity=%s | signature=%s | status=%s | line_hash=%s | exit=%s | output=%s\n' \
     "$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')" \
     "$SOURCE_FILE" \
     "$EVENT_KIND" \
+    "$FAILURE_TAXONOMY" \
+    "$FAILURE_SEVERITY" \
+    "$FAILURE_SIGNATURE" \
     "$status" \
     "$ERROR_HASH" \
     "$CODEx_EXIT_CODE" \
@@ -154,7 +180,7 @@ now_ts="$(date +%s)"
 cutoff_ts=$((now_ts - FIX_COOLDOWN_SECONDS))
 
 if [[ -f "$AUTOFIX_STATE_FILE" ]]; then
-  previous_ts="$(awk -F'|' -v key="$ERROR_KEY" '$1==key {print $2; exit}' "$AUTOFIX_STATE_FILE" 2>/dev/null || true)"
+  previous_ts="$(awk -F'|' -v key="$ERROR_KEY" '$1==key {print $NF; exit}' "$AUTOFIX_STATE_FILE" 2>/dev/null || true)"
   if [[ "$previous_ts" =~ ^[0-9]+$ && $((now_ts - previous_ts)) -le "$FIX_COOLDOWN_SECONDS" ]]; then
     CODEx_EXIT_CODE=0
     log_dispatch "skipped" "dedupe window active"
@@ -162,7 +188,7 @@ if [[ -f "$AUTOFIX_STATE_FILE" ]]; then
   fi
 fi
 
-awk -F'|' -v cutoff="$cutoff_ts" 'NF==2 && $2>=cutoff {print}' "$AUTOFIX_STATE_FILE" > "${AUTOFIX_STATE_FILE}.tmp" || true
+awk -F'|' -v cutoff="$cutoff_ts" 'NF>=2 && $NF>=cutoff {print}' "$AUTOFIX_STATE_FILE" > "${AUTOFIX_STATE_FILE}.tmp" || true
 mv "${AUTOFIX_STATE_FILE}.tmp" "$AUTOFIX_STATE_FILE"
 echo "${ERROR_KEY}|${now_ts}" >> "$AUTOFIX_STATE_FILE"
 
@@ -175,6 +201,10 @@ Source file: ${SOURCE_FILE}
 
 Log line:
 ${ERROR_LINE}
+
+Failure taxonomy: ${FAILURE_TAXONOMY}
+Failure severity: ${FAILURE_SEVERITY}
+Failure signature: ${FAILURE_SIGNATURE}
 
 Recent context:
 ${CONTEXT_SNIPPET}

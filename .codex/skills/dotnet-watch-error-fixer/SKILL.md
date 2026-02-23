@@ -5,21 +5,23 @@ description: Launches dotnet watch and continuously auto-fixes log events and re
 
 # dotnet-watch-error-fixer
 
-Use this skill when you want continuous `dotnet watch` operation and automated recovery actions.
+Use this skill when you want continuous `dotnet watch` operation, deterministic restart behavior, and automated recovery actions.
 
 ## What this skill does
 
-1. Cleans `data/logs` and dispatch logs before startup.
-2. Stops existing `dotnet watch` before startup.
+1. Enforces launcher singleton lock (`AUTOFIX_LOCK_FILE`) so only one launcher process runs.
+2. Stops existing `dotnet watch` and releases stale listeners on startup ports before launch.
 3. Starts:
-   `DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_WATCH_SUPPRESS_EMOJIS=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development dotnet watch --non-interactive --project src/AgentsDashboard.ControlPlane`
+   `DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_WATCH_SUPPRESS_EMOJIS=1 DOTNET_WATCH_NONINTERACTIVE=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development dotnet watch --non-interactive --project src/AgentsDashboard.ControlPlane`
 4. Watches warning/error-like events from `data/errors.log`, `dotnet-watch.stdout.log`, and `dotnet-watch.stderr.log`.
-5. Appends matching events to:
+5. Classifies events into `compile/runtime/startup` taxonomy.
+6. Applies compile-loop dispatch gating to avoid duplicate dispatch storms.
+7. Appends matching events to:
    - `data/logs/autofix-unified-errors.log`
-6. Dispatches Codex using `--yolo` in non-interactive mode for actionable events.
-7. Probes `HEALTH_CHECK_URL` on a random 5-10 second interval for 10 attempts.
-8. On repeated failures, builds a multi-log context bundle and dispatches a focused Codex recovery attempt.
-9. Restarts `dotnet watch` automatically with exponential backoff.
+8. Dispatches Codex using `--yolo` in non-interactive mode for actionable events.
+9. Probes `HEALTH_CHECK_URL` on a random 5-10 second interval for 10 attempts.
+10. On repeated failures, builds a multi-log context bundle and dispatches a focused Codex recovery attempt.
+11. Restarts `dotnet watch` automatically with exponential backoff.
 
 ## Required behavior
 
@@ -57,3 +59,11 @@ bash .codex/skills/dotnet-watch-error-fixer/launch-and-fix.sh
 - `HEALTH_CHECK_TIMEOUT_SECONDS` (default `5`)
 - `HEALTH_CONTEXT_LINES` (default `120`)
 - `HEALTH_FIX_COOLDOWN_SECONDS` (default `90`)
+- `COMPILE_COOLDOWN_SECONDS` (default `30`)
+- `STARTUP_COOLDOWN_SECONDS` (default `25`)
+- `RUNTIME_COOLDOWN_SECONDS` (default `10`)
+- `AUTOFIX_LOCK_DIR`
+- `AUTOFIX_LOCK_FILE`
+- `PRESTART_CLEANUP_DOTNET_WATCH` (`true|false`, default `true`)
+- `PRESTART_CLEANUP_PORTS` (default `5266,5268`)
+- `PRESTART_CLEANUP_TIMEOUT_SECONDS` (default `10`)

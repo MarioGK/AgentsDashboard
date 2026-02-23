@@ -1099,7 +1099,8 @@ public sealed class OrchestratorStore(
         CancellationToken cancellationToken,
         int attempt = 1,
         HarnessExecutionMode? executionModeOverride = null,
-        string? sessionProfileId = null)
+        string? sessionProfileId = null,
+        string? mcpConfigSnapshotJson = null)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var run = new RunDocument
@@ -1110,6 +1111,7 @@ public sealed class OrchestratorStore(
             ExecutionMode = executionModeOverride ?? task.ExecutionModeDefault ?? HarnessExecutionMode.Default,
             StructuredProtocol = "harness-structured-event-v2",
             SessionProfileId = sessionProfileId?.Trim() ?? task.SessionProfileId,
+            McpConfigSnapshotJson = mcpConfigSnapshotJson?.Trim() ?? string.Empty,
             Summary = "Queued",
             Attempt = attempt,
         };

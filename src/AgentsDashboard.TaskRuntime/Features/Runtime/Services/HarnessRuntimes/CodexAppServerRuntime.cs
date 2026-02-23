@@ -267,6 +267,13 @@ public sealed partial class CodexAppServerRuntime(
                             runtimeCt);
                     }
                 }
+
+                if (TryCreateToolLifecyclePayload(method, parameters, out var toolPayload))
+                {
+                    await sink.PublishAsync(
+                        new HarnessRuntimeEvent(HarnessRuntimeEventType.Log, Redact(toolPayload, request.Environment)),
+                        runtimeCt);
+                }
             }
         }, CancellationToken.None);
 
@@ -335,7 +342,7 @@ public sealed partial class CodexAppServerRuntime(
                     sandbox = ResolveSandboxMode(request.Environment),
                     model = ResolveModel(request.Environment),
                     ephemeral = true,
-                    experimentalRawEvents = false,
+                    experimentalRawEvents = true,
                 },
                 runtimeCt);
 
@@ -742,6 +749,314 @@ public sealed partial class CodexAppServerRuntime(
         }
 
         return [.. items];
+    }
+
+    private static bool TryCreateToolLifecyclePayload(string method, JsonElement parameters, out string payload)
+    {
+        payload = string.Empty;
+        if (parameters.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var methodIndicatesTool = method.Contains("tool", StringComparison.OrdinalIgnoreCase) ||
+                                  method.Contains("function", StringComparison.OrdinalIgnoreCase);
+        if (!methodIndicatesTool && !ContainsToolHint(parameters))
+        {
+            return false;
+        }
+
+        var toolName = ResolveToolName(parameters);
+        if (string.IsNullOrWhiteSpace(toolName))
+        {
+            if (!methodIndicatesTool)
+            {
+                return false;
+            }
+
+            toolName = "tool";
+        }
+
+        var toolCallId = ResolveToolCallId(parameters);
+        var state = ResolveToolState(method, parameters);
+        var input = ResolveToolInput(parameters);
+        var output = ResolveToolOutput(parameters);
+
+        var properties = new Dictionary<string, object?>
+        {
+            ["toolName"] = toolName,
+            ["toolCallId"] = toolCallId,
+            ["state"] = state,
+            ["method"] = method,
+        };
+
+        if (input is not null)
+        {
+            properties["input"] = input;
+        }
+
+        if (output is not null)
+        {
+            properties["output"] = output;
+        }
+
+        payload = JsonSerializer.Serialize(new
+        {
+            type = "tool.lifecycle",
+            schemaVersion = "codex.raw.tool.v1",
+            properties,
+        });
+
+        return true;
+    }
+
+    private static string ResolveToolName(JsonElement parameters)
+    {
+        var directName = ReadStringIgnoreCase(parameters, "toolName", "tool_name");
+        if (!string.IsNullOrWhiteSpace(directName))
+        {
+            return directName;
+        }
+
+        if (TryGetPropertyIgnoreCase(parameters, "function", out var functionElement))
+        {
+            var functionName = ReadStringIgnoreCase(functionElement, "name");
+            if (!string.IsNullOrWhiteSpace(functionName))
+            {
+                return functionName;
+            }
+        }
+
+        if (TryGetPropertyIgnoreCase(parameters, "tool", out var toolElement))
+        {
+            if (toolElement.ValueKind == JsonValueKind.String)
+            {
+                var value = toolElement.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            var nestedName = ReadStringIgnoreCase(toolElement, "name", "toolName", "tool_name");
+            if (!string.IsNullOrWhiteSpace(nestedName))
+            {
+                return nestedName;
+            }
+        }
+
+        if (TryGetPropertyIgnoreCase(parameters, "item", out var itemElement))
+        {
+            var itemType = ReadStringIgnoreCase(itemElement, "type");
+            var itemIndicatesTool = itemType.Contains("tool", StringComparison.OrdinalIgnoreCase) ||
+                                    itemType.Contains("function", StringComparison.OrdinalIgnoreCase);
+            if (itemIndicatesTool)
+            {
+                var itemName = ReadStringIgnoreCase(itemElement, "name", "toolName", "tool_name");
+                if (!string.IsNullOrWhiteSpace(itemName))
+                {
+                    return itemName;
+                }
+            }
+
+            if (TryGetPropertyIgnoreCase(itemElement, "function", out var itemFunction))
+            {
+                var functionName = ReadStringIgnoreCase(itemFunction, "name");
+                if (!string.IsNullOrWhiteSpace(functionName))
+                {
+                    return functionName;
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static bool ContainsToolHint(JsonElement parameters)
+    {
+        if (TryGetPropertyIgnoreCase(parameters, "toolName", out _) ||
+            TryGetPropertyIgnoreCase(parameters, "tool_name", out _) ||
+            TryGetPropertyIgnoreCase(parameters, "toolCallId", out _) ||
+            TryGetPropertyIgnoreCase(parameters, "tool_call_id", out _) ||
+            TryGetPropertyIgnoreCase(parameters, "function", out _) ||
+            TryGetPropertyIgnoreCase(parameters, "tool", out _))
+        {
+            return true;
+        }
+
+        if (TryGetPropertyIgnoreCase(parameters, "item", out var itemElement))
+        {
+            var itemType = ReadStringIgnoreCase(itemElement, "type");
+            return itemType.Contains("tool", StringComparison.OrdinalIgnoreCase) ||
+                   itemType.Contains("function", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private static string ResolveToolCallId(JsonElement parameters)
+    {
+        var directId = ReadStringIgnoreCase(parameters, "toolCallId", "tool_call_id", "callId", "call_id");
+        if (!string.IsNullOrWhiteSpace(directId))
+        {
+            return directId;
+        }
+
+        if (TryGetPropertyIgnoreCase(parameters, "item", out var itemElement))
+        {
+            var itemId = ReadStringIgnoreCase(itemElement, "toolCallId", "tool_call_id", "callId", "call_id", "id");
+            if (!string.IsNullOrWhiteSpace(itemId))
+            {
+                return itemId;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string ResolveToolState(string method, JsonElement parameters)
+    {
+        var state = ReadStringIgnoreCase(parameters, "state", "status", "phase");
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            return state;
+        }
+
+        var normalizedMethod = method?.Trim() ?? string.Empty;
+        if (normalizedMethod.EndsWith("/started", StringComparison.OrdinalIgnoreCase))
+        {
+            return "started";
+        }
+
+        if (normalizedMethod.EndsWith("/completed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "completed";
+        }
+
+        if (normalizedMethod.EndsWith("/failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "failed";
+        }
+
+        if (normalizedMethod.EndsWith("/delta", StringComparison.OrdinalIgnoreCase))
+        {
+            return "running";
+        }
+
+        return "running";
+    }
+
+    private static JsonElement? ResolveToolInput(JsonElement parameters)
+    {
+        if (TryReadRawPropertyIgnoreCase(parameters, ["input", "arguments", "args", "params"], out var inputElement))
+        {
+            return inputElement;
+        }
+
+        if (TryGetPropertyIgnoreCase(parameters, "item", out var itemElement) &&
+            TryReadRawPropertyIgnoreCase(itemElement, ["input", "arguments", "args", "params"], out var nestedInput))
+        {
+            return nestedInput;
+        }
+
+        return null;
+    }
+
+    private static JsonElement? ResolveToolOutput(JsonElement parameters)
+    {
+        if (TryReadRawPropertyIgnoreCase(parameters, ["output", "result"], out var outputElement))
+        {
+            return outputElement;
+        }
+
+        if (TryGetPropertyIgnoreCase(parameters, "item", out var itemElement) &&
+            TryReadRawPropertyIgnoreCase(itemElement, ["output", "result"], out var nestedOutput))
+        {
+            return nestedOutput;
+        }
+
+        return null;
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonElement value)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            value = default;
+            return false;
+        }
+
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            value = property.Value.Clone();
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static string ReadStringIgnoreCase(JsonElement element, params string[] propertyNames)
+    {
+        if (element.ValueKind != JsonValueKind.Object || propertyNames.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        foreach (var propertyName in propertyNames)
+        {
+            if (!TryGetPropertyIgnoreCase(element, propertyName, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                return value.GetString()?.Trim() ?? string.Empty;
+            }
+
+            if (value.ValueKind == JsonValueKind.Null)
+            {
+                return string.Empty;
+            }
+
+            return value.GetRawText();
+        }
+
+        return string.Empty;
+    }
+
+    private static bool TryReadRawPropertyIgnoreCase(JsonElement element, IReadOnlyList<string> propertyNames, out JsonElement value)
+    {
+        if (element.ValueKind != JsonValueKind.Object || propertyNames.Count == 0)
+        {
+            value = default;
+            return false;
+        }
+
+        foreach (var propertyName in propertyNames)
+        {
+            if (!TryGetPropertyIgnoreCase(element, propertyName, out var candidate))
+            {
+                continue;
+            }
+
+            if (candidate.ValueKind == JsonValueKind.Null)
+            {
+                continue;
+            }
+
+            value = candidate;
+            return true;
+        }
+
+        value = default;
+        return false;
     }
 
     private static bool TryParseJsonLine(string line, out JsonElement root)

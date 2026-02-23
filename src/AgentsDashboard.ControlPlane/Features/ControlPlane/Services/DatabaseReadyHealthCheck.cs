@@ -20,13 +20,13 @@ public sealed class DatabaseReadyHealthCheck(
                 return HealthCheckResult.Unhealthy("LiteDB path is not configured");
             }
 
-            _ = await database.ExecuteAsync(
-                db => db.GetCollectionNames().ToList(),
+            await database.ExecuteAsync(
+                static db =>
+                {
+                    _ = db.GetCollectionNames().ToList();
+                    return true;
+                },
                 cancellationToken);
-            if (!string.Equals(path, ":memory:", StringComparison.OrdinalIgnoreCase) && !File.Exists(path))
-            {
-                return HealthCheckResult.Unhealthy($"LiteDB file is missing: {path}");
-            }
 
             return HealthCheckResult.Healthy("LiteDB is ready");
         }

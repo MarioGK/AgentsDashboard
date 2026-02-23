@@ -49,6 +49,13 @@
         @MessageList
     </div>
 
+    @if (ContextPanel is not null)
+    {
+        <div class="workspace-thread-chat-context-panel">
+            @ContextPanel
+        </div>
+    }
+
     <div class="workspace-thread-chat-composer">
         @Composer
     </div>
@@ -70,5 +77,6 @@
     [Parameter] public EventCallback OnRefreshRuns { get; set; }
     [Parameter] public EventCallback OnToggleAdvanced { get; set; }
     [Parameter] public RenderFragment? MessageList { get; set; }
+    [Parameter] public RenderFragment? ContextPanel { get; set; }
     [Parameter] public RenderFragment? Composer { get; set; }
 }

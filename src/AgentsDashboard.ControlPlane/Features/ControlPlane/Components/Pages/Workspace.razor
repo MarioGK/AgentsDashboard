@@ -132,6 +132,11 @@
                         <MessageList>
                             <WorkspaceThreadMessageList Messages="@ProjectedMessages" />
                         </MessageList>
+                        <ContextPanel>
+                            <WorkspaceQuestionInbox QuestionRequests="@_selectedRunQuestionRequests"
+                                                    Disabled="@_isSubmittingQuestionAnswers"
+                                                    OnSubmit="SubmitQuestionAnswersAsync" />
+                        </ContextPanel>
                         <Composer>
                             <WorkspaceThreadComposerBar ComposerInputId="@_composerInputId"
                                                         ComposerValue="@_composerValue"
@@ -620,6 +625,7 @@
     private RunDiffSnapshotDocument? _selectedRunDiffSnapshot;
     private RunStructuredViewSnapshot _selectedRunStructuredView = new(string.Empty, 0, [], [], [], null, DateTime.UtcNow);
     private RunAiSummaryDocument? _selectedRunAiSummary;
+    private List<RunQuestionRequestDocument> _selectedRunQuestionRequests = [];
     private List<WorkspacePromptEntryDocument> _selectedTaskPromptHistory = [];
     private string _repositoryFilter = RepositoryFilterAll;
     private string _taskFilter = TaskFilterAll;
@@ -633,6 +639,7 @@
     private readonly string _createTaskPromptInputId = $"workspace-create-task-prompt-{Guid.NewGuid():N}";
 
     private bool _isSubmittingComposer;
+    private bool _isSubmittingQuestionAnswers;
     private HarnessExecutionMode? _composerModeOverride;
     private string _composerValue = string.Empty;
     private IReadOnlyList<WorkspaceImageInput> _composerImages = [];
@@ -1117,6 +1124,7 @@
         _selectedRunLogs = _selectedRunLogs.OrderBy(log => log.TimestampUtc).ToList();
         _selectedRunParsed = HarnessOutputParser.Parse(_selectedRun.OutputJson, _selectedRunLogs);
         await RefreshSelectedRunStructuredStateAsync(run.Id);
+        await RefreshSelectedRunQuestionRequestsAsync(run.Id, run.TaskId);
         _selectedRunAiSummary = await Store.GetRunAiSummaryAsync(run.Id, CancellationToken.None);
         await RefreshRunSummaryAsync(force: false);
         SetThreadSelectedRun(run.TaskId, run.Id);
@@ -1204,6 +1212,7 @@
         }
 
         await RefreshSelectedRunStructuredStateAsync(structuredEvent.RunId);
+        await RefreshSelectedRunQuestionRequestsAsync(structuredEvent.RunId, _selectedRun.TaskId);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1240,6 +1249,7 @@
         }
 
         await RefreshSelectedRunStructuredStateAsync(toolEvent.RunId);
+        await RefreshSelectedRunQuestionRequestsAsync(toolEvent.RunId, _selectedRun.TaskId);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1269,6 +1279,38 @@
         _selectedRunStructuredEvents = structuredEvents;
         _selectedRunDiffSnapshot = diffSnapshot;
         _selectedRunStructuredView = structuredView;
+    }
+
+    private async Task RefreshSelectedRunQuestionRequestsAsync(string? expectedRunId = null, string? expectedTaskId = null)
+    {
+        var runId = expectedRunId;
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            runId = _selectedRun?.Id;
+        }
+
+        var taskId = expectedTaskId;
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            taskId = _selectedTask?.Id;
+        }
+
+        if (string.IsNullOrWhiteSpace(runId) || string.IsNullOrWhiteSpace(taskId))
+        {
+            _selectedRunQuestionRequests = [];
+            return;
+        }
+
+        var pendingQuestionRequests = await Store.ListPendingRunQuestionRequestsAsync(taskId, runId, CancellationToken.None);
+        if (_selectedRun is null || !string.Equals(_selectedRun.Id, runId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _selectedRunQuestionRequests = pendingQuestionRequests
+            .OrderBy(request => request.SourceSequence)
+            .ThenBy(request => request.CreatedAtUtc)
+            .ToList();
     }
 
     private async Task RefreshRunSummaryAsync(bool force)
@@ -1550,6 +1592,51 @@
         finally
         {
             _isSubmittingComposer = false;
+        }
+    }
+
+    private async Task SubmitQuestionAnswersAsync(WorkspaceQuestionAnswersSubmissionRequest request)
+    {
+        if (_selectedRepository is null || _selectedTask is null || _selectedRun is null || _isSubmittingQuestionAnswers)
+        {
+            return;
+        }
+
+        _isSubmittingQuestionAnswers = true;
+        try
+        {
+            var result = await WorkspaceService.SubmitQuestionAnswersAsync(
+                _selectedRepository.Id,
+                request,
+                CancellationToken.None);
+
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Message, Severity.Warning);
+                await RefreshSelectedRunQuestionRequestsAsync(_selectedRun.Id, _selectedTask.Id);
+                return;
+            }
+
+            _selectedRunQuestionRequests = _selectedRunQuestionRequests
+                .Where(questionRequest => !string.Equals(questionRequest.Id, request.QuestionRequestId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
+            if (result.Run is not null)
+            {
+                await SelectRunAsync(result.Run.Id);
+            }
+
+            Snackbar.Add(result.Message, Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to submit answers: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmittingQuestionAnswers = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -2281,6 +2368,7 @@ Composer Focus:
         _selectedRunStructuredEvents = [];
         _selectedRunDiffSnapshot = null;
         _selectedRunStructuredView = new RunStructuredViewSnapshot(string.Empty, 0, [], [], [], null, DateTime.UtcNow);
+        _selectedRunQuestionRequests = [];
     }
 
     private string GetSelectedRunStructuredEventsJson()

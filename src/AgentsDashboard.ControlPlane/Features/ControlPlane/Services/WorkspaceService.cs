@@ -320,12 +320,18 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
+        var settings = await store.GetSettingsAsync(cancellationToken);
+        var mcpConfigSnapshotJson = !string.IsNullOrWhiteSpace(sessionProfile?.McpConfigJson)
+            ? sessionProfile.McpConfigJson
+            : settings.Orchestrator.McpConfigJson;
+
         var effectiveModeOverride = request.ModeOverride ?? sessionProfile?.ExecutionModeDefault;
         var run = await store.CreateRunAsync(
             task,
             cancellationToken,
             executionModeOverride: effectiveModeOverride,
-            sessionProfileId: sessionProfile?.Id);
+            sessionProfileId: sessionProfile?.Id,
+            mcpConfigSnapshotJson: mcpConfigSnapshotJson);
 
         var storedImages = new List<WorkspaceStoredImage>();
         if (requestedImages.Count > 0)
@@ -371,11 +377,6 @@ public sealed class WorkspaceService(
             request.UserMessage,
             cancellationToken);
         instructionStack = await store.UpsertRunInstructionStackAsync(instructionStack, cancellationToken);
-
-        var settings = await store.GetSettingsAsync(cancellationToken);
-        var mcpConfigSnapshotJson = !string.IsNullOrWhiteSpace(sessionProfile?.McpConfigJson)
-            ? sessionProfile.McpConfigJson
-            : settings.Orchestrator.McpConfigJson;
 
         var dispatchAccepted = await dispatcher.DispatchAsync(
             repository,

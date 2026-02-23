@@ -1,0 +1,306 @@
+@namespace AgentsDashboard.ControlPlane.Components.Workspace
+@using AgentsDashboard.Contracts.Domain
+@using AgentsDashboard.ControlPlane.Services
+
+@if (QuestionRequests.Count > 0)
+{
+    <div class="workspace-question-inbox" data-testid="workspace-question-inbox">
+        <MudStack Spacing="1" Class="workspace-question-inbox-header-row">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                <MudText Typo="Typo.subtitle2">Pending Plan Questions</MudText>
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">@QuestionRequests.Count</MudChip>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Answer every question to continue.</MudText>
+            </MudStack>
+        </MudStack>
+
+        @foreach (var request in QuestionRequests.OrderBy(x => x.SourceSequence).ThenBy(x => x.CreatedAtUtc))
+        {
+            var progress = GetAnsweredCount(request);
+            var total = request.Questions.Count;
+            var isComplete = progress == total && total > 0;
+            var isSubmitting = _submittingRequestIds.Contains(request.Id);
+            <MudPaper Class="workspace-question-request-card" Elevation="0">
+                <MudStack Spacing="1">
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="workspace-question-request-head">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Tool @request.SourceToolName</MudChip>
+                        @if (!string.IsNullOrWhiteSpace(request.SourceToolCallId))
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@request.SourceToolCallId</MudChip>
+                        }
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Seq @request.SourceSequence</MudChip>
+                        <MudSpacer />
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@request.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
+                    </MudStack>
+
+                    @foreach (var question in request.Questions.OrderBy(x => x.Order))
+                    {
+                        <MudPaper Class="workspace-question-item-card" Elevation="0">
+                            <MudStack Spacing="1">
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">Question @(question.Order + 1)</MudChip>
+                                    @if (!string.IsNullOrWhiteSpace(question.Header))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@question.Header</MudText>
+                                    }
+                                </MudStack>
+
+                                <MudText Typo="Typo.body2">@question.Prompt</MudText>
+
+                                <div class="workspace-question-options-grid">
+                                    @foreach (var option in question.Options)
+                                    {
+                                        var selected = IsOptionSelected(request.Id, question.Id, option.Value);
+                                        <button type="button"
+                                                class="@GetOptionClass(selected)"
+                                                @onclick="(() => SelectOption(request.Id, question.Id, option.Value))"
+                                                disabled="@(Disabled || isSubmitting)">
+                                            <span class="workspace-question-option-label">@option.Label</span>
+                                            @if (!string.IsNullOrWhiteSpace(option.Description))
+                                            {
+                                                <span class="workspace-question-option-description">@option.Description</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+
+                                <MudTextField T="string"
+                                              Label="Additional context"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Lines="2"
+                                              Value="@GetAdditionalContext(request.Id, question.Id)"
+                                              ValueChanged="value => SetAdditionalContext(request.Id, question.Id, value)"
+                                              Disabled="@(Disabled || isSubmitting)" />
+                            </MudStack>
+                        </MudPaper>
+                    }
+
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="workspace-question-request-actions">
+                        <MudChip T="string"
+                                 Size="Size.Small"
+                                 Color="@(isComplete ? Color.Success : Color.Warning)"
+                                 Variant="Variant.Outlined">
+                            @progress/@total answered
+                        </MudChip>
+                        <MudSpacer />
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Disabled="@(Disabled || isSubmitting || !isComplete)"
+                                   OnClick="() => SubmitRequestAsync(request)"
+                                   data-testid="@($"workspace-question-submit-{request.Id}")">
+                            @if (isSubmitting)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                                <span>Submitting...</span>
+                            }
+                            else
+                            {
+                                <span>Submit Answers</span>
+                            }
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<RunQuestionRequestDocument> QuestionRequests { get; set; } = [];
+    [Parameter] public EventCallback<WorkspaceQuestionAnswersSubmissionRequest> OnSubmit { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private readonly Dictionary<string, Dictionary<string, string>> _selectedOptionValuesByRequestId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<string, string>> _additionalContextByRequestId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _submittingRequestIds = new(StringComparer.OrdinalIgnoreCase);
+
+    protected override void OnParametersSet()
+    {
+        var activeRequestIds = new HashSet<string>(
+            QuestionRequests
+                .Select(request => request.Id)
+                .Where(id => !string.IsNullOrWhiteSpace(id)),
+            StringComparer.OrdinalIgnoreCase);
+
+        var staleOptionStateRequestIds = _selectedOptionValuesByRequestId.Keys
+            .Where(id => !activeRequestIds.Contains(id))
+            .ToList();
+        foreach (var stale in staleOptionStateRequestIds)
+        {
+            _selectedOptionValuesByRequestId.Remove(stale);
+        }
+
+        var staleContextStateRequestIds = _additionalContextByRequestId.Keys
+            .Where(id => !activeRequestIds.Contains(id))
+            .ToList();
+        foreach (var stale in staleContextStateRequestIds)
+        {
+            _additionalContextByRequestId.Remove(stale);
+        }
+
+        var staleSubmittingRequestIds = _submittingRequestIds
+            .Where(id => !activeRequestIds.Contains(id))
+            .ToList();
+        foreach (var stale in staleSubmittingRequestIds)
+        {
+            _submittingRequestIds.Remove(stale);
+        }
+
+        foreach (var request in QuestionRequests)
+        {
+            var optionMap = GetOrCreateRequestOptionMap(request.Id);
+            var contextMap = GetOrCreateRequestContextMap(request.Id);
+            foreach (var question in request.Questions)
+            {
+                var questionId = question.Id?.Trim() ?? string.Empty;
+                if (questionId.Length == 0)
+                {
+                    continue;
+                }
+
+                if (!optionMap.ContainsKey(questionId))
+                {
+                    optionMap[questionId] = string.Empty;
+                }
+
+                if (!contextMap.ContainsKey(questionId))
+                {
+                    contextMap[questionId] = string.Empty;
+                }
+            }
+        }
+    }
+
+    private async Task SubmitRequestAsync(RunQuestionRequestDocument request)
+    {
+        if (!OnSubmit.HasDelegate ||
+            string.IsNullOrWhiteSpace(request.Id) ||
+            _submittingRequestIds.Contains(request.Id) ||
+            !IsRequestComplete(request))
+        {
+            return;
+        }
+
+        _submittingRequestIds.Add(request.Id);
+        try
+        {
+            var answers = request.Questions
+                .OrderBy(question => question.Order)
+                .Select(question => new WorkspaceQuestionAnswerInput(
+                    QuestionId: question.Id,
+                    SelectedOptionValue: GetSelectedOptionValue(request.Id, question.Id),
+                    AdditionalContext: GetAdditionalContext(request.Id, question.Id)))
+                .ToList();
+
+            await OnSubmit.InvokeAsync(new WorkspaceQuestionAnswersSubmissionRequest(request.Id, answers));
+        }
+        finally
+        {
+            _submittingRequestIds.Remove(request.Id);
+        }
+    }
+
+    private int GetAnsweredCount(RunQuestionRequestDocument request)
+    {
+        var answered = 0;
+        foreach (var question in request.Questions)
+        {
+            if (!string.IsNullOrWhiteSpace(GetSelectedOptionValue(request.Id, question.Id)))
+            {
+                answered++;
+            }
+        }
+
+        return answered;
+    }
+
+    private bool IsRequestComplete(RunQuestionRequestDocument request)
+    {
+        if (request.Questions.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var question in request.Questions)
+        {
+            if (string.IsNullOrWhiteSpace(GetSelectedOptionValue(request.Id, question.Id)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void SelectOption(string requestId, string questionId, string optionValue)
+    {
+        if (Disabled)
+        {
+            return;
+        }
+
+        var optionMap = GetOrCreateRequestOptionMap(requestId);
+        optionMap[questionId] = optionValue?.Trim() ?? string.Empty;
+    }
+
+    private bool IsOptionSelected(string requestId, string questionId, string optionValue)
+    {
+        return string.Equals(
+            GetSelectedOptionValue(requestId, questionId),
+            optionValue,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetSelectedOptionValue(string requestId, string questionId)
+    {
+        var optionMap = GetOrCreateRequestOptionMap(requestId);
+        return optionMap.TryGetValue(questionId, out var selected)
+            ? selected
+            : string.Empty;
+    }
+
+    private string GetAdditionalContext(string requestId, string questionId)
+    {
+        var contextMap = GetOrCreateRequestContextMap(requestId);
+        return contextMap.TryGetValue(questionId, out var context)
+            ? context
+            : string.Empty;
+    }
+
+    private void SetAdditionalContext(string requestId, string questionId, string? context)
+    {
+        var contextMap = GetOrCreateRequestContextMap(requestId);
+        contextMap[questionId] = context?.Trim() ?? string.Empty;
+    }
+
+    private Dictionary<string, string> GetOrCreateRequestOptionMap(string requestId)
+    {
+        var key = requestId?.Trim() ?? string.Empty;
+        if (!_selectedOptionValuesByRequestId.TryGetValue(key, out var optionMap))
+        {
+            optionMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _selectedOptionValuesByRequestId[key] = optionMap;
+        }
+
+        return optionMap;
+    }
+
+    private Dictionary<string, string> GetOrCreateRequestContextMap(string requestId)
+    {
+        var key = requestId?.Trim() ?? string.Empty;
+        if (!_additionalContextByRequestId.TryGetValue(key, out var contextMap))
+        {
+            contextMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _additionalContextByRequestId[key] = contextMap;
+        }
+
+        return contextMap;
+    }
+
+    private static string GetOptionClass(bool selected)
+    {
+        return selected
+            ? "workspace-question-option workspace-question-option-selected"
+            : "workspace-question-option";
+    }
+}

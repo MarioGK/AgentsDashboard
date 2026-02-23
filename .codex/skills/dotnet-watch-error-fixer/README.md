@@ -1,6 +1,6 @@
 # Dotnet watch auto-fix skill
 
-This skill keeps the repository running under `dotnet watch`, auto-restarts on exits/rude edits, and triggers non-interactive Codex recovery attempts from relevant logs and health-check failures.
+This skill keeps the repository running under `dotnet watch`, enforces single-instance startup, clears stale bind processes/ports before launch, auto-restarts on exits/rude edits, and triggers non-interactive Codex recovery attempts from relevant logs and health-check failures.
 
 ## Start
 
@@ -11,20 +11,23 @@ bash .codex/skills/dotnet-watch-error-fixer/launch-and-fix.sh
 ## What happens
 
 1. Cleans existing `*.log` files in `data/logs` at startup.
-2. Stops existing `dotnet watch` processes before startup.
-3. Starts `dotnet watch --project src/AgentsDashboard.ControlPlane` with non-interactive + auto-restart rude-edit env.
+2. Performs pre-flight cleanup:
+   - stops existing `dotnet watch` processes
+   - releases stale listeners on `PRESTART_CLEANUP_PORTS` (default `5266,5268`)
+3. Starts `dotnet watch --project src/AgentsDashboard.ControlPlane` with non-interactive + restart-on-rude-edit env.
 4. Watches `data/errors.log` plus `dotnet-watch` output logs for actionable events.
-5. Writes normalized events to `data/logs/autofix-unified-errors.log`.
-6. Probes `https://192.168.10.101:5266/health` repeatedly (default 5-10s interval, 10 attempts).
-7. If health checks fail `HEALTH_CHECK_MAX_ATTEMPTS` times, it dispatches a Codex recovery with context bundles from available logs.
-8. Watches `dotnet watch --non-interactive --project "$WATCH_PROJECT"` and restarts with exponential backoff.
+5. Classifies events into compile/runtime/startup taxonomy and applies compile-loop dispatch gating.
+6. Writes normalized events to `data/logs/autofix-unified-errors.log`.
+7. Probes `https://192.168.10.101:5266/health` repeatedly (default 5-10s interval, 10 attempts).
+8. If health checks fail `HEALTH_CHECK_MAX_ATTEMPTS` times, it dispatches a Codex recovery with context bundles from available logs.
+9. Watches `dotnet watch --non-interactive --project "$WATCH_PROJECT"` and restarts with exponential backoff.
 
 ## Restart mode (always restart on rude edits)
 
 The reliable startup command is:
 
 ```bash
-DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_WATCH_SUPPRESS_EMOJIS=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development dotnet watch --non-interactive --project src/AgentsDashboard.ControlPlane
+DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_WATCH_SUPPRESS_EMOJIS=1 DOTNET_WATCH_NONINTERACTIVE=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development dotnet watch --non-interactive --project src/AgentsDashboard.ControlPlane
 ```
 
 This avoids interactive prompts and matches how `dotnet watch` handles rude edits in unattended mode.
@@ -58,4 +61,12 @@ This avoids interactive prompts and matches how `dotnet watch` handles rude edit
 - `HEALTH_CHECK_MAX_INTERVAL_SECONDS` (default `10`)
 - `HEALTH_CHECK_TIMEOUT_SECONDS` (default `5`)
 - `HEALTH_CONTEXT_LINES` (default `120`)
+- `AUTOFIX_LOCK_DIR` (default `${REPO_ROOT}/.autofix`)
+- `AUTOFIX_LOCK_FILE` (default `${AUTOFIX_LOCK_DIR}/launcher.lock`)
+- `PRESTART_CLEANUP_DOTNET_WATCH` (`true|false`, default `true`)
+- `PRESTART_CLEANUP_PORTS` (default `5266,5268`)
+- `PRESTART_CLEANUP_TIMEOUT_SECONDS` (default `10`)
+- `COMPILE_COOLDOWN_SECONDS` (default `30`)
+- `STARTUP_COOLDOWN_SECONDS` (default `25`)
+- `RUNTIME_COOLDOWN_SECONDS` (default `10`)
 - `HEALTH_FIX_COOLDOWN_SECONDS` (default `90`)

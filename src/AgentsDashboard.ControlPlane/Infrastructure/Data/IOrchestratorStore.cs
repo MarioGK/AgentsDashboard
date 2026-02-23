@@ -58,7 +58,8 @@ public interface IOrchestratorStore
         CancellationToken cancellationToken,
         int attempt = 1,
         HarnessExecutionMode? executionModeOverride = null,
-        string? sessionProfileId = null);
+        string? sessionProfileId = null,
+        string? mcpConfigSnapshotJson = null);
     Task<List<RunDocument>> ListRunsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRecentRunsAsync(CancellationToken cancellationToken);
     Task<List<RepositoryDocument>> ListRepositoriesWithRecentTasksAsync(int limit, CancellationToken cancellationToken);

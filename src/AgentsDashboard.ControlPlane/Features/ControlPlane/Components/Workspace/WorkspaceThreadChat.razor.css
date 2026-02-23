@@ -19,6 +19,12 @@
     flex: 1;
 }
 
+.workspace-thread-chat-context-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
 .workspace-thread-chat-composer {
     border-top: 1px solid rgba(159, 177, 201, 0.18);
     padding-top: 0.65rem;

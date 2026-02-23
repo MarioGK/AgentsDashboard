@@ -15,8 +15,7 @@ internal static class HealthChecksExtensions
             .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
             .AddCheck<DatabaseReadyHealthCheck>(
                 "database",
-                tags: ["ready"],
-                timeout: TimeSpan.FromSeconds(15));
+                tags: ["ready"]);
 
         return services;
     }
@@ -25,13 +24,13 @@ internal static class HealthChecksExtensions
     {
         var readyHealthCheckOptions = new HealthCheckOptions
         {
-            Predicate = registration => registration.Tags.Contains("ready"),
+            Predicate = registration => registration.Tags.Contains("ready")
         }
         .WithJsonResponseWriter();
 
         var liveHealthCheckOptions = new HealthCheckOptions
         {
-            Predicate = registration => registration.Tags.Contains("live"),
+            Predicate = registration => registration.Tags.Contains("live")
         }
         .WithJsonResponseWriter();
 

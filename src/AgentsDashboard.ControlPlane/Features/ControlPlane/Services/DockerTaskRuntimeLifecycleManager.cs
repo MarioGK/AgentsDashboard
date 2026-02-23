@@ -1572,6 +1572,12 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         process.BeginErrorReadLine();
         await process.WaitForExitAsync(cancellationToken);
 
+        if (process.ExitCode == 130)
+        {
+            throw new OperationCanceledException(
+                $"docker build for {imageReference} was interrupted with exit code {process.ExitCode}");
+        }
+
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException($"docker build for {imageReference} failed with exit code {process.ExitCode}");
