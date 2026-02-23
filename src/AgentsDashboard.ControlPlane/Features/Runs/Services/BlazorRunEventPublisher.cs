@@ -94,18 +94,6 @@ public sealed class BlazorRunEventPublisher(IUiRealtimeBroker broker) : IRunEven
             cancellationToken);
     }
 
-    public Task PublishFindingUpdatedAsync(FindingDocument finding, CancellationToken cancellationToken)
-    {
-        return broker.PublishAsync(
-            new FindingUpdatedEvent(
-                finding.Id,
-                finding.RepositoryId,
-                finding.State.ToString(),
-                finding.Severity.ToString(),
-                finding.Title),
-            cancellationToken);
-    }
-
     public Task PublishTaskRuntimeHeartbeatAsync(string workerId, string hostName, int activeSlots, int maxSlots, CancellationToken cancellationToken)
     {
         return broker.PublishAsync(

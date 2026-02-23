@@ -59,26 +59,22 @@ public sealed class GlobalSearchService(
             ["security"] = ["vulnerability", "auth", "permission", "token"],
             ["timeout"] = ["slow", "deadline", "cancelled"],
             ["approval"] = ["review", "gate", "pending", "manual"],
-            ["finding"] = ["issue", "risk", "alert", "incident"]
         };
 
     private static readonly HashSet<GlobalSearchKind> s_allKinds =
     [
         GlobalSearchKind.Task,
         GlobalSearchKind.Run,
-        GlobalSearchKind.Finding,
         GlobalSearchKind.RunLog
     ];
 
     private const int MaxTaskCandidates = 320;
     private const int MaxRunCandidates = 900;
-    private const int MaxFindingCandidates = 500;
     private const int MaxRunLogRuns = 90;
     private const int MaxRunLogsPerRun = 64;
     private const int MaxSemanticTaskCandidates = 90;
     private const int MaxRunOutputLength = 2200;
     private const int MaxTaskPromptLength = 1800;
-    private const int MaxFindingDescriptionLength = 1400;
 
     public async Task<GlobalSearchResult> SearchAsync(GlobalSearchRequest request, CancellationToken cancellationToken)
     {
@@ -108,18 +104,11 @@ public sealed class GlobalSearchService(
         var tasksByRepositoryTasks = scopedRepositories
             .Select(repository => store.ListTasksAsync(repository.Id, cancellationToken))
             .ToList();
-        var findingsByRepositoryTasks = scopedRepositories
-            .Select(repository => store.ListFindingsAsync(repository.Id, cancellationToken))
-            .ToList();
-        await Task.WhenAll(tasksByRepositoryTasks.Cast<Task>().Concat(findingsByRepositoryTasks));
+        await Task.WhenAll(tasksByRepositoryTasks);
 
         var tasks = tasksByRepositoryTasks
             .SelectMany(task => task.Result)
             .Where(task => scopedRepositoryIds.Contains(task.RepositoryId))
-            .ToList();
-        var findings = findingsByRepositoryTasks
-            .SelectMany(finding => finding.Result)
-            .Where(finding => scopedRepositoryIds.Contains(finding.RepositoryId))
             .ToList();
 
         if (!string.IsNullOrWhiteSpace(request.TaskId) &&
@@ -159,26 +148,9 @@ public sealed class GlobalSearchService(
         var taskById = tasks.ToDictionary(task => task.Id, StringComparer.OrdinalIgnoreCase);
         var runById = runs.ToDictionary(run => run.Id, StringComparer.OrdinalIgnoreCase);
 
-        findings = findings
-            .Where(finding => request.FindingStateFilter is null || finding.State == request.FindingStateFilter)
-            .Where(finding => MatchesTimeFilter(finding.CreatedAtUtc, request.FromUtc, request.ToUtc))
-            .Where(finding =>
-            {
-                if (string.IsNullOrWhiteSpace(request.TaskId))
-                {
-                    return true;
-                }
-
-                return runById.TryGetValue(finding.RunId, out var findingRun) &&
-                       string.Equals(findingRun.TaskId, request.TaskId, StringComparison.OrdinalIgnoreCase);
-            })
-            .OrderByDescending(finding => finding.CreatedAtUtc)
-            .Take(MaxFindingCandidates)
-            .ToList();
-
         var logsByRun = await LoadRunLogsAsync(runs, request, kinds, cancellationToken);
 
-        var embeddingRepositoryId = ResolveEmbeddingRepositoryId(request.RepositoryId, scopedRepositories, tasks, runs, findings);
+        var embeddingRepositoryId = ResolveEmbeddingRepositoryId(request.RepositoryId, scopedRepositories, tasks, runs);
         var queryEmbedding = await workspaceAiService.CreateEmbeddingAsync(embeddingRepositoryId, normalizedQuery, cancellationToken);
 
         var semanticTasks = tasks
@@ -199,7 +171,6 @@ public sealed class GlobalSearchService(
             runById,
             tasks,
             runs,
-            findings,
             logsByRun);
 
         var scoredHits = ScoreCandidates(
@@ -410,10 +381,9 @@ public sealed class GlobalSearchService(
         IReadOnlyDictionary<string, RunDocument> runById,
         IReadOnlyList<TaskDocument> tasks,
         IReadOnlyList<RunDocument> runs,
-        IReadOnlyList<FindingDocument> findings,
         IReadOnlyDictionary<string, IReadOnlyList<RunLogEvent>> logsByRun)
     {
-        var candidates = new List<SearchCandidate>(tasks.Count + runs.Count + findings.Count + 200);
+        var candidates = new List<SearchCandidate>(tasks.Count + runs.Count + 200);
 
         if (kinds.Contains(GlobalSearchKind.Task))
         {
@@ -525,51 +495,6 @@ public sealed class GlobalSearchService(
                             SemanticKey: BuildRunSignalKey(run.Id)));
                     }
                 }
-            }
-        }
-
-        if (kinds.Contains(GlobalSearchKind.Finding))
-        {
-            foreach (var finding in findings)
-            {
-                repositoryById.TryGetValue(finding.RepositoryId, out var repository);
-                var repositoryName = repository?.Name ?? finding.RepositoryId;
-
-                string? taskId = null;
-                string? taskName = null;
-                if (!string.IsNullOrWhiteSpace(finding.RunId) &&
-                    runById.TryGetValue(finding.RunId, out var run))
-                {
-                    taskId = run.TaskId;
-                    if (!string.IsNullOrWhiteSpace(taskId) && taskById.TryGetValue(taskId, out var task))
-                    {
-                        taskName = task.Name;
-                    }
-                }
-
-                var body = new StringBuilder()
-                    .AppendLine($"Repository: {repositoryName}")
-                    .AppendLine($"Run: {finding.RunId}")
-                    .AppendLine($"Severity: {finding.Severity}")
-                    .AppendLine($"State: {finding.State}")
-                    .AppendLine($"Assigned: {finding.AssignedTo}")
-                    .AppendLine(finding.Title)
-                    .AppendLine(TruncateForIndex(finding.Description, MaxFindingDescriptionLength))
-                    .ToString();
-
-                candidates.Add(new SearchCandidate(
-                    Kind: GlobalSearchKind.Finding,
-                    Id: finding.Id,
-                    RepositoryId: finding.RepositoryId,
-                    RepositoryName: repositoryName,
-                    TaskId: taskId,
-                    TaskName: taskName,
-                    RunId: finding.RunId,
-                    Title: finding.Title,
-                    Body: body,
-                    State: finding.State.ToString(),
-                    TimestampUtc: finding.CreatedAtUtc,
-                    SemanticKey: string.IsNullOrWhiteSpace(finding.RunId) ? null : BuildRunSignalKey(finding.RunId)));
             }
         }
 
@@ -692,8 +617,7 @@ public sealed class GlobalSearchService(
         string? requestedRepositoryId,
         IReadOnlyList<RepositoryDocument> scopedRepositories,
         IReadOnlyList<TaskDocument> tasks,
-        IReadOnlyList<RunDocument> runs,
-        IReadOnlyList<FindingDocument> findings)
+        IReadOnlyList<RunDocument> runs)
     {
         if (!string.IsNullOrWhiteSpace(requestedRepositoryId))
         {
@@ -713,11 +637,6 @@ public sealed class GlobalSearchService(
         if (runs.Count > 0)
         {
             return runs[0].RepositoryId;
-        }
-
-        if (findings.Count > 0)
-        {
-            return findings[0].RepositoryId;
         }
 
         return string.Empty;

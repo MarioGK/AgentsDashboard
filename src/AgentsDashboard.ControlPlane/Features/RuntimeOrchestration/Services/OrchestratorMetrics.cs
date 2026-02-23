@@ -21,7 +21,6 @@ public interface IOrchestratorMetrics
     void RecordWebhookDelivery(string status);
     void SetSignalRConnections(int count);
     void RecordGrpcDuration(string method, double seconds);
-    void RecordFinding(string severity);
     void RecordArtifactGenerated(string harness);
     void RecordContainerMetrics(string harness, double cpuPercent, double memoryBytes);
 }
@@ -35,7 +34,6 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     private readonly Counter<long> _errorsTotal;
     private readonly Counter<long> _alertsFiredTotal;
     private readonly Counter<long> _webhookDeliveriesTotal;
-    private readonly Counter<long> _findingsTotal;
     private readonly Counter<long> _artifactsTotal;
 
     private readonly UpDownCounter<int> _pendingJobs;
@@ -68,7 +66,6 @@ public class OrchestratorMetrics : IOrchestratorMetrics
         _errorsTotal = s_meter.CreateCounter<long>("orchestrator_errors_total", "errors", "Total number of errors");
         _alertsFiredTotal = s_meter.CreateCounter<long>("orchestrator_alerts_fired_total", "alerts", "Total alerts fired");
         _webhookDeliveriesTotal = s_meter.CreateCounter<long>("orchestrator_webhook_deliveries_total", "deliveries", "Total webhook deliveries");
-        _findingsTotal = s_meter.CreateCounter<long>("orchestrator_findings_total", "findings", "Total findings created");
         _artifactsTotal = s_meter.CreateCounter<long>("orchestrator_artifacts_total", "artifacts", "Total artifacts generated");
 
         _pendingJobs = s_meter.CreateUpDownCounter<int>("orchestrator_pending_jobs", "jobs", "Current number of pending jobs");
@@ -192,11 +189,6 @@ public class OrchestratorMetrics : IOrchestratorMetrics
     public void RecordGrpcDuration(string method, double seconds)
     {
         _grpcDuration.Record(seconds, new KeyValuePair<string, object?>("method", method));
-    }
-
-    public void RecordFinding(string severity)
-    {
-        _findingsTotal.Add(1, new KeyValuePair<string, object?>("severity", severity));
     }
 
     public void RecordArtifactGenerated(string harness)

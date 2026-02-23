@@ -21,7 +21,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         IRepository<RunSessionProfileDocument> runSessionProfiles,
         IRepository<RunInstructionStackDocument> runInstructionStacks,
         IRepository<RunShareBundleDocument> runShareBundles,
-        IRepository<FindingDocument> findings,
         IRepository<ProviderSecretDocument> providerSecrets,
         IRepository<TaskRuntimeRegistration> taskRuntimeRegistrations,
         IRepository<TaskRuntimeDocument> taskRuntimes,
@@ -52,7 +51,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         RunSessionProfiles = new TrackedRepositorySet<RunSessionProfileDocument>(runSessionProfiles);
         RunInstructionStacks = new TrackedRepositorySet<RunInstructionStackDocument>(runInstructionStacks);
         RunShareBundles = new TrackedRepositorySet<RunShareBundleDocument>(runShareBundles);
-        Findings = new TrackedRepositorySet<FindingDocument>(findings);
         ProviderSecrets = new TrackedRepositorySet<ProviderSecretDocument>(providerSecrets);
         TaskRuntimeRegistrations = new TrackedRepositorySet<TaskRuntimeRegistration>(taskRuntimeRegistrations);
         TaskRuntimes = new TrackedRepositorySet<TaskRuntimeDocument>(taskRuntimes);
@@ -84,7 +82,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
             RunSessionProfiles,
             RunInstructionStacks,
             RunShareBundles,
-            Findings,
             ProviderSecrets,
             TaskRuntimeRegistrations,
             TaskRuntimes,
@@ -116,7 +113,6 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
     public TrackedRepositorySet<RunSessionProfileDocument> RunSessionProfiles { get; }
     public TrackedRepositorySet<RunInstructionStackDocument> RunInstructionStacks { get; }
     public TrackedRepositorySet<RunShareBundleDocument> RunShareBundles { get; }
-    public TrackedRepositorySet<FindingDocument> Findings { get; }
     public TrackedRepositorySet<ProviderSecretDocument> ProviderSecrets { get; }
     public TrackedRepositorySet<TaskRuntimeRegistration> TaskRuntimeRegistrations { get; }
     public TrackedRepositorySet<TaskRuntimeDocument> TaskRuntimes { get; }

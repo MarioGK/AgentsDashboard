@@ -27,7 +27,7 @@
             </MudStack>
 
             <MudText Typo="Typo.body2" Color="Color.Secondary">
-                Search across repositories, tasks, runs, findings, and run logs with semantic + keyword ranking.
+                Search across repositories, tasks, runs, and run logs with semantic + keyword ranking.
             </MudText>
 
             <MudGrid Class="search-filter-grid">
@@ -130,21 +130,6 @@
                 </MudItem>
 
                 <MudItem xs="12" md="4">
-                    <MudSelect T="FindingState?"
-                               @bind-Value="_findingStateFilter"
-                               Label="Finding State"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Disabled="_loadingFilters">
-                        <MudSelectItem T="FindingState?" Value="@((FindingState?)null)">Any</MudSelectItem>
-                        @foreach (var state in Enum.GetValues<FindingState>())
-                        {
-                            <MudSelectItem T="FindingState?" Value="@((FindingState?)state)">@state</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-
-                <MudItem xs="12" md="4">
                     <MudSelect T="int"
                                @bind-Value="_limit"
                                Label="Result Limit"
@@ -162,7 +147,6 @@
             <MudStack Row Spacing="2" Class="search-kind-row">
                 <MudCheckBox T="bool" @bind-Value="_includeTasks" Label="Tasks" />
                 <MudCheckBox T="bool" @bind-Value="_includeRuns" Label="Runs" />
-                <MudCheckBox T="bool" @bind-Value="_includeFindings" Label="Findings" />
                 <MudCheckBox T="bool" @bind-Value="_includeRunLogs" Label="Run Logs" />
             </MudStack>
 
@@ -192,7 +176,6 @@
                 {
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Tasks @GetKindCount(GlobalSearchKind.Task)</MudChip>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Runs @GetKindCount(GlobalSearchKind.Run)</MudChip>
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Findings @GetKindCount(GlobalSearchKind.Finding)</MudChip>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Logs @GetKindCount(GlobalSearchKind.RunLog)</MudChip>
                 }
             </MudStack>
@@ -277,11 +260,9 @@
     private string _selectedTaskId = string.Empty;
     private SearchTimeWindow _timeWindow = SearchTimeWindow.Last30Days;
     private RunState? _runStateFilter;
-    private FindingState? _findingStateFilter;
     private int _limit = 50;
     private bool _includeTasks = true;
     private bool _includeRuns = true;
-    private bool _includeFindings = true;
     private bool _includeRunLogs = true;
 
     private bool _loadingFilters = true;
@@ -396,11 +377,9 @@
         _selectedTaskId = string.Empty;
         _timeWindow = SearchTimeWindow.Last30Days;
         _runStateFilter = null;
-        _findingStateFilter = null;
         _limit = 50;
         _includeTasks = true;
         _includeRuns = true;
-        _includeFindings = true;
         _includeRunLogs = true;
         _error = string.Empty;
         _result = null;
@@ -441,7 +420,6 @@
             FromUtc: fromUtc,
             ToUtc: toUtc,
             RunStateFilter: _runStateFilter,
-            FindingStateFilter: _findingStateFilter,
             Limit: _limit,
             IncludeRunLogs: _includeRunLogs);
 
@@ -489,11 +467,6 @@
             kinds.Add(GlobalSearchKind.Run);
         }
 
-        if (_includeFindings)
-        {
-            kinds.Add(GlobalSearchKind.Finding);
-        }
-
         if (_includeRunLogs)
         {
             kinds.Add(GlobalSearchKind.RunLog);
@@ -531,7 +504,6 @@
         {
             GlobalSearchKind.Task => "Task",
             GlobalSearchKind.Run => "Run",
-            GlobalSearchKind.Finding => "Finding",
             GlobalSearchKind.RunLog => "Run Log",
             _ => "Result"
         };
@@ -543,7 +515,6 @@
         {
             GlobalSearchKind.Task => Color.Info,
             GlobalSearchKind.Run => Color.Primary,
-            GlobalSearchKind.Finding => Color.Warning,
             GlobalSearchKind.RunLog => Color.Secondary,
             _ => Color.Default
         };
@@ -553,7 +524,6 @@
     {
         return hit.Kind switch
         {
-            GlobalSearchKind.Finding => $"/settings/findings/{Uri.EscapeDataString(hit.Id)}",
             GlobalSearchKind.Run => $"/settings/runs/{Uri.EscapeDataString(hit.RunId ?? hit.Id)}",
             GlobalSearchKind.RunLog => string.IsNullOrWhiteSpace(hit.RunId)
                 ? $"/settings/repositories/{Uri.EscapeDataString(hit.RepositoryId)}"

@@ -9,7 +9,6 @@ const routeAssertions = [
   { path: '/settings/task-runtimes', heading: 'Task Runtime Settings' },
   { path: '/settings/repositories', heading: 'Repositories' },
   { path: '/settings/runs', heading: 'Runs' },
-  { path: '/settings/findings', heading: 'Findings' },
   { path: '/providers', heading: 'Provider Settings' },
   { path: '/settings/image-builder', heading: 'Container Image Builder' },
   { path: '/settings/mcp', heading: 'MCP Settings' },
@@ -50,7 +49,6 @@ test('primary app shell navigation resolves to core surfaces', async ({ page }) 
 const settingsHomeTests = [
   { id: 'settings-home-repositories', heading: 'Repositories' },
   { id: 'settings-home-runs', heading: 'Runs' },
-  { id: 'settings-home-findings', heading: 'Findings' },
   { id: 'settings-home-skills', heading: 'Global Prompt Skills' },
   { id: 'settings-home-alerts', heading: 'Alert Settings' },
   { id: 'settings-home-image-builder', heading: 'Container Image Builder' },
@@ -73,7 +71,6 @@ for (const setting of settingsHomeTests)
 const settingsSideNavTests = [
   { id: 'settings-nav-repositories-link', path: '/settings/repositories', heading: 'Repositories' },
   { id: 'settings-nav-runs-link', path: '/settings/runs', heading: 'Runs' },
-  { id: 'settings-nav-findings-link', path: '/settings/findings', heading: 'Findings' },
   { id: 'settings-nav-skills-link', path: '/settings/skills', heading: 'Global Prompt Skills' },
   { id: 'settings-nav-sounds-link', path: '/settings/sounds', heading: 'Sound Settings' },
   { id: 'settings-nav-alerts-link', path: '/settings/alerts', heading: 'Alert Settings' },
@@ -108,7 +105,6 @@ const settingsHintPages = [
   '/settings/skills',
   '/settings/repositories',
   '/settings/alerts',
-  '/settings/findings',
   '/settings/runs',
   '/settings/image-builder'
 ];

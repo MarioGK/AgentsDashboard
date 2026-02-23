@@ -239,9 +239,6 @@ else
                 <SettingsHintedField Hint="Delete disabled tasks after this inactivity period. Set to 0 to disable this specific rule.">
                     <MudNumericField T="int" Label="Disabled Task Inactivity (days, 0 disables)" Variant="Variant.Outlined" @bind-Value="_settings.DisabledTaskInactivityDays" Min="0" Max="3650" />
                 </SettingsHintedField>
-                <SettingsHintedField Hint="Prevents cleanup from deleting tasks that still have unresolved findings.">
-                    <MudSwitch T="bool" Color="Color.Primary" @bind-Value="_settings.CleanupExcludeTasksWithOpenFindings" Label="Exclude Tasks With Open Findings" />
-                </SettingsHintedField>
                 <SettingsHintedField Hint="Database size threshold that triggers pressure cleanup.">
                     <MudNumericField T="int" Label="DB Size Soft Limit (GB)" Variant="Variant.Outlined" @bind-Value="_settings.DbSizeSoftLimitGb" Min="1" Max="16384" />
                 </SettingsHintedField>
@@ -617,7 +614,6 @@ else
             TaskRetentionDays = source.TaskRetentionDays,
             CleanupProtectedDays = source.CleanupProtectedDays,
             DisabledTaskInactivityDays = source.DisabledTaskInactivityDays,
-            CleanupExcludeTasksWithOpenFindings = source.CleanupExcludeTasksWithOpenFindings,
             DbSizeSoftLimitGb = source.DbSizeSoftLimitGb,
             DbSizeTargetGb = source.DbSizeTargetGb,
             MaxTasksDeletedPerTick = source.MaxTasksDeletedPerTick,

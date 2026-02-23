@@ -29,7 +29,7 @@ else
 
             <MudTextField T="string"
                           @bind-Value="_commandText"
-                          Placeholder="Type a command like 'runs', 'findings', 'runtimes', 'repositories'"
+                          Placeholder="Type a command like 'runs', 'runtimes', 'repositories'"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
                           Adornment="Adornment.Start"
@@ -49,12 +49,6 @@ else
                 <MudPaper Class="overview-stat-card" Elevation="0">
                     <MudText Typo="Typo.caption">Repositories</MudText>
                     <MudText Typo="Typo.h4">@_repositories.Count</MudText>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" md="4">
-                <MudPaper Class="overview-stat-card" Elevation="0">
-                    <MudText Typo="Typo.caption">Open Findings</MudText>
-                    <MudText Typo="Typo.h4">@_openFindings</MudText>
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="4">
@@ -558,7 +552,6 @@ else
     private readonly List<QuickAction> _quickActions =
     [
         new("Runs", "Inspect queues, active and finished runs", "/settings/runs", Icons.Material.Filled.PlayCircle),
-        new("Findings", "Triage failures and quality issues", "/settings/findings", Icons.Material.Filled.BugReport),
         new("Repositories", "Manage git-linked repositories", "/settings/repositories", Icons.Material.Filled.AccountTree),
         new("Orchestrator", "Inspect task runtime status and queueing", "/settings/task-runtimes", Icons.Material.Filled.Engineering),
         new("MCP", "Configure model context protocol routing snapshot", "/settings/mcp", Icons.Material.Filled.Extension),
@@ -568,7 +561,6 @@ else
 
     private bool _loading = true;
     private string _commandText = string.Empty;
-    private int _openFindings;
     private int _activeRuns;
     private int _runQueuedCount;
     private int _runRunningCount;
@@ -686,14 +678,10 @@ else
             if (SelectionService.SelectedRepositoryId is not null)
             {
                 _runs = await Store.ListRunsByRepositoryAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
-                var findings = await Store.ListFindingsAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
-                _openFindings = findings.Count(IsOpenFinding);
             }
             else
             {
                 _runs = await Store.ListRecentRunsAsync(CancellationToken.None);
-                var findings = await Store.ListAllFindingsAsync(CancellationToken.None);
-                _openFindings = findings.Count(IsOpenFinding);
             }
 
             _activeRuns = _runs.Count(r => TaskRunStatusPresentation.FromRunState(r.State).IsWorking);
@@ -1379,7 +1367,6 @@ else
         var normalized = command?.Trim().ToLowerInvariant() ?? string.Empty;
 
         if (normalized.Contains("run")) return "/settings/runs";
-        if (normalized.Contains("finding")) return "/settings/findings";
         if (normalized.Contains("project") || normalized.Contains("repo")) return "/settings/repositories";
         if (normalized.Contains("mcp")) return "/settings/mcp";
         if (normalized.Contains("provider")) return "/providers";
@@ -1395,8 +1382,6 @@ else
     private static Color GetRunStateColor(RunState state) => TaskRunStatusPresentation.FromRunState(state).Color;
 
     private static string GetRunStateLabel(RunState state) => TaskRunStatusPresentation.FromRunState(state).Label;
-
-    private static bool IsOpenFinding(FindingDocument finding) => finding.State is FindingState.New or FindingState.Acknowledged or FindingState.InProgress;
 
     private static Color MapRuntimeHealthColor(TaskRuntimeHealthStatus status)
     {

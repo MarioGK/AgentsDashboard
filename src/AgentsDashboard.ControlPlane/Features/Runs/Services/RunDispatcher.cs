@@ -88,7 +88,6 @@ public sealed class RunDispatcher(
             if (rejected is not null)
             {
                 await publisher.PublishStatusAsync(rejected, cancellationToken);
-                await store.CreateFindingFromFailureAsync(rejected, "Admission control rejected the run due to queue depth policy.", cancellationToken);
             }
 
             return false;
@@ -257,7 +256,6 @@ public sealed class RunDispatcher(
             if (failed is not null)
             {
                 await publisher.PublishStatusAsync(failed, cancellationToken);
-                await store.CreateFindingFromFailureAsync(failed, response.ErrorMessage ?? "Unknown error", cancellationToken);
             }
             return false;
         }

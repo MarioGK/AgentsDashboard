@@ -14,5 +14,4 @@ public sealed record TaskCleanupQuery(
     int ScanLimit = 0,
     bool IncludeRetentionEligibility = true,
     bool IncludeDisabledInactiveEligibility = false,
-    DateTime DisabledInactiveOlderThanUtc = default,
-    bool ExcludeTasksWithOpenFindings = false);
+    DateTime DisabledInactiveOlderThanUtc = default);

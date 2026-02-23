@@ -22,23 +22,6 @@ public enum TaskRuntimeState
     Failed = 6
 }
 
-public enum FindingSeverity
-{
-    Low = 0,
-    Medium = 1,
-    High = 2,
-    Critical = 3
-}
-
-public enum FindingState
-{
-    New = 0,
-    Acknowledged = 1,
-    InProgress = 2,
-    Resolved = 3,
-    Ignored = 4
-}
-
 public enum HarnessType
 {
     Codex = 0,

@@ -295,7 +295,6 @@ public sealed class RecoveryService(
             if (failed is not null)
             {
                 await publisher.PublishStatusAsync(failed, CancellationToken.None);
-                await store.CreateFindingFromFailureAsync(failed, $"{reason}. Run {run.Id} was terminated automatically.", CancellationToken.None);
             }
         }
         catch (Exception ex)
@@ -326,7 +325,6 @@ public sealed class RecoveryService(
                 if (failed is not null)
                 {
                     await publisher.PublishStatusAsync(failed, cancellationToken);
-                    await store.CreateFindingFromFailureAsync(failed, "Run was still in Running state when control plane restarted. Marked as failed.", cancellationToken);
                     recoveredCount++;
                 }
             }

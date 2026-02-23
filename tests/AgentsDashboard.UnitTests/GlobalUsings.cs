@@ -1,7 +1,5 @@
 global using AgentsDashboard.Contracts.Features.Alerts.Models.Api;
 global using AgentsDashboard.Contracts.Features.Alerts.Models.Domain;
-global using AgentsDashboard.Contracts.Features.Findings.Models.Api;
-global using AgentsDashboard.Contracts.Features.Findings.Models.Domain;
 global using AgentsDashboard.Contracts.Features.ImageBuilder.Models.Api;
 global using AgentsDashboard.Contracts.Features.Mcp.Models.Domain;
 global using AgentsDashboard.Contracts.Features.Providers.Models.Api;

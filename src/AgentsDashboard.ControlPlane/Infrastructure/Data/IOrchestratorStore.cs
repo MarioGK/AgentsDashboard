@@ -119,7 +119,6 @@ public interface IOrchestratorStore
     Task<StructuredRunDataPruneResult> PruneStructuredRunDataAsync(
         DateTime olderThanUtc,
         int maxRuns,
-        bool excludeTasksWithOpenFindings,
         CancellationToken cancellationToken);
     Task UpsertSemanticChunksAsync(string taskId, List<SemanticChunkDocument> chunks, CancellationToken cancellationToken);
     Task<List<SemanticChunkDocument>> SearchWorkspaceSemanticAsync(
@@ -128,14 +127,6 @@ public interface IOrchestratorStore
         string? queryEmbeddingPayload,
         int limit,
         CancellationToken cancellationToken);
-
-    Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken);
-    Task<List<FindingDocument>> ListAllFindingsAsync(CancellationToken cancellationToken);
-    Task<FindingDocument?> GetFindingAsync(string findingId, CancellationToken cancellationToken);
-    Task<FindingDocument> CreateFindingFromFailureAsync(RunDocument run, string description, CancellationToken cancellationToken);
-    Task<FindingDocument?> UpdateFindingStateAsync(string findingId, FindingState state, CancellationToken cancellationToken);
-    Task<FindingDocument?> AssignFindingAsync(string findingId, string assignedTo, CancellationToken cancellationToken);
-    Task<bool> DeleteFindingAsync(string findingId, CancellationToken cancellationToken);
 
     Task UpsertProviderSecretAsync(string repositoryId, string provider, string encryptedValue, CancellationToken cancellationToken);
     Task<List<ProviderSecretDocument>> ListProviderSecretsAsync(string repositoryId, CancellationToken cancellationToken);

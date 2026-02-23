@@ -131,7 +131,6 @@ public sealed class TaskRetentionCleanupService(
         var structuredPrune = await store.PruneStructuredRunDataAsync(
             ageOlderThanUtc,
             structuredPruneBatchSize,
-            settings.CleanupExcludeTasksWithOpenFindings,
             cancellationToken);
         totalDeletedRows += CountDeletedRows(structuredPrune);
 
@@ -145,8 +144,7 @@ public sealed class TaskRetentionCleanupService(
                 ScanLimit: Math.Max(remainingDeleteBudget * 20, 200),
                 IncludeRetentionEligibility: true,
                 IncludeDisabledInactiveEligibility: includeDisabledInactiveEligibility,
-                DisabledInactiveOlderThanUtc: disabledInactiveOlderThanUtc,
-                ExcludeTasksWithOpenFindings: settings.CleanupExcludeTasksWithOpenFindings),
+                DisabledInactiveOlderThanUtc: disabledInactiveOlderThanUtc),
             cancellationToken);
 
         if (ageCandidates.Count > 0)
@@ -175,8 +173,7 @@ public sealed class TaskRetentionCleanupService(
                         ScanLimit: Math.Max(batchSize * 20, 200),
                         IncludeRetentionEligibility: true,
                         IncludeDisabledInactiveEligibility: includeDisabledInactiveEligibility,
-                        DisabledInactiveOlderThanUtc: disabledInactiveOlderThanUtc,
-                        ExcludeTasksWithOpenFindings: settings.CleanupExcludeTasksWithOpenFindings),
+                        DisabledInactiveOlderThanUtc: disabledInactiveOlderThanUtc),
                     cancellationToken);
 
                 if (pressureCandidates.Count == 0)
@@ -253,7 +250,6 @@ public sealed class TaskRetentionCleanupService(
         return batch.TasksDeleted +
                batch.DeletedRuns +
                batch.DeletedRunLogs +
-               batch.DeletedFindings +
                batch.DeletedPromptEntries +
                batch.DeletedRunSummaries +
                batch.DeletedSemanticChunks;

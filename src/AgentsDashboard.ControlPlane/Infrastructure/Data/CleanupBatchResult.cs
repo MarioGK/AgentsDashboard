@@ -11,7 +11,6 @@ public sealed record CleanupBatchResult(
     int FailedTasks,
     int DeletedRuns,
     int DeletedRunLogs,
-    int DeletedFindings,
     int DeletedPromptEntries,
     int DeletedRunSummaries,
     int DeletedSemanticChunks,

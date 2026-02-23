@@ -252,23 +252,6 @@ else
                 </MudTable>
             </MudTabPanel>
 
-            <MudTabPanel Text="Findings Inbox">
-                <MudTable Items="_findings" Dense Hover>
-                    <HeaderContent>
-                        <MudTh>Title</MudTh>
-                        <MudTh>Severity</MudTh>
-                        <MudTh>State</MudTh>
-                        <MudTh>Created</MudTh>
-                    </HeaderContent>
-                    <RowTemplate>
-                        <MudTd>@context.Title</MudTd>
-                        <MudTd>@context.Severity</MudTd>
-                        <MudTd>@context.State</MudTd>
-                        <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("g")</MudTd>
-                    </RowTemplate>
-                </MudTable>
-            </MudTabPanel>
-
             <MudTabPanel Text="Instructions">
                 <MudPaper Class="pa-4">
                     <MudText Typo="Typo.h6" Class="mb-3">Repository Instruction Files</MudText>
@@ -384,7 +367,6 @@ else
 
     private readonly List<TaskDocument> _tasks = [];
     private readonly List<RunDocument> _runs = [];
-    private readonly List<FindingDocument> _findings = [];
     private readonly Dictionary<string, RunDocument?> _latestRunsByTaskId = new(StringComparer.Ordinal);
     private bool _taskStatusLoading;
     private readonly List<PromptSkillDocument> _repositoryPromptSkills = [];
@@ -886,9 +868,6 @@ else
         _runs.Clear();
         _runs.AddRange(await Store.ListRunsByRepositoryAsync(_repository.Id, CancellationToken.None));
         await RefreshLatestRunsByTaskAsync();
-
-        _findings.Clear();
-        _findings.AddRange(await Store.ListFindingsAsync(_repository.Id, CancellationToken.None));
     }
 
     private RunDocument? GetLatestRunForTask(string taskId)

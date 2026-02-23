@@ -274,7 +274,6 @@ public sealed class TaskRuntimeEventListenerService(
 
             if (!succeeded)
             {
-                await store.CreateFindingFromFailureAsync(completedRun, envelope.Error, CancellationToken.None);
                 await TryRetryAsync(completedRun);
             }
 

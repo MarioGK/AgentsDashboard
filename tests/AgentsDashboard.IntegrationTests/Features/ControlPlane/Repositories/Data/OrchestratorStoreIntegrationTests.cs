@@ -580,8 +580,7 @@ public sealed class OrchestratorStoreIntegrationTests
 
         var prune = await fixture.Store.PruneStructuredRunDataAsync(
             DateTime.UtcNow.AddDays(1),
-            maxRuns: 100,
-            excludeTasksWithOpenFindings: false,
+            100,
             CancellationToken.None);
 
         await Assert.That(prune.RunsScanned).IsEqualTo(1);

@@ -12,7 +12,6 @@ public sealed class OrchestratorStore(
     LiteDbDatabase liteDbDatabase) : IOrchestratorStore, IAsyncDisposable
 {
     private static readonly RunState[] ActiveStates = [RunState.Queued, RunState.Running, RunState.PendingApproval];
-    private static readonly FindingState[] OpenFindingStates = [FindingState.New, FindingState.Acknowledged, FindingState.InProgress];
     private static readonly Regex PromptSkillTriggerRegex = new("^[a-z0-9-]+$", RegexOptions.Compiled);
     private const string GlobalRepositoryScope = "global";
     private const string TaskWorkspacesRootPath = "/workspaces/repos";
@@ -788,19 +787,6 @@ public sealed class OrchestratorStore(
         var promptsByTask = promptAggregates.ToDictionary(x => x.TaskId, x => x.TimestampUtc, StringComparer.Ordinal);
         var summariesByTask = summaryAggregates.ToDictionary(x => x.TaskId, x => x.TimestampUtc, StringComparer.Ordinal);
 
-        var tasksWithOpenFindings = new HashSet<string>(StringComparer.Ordinal);
-        if (query.ExcludeTasksWithOpenFindings)
-        {
-            var taskIdsWithOpenFindings = await (
-                    from finding in db.Findings.AsNoTracking()
-                    join run in db.Runs.AsNoTracking() on finding.RunId equals run.Id
-                    where taskIds.Contains(run.TaskId) && OpenFindingStates.Contains(finding.State)
-                    select run.TaskId)
-                .Distinct()
-                .ToListAsync(cancellationToken);
-            tasksWithOpenFindings = new HashSet<string>(taskIdsWithOpenFindings, StringComparer.Ordinal);
-        }
-
         var candidates = new List<TaskCleanupCandidate>(taskSeeds.Count);
         foreach (var task in taskSeeds)
         {
@@ -835,12 +821,6 @@ public sealed class OrchestratorStore(
                 continue;
             }
 
-            var hasOpenFindings = tasksWithOpenFindings.Contains(task.TaskId);
-            if (query.ExcludeTasksWithOpenFindings && hasOpenFindings)
-            {
-                continue;
-            }
-
             candidates.Add(new TaskCleanupCandidate(
                 task.TaskId,
                 task.RepositoryId,
@@ -850,8 +830,7 @@ public sealed class OrchestratorStore(
                 runAggregate?.RunCount ?? 0,
                 runAggregate?.OldestRunAtUtc,
                 isRetentionEligible,
-                isDisabledInactiveEligible,
-                hasOpenFindings));
+                isDisabledInactiveEligible));
         }
 
         return candidates
@@ -871,7 +850,6 @@ public sealed class OrchestratorStore(
                 TaskDeleted: false,
                 DeletedRuns: 0,
                 DeletedRunLogs: 0,
-                DeletedFindings: 0,
                 DeletedPromptEntries: 0,
                 DeletedRunSummaries: 0,
                 DeletedSemanticChunks: 0,
@@ -895,7 +873,6 @@ public sealed class OrchestratorStore(
                 TaskDeleted: false,
                 DeletedRuns: 0,
                 DeletedRunLogs: 0,
-                DeletedFindings: 0,
                 DeletedPromptEntries: 0,
                 DeletedRunSummaries: 0,
                 DeletedSemanticChunks: 0,
@@ -915,7 +892,6 @@ public sealed class OrchestratorStore(
             .ToList();
 
         var deletedRunLogs = 0;
-        var deletedFindings = 0;
         var deletedPromptEntries = 0;
         var deletedRunSummaries = 0;
         var deletedSemanticChunks = 0;
@@ -929,7 +905,6 @@ public sealed class OrchestratorStore(
             _ = await db.RunDiffSnapshots.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
             _ = await db.RunToolProjections.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
             _ = await db.RunQuestionRequests.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
-            deletedFindings = await db.Findings.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         }
 
         deletedPromptEntries = await db.WorkspacePromptEntries.DeleteWhereAsync(x => x.TaskId == taskId, cancellationToken);
@@ -978,7 +953,6 @@ public sealed class OrchestratorStore(
             TaskDeleted: taskDeleted,
             DeletedRuns: deletedRuns,
             DeletedRunLogs: deletedRunLogs,
-            DeletedFindings: deletedFindings,
             DeletedPromptEntries: deletedPromptEntries,
             DeletedRunSummaries: deletedRunSummaries,
             DeletedSemanticChunks: deletedSemanticChunks,
@@ -998,7 +972,6 @@ public sealed class OrchestratorStore(
                 FailedTasks: 0,
                 DeletedRuns: 0,
                 DeletedRunLogs: 0,
-                DeletedFindings: 0,
                 DeletedPromptEntries: 0,
                 DeletedRunSummaries: 0,
                 DeletedSemanticChunks: 0,
@@ -1017,7 +990,6 @@ public sealed class OrchestratorStore(
         var failedTasks = 0;
         var deletedRuns = 0;
         var deletedRunLogs = 0;
-        var deletedFindings = 0;
         var deletedPromptEntries = 0;
         var deletedRunSummaries = 0;
         var deletedSemanticChunks = 0;
@@ -1038,7 +1010,6 @@ public sealed class OrchestratorStore(
 
                 deletedRuns += result.DeletedRuns;
                 deletedRunLogs += result.DeletedRunLogs;
-                deletedFindings += result.DeletedFindings;
                 deletedPromptEntries += result.DeletedPromptEntries;
                 deletedRunSummaries += result.DeletedRunSummaries;
                 deletedSemanticChunks += result.DeletedSemanticChunks;
@@ -1059,7 +1030,6 @@ public sealed class OrchestratorStore(
             FailedTasks: failedTasks,
             DeletedRuns: deletedRuns,
             DeletedRunLogs: deletedRunLogs,
-            DeletedFindings: deletedFindings,
             DeletedPromptEntries: deletedPromptEntries,
             DeletedRunSummaries: deletedRunSummaries,
             DeletedSemanticChunks: deletedSemanticChunks,
@@ -2379,7 +2349,6 @@ public sealed class OrchestratorStore(
     public async Task<StructuredRunDataPruneResult> PruneStructuredRunDataAsync(
         DateTime olderThanUtc,
         int maxRuns,
-        bool excludeTasksWithOpenFindings,
         CancellationToken cancellationToken)
     {
         var normalizedMaxRuns = Math.Clamp(maxRuns, 1, 5000);
@@ -2408,44 +2377,6 @@ public sealed class OrchestratorStore(
         }
 
         var candidateRunSeeds = runSeeds;
-        if (excludeTasksWithOpenFindings)
-        {
-            var taskIds = candidateRunSeeds
-                .Select(x => x.TaskId)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-
-            if (taskIds.Count > 0)
-            {
-                var excludedTaskIds = new HashSet<string>(StringComparer.Ordinal);
-                if (excludeTasksWithOpenFindings)
-                {
-                    var taskIdsWithOpenFindings = await (
-                            from finding in db.Findings.AsNoTracking()
-                            join run in db.Runs.AsNoTracking() on finding.RunId equals run.Id
-                            where taskIds.Contains(run.TaskId) && OpenFindingStates.Contains(finding.State)
-                            select run.TaskId)
-                        .Distinct()
-                        .ToListAsync(cancellationToken);
-
-                    foreach (var taskId in taskIdsWithOpenFindings)
-                    {
-                        if (!string.IsNullOrWhiteSpace(taskId))
-                        {
-                            excludedTaskIds.Add(taskId);
-                        }
-                    }
-                }
-
-                if (excludedTaskIds.Count > 0)
-                {
-                    candidateRunSeeds = candidateRunSeeds
-                        .Where(x => !excludedTaskIds.Contains(x.TaskId))
-                        .ToList();
-                }
-            }
-        }
 
         var runIds = candidateRunSeeds
             .Select(x => x.RunId)
@@ -2473,80 +2404,6 @@ public sealed class OrchestratorStore(
             DeletedStructuredEvents: deletedStructuredEvents,
             DeletedDiffSnapshots: deletedDiffSnapshots,
             DeletedToolProjections: deletedToolProjections);
-    }
-
-    public async Task<List<FindingDocument>> ListFindingsAsync(string repositoryId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Findings.AsNoTracking().Where(x => x.RepositoryId == repositoryId).OrderByDescending(x => x.CreatedAtUtc).Take(200).ToListAsync(cancellationToken);
-    }
-
-    public async Task<List<FindingDocument>> ListAllFindingsAsync(CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Findings.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(500).ToListAsync(cancellationToken);
-    }
-
-    public async Task<FindingDocument?> GetFindingAsync(string findingId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        return await db.Findings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
-    }
-
-    public async Task<FindingDocument> CreateFindingFromFailureAsync(RunDocument run, string description, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var shortRun = run.Id.Length >= 8 ? run.Id[..8] : run.Id;
-        var finding = new FindingDocument
-        {
-            RepositoryId = run.RepositoryId,
-            RunId = run.Id,
-            Title = $"Run {shortRun} failed",
-            Description = description,
-            Severity = FindingSeverity.High,
-            State = FindingState.New,
-        };
-
-        db.Findings.Add(finding);
-        await db.SaveChangesAsync(cancellationToken);
-        return finding;
-    }
-
-    public async Task<FindingDocument?> UpdateFindingStateAsync(string findingId, FindingState state, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
-        if (finding is null)
-            return null;
-
-        finding.State = state;
-        await db.SaveChangesAsync(cancellationToken);
-        return finding;
-    }
-
-    public async Task<FindingDocument?> AssignFindingAsync(string findingId, string assignedTo, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
-        if (finding is null)
-            return null;
-
-        finding.AssignedTo = assignedTo;
-        finding.State = FindingState.InProgress;
-        await db.SaveChangesAsync(cancellationToken);
-        return finding;
-    }
-
-    public async Task<bool> DeleteFindingAsync(string findingId, CancellationToken cancellationToken)
-    {
-        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
-        var finding = await db.Findings.FirstOrDefaultAsync(x => x.Id == findingId, cancellationToken);
-        if (finding is null)
-            return false;
-
-        db.Findings.Remove(finding);
-        await db.SaveChangesAsync(cancellationToken);
-        return true;
     }
 
     public async Task UpsertProviderSecretAsync(string repositoryId, string provider, string encryptedValue, CancellationToken cancellationToken)

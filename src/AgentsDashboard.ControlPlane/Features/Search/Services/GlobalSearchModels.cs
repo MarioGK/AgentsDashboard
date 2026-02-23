@@ -6,8 +6,7 @@ public enum GlobalSearchKind
 {
     Task = 0,
     Run = 1,
-    Finding = 2,
-    RunLog = 3
+    RunLog = 2
 }
 
 
@@ -21,6 +20,5 @@ public sealed record GlobalSearchRequest(
     DateTime? FromUtc = null,
     DateTime? ToUtc = null,
     RunState? RunStateFilter = null,
-    FindingState? FindingStateFilter = null,
     int Limit = 50,
     bool IncludeRunLogs = true);

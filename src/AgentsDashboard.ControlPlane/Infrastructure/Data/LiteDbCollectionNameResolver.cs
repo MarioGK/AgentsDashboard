@@ -21,7 +21,6 @@ public sealed class LiteDbCollectionNameResolver : ILiteDbCollectionNameResolver
             [typeof(RunSessionProfileDocument)] = new("run_session_profiles", nameof(RunSessionProfileDocument.Id)),
             [typeof(RunInstructionStackDocument)] = new("run_instruction_stacks", nameof(RunInstructionStackDocument.Id)),
             [typeof(RunShareBundleDocument)] = new("run_share_bundles", nameof(RunShareBundleDocument.Id)),
-            [typeof(FindingDocument)] = new("findings", nameof(FindingDocument.Id)),
             [typeof(ProviderSecretDocument)] = new("provider_secrets", nameof(ProviderSecretDocument.Id)),
             [typeof(TaskRuntimeRegistration)] = new("task_runtime_registrations", nameof(TaskRuntimeRegistration.Id)),
             [typeof(TaskRuntimeDocument)] = new("task_runtimes", nameof(TaskRuntimeDocument.Id)),

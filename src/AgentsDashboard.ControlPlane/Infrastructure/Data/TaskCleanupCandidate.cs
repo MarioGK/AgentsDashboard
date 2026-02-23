@@ -1,10 +1,5 @@
 namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
-
-
-
-
-
 public sealed record TaskCleanupCandidate(
     string TaskId,
     string RepositoryId,
@@ -14,5 +9,4 @@ public sealed record TaskCleanupCandidate(
     int RunCount,
     DateTime? OldestRunUtc,
     bool IsRetentionEligible = false,
-    bool IsDisabledInactiveEligible = false,
-    bool HasOpenFindings = false);
+    bool IsDisabledInactiveEligibility = false);

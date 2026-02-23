@@ -13,11 +13,11 @@ Use this skill when you want continuous `dotnet watch` operation, deterministic 
 2. Stops existing `dotnet watch` and releases stale listeners on startup ports before launch.
 3. Starts:
    `DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_WATCH_SUPPRESS_EMOJIS=1 DOTNET_WATCH_NONINTERACTIVE=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development dotnet watch --non-interactive --project src/AgentsDashboard.ControlPlane`
-4. Watches warning/error-like events from `data/errors.log`, `dotnet-watch.stdout.log`, and `dotnet-watch.stderr.log`.
+4. Watches warning/error-like events from the unified log stream (`AUTOFIX_SINGLE_LOG_FILE`).
 5. Classifies events into `compile/runtime/startup` taxonomy.
 6. Applies compile-loop dispatch gating to avoid duplicate dispatch storms.
 7. Appends matching events to:
-   - `data/logs/autofix-unified-errors.log`
+   - `AUTOFIX_SINGLE_LOG_FILE` (default `/tmp/autofix/logs/autofix.log`)
 8. Dispatches Codex using `--yolo` in non-interactive mode for actionable events.
 9. Probes `HEALTH_CHECK_URL` on a random 5-10 second interval for 10 attempts.
 10. On repeated failures, builds a multi-log context bundle and dispatches a focused Codex recovery attempt.
@@ -41,13 +41,14 @@ bash .codex/skills/dotnet-watch-error-fixer/launch-and-fix.sh
 - `WATCH_PROJECT` (default: `src/AgentsDashboard.ControlPlane`)
 - `MONITOR_NORMAL_LOGS` (`true|false`, default `false`)
 - `FIX_COOLDOWN_SECONDS` (default `10`)
-- `WATCH_LOG_FILE` (default: `data/errors.log`)
+- `AUTOFIX_SINGLE_LOG_FILE` (default: `/tmp/autofix/logs/autofix.log`)
+- `WATCH_LOG_FILE` (defaults to `AUTOFIX_SINGLE_LOG_FILE`)
 - `RESTART_DELAY_SECONDS` (default `3`)
 - `RESTART_MAX_DELAY_SECONDS` (default `30`)
-- `UNIFIED_ERROR_LOG`
-- `DOTNET_WATCH_STDOUT_LOG`
-- `DOTNET_WATCH_STDERR_LOG`
-- `AUTOFIX_DISPATCH_LOG`
+- `UNIFIED_ERROR_LOG` (defaults to `AUTOFIX_SINGLE_LOG_FILE`)
+- `DOTNET_WATCH_STDOUT_LOG` (defaults to `AUTOFIX_SINGLE_LOG_FILE`)
+- `DOTNET_WATCH_STDERR_LOG` (defaults to `AUTOFIX_SINGLE_LOG_FILE`)
+- `AUTOFIX_DISPATCH_LOG` (defaults to `AUTOFIX_SINGLE_LOG_FILE`)
 - `AUTOFIX_STATE_FILE`
 - `CODEX_CLI` (default `codex`)
 - `CODEX_CLI_ARGS` (optional additional args)
