@@ -1,6 +1,6 @@
 # AI Orchestrator
 
-Self-hosted AI orchestration platform on .NET 10. Blazor Server is the control plane; execution runs through CLI harnesses (`codex`, `opencode`) and dashboard AI feature calls via `LlmTornado`.
+Self-hosted AI orchestration platform on .NET 10. Blazor Server is the control plane; execution runs through CLI harnesses (`codex`, `opencode`) and dashboard AI feature calls via direct Z.AI Anthropic-compatible HTTP APIs.
 
 ## Documentation
 - Check the docs folder for better documentation

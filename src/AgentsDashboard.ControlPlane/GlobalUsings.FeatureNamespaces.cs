@@ -33,6 +33,8 @@ global using AgentsDashboard.ControlPlane.Features.Runs.Services;
 global using AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 global using AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services.Models;
 global using AgentsDashboard.ControlPlane.Features.Search.Services;
+global using AgentsDashboard.ControlPlane.Features.Settings.Models;
+global using AgentsDashboard.ControlPlane.Features.Settings.Services;
 global using AgentsDashboard.ControlPlane.Features.Workspace.Services;
 global using AgentsDashboard.ControlPlane.Infrastructure;
 global using AgentsDashboard.ControlPlane.Infrastructure.Ai;

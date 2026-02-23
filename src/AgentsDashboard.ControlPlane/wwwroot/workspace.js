@@ -164,18 +164,38 @@ export function registerComposerImagePasteBridge(elementId, dotNetRef, bridgeKey
         }
 
         const files = [];
+        const seen = new Set();
+
+        const addImageFile = file => {
+            if (!file) {
+                return;
+            }
+
+            if (!isLikelyImageFile(file)) {
+                return;
+            }
+
+            const key = `${file.name || ""}:${file.type || ""}:${file.size || 0}`;
+            if (seen.has(key)) {
+                return;
+            }
+
+            seen.add(key);
+            files.push(file);
+        };
+
         for (const item of clipboard.items) {
             if (item.kind !== "file") {
                 continue;
             }
 
-            if (!item.type || !item.type.startsWith("image/")) {
-                continue;
-            }
-
             const file = item.getAsFile();
-            if (file) {
-                files.push(file);
+            addImageFile(file);
+        }
+
+        if (clipboard.files) {
+            for (const file of clipboard.files) {
+                addImageFile(file);
             }
         }
 
@@ -203,6 +223,16 @@ export function registerComposerImagePasteBridge(elementId, dotNetRef, bridgeKey
     element.addEventListener("paste", handler);
     composerImagePasteBridges.set(id, { element, handler });
     return id;
+}
+
+function isLikelyImageFile(file) {
+    const mimeType = (file.type || "").trim().toLowerCase();
+    if (mimeType.startsWith("image/")) {
+        return true;
+    }
+
+    const name = (file.name || "").trim().toLowerCase();
+    return name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif") || name.endsWith(".webp");
 }
 
 export function unregisterComposerImagePasteBridge(id) {
@@ -391,16 +421,76 @@ export function scrollChatToLatest(id) {
 
 async function readClipboardImage(file) {
     const dataUrl = await readFileAsDataUrl(file);
+    const mimeType = normalizeImageMimeType(file.type, file.name, dataUrl);
     const dimensions = await readImageDimensions(dataUrl);
+
+    if (!mimeType) {
+        throw new Error("Clipboard image has unsupported MIME type.");
+    }
+
     return {
         id: createImageId(),
         fileName: file.name || "pasted-image",
-        mimeType: file.type || "image/png",
+        mimeType,
         sizeBytes: file.size || 0,
         dataUrl,
         width: dimensions.width,
         height: dimensions.height
     };
+}
+
+function normalizeImageMimeType(rawMimeType, fileName, dataUrl) {
+    const mimeType = (rawMimeType || "").trim().toLowerCase();
+    if (mimeType === "image/jpg") {
+        return "image/jpeg";
+    }
+
+    if (mimeType.startsWith("image/")) {
+        return mimeType;
+    }
+
+    const extension = extractFileExtension(fileName || "").toLowerCase();
+    if (extensionToMimeType[extension]) {
+        return extensionToMimeType[extension];
+    }
+
+    const headerMime = extractDataUrlMimeType(dataUrl);
+    if (headerMime && headerMime.startsWith("image/")) {
+        return headerMime === "image/jpg" ? "image/jpeg" : headerMime;
+    }
+
+    return "";
+}
+
+function extractDataUrlMimeType(dataUrl) {
+    if (!dataUrl || !dataUrl.startsWith("data:", 0)) {
+        return "";
+    }
+
+    const commaIndex = dataUrl.indexOf(",");
+    if (commaIndex <= 5) {
+        return "";
+    }
+
+    const metadata = dataUrl.slice(5, commaIndex);
+    return (metadata.split(";")[0] || "").trim().toLowerCase();
+}
+
+const extensionToMimeType = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp"
+};
+
+function extractFileExtension(fileName) {
+    const index = (fileName || "").lastIndexOf(".");
+    if (index < 0) {
+        return "";
+    }
+
+    return fileName.slice(index).trim();
 }
 
 function readFileAsDataUrl(file) {

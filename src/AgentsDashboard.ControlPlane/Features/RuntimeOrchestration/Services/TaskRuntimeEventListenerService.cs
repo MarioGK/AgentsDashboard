@@ -22,17 +22,21 @@ public sealed class TaskRuntimeEventListenerService(
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan TaskRuntimeTtl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan EventHubProbeTimeout = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan DiffPublishThrottle = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan ToolPublishThrottle = TimeSpan.FromMilliseconds(125);
+    private const int EventHubFailureWarnThreshold = 3;
     private const long MaxArtifactBytesPerArtifact = 104_857_600;
     private const long MaxArtifactBytesPerRun = 262_144_000;
 
     private readonly ConcurrentDictionary<string, TaskRuntimeHubConnection> _connections = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, int> _connectionFailures = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTime> _structuredPublishWatermarks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _structuredSequenceWatermarks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ArtifactAssemblyState> _artifactAssemblies = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _artifactRunByteTotals = new(StringComparer.OrdinalIgnoreCase);
     private readonly IRunStructuredViewService _runStructuredViewService = runStructuredViewService ?? NullRunStructuredViewService.Instance;
+    private static readonly ITaskRuntimeEventReceiver s_eventHubProbeReceiver = new EventHubProbeReceiver();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -63,6 +67,12 @@ public sealed class TaskRuntimeEventListenerService(
 
         foreach (var worker in runningWorkers.Values)
         {
+            if (string.IsNullOrWhiteSpace(worker.GrpcEndpoint))
+            {
+                logger.LogDebug("Skipping event hub connection for {TaskRuntimeId} because gRPC endpoint is empty", worker.TaskRuntimeId);
+                continue;
+            }
+
             if (_connections.TryGetValue(worker.TaskRuntimeId, out var existing))
             {
                 if (string.Equals(existing.Endpoint, worker.GrpcEndpoint, StringComparison.OrdinalIgnoreCase))
@@ -99,9 +109,27 @@ public sealed class TaskRuntimeEventListenerService(
         {
             try
             {
+                var endpoint = await ResolveWorkerEventHubEndpointAsync(connection.TaskRuntimeId, connection.Endpoint, cancellationToken);
+                if (endpoint is null)
+                {
+                    RecordWorkerEventHubConnectionFailure(
+                        connection.TaskRuntimeId,
+                        connection.Endpoint,
+                        "Worker event hub is not yet accepting streaming connections.");
+                    await Task.Delay(reconnectDelay, cancellationToken);
+                    reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
+                    continue;
+                }
+
+                if (!string.Equals(endpoint, connection.Endpoint, StringComparison.OrdinalIgnoreCase))
+                {
+                    connection.Endpoint = endpoint;
+                }
+
                 logger.LogInformation("Connecting worker event hub for {TaskRuntimeId} at {Endpoint}", connection.TaskRuntimeId, connection.Endpoint);
                 var hub = await clientFactory.ConnectEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, this, cancellationToken);
                 connection.SetHub(hub);
+                _connectionFailures.TryRemove(connection.TaskRuntimeId, out _);
                 reconnectDelay = TimeSpan.FromSeconds(1);
 
                 await hub.SubscribeAsync(runIds: null);
@@ -115,11 +143,7 @@ public sealed class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(
-                    "Worker event hub connection failed for {TaskRuntimeId}: {ErrorMessage}",
-                    connection.TaskRuntimeId,
-                    ex.Message.ReplaceLineEndings(" "));
-                logger.LogDebug(ex, "Worker event hub connection failure details for {TaskRuntimeId}", connection.TaskRuntimeId);
+                RecordWorkerEventHubConnectionFailure(connection.TaskRuntimeId, connection.Endpoint, ex.Message.ReplaceLineEndings(" "), ex);
                 await Task.Delay(reconnectDelay, cancellationToken);
                 reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
             }
@@ -137,6 +161,7 @@ public sealed class TaskRuntimeEventListenerService(
             return;
         }
 
+        _connectionFailures.TryRemove(runtimeId, out _);
         connection.Cancellation.Cancel();
 
         try
@@ -165,6 +190,105 @@ public sealed class TaskRuntimeEventListenerService(
     void ITaskRuntimeEventReceiver.OnTaskRuntimeStatusChanged(TaskRuntimeStatusMessage statusMessage)
     {
         _ = HandleTaskRuntimeStatusAsync(statusMessage);
+    }
+
+    private async Task<string?> ResolveWorkerEventHubEndpointAsync(string runtimeId, string preferredEndpoint, CancellationToken cancellationToken)
+    {
+        if (await IsEventHubReachableAsync(runtimeId, preferredEndpoint, cancellationToken))
+        {
+            return preferredEndpoint;
+        }
+
+        var workers = await lifecycleManager.ListTaskRuntimesAsync(cancellationToken);
+        var worker = workers.FirstOrDefault(x => string.Equals(x.TaskRuntimeId, runtimeId, StringComparison.OrdinalIgnoreCase));
+        var candidateEndpoint = worker?.ProxyEndpoint;
+
+        if (string.IsNullOrWhiteSpace(candidateEndpoint) ||
+            string.Equals(candidateEndpoint, preferredEndpoint, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (await IsEventHubReachableAsync(runtimeId, candidateEndpoint, cancellationToken))
+        {
+            logger.LogInformation(
+                "Worker event hub endpoint fallback used for {TaskRuntimeId}: {Endpoint}",
+                runtimeId,
+                candidateEndpoint);
+            return candidateEndpoint;
+        }
+
+        return null;
+    }
+
+    private async Task<bool> IsEventHubReachableAsync(string runtimeId, string endpoint, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return false;
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(EventHubProbeTimeout);
+        try
+        {
+            var hub = await clientFactory.ConnectEventHubAsync(runtimeId, endpoint, s_eventHubProbeReceiver, timeout.Token);
+            await hub.DisposeAsync();
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void RecordWorkerEventHubConnectionFailure(string runtimeId, string endpoint, string message, Exception? ex = null)
+    {
+        var consecutiveFailures = _connectionFailures.AddOrUpdate(runtimeId, 1, (_, value) => value + 1);
+        var shouldWarn = consecutiveFailures >= EventHubFailureWarnThreshold && consecutiveFailures % EventHubFailureWarnThreshold == 0;
+        if (!shouldWarn)
+        {
+            if (ex is null)
+            {
+                logger.LogDebug(
+                    "Worker event hub connection failed for {TaskRuntimeId} at {Endpoint}: {ErrorMessage}",
+                    runtimeId,
+                    endpoint,
+                    message);
+                return;
+            }
+
+            logger.LogDebug(ex,
+                "Worker event hub connection failed for {TaskRuntimeId} at {Endpoint}: {ErrorMessage}",
+                runtimeId,
+                endpoint,
+                message);
+            return;
+        }
+
+        if (ex is null)
+        {
+            logger.LogWarning(
+                "Worker event hub connection failed for {TaskRuntimeId} at {Endpoint}: {ErrorMessage}",
+                runtimeId,
+                endpoint,
+                message);
+            return;
+        }
+
+        logger.LogWarning(ex,
+            "Worker event hub connection failed for {TaskRuntimeId} at {Endpoint}: {ErrorMessage}",
+            runtimeId,
+            endpoint,
+            message);
     }
 
     private async Task HandleJobEventAsync(JobEventMessage message)
@@ -218,15 +342,7 @@ public sealed class TaskRuntimeEventListenerService(
 
             string? prUrl = envelope.Metadata.TryGetValue("prUrl", out var url) ? url : null;
 
-            string? failureClass = null;
-            if (!succeeded && !string.IsNullOrWhiteSpace(envelope.Error))
-            {
-                if (envelope.Error.Contains("Envelope validation", StringComparison.OrdinalIgnoreCase))
-                    failureClass = "EnvelopeValidation";
-                else if (envelope.Error.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
-                         envelope.Error.Contains("cancelled", StringComparison.OrdinalIgnoreCase))
-                    failureClass = "Timeout";
-            }
+            var failureClass = ResolveFailureClassFromCompletion(envelope, succeeded);
 
             var completedRun = await runStore.MarkRunCompletedAsync(
                 message.RunId,
@@ -587,6 +703,40 @@ public sealed class TaskRuntimeEventListenerService(
         {
             logger.LogWarning(ex, "Failed dispatching next queued run for task {TaskId}", taskId);
         }
+    }
+
+    private static string? ResolveFailureClassFromCompletion(HarnessResultEnvelope envelope, bool succeeded)
+    {
+        if (succeeded)
+        {
+            return null;
+        }
+
+        if (envelope.Metadata.TryGetValue("failureClass", out var metadataFailureClass) &&
+            !string.IsNullOrWhiteSpace(metadataFailureClass))
+        {
+            return metadataFailureClass;
+        }
+
+        if (!string.IsNullOrWhiteSpace(envelope.Summary) &&
+            envelope.Summary.Contains("Workspace preparation failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "WorkspacePreparation";
+        }
+
+        if (string.IsNullOrWhiteSpace(envelope.Error))
+        {
+            return null;
+        }
+
+        if (envelope.Error.Contains("Envelope validation", StringComparison.OrdinalIgnoreCase))
+            return "EnvelopeValidation";
+
+        if (envelope.Error.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+            envelope.Error.Contains("cancelled", StringComparison.OrdinalIgnoreCase))
+            return "Timeout";
+
+        return null;
     }
 
     private static HarnessResultEnvelope ParseEnvelope(string? payloadJson)
@@ -994,7 +1144,7 @@ public sealed class TaskRuntimeEventListenerService(
     private sealed class TaskRuntimeHubConnection
     {
         public required string TaskRuntimeId { get; init; }
-        public required string Endpoint { get; init; }
+        public required string Endpoint { get; set; }
         public required CancellationTokenSource Cancellation { get; init; }
         public Task? ConnectionTask { get; set; }
         private ITaskRuntimeEventHub? _hub;
@@ -1035,6 +1185,17 @@ public sealed class TaskRuntimeEventListenerService(
             {
                 _hubLock.Release();
             }
+        }
+    }
+
+    private sealed class EventHubProbeReceiver : ITaskRuntimeEventReceiver
+    {
+        public void OnJobEvent(JobEventMessage eventMessage)
+        {
+        }
+
+        public void OnTaskRuntimeStatusChanged(TaskRuntimeStatusMessage statusMessage)
+        {
         }
     }
 }

@@ -73,5 +73,6 @@ public sealed class SystemSettingsDocument
     public string VictoriaMetricsEndpoint { get; set; } = "http://localhost:8428";
     public string VmUiEndpoint { get; set; } = "http://localhost:8081";
     public OrchestratorSettings Orchestrator { get; set; } = new();
+    public ZAiSettings ZAi { get; set; } = new();
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

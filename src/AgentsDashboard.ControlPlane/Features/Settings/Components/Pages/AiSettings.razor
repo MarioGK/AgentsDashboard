@@ -1,0 +1,464 @@
+@page "/settings/ai"
+@layout SettingsLayout
+@rendermode InteractiveServer
+@inject ISystemStore Store
+@inject IRepositoryStore RepositoryStore
+@inject ISecretCryptoService SecretCrypto
+@inject ZAiValidationService ValidationService
+@inject ISnackbar Snackbar
+
+@namespace AgentsDashboard.ControlPlane.Components.Pages
+<PageTitle>AI Settings - AgentsDashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">AI Settings</MudText>
+<MudText Typo="Typo.body2" Class="mb-3">
+    Global Z.AI configuration for dashboard AI workflows. Model is fixed to <strong>glm-5</strong>.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <SettingsActionBar IsDirty="@HasUnsavedChanges"
+                       IsSaving="_saving"
+                       SaveLabel="Save AI Settings"
+                       OnSave="SaveAsync"
+                       OnRevert="RevertChangesAsync"
+                       OnResetDefaults="ResetToDefaultsAsync" />
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Global API Key</MudText>
+                    <SettingsHintIcon Text="Stored as encrypted provider secret under global scope and shared by dashboard AI features." />
+                </MudStack>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                    <MudChip T="string" Variant="Variant.Outlined" Size="Size.Small" Color="@(_keyConfigured ? Color.Success : Color.Default)">
+                        @(_keyConfigured ? "Configured" : "Not configured")
+                    </MudChip>
+                    @if (_keyUpdatedAtUtc.HasValue)
+                    {
+                        <MudText Typo="Typo.caption">Updated @_keyUpdatedAtUtc.Value.ToLocalTime().ToString("g")</MudText>
+                    }
+                </MudStack>
+
+                <SettingsHintedField Hint="Enter key to save/replace the global credential.">
+                    <MudTextField T="string"
+                                  @bind-Value="_apiKeyInput"
+                                  Label="Z.AI API Key"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Text" />
+                </SettingsHintedField>
+
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveGlobalKeyAsync"
+                               Disabled="@string.IsNullOrWhiteSpace(_apiKeyInput)">
+                        Save Global Key
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Info"
+                               StartIcon="@Icons.Material.Filled.NetworkCheck"
+                               OnClick="TestConnectivityAsync"
+                               Disabled="@_testingConnectivity">
+                        @if (_testingConnectivity)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        Test Connectivity
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                    <MudText Typo="Typo.h6">Runtime</MudText>
+                    <SettingsHintIcon Text="Controls the API endpoint path used by Z.AI requests. All calls are fixed to glm-5." />
+                </MudStack>
+
+                <SettingsHintedField Hint="Anthropic-compatible base URL. /v1/messages is appended automatically for validation calls.">
+                    <MudTextField T="string"
+                                  @bind-Value="_baseUrl"
+                                  Label="Z.AI Base URL"
+                                  Variant="Variant.Outlined" />
+                </SettingsHintedField>
+
+                <SettingsHintedField ContainerClass="" Hint="Prompt used for the chat smoke validation request.">
+                    <MudTextField T="string"
+                                  @bind-Value="_chatPrompt"
+                                  Label="Chat Smoke Prompt"
+                                  Variant="Variant.Outlined"
+                                  Lines="3" />
+                </SettingsHintedField>
+
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.SmartToy"
+                           OnClick="TestChatAsync"
+                           Disabled="@_testingChat">
+                    @if (_testingChat)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Test Chat (glm-5)
+                </MudButton>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                    <MudText Typo="Typo.h6">Connectivity Result</MudText>
+                    <SettingsHintIcon Text="Auth + endpoint reachability against glm-5." />
+                </MudStack>
+
+                @if (_connectivityResult is null)
+                {
+                    <MudText Typo="Typo.body2">No connectivity test run yet.</MudText>
+                }
+                else
+                {
+                    <MudAlert Severity="@(_connectivityResult.Success ? Severity.Success : Severity.Error)" Dense="true" Variant="Variant.Text">
+                        @_connectivityResult.Message
+                    </MudAlert>
+                    <MudText Typo="Typo.caption">Status: @_connectivityResult.StatusCode | Duration: @_connectivityResult.DurationMs ms</MudText>
+                    @if (!string.IsNullOrWhiteSpace(_connectivityResult.ResponsePreview))
+                    {
+                        <MudPaper Class="pa-2 mt-2">
+                            <MudText Typo="Typo.caption">@_connectivityResult.ResponsePreview</MudText>
+                        </MudPaper>
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                    <MudText Typo="Typo.h6">Chat Smoke Result</MudText>
+                    <SettingsHintIcon Text="Single prompt/response smoke check using glm-5." />
+                </MudStack>
+
+                @if (_chatResult is null)
+                {
+                    <MudText Typo="Typo.body2">No chat smoke test run yet.</MudText>
+                }
+                else
+                {
+                    <MudAlert Severity="@(_chatResult.Success ? Severity.Success : Severity.Error)" Dense="true" Variant="Variant.Text">
+                        @_chatResult.Message
+                    </MudAlert>
+                    <MudText Typo="Typo.caption">Status: @_chatResult.StatusCode | Duration: @_chatResult.DurationMs ms</MudText>
+                    @if (!string.IsNullOrWhiteSpace(_chatResult.ResponsePreview))
+                    {
+                        <MudPaper Class="pa-2 mt-2">
+                            <MudText Typo="Typo.caption">@_chatResult.ResponsePreview</MudText>
+                        </MudPaper>
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <SettingsActionBar IsDirty="@HasUnsavedChanges"
+                       IsSaving="_saving"
+                       SaveLabel="Save AI Settings"
+                       Class="mt-2"
+                       OnSave="SaveAsync"
+                       OnRevert="RevertChangesAsync"
+                       OnResetDefaults="ResetToDefaultsAsync" />
+}
+
+@code {
+    private const string GlobalRepositoryId = "global";
+    private const string ZAiProvider = "zai";
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _testingConnectivity;
+    private bool _testingChat;
+    private bool _keyConfigured;
+    private DateTime? _keyUpdatedAtUtc;
+    private string _apiKeyInput = string.Empty;
+    private string _savedApiKeyInput = string.Empty;
+    private string _baseUrl = ZAiSettings.DefaultBaseUrl;
+    private string _savedBaseUrl = ZAiSettings.DefaultBaseUrl;
+    private string _chatPrompt = "Reply with a short readiness confirmation.";
+    private ZAiValidationResult? _connectivityResult;
+    private ZAiValidationResult? _chatResult;
+
+    private bool HasUnsavedChanges =>
+        NormalizeBaseUrl(_baseUrl) != NormalizeBaseUrl(_savedBaseUrl) ||
+        NormalizeApiKey(_apiKeyInput) != NormalizeApiKey(_savedApiKeyInput);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            var settings = await Store.GetSettingsAsync(CancellationToken.None);
+            _baseUrl = NormalizeBaseUrl(settings.ZAi?.BaseUrl);
+            _savedBaseUrl = _baseUrl;
+
+            var secret = await RepositoryStore.GetProviderSecretAsync(GlobalRepositoryId, ZAiProvider, CancellationToken.None);
+            _keyConfigured = secret is not null && !string.IsNullOrWhiteSpace(secret.EncryptedValue);
+            _keyUpdatedAtUtc = secret?.UpdatedAtUtc;
+            if (_keyConfigured && secret is not null)
+            {
+                try
+                {
+                    var decrypted = SecretCrypto.Decrypt(secret.EncryptedValue);
+                    _apiKeyInput = NormalizeApiKey(decrypted);
+                }
+                catch (Exception ex)
+                {
+                    _apiKeyInput = string.Empty;
+                    Snackbar.Add($"Failed to decrypt stored API key: {ex.Message}", Severity.Error);
+                }
+            }
+            else
+            {
+                _apiKeyInput = string.Empty;
+            }
+
+            _savedApiKeyInput = _apiKeyInput;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load AI settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            var settings = await Store.GetSettingsAsync(CancellationToken.None);
+            settings.ZAi ??= new ZAiSettings();
+            settings.ZAi.BaseUrl = NormalizeBaseUrl(_baseUrl);
+
+            await Store.UpdateSettingsAsync(settings, CancellationToken.None);
+            var normalizedInput = NormalizeApiKey(_apiKeyInput);
+            if (!string.IsNullOrWhiteSpace(normalizedInput))
+            {
+                await SaveGlobalKeyInternalAsync(normalizedInput, showSnackbar: false);
+            }
+
+            _baseUrl = settings.ZAi.BaseUrl;
+            _savedBaseUrl = _baseUrl;
+            _savedApiKeyInput = NormalizeApiKey(_apiKeyInput);
+            Snackbar.Add("AI settings saved", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save AI settings: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task RevertChangesAsync()
+    {
+        _baseUrl = _savedBaseUrl;
+        _apiKeyInput = _savedApiKeyInput;
+        return Task.CompletedTask;
+    }
+
+    private Task ResetToDefaultsAsync()
+    {
+        _baseUrl = ZAiSettings.DefaultBaseUrl;
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveGlobalKeyAsync()
+    {
+        var normalizedInput = NormalizeApiKey(_apiKeyInput);
+        if (string.IsNullOrWhiteSpace(normalizedInput))
+        {
+            Snackbar.Add("API key cannot be empty.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await SaveGlobalKeyInternalAsync(normalizedInput, showSnackbar: false);
+            Snackbar.Add("Global Z.AI API key saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save API key: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveGlobalKeyInternalAsync(string normalizedKey, bool showSnackbar)
+    {
+        var encrypted = SecretCrypto.Encrypt(normalizedKey);
+        await RepositoryStore.UpsertProviderSecretAsync(GlobalRepositoryId, ZAiProvider, encrypted, CancellationToken.None);
+        var savedSecret = await RepositoryStore.GetProviderSecretAsync(GlobalRepositoryId, ZAiProvider, CancellationToken.None);
+
+        _apiKeyInput = normalizedKey;
+        _savedApiKeyInput = normalizedKey;
+        _keyConfigured = savedSecret is not null && !string.IsNullOrWhiteSpace(savedSecret.EncryptedValue);
+        _keyUpdatedAtUtc = savedSecret?.UpdatedAtUtc ?? DateTime.UtcNow;
+
+        if (showSnackbar)
+        {
+            Snackbar.Add("Global Z.AI API key saved.", Severity.Success);
+        }
+    }
+
+    private async Task TestConnectivityAsync()
+    {
+        _testingConnectivity = true;
+
+        try
+        {
+            var key = await ResolveApiKeyAsync();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                _connectivityResult = new ZAiValidationResult(
+                    Success: false,
+                    TestName: "Connectivity",
+                    Message: "No API key configured.",
+                    StatusCode: 0,
+                    DurationMs: 0,
+                    ResponsePreview: string.Empty);
+                Snackbar.Add("No API key configured.", Severity.Error);
+                return;
+            }
+
+            _connectivityResult = await ValidationService.TestConnectivityAsync(
+                key,
+                NormalizeBaseUrl(_baseUrl),
+                CancellationToken.None);
+
+            Snackbar.Add(
+                _connectivityResult.Success ? "Connectivity test succeeded." : $"Connectivity test failed: {_connectivityResult.Message}",
+                _connectivityResult.Success ? Severity.Success : Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            _connectivityResult = new ZAiValidationResult(
+                Success: false,
+                TestName: "Connectivity",
+                Message: ex.Message,
+                StatusCode: 0,
+                DurationMs: 0,
+                ResponsePreview: string.Empty);
+            Snackbar.Add($"Connectivity test failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _testingConnectivity = false;
+        }
+    }
+
+    private async Task TestChatAsync()
+    {
+        _testingChat = true;
+
+        try
+        {
+            var key = await ResolveApiKeyAsync();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                _chatResult = new ZAiValidationResult(
+                    Success: false,
+                    TestName: "Chat",
+                    Message: "No API key configured.",
+                    StatusCode: 0,
+                    DurationMs: 0,
+                    ResponsePreview: string.Empty);
+                Snackbar.Add("No API key configured.", Severity.Error);
+                return;
+            }
+
+            _chatResult = await ValidationService.TestChatAsync(
+                key,
+                NormalizeBaseUrl(_baseUrl),
+                _chatPrompt,
+                CancellationToken.None);
+
+            Snackbar.Add(
+                _chatResult.Success ? "Chat smoke test succeeded." : $"Chat smoke test failed: {_chatResult.Message}",
+                _chatResult.Success ? Severity.Success : Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            _chatResult = new ZAiValidationResult(
+                Success: false,
+                TestName: "Chat",
+                Message: ex.Message,
+                StatusCode: 0,
+                DurationMs: 0,
+                ResponsePreview: string.Empty);
+            Snackbar.Add($"Chat smoke test failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _testingChat = false;
+        }
+    }
+
+    private async Task<string?> ResolveApiKeyAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_apiKeyInput))
+        {
+            return _apiKeyInput.Trim();
+        }
+
+        var secret = await RepositoryStore.GetProviderSecretAsync(GlobalRepositoryId, ZAiProvider, CancellationToken.None);
+        if (secret is null || string.IsNullOrWhiteSpace(secret.EncryptedValue))
+        {
+            return null;
+        }
+
+        try
+        {
+            return SecretCrypto.Decrypt(secret.EncryptedValue);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to decrypt stored API key: {ex.Message}", Severity.Error);
+            return null;
+        }
+    }
+
+    private static string NormalizeBaseUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return ZAiSettings.DefaultBaseUrl;
+        }
+
+        return value.Trim().TrimEnd('/');
+    }
+
+    private static string NormalizeApiKey(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Trim();
+    }
+}

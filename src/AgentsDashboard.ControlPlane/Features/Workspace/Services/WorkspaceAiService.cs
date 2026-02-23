@@ -3,11 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-
-using LlmTornado;
-using LlmTornado.Code;
-using LlmTornado.Embedding.Models;
-
 namespace AgentsDashboard.ControlPlane.Features.Workspace.Services;
 
 public interface IWorkspaceAiService
@@ -65,29 +60,23 @@ public sealed record WorkspaceEmbeddingResult(
 public sealed class WorkspaceAiService(
     IRepositoryStore store,
     ISecretCryptoService secretCryptoService,
-    LlmTornadoGatewayService llmTornadoGatewayService,
+    ZAiGatewayService zAiGatewayService,
     IHarnessOutputParserService parserService,
     ILogger<WorkspaceAiService> logger) : IWorkspaceAiService
 {
-    private static readonly string[] s_defaultEmbeddingModelCandidates =
-    [
-        "embedding-3",
-        "text-embedding-3-small"
-    ];
-
     private const int MaxEmbeddingInputCharacters = 6000;
     private const int FallbackEmbeddingDimensions = 128;
     private const int TaskTitleMaxRetries = 5;
     private const int TaskTitleMaxLength = 80;
 
     public async Task<WorkspaceAiTextResult> SuggestPromptContinuationAsync(
-        string repositoryId,
+        string _,
         string prompt,
         string? context,
         CancellationToken cancellationToken)
     {
         var fallback = BuildFallbackPromptContinuation(prompt);
-        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+        var apiKey = await ResolveApiKeyAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -99,7 +88,7 @@ public sealed class WorkspaceAiService(
                 Message: "AI key not configured; returned heuristic continuation.");
         }
 
-        var result = await llmTornadoGatewayService.SuggestPromptContinuationAsync(
+        var result = await zAiGatewayService.SuggestPromptContinuationAsync(
             prompt,
             context,
             apiKey,
@@ -124,13 +113,13 @@ public sealed class WorkspaceAiService(
     }
 
     public async Task<WorkspaceAiTextResult> ImprovePromptAsync(
-        string repositoryId,
+        string _,
         string prompt,
         string? context,
         CancellationToken cancellationToken)
     {
         var fallback = BuildFallbackPromptImprovement(prompt);
-        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+        var apiKey = await ResolveApiKeyAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -142,7 +131,7 @@ public sealed class WorkspaceAiService(
                 Message: "AI key not configured; returned heuristic prompt improvement.");
         }
 
-        var result = await llmTornadoGatewayService.ImprovePromptAsync(
+        var result = await zAiGatewayService.ImprovePromptAsync(
             prompt,
             context,
             apiKey,
@@ -167,12 +156,12 @@ public sealed class WorkspaceAiService(
     }
 
     public async Task<WorkspaceAiTextResult> GeneratePromptFromContextAsync(
-        string repositoryId,
+        string _,
         string context,
         CancellationToken cancellationToken)
     {
         var fallback = BuildFallbackGeneratedPrompt(context);
-        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+        var apiKey = await ResolveApiKeyAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -184,7 +173,7 @@ public sealed class WorkspaceAiService(
                 Message: "AI key not configured; returned template prompt.");
         }
 
-        var result = await llmTornadoGatewayService.GeneratePromptFromContextAsync(
+        var result = await zAiGatewayService.GeneratePromptFromContextAsync(
             context,
             apiKey,
             cancellationToken);
@@ -208,7 +197,7 @@ public sealed class WorkspaceAiService(
     }
 
     public async Task<WorkspaceAiTextResult> GenerateTaskTitleAsync(
-        string repositoryId,
+        string _,
         string prompt,
         CancellationToken cancellationToken)
     {
@@ -224,7 +213,7 @@ public sealed class WorkspaceAiService(
         }
 
         var fallback = BuildFallbackTaskTitle(normalizedPrompt);
-        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+        var apiKey = await ResolveApiKeyAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -242,7 +231,7 @@ public sealed class WorkspaceAiService(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var result = await llmTornadoGatewayService.GenerateTaskTitleAsync(
+            var result = await zAiGatewayService.GenerateTaskTitleAsync(
                 normalizedPrompt,
                 apiKey,
                 cancellationToken);
@@ -273,13 +262,13 @@ public sealed class WorkspaceAiService(
     }
 
     public async Task<WorkspaceAiTextResult> SummarizeRunOutputAsync(
-        string repositoryId,
+        string _,
         string outputJson,
         IReadOnlyList<RunLogEvent> runLogs,
         CancellationToken cancellationToken)
     {
         var fallback = BuildFallbackRunSummary(outputJson, runLogs);
-        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
+        var apiKey = await ResolveApiKeyAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -298,7 +287,7 @@ public sealed class WorkspaceAiService(
                 .TakeLast(250)
                 .Select(x => $"[{x.TimestampUtc:O}] {x.Level}: {x.Message}"));
 
-        var result = await llmTornadoGatewayService.SummarizeRunOutputAsync(
+        var result = await zAiGatewayService.SummarizeRunOutputAsync(
             outputJson,
             logText,
             apiKey,
@@ -323,7 +312,7 @@ public sealed class WorkspaceAiService(
     }
 
     public async Task<WorkspaceEmbeddingResult> CreateEmbeddingAsync(
-        string repositoryId,
+        string _,
         string text,
         CancellationToken cancellationToken)
     {
@@ -340,60 +329,8 @@ public sealed class WorkspaceAiService(
                 Message: "Embedding input is empty.");
         }
 
-        var apiKey = await ResolveApiKeyAsync(repositoryId, cancellationToken);
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            var fallbackPayload = BuildDeterministicEmbeddingPayload(normalizedText, FallbackEmbeddingDimensions);
-            return new WorkspaceEmbeddingResult(
-                Success: true,
-                Payload: fallbackPayload,
-                Dimensions: FallbackEmbeddingDimensions,
-                Model: "deterministic-fallback",
-                UsedFallback: true,
-                KeyConfigured: false,
-                Message: "AI key not configured; using deterministic fallback embedding.");
-        }
-
-        try
-        {
-            var api = new TornadoApi(LLmProviders.Zai, apiKey);
-            var modelCandidates = ResolveEmbeddingModelCandidates();
-
-            foreach (var modelName in modelCandidates)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    var model = new EmbeddingModel(modelName, LLmProviders.Zai);
-                    var vector = await api.Embeddings.GetEmbeddings(model, normalizedText);
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (vector is not { Length: > 0 })
-                    {
-                        continue;
-                    }
-
-                    return new WorkspaceEmbeddingResult(
-                        Success: true,
-                        Payload: SerializeEmbeddingPayload(vector),
-                        Dimensions: vector.Length,
-                        Model: modelName,
-                        UsedFallback: false,
-                        KeyConfigured: true,
-                        Message: null);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogDebug(ex, "Embedding generation failed for model {ModelName}", modelName);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to initialize Z.ai embedding client");
-        }
-
+        var apiKey = await ResolveApiKeyAsync(cancellationToken);
+        var keyConfigured = !string.IsNullOrWhiteSpace(apiKey);
         var fallback = BuildDeterministicEmbeddingPayload(normalizedText, FallbackEmbeddingDimensions);
         return new WorkspaceEmbeddingResult(
             Success: true,
@@ -401,17 +338,14 @@ public sealed class WorkspaceAiService(
             Dimensions: FallbackEmbeddingDimensions,
             Model: "deterministic-fallback",
             UsedFallback: true,
-            KeyConfigured: true,
-            Message: "Embedding API unavailable; using deterministic fallback embedding.");
+            KeyConfigured: keyConfigured,
+            Message: "Using deterministic fallback embedding.");
     }
 
-    private async Task<string?> ResolveApiKeyAsync(string repositoryId, CancellationToken cancellationToken)
+    private async Task<string?> ResolveApiKeyAsync(CancellationToken cancellationToken)
     {
         var candidates = new[]
         {
-            (RepositoryId: repositoryId, Provider: "llmtornado"),
-            (RepositoryId: repositoryId, Provider: "zai"),
-            (RepositoryId: "global", Provider: "llmtornado"),
             (RepositoryId: "global", Provider: "zai"),
         };
 
@@ -444,17 +378,6 @@ public sealed class WorkspaceAiService(
         return null;
     }
 
-    private static IReadOnlyList<string> ResolveEmbeddingModelCandidates()
-    {
-        var configured = Environment.GetEnvironmentVariable("WORKSPACE_EMBEDDING_MODEL");
-        if (!string.IsNullOrWhiteSpace(configured))
-        {
-            return [configured.Trim()];
-        }
-
-        return s_defaultEmbeddingModelCandidates;
-    }
-
     private static string NormalizeForEmbedding(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -466,16 +389,6 @@ public sealed class WorkspaceAiService(
         return normalized.Length <= MaxEmbeddingInputCharacters
             ? normalized
             : normalized[..MaxEmbeddingInputCharacters];
-    }
-
-    private static string SerializeEmbeddingPayload(float[] embedding)
-    {
-        if (embedding.Length == 0)
-        {
-            return "[]";
-        }
-
-        return $"[{string.Join(",", embedding.Select(value => value.ToString("R", CultureInfo.InvariantCulture)))}]";
     }
 
     private static string BuildDeterministicEmbeddingPayload(string text, int dimensions)

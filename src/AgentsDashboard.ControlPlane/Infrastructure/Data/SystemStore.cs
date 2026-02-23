@@ -15,12 +15,13 @@ public sealed class SystemStore(
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
         var settings = await db.Settings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == "singleton", cancellationToken);
-        return settings ?? new SystemSettingsDocument();
+        return NormalizeSystemSettings(settings ?? new SystemSettingsDocument());
     }
 
     public async Task<SystemSettingsDocument> UpdateSettingsAsync(SystemSettingsDocument settings, CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        settings = NormalizeSystemSettings(settings);
         settings.Id = "singleton";
         settings.UpdatedAtUtc = DateTime.UtcNow;
 
@@ -33,6 +34,7 @@ public sealed class SystemStore(
         }
 
         db.Entry(existing).CurrentValues.SetValues(settings);
+        NormalizeSystemSettings(existing);
         await db.SaveChangesAsync(cancellationToken);
         return existing;
     }
@@ -273,6 +275,24 @@ public sealed class SystemStore(
     public ValueTask DisposeAsync()
     {
         return ValueTask.CompletedTask;
+    }
+
+    private static SystemSettingsDocument NormalizeSystemSettings(SystemSettingsDocument settings)
+    {
+        settings.Orchestrator ??= new OrchestratorSettings();
+        settings.ZAi ??= new ZAiSettings();
+        settings.ZAi.BaseUrl = NormalizeBaseUrl(settings.ZAi.BaseUrl);
+        return settings;
+    }
+
+    private static string NormalizeBaseUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return ZAiSettings.DefaultBaseUrl;
+        }
+
+        return value.Trim().TrimEnd('/');
     }
 
 

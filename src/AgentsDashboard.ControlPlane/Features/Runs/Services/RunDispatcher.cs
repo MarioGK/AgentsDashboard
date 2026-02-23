@@ -152,7 +152,6 @@ public sealed class RunDispatcher(
             ["AUTO_CREATE_PR"] = "false",
             ["HARNESS_NAME"] = task.Harness,
             ["HARNESS_MODE"] = run.ExecutionMode.ToString().ToLowerInvariant(),
-            ["HARNESS_EXECUTION_MODE"] = run.ExecutionMode.ToString().ToLowerInvariant(),
             ["GH_REPO"] = ParseGitHubRepoSlug(repository.GitUrl),
         };
 
@@ -749,9 +748,6 @@ public sealed class RunDispatcher(
 
         if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
         {
-            SetOrReplace(envVars, "CODEX_TRANSPORT", "stdio");
-            SetIfMissing(envVars, "CODEX_MODE", "stdio");
-
             var approvalPolicy = mode is HarnessExecutionMode.Plan or HarnessExecutionMode.Review
                 ? "never"
                 : "on-failure";
@@ -776,18 +772,6 @@ public sealed class RunDispatcher(
         }
 
         envVars[key] = value;
-    }
-
-    private static void SetOrReplace(IDictionary<string, string> envVars, string key, string value)
-    {
-        var existingKey = FindKeyIgnoreCase(envVars, key);
-        if (existingKey is null)
-        {
-            envVars[key] = value;
-            return;
-        }
-
-        envVars[existingKey] = value;
     }
 
     private static string? FindKeyIgnoreCase(IDictionary<string, string> envVars, string key)

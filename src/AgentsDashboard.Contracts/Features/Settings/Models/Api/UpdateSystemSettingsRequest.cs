@@ -19,4 +19,5 @@ public sealed record UpdateSystemSettingsRequest(
     int? RetentionDaysRuns = null,
     string? VictoriaMetricsEndpoint = null,
     string? VmUiEndpoint = null,
-    OrchestratorSettings? Orchestrator = null);
+    OrchestratorSettings? Orchestrator = null,
+    ZAiSettings? ZAi = null);

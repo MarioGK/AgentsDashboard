@@ -26,7 +26,7 @@ public sealed record ImageDependencyMatrix(
     IReadOnlyList<string> SecurityTools);
 
 public class ImageBuilderService(
-    LlmTornadoGatewayService llmTornadoGatewayService,
+    ZAiGatewayService zAiGatewayService,
     ILogger<ImageBuilderService> logger) : IAsyncDisposable
 {
     private readonly DockerClient _dockerClient = new DockerClientConfiguration().CreateClient();
@@ -422,10 +422,10 @@ public class ImageBuilderService(
     {
         if (string.IsNullOrWhiteSpace(zaiApiKey))
         {
-            return new AiDockerfileResult(false, string.Empty, "Z.ai API key not configured. Please set up Z.ai credentials in Provider Settings.");
+            return new AiDockerfileResult(false, string.Empty, "Z.ai API key not configured. Please set up credentials in AI Settings.");
         }
 
-        return await llmTornadoGatewayService.GenerateDockerfileAsync(description, zaiApiKey, cancellationToken);
+        return await zAiGatewayService.GenerateDockerfileAsync(description, zaiApiKey, cancellationToken);
     }
 
     public async Task<ImageBuildResult> BuildImageAsync(

@@ -8,10 +8,10 @@ services:
       - "8080:8080"
     environment:
       Orchestrator__LiteDbPath: data/litedb/orchestrator.db
-      Orchestrator__Workers__ContainerImage: ${WORKER_CONTAINER_IMAGE:-agentsdashboard-task-runtime-gateway:latest}
-      Orchestrator__Workers__ContainerNamePrefix: task-runtime-gateway
-      Orchestrator__Workers__DockerNetwork: agentsdashboard
-      Orchestrator__Workers__ConnectivityMode: DockerDnsOnly
+      Orchestrator__TaskRuntimes__ContainerImage: ${WORKER_CONTAINER_IMAGE:-agentsdashboard-task-runtime-gateway:latest}
+      Orchestrator__TaskRuntimes__ContainerNamePrefix: task-runtime-gateway
+      Orchestrator__TaskRuntimes__DockerNetwork: agentsdashboard
+      Orchestrator__TaskRuntimes__ConnectivityMode: DockerDnsOnly
       WORKER_DEFAULT_IMAGE: ${WORKER_DEFAULT_IMAGE:-ghcr.io/mariogk/ai-harness:latest}
       WORKER_CONTROL_PLANE_URL: http://control-plane:8080
       CODEX_API_KEY: ${CODEX_API_KEY:-}

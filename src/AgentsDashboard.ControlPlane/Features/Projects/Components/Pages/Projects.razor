@@ -303,7 +303,7 @@
 
     private async Task ConfirmDeleteRepositoryAsync(RepositoryDocument repo)
     {
-        var result = await DialogService.ShowMessageBox(
+        var result = await DialogService.ShowMessageBoxAsync(
             "Delete Repository",
             $"Are you sure you want to delete repository '{repo.Name}'? This will also delete all tasks and runs.",
             yesText: "Delete",

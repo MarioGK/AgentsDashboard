@@ -87,7 +87,7 @@ internal static class ControlPlaneServiceCollectionExtensions
     private static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddHttpClient();
-        services.AddSingleton<LlmTornadoGatewayService>();
+        services.AddSingleton<ZAiGatewayService>();
         services.AddSingleton<IHarnessOutputParserService, HarnessOutputParserService>();
         services.AddSingleton<IWorkspaceAiService, WorkspaceAiService>();
         services.AddSingleton<IWorkspaceImageCompressionService, WorkspaceImageCompressionService>();
@@ -100,6 +100,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddSingleton<IHostFileExplorerService, HostFileExplorerService>();
         services.AddSingleton<ImageBuilderService>();
         services.AddSingleton<CredentialValidationService>();
+        services.AddSingleton<ZAiValidationService>();
         services.AddSingleton<McpConfigJsonService>();
         services.AddSingleton<McpSettingsFileService>();
         services.AddSingleton<McpSettingsService>();

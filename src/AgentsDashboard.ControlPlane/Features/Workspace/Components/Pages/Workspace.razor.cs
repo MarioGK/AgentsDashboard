@@ -32,6 +32,20 @@ public partial class Workspace
         "Finish with a short markdown summary and concrete next steps."
     ];
 
+    private const string DefaultComposerHelperText = "Enter to send. Shift+Enter inserts a new line. Paste or upload images.";
+    private const string WorkspacePreparationFailureSummary = "Workspace preparation failed";
+
+    private static readonly HashSet<string> BlockingFailureClasses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "EnvelopeValidation",
+        "AuthenticationError",
+        "ConfigurationError",
+        "InvalidInput",
+        "PermissionDenied",
+        "NotFound",
+        "WorkspacePreparation",
+    };
+
     private bool _loading = true;
     private List<RepositoryDocument> _repositories = [];
     private RepositoryDocument? _selectedRepository;
@@ -73,14 +87,18 @@ public partial class Workspace
 
     private bool _promptDraftDialogOpen;
     private bool _isPromptDraftLoading;
+    private bool _isPromptDraftRefining;
     private string _promptDraftError = string.Empty;
     private string _promptDraftValue = string.Empty;
     private int _promptDraftActivePanel;
     private int _promptDraftEditorKey;
     private bool _pendingPromptDraftEditorSync;
+    private long _promptDraftRequestVersion;
     private StandaloneCodeEditor? _promptDraftEditor;
     private PromptDraftMode _promptDraftMode = PromptDraftMode.Generate;
     private readonly DialogOptions _promptDraftDialogOptions = new() { MaxWidth = MaxWidth.False, FullWidth = true, CloseOnEscapeKey = true };
+    private long _composerSuggestionRequestVersion;
+    private long _runSummaryRequestVersion;
 
     private IDisposable? _selectionSubscription;
     private IDisposable? _runLogSubscription;
@@ -353,6 +371,17 @@ public partial class Workspace
     private bool IsSelectedRunActive =>
         _selectedRun is not null && _selectedRun.State is RunState.Running or RunState.Queued or RunState.PendingApproval;
 
+    private bool IsComposerBlocked =>
+        IsBlockingRunFailure(_selectedRun);
+
+    private string ComposerBlockedReason =>
+        ResolveComposerBlockedReason(_selectedRun) ?? string.Empty;
+
+    private string ComposerHelperText =>
+        IsComposerBlocked
+            ? $"Composer blocked: {ComposerBlockedReason}"
+            : DefaultComposerHelperText;
+
     [JSInvokable]
     public Task<bool> TryAcceptGhostSuggestionFromJs(string key, int selectionStart, int selectionEnd)
     {
@@ -373,6 +402,12 @@ public partial class Workspace
             return false;
         }
 
+        if (IsComposerBlocked)
+        {
+            Snackbar.Add("Composer is blocked because the latest run has a blocking failure. Resolve it before submitting new input.", Severity.Warning);
+            return false;
+        }
+
         if (_selectedRepository is null)
         {
             return false;
@@ -380,6 +415,150 @@ public partial class Workspace
 
         await SubmitComposerAsync();
         return true;
+    }
+
+    private static bool IsBlockingRunFailure(RunDocument? run)
+    {
+        if (run is null || run.State is not RunState.Failed)
+        {
+            return false;
+        }
+
+        if (IsWorkspacePreparationFailure(run))
+        {
+            return true;
+        }
+
+        if (TryReadOutputMetadataBool(run.OutputJson, "isRetryable", out var isRetryable))
+        {
+            return !isRetryable;
+        }
+
+        return !string.IsNullOrWhiteSpace(run.FailureClass) &&
+               IsBlockingFailureClass(run.FailureClass);
+    }
+
+    private static string? ResolveComposerBlockedReason(RunDocument? run)
+    {
+        if (run is null || run.State is not RunState.Failed)
+        {
+            return null;
+        }
+
+        if (IsWorkspacePreparationFailure(run))
+        {
+            return WorkspacePreparationFailureSummary;
+        }
+
+        if (TryReadOutputMetadataBool(run.OutputJson, "isRetryable", out var isRetryable))
+        {
+            if (isRetryable)
+            {
+                return null;
+            }
+
+            return !string.IsNullOrWhiteSpace(run.FailureClass)
+                ? $"{run.FailureClass} (non-retryable)"
+                : "Blocking failure (non-retryable)";
+        }
+
+        if (string.IsNullOrWhiteSpace(run.FailureClass))
+        {
+            return null;
+        }
+
+        return IsBlockingFailureClass(run.FailureClass)
+            ? run.FailureClass
+            : null;
+    }
+
+    private static bool IsBlockingFailureClass(string failureClass)
+    {
+        return !string.IsNullOrWhiteSpace(failureClass) && BlockingFailureClasses.Contains(failureClass);
+    }
+
+    private static bool IsWorkspacePreparationFailure(RunDocument run)
+    {
+        if (string.Equals(run.FailureClass, "WorkspacePreparation", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(run.Summary))
+        {
+            return false;
+        }
+
+        return run.Summary.Contains(
+            WorkspacePreparationFailureSummary,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryReadOutputMetadataBool(string outputJson, string key, out bool value)
+    {
+        value = false;
+
+        if (!TryReadOutputMetadataValue(outputJson, key, out var rawValue))
+        {
+            return false;
+        }
+
+        return bool.TryParse(rawValue, out value);
+    }
+
+    private static bool TryReadOutputMetadataValue(string outputJson, string key, out string? value)
+    {
+        value = null;
+        if (string.IsNullOrWhiteSpace(outputJson))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(outputJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, "metadata", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (property.Value.ValueKind != JsonValueKind.Object)
+                {
+                    return false;
+                }
+
+                foreach (var metadata in property.Value.EnumerateObject())
+                {
+                    if (!string.Equals(metadata.Name, key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    value = metadata.Value.ValueKind switch
+                    {
+                        JsonValueKind.String => metadata.Value.GetString(),
+                        JsonValueKind.True => bool.TrueString,
+                        JsonValueKind.False => bool.FalseString,
+                        _ => metadata.Value.GetRawText(),
+                    };
+
+                    return true;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        return false;
     }
 
     private async Task LoadWorkspaceAsync()
@@ -580,7 +759,7 @@ public partial class Workspace
         }
 
         MarkThreadActivity(task.Id, DateTime.UtcNow, false);
-        _ = QueueComposerSuggestionAsync();
+        ScheduleComposerSuggestionRefresh();
     }
 
     private async Task SelectRunAsync(string runId)
@@ -794,38 +973,34 @@ public partial class Workspace
             .ToList();
     }
 
-    private async Task RefreshRunSummaryAsync(bool force)
+    private Task RefreshRunSummaryAsync(bool force)
     {
         if (_selectedRepository is null || _selectedRun is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var result = await WorkspaceService.RefreshRunSummaryAsync(
-            _selectedRepository.Id,
-            _selectedRun.Id,
-            eventType: "run-selected",
-            force,
-            CancellationToken.None);
-
-        if (!result.Success)
+        var repositoryId = _selectedRepository.Id;
+        var run = _selectedRun;
+        var runId = run.Id;
+        var summary = _selectedRunAiSummary?.Summary;
+        if (string.IsNullOrWhiteSpace(summary))
         {
-            return;
+            summary = !string.IsNullOrWhiteSpace(_selectedRunParsed?.Summary)
+                ? _selectedRunParsed.Summary
+                : GetRunSummary(run);
         }
 
-        _selectedRunAiSummary = await RunStore.GetRunAiSummaryAsync(_selectedRun.Id, CancellationToken.None)
-            ?? _selectedRunAiSummary;
-
-        if (_selectedRunAiSummary is null && !string.IsNullOrWhiteSpace(result.Summary))
+        if (_selectedRunAiSummary is null && !string.IsNullOrWhiteSpace(summary))
         {
             _selectedRunAiSummary = new RunAiSummaryDocument
             {
-                RunId = _selectedRun.Id,
-                RepositoryId = _selectedRun.RepositoryId,
-                TaskId = _selectedRun.TaskId,
+                RunId = run.Id,
+                RepositoryId = run.RepositoryId,
+                TaskId = run.TaskId,
                 Title = "Run summary",
-                Summary = result.Summary,
-                Model = result.UsedFallback ? "fallback" : "glm-5",
+                Summary = summary,
+                Model = "fallback",
                 GeneratedAtUtc = DateTime.UtcNow,
             };
         }
@@ -833,6 +1008,65 @@ public partial class Workspace
         if (_selectedTask is not null)
         {
             MarkThreadActivity(_selectedTask.Id, DateTime.UtcNow, false);
+        }
+
+        var requestVersion = Interlocked.Increment(ref _runSummaryRequestVersion);
+        _ = RefreshRunSummaryInBackgroundAsync(requestVersion, repositoryId, runId, force);
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshRunSummaryInBackgroundAsync(long requestVersion, string repositoryId, string runId, bool force)
+    {
+        try
+        {
+            var result = await WorkspaceService.RefreshRunSummaryAsync(
+                repositoryId,
+                runId,
+                eventType: "run-selected",
+                force,
+                CancellationToken.None);
+
+            if (!result.Success)
+            {
+                return;
+            }
+
+            await InvokeAsync(async () =>
+            {
+                if (requestVersion != _runSummaryRequestVersion ||
+                    _selectedRun is null ||
+                    !string.Equals(_selectedRun.Id, runId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _selectedRunAiSummary = await RunStore.GetRunAiSummaryAsync(runId, CancellationToken.None)
+                    ?? _selectedRunAiSummary;
+
+                if (_selectedRunAiSummary is null && !string.IsNullOrWhiteSpace(result.Summary))
+                {
+                    _selectedRunAiSummary = new RunAiSummaryDocument
+                    {
+                        RunId = _selectedRun.Id,
+                        RepositoryId = _selectedRun.RepositoryId,
+                        TaskId = _selectedRun.TaskId,
+                        Title = "Run summary",
+                        Summary = result.Summary,
+                        Model = result.UsedFallback ? "fallback" : "glm-5",
+                        GeneratedAtUtc = DateTime.UtcNow,
+                    };
+                }
+
+                if (_selectedTask is not null)
+                {
+                    MarkThreadActivity(_selectedTask.Id, DateTime.UtcNow, false);
+                }
+
+                StateHasChanged();
+            });
+        }
+        catch
+        {
         }
     }
 
@@ -860,7 +1094,7 @@ public partial class Workspace
             return;
         }
 
-        var confirmed = await DialogService.ShowMessageBox(
+        var confirmed = await DialogService.ShowMessageBoxAsync(
             "Delete Task",
             $"Delete task '{task.Name}' and all related task data?",
             yesText: "Delete",
@@ -979,10 +1213,7 @@ public partial class Workspace
 
         try
         {
-            var titleResult = await WorkspaceAiService.GenerateTaskTitleAsync(_selectedRepository.Id, taskPrompt, CancellationToken.None);
-            var taskName = titleResult.Success && !string.IsNullOrWhiteSpace(titleResult.Text)
-                ? titleResult.Text
-                : BuildFallbackTaskName(taskPrompt);
+            var taskName = BuildFallbackTaskName(taskPrompt);
 
             var request = new CreateTaskRequest(
                 RepositoryId: _selectedRepository.Id,
@@ -992,11 +1223,7 @@ public partial class Workspace
             var created = await TaskStore.CreateTaskAsync(request, CancellationToken.None);
             await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: false);
             await SelectTaskAsync(created.Id);
-
-            if (titleResult.UsedFallback && !string.IsNullOrWhiteSpace(titleResult.Message))
-            {
-                Snackbar.Add(titleResult.Message, Severity.Warning);
-            }
+            QueueTaskTitleRefinement(created.Id, _selectedRepository.Id, taskPrompt);
 
             Snackbar.Add("Task created.", Severity.Success);
             return created.Id;
@@ -1008,10 +1235,72 @@ public partial class Workspace
         }
     }
 
+    private void QueueTaskTitleRefinement(string taskId, string repositoryId, string prompt)
+    {
+        _ = RefineTaskTitleInBackgroundAsync(taskId, repositoryId, prompt);
+    }
+
+    private async Task RefineTaskTitleInBackgroundAsync(string taskId, string repositoryId, string prompt)
+    {
+        try
+        {
+            var titleResult = await WorkspaceAiService.GenerateTaskTitleAsync(repositoryId, prompt, CancellationToken.None);
+            if (!titleResult.Success || titleResult.UsedFallback || string.IsNullOrWhiteSpace(titleResult.Text))
+            {
+                return;
+            }
+
+            var existingTask = await TaskStore.GetTaskAsync(taskId, CancellationToken.None);
+            if (existingTask is null)
+            {
+                return;
+            }
+
+            var normalizedTitle = titleResult.Text.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedTitle) ||
+                string.Equals(existingTask.Name, normalizedTitle, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var updateRequest = ToTaskUpdateRequest(existingTask, existingTask.Prompt, normalizedTitle);
+            var updatedTask = await TaskStore.UpdateTaskAsync(existingTask.Id, updateRequest, CancellationToken.None);
+            if (updatedTask is null)
+            {
+                return;
+            }
+
+            await InvokeAsync(() =>
+            {
+                var index = _selectedRepositoryTasks.FindIndex(task => string.Equals(task.Id, updatedTask.Id, StringComparison.OrdinalIgnoreCase));
+                if (index >= 0)
+                {
+                    _selectedRepositoryTasks[index] = updatedTask;
+                }
+
+                if (_selectedTask is not null && string.Equals(_selectedTask.Id, updatedTask.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    _selectedTask = updatedTask;
+                }
+
+                StateHasChanged();
+            });
+        }
+        catch
+        {
+        }
+    }
+
     private async Task SubmitComposerAsync()
     {
         if (_selectedRepository is null)
         {
+            return;
+        }
+
+        if (IsComposerBlocked)
+        {
+            Snackbar.Add("Composer is blocked because the latest run has a blocking failure. Resolve it before submitting new input.", Severity.Warning);
             return;
         }
 
@@ -1036,7 +1325,7 @@ public partial class Workspace
             _composerGhostSuggestion = persistedGhostSuggestion;
             _composerGhostSuffix = persistedGhostSuffix;
             UpdateActiveThreadCache();
-            _ = QueueComposerSuggestionAsync();
+            ScheduleComposerSuggestionRefresh();
         }
 
         _isSubmittingComposer = true;
@@ -1111,7 +1400,7 @@ public partial class Workspace
                 _selectedTask = submission.Task;
             }
 
-            _ = QueueComposerSuggestionAsync();
+            ScheduleComposerSuggestionRefresh();
             RemoveOptimisticUserMessage(optimisticMessageId);
 
             await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
@@ -1218,58 +1507,121 @@ public partial class Workspace
 
         _promptDraftMode = mode;
         _promptDraftDialogOpen = true;
-        _isPromptDraftLoading = true;
+        _isPromptDraftLoading = false;
+        _isPromptDraftRefining = true;
         _promptDraftError = string.Empty;
-        _promptDraftValue = string.Empty;
+        _promptDraftValue = mode == PromptDraftMode.Improve
+            ? BuildFallbackPromptImprovement(_selectedTask.Prompt)
+            : BuildFallbackGeneratedPrompt(BuildPromptGenerationContext());
         _promptDraftActivePanel = 0;
         _promptDraftEditorKey++;
-        _pendingPromptDraftEditorSync = false;
+        _pendingPromptDraftEditorSync = true;
         StateHasChanged();
 
-        try
-        {
-            WorkspaceAiTextResult result;
-            if (mode == PromptDraftMode.Improve)
-            {
-                result = await WorkspaceAiService.ImprovePromptAsync(
-                    _selectedRepository.Id,
-                    _selectedTask.Prompt,
-                    _composerValue,
-                    CancellationToken.None);
-            }
-            else
-            {
-                result = await WorkspaceAiService.GeneratePromptFromContextAsync(
-                    _selectedRepository.Id,
-                    BuildPromptGenerationContext(),
-                    CancellationToken.None);
-            }
-
-            if (!result.Success || string.IsNullOrWhiteSpace(result.Text))
-            {
-                _promptDraftError = result.Message ?? "Prompt generation failed.";
-                return;
-            }
-
-            _promptDraftValue = result.Text;
-            _pendingPromptDraftEditorSync = true;
-        }
-        catch (Exception ex)
-        {
-            _promptDraftError = $"Prompt generation failed: {ex.Message}";
-        }
-        finally
-        {
-            _isPromptDraftLoading = false;
-            StateHasChanged();
-        }
+        var requestVersion = Interlocked.Increment(ref _promptDraftRequestVersion);
+        var repositoryId = _selectedRepository.Id;
+        var taskPrompt = _selectedTask.Prompt;
+        var composerValue = _composerValue;
+        var context = BuildPromptGenerationContext();
+        QueuePromptDraftRefinement(requestVersion, mode, repositoryId, taskPrompt, composerValue, context);
+        await Task.CompletedTask;
     }
 
     private void ClosePromptDraftDialog()
     {
         _promptDraftDialogOpen = false;
         _isPromptDraftLoading = false;
+        _isPromptDraftRefining = false;
         _promptDraftError = string.Empty;
+        Interlocked.Increment(ref _promptDraftRequestVersion);
+    }
+
+    private void QueuePromptDraftRefinement(
+        long requestVersion,
+        PromptDraftMode mode,
+        string repositoryId,
+        string taskPrompt,
+        string composerValue,
+        string context)
+    {
+        _ = RefinePromptDraftInBackgroundAsync(
+            requestVersion,
+            mode,
+            repositoryId,
+            taskPrompt,
+            composerValue,
+            context);
+    }
+
+    private async Task RefinePromptDraftInBackgroundAsync(
+        long requestVersion,
+        PromptDraftMode mode,
+        string repositoryId,
+        string taskPrompt,
+        string composerValue,
+        string context)
+    {
+        WorkspaceAiTextResult result;
+        try
+        {
+            result = mode == PromptDraftMode.Improve
+                ? await WorkspaceAiService.ImprovePromptAsync(
+                    repositoryId,
+                    taskPrompt,
+                    composerValue,
+                    CancellationToken.None)
+                : await WorkspaceAiService.GeneratePromptFromContextAsync(
+                    repositoryId,
+                    context,
+                    CancellationToken.None);
+        }
+        catch
+        {
+            result = new WorkspaceAiTextResult(
+                Success: false,
+                Text: string.Empty,
+                UsedFallback: true,
+                KeyConfigured: true,
+                Message: "Prompt refinement failed.");
+        }
+
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (requestVersion != _promptDraftRequestVersion ||
+                    !_promptDraftDialogOpen ||
+                    _promptDraftMode != mode)
+                {
+                    return;
+                }
+
+                _isPromptDraftRefining = false;
+
+                if (!result.Success || string.IsNullOrWhiteSpace(result.Text))
+                {
+                    StateHasChanged();
+                    return;
+                }
+
+                if (_promptDraftEditor is not null)
+                {
+                    var currentValue = await _promptDraftEditor.GetValue();
+                    if (!string.Equals(currentValue, _promptDraftValue, StringComparison.Ordinal))
+                    {
+                        StateHasChanged();
+                        return;
+                    }
+                }
+
+                _promptDraftValue = result.Text;
+                _pendingPromptDraftEditorSync = true;
+                StateHasChanged();
+            });
+        }
+        catch
+        {
+        }
     }
 
     private async Task RefreshPromptDraftPreviewAsync()
@@ -1299,7 +1651,7 @@ public partial class Workspace
 
         try
         {
-            var updateRequest = ToUpdateRequest(_selectedTask, promptValue);
+            var updateRequest = ToTaskUpdateRequest(_selectedTask, promptValue);
             var updatedTask = await TaskStore.UpdateTaskAsync(_selectedTask.Id, updateRequest, CancellationToken.None);
             if (updatedTask is not null)
             {
@@ -1352,11 +1704,12 @@ Composer Focus:
         Value = _promptDraftValue,
     };
 
-    private async Task OnComposerValueChangedAsync(string value)
+    private Task OnComposerValueChangedAsync(string value)
     {
         _composerValue = value;
         UpdateActiveThreadCache();
-        await QueueComposerSuggestionAsync();
+        ScheduleComposerSuggestionRefresh();
+        return Task.CompletedTask;
     }
 
     private Task OnComposerImagesChangedAsync(IReadOnlyList<WorkspaceImageInput> images)
@@ -1395,6 +1748,7 @@ Composer Focus:
 
         var cts = new CancellationTokenSource();
         _composerSuggestionCts = cts;
+        var suggestionRequestVersion = Interlocked.Increment(ref _composerSuggestionRequestVersion);
 
         try
         {
@@ -1424,7 +1778,9 @@ Composer Focus:
                 return;
             }
 
-            if (ReferenceEquals(_composerSuggestionCts, cts) && result.Text.Length > 0)
+            if (ReferenceEquals(_composerSuggestionCts, cts) &&
+                suggestionRequestVersion == _composerSuggestionRequestVersion &&
+                result.Text.Length > 0)
             {
                 if (result.Text.StartsWith(_composerValue, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1447,6 +1803,11 @@ Composer Focus:
         catch
         {
         }
+    }
+
+    private void ScheduleComposerSuggestionRefresh()
+    {
+        _ = QueueComposerSuggestionAsync();
     }
 
     private async Task OnComposerKeyDown(KeyboardEventArgs args)
@@ -1474,7 +1835,7 @@ Composer Focus:
 
         _composerValue = string.Concat(_composerValue, _composerGhostSuffix);
         UpdateActiveThreadCache();
-        _ = QueueComposerSuggestionAsync();
+        ScheduleComposerSuggestionRefresh();
         return true;
     }
 
@@ -2062,10 +2423,10 @@ Composer Focus:
         }
     }
 
-    private static UpdateTaskRequest ToUpdateRequest(TaskDocument task, string prompt)
+    private static UpdateTaskRequest ToTaskUpdateRequest(TaskDocument task, string prompt, string? name = null)
     {
         return new UpdateTaskRequest(
-            task.Name,
+            string.IsNullOrWhiteSpace(name) ? task.Name : name,
             task.Harness,
             prompt,
             task.Command,
@@ -2101,6 +2462,67 @@ Composer Focus:
         return normalized.Length <= 80
             ? normalized
             : normalized[..80].TrimEnd();
+    }
+
+    private static string BuildFallbackPromptImprovement(string prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return "Goal:\n- Describe the intended outcome\n\nRequired steps:\n- Implement changes\n- Validate behavior\n\nExpected output format:\n- Brief summary plus verification evidence";
+        }
+
+        var normalized = prompt.Trim();
+        var builder = new StringBuilder(normalized);
+
+        if (!normalized.Contains("Validation", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.AppendLine();
+            builder.AppendLine();
+            builder.AppendLine("Validation checks:");
+            builder.AppendLine("- Build succeeds");
+            builder.AppendLine("- Relevant tests pass");
+        }
+
+        if (!normalized.Contains("Expected output", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.AppendLine();
+            builder.AppendLine("Expected output format:");
+            builder.AppendLine("- Concise summary of changes");
+            builder.AppendLine("- Verification results");
+            builder.AppendLine("- Risks or follow-ups");
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string BuildFallbackGeneratedPrompt(string context)
+    {
+        var normalizedContext = string.IsNullOrWhiteSpace(context)
+            ? "No context provided"
+            : context.Trim();
+
+        return $"""
+Goal:
+- {normalizedContext}
+
+Constraints:
+- Keep scope focused and deterministic.
+- Preserve existing behavior unless explicitly requested.
+
+Required steps:
+- Inspect relevant files and dependencies.
+- Implement minimal, correct changes.
+- Validate with focused checks.
+
+Validation checks:
+- Build succeeds.
+- Behavior matches requested goal.
+
+Expected output format:
+- Summary of changes
+- Verification performed
+- Remaining risks
+""";
     }
 
     private static string TruncateForDisplay(string text, int maxLength)

@@ -8,12 +8,12 @@
                         ValueChanged="OnComposerValueChanged"
                         Images="@ComposerImages"
                         ImagesChanged="OnComposerImagesChanged"
-                        HelperText="Enter to send. Shift+Enter inserts a new line. Paste or upload images."
+                        HelperText="@ComposerHelperText"
                         Rows="7"
                         ShowGhostSuggestion="true"
                         GhostSuffix="@GhostSuffix"
                         PasteBridgeKey="workspace-composer"
-                        Disabled="@IsSubmitting"
+                        Disabled="@(IsSubmitting || IsComposerBlocked)"
                         ShowSubmitButton="true"
                         SubmitTooltip="Send"
                         OnSubmit="SubmitRequested"
@@ -30,6 +30,12 @@
                 Sending...
             </MudChip>
         }
+        @if (IsComposerBlocked)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Class="workspace-thread-composer-status-chip">
+                @ComposerBlockReason
+            </MudChip>
+        }
     </MudStack>
 </div>
 
@@ -40,6 +46,9 @@
     [Parameter] public IReadOnlyList<WorkspaceImageInput> ComposerImages { get; set; } = [];
     [Parameter] public EventCallback<IReadOnlyList<WorkspaceImageInput>> OnComposerImagesChanged { get; set; }
     [Parameter] public bool IsSubmitting { get; set; }
+    [Parameter] public bool IsComposerBlocked { get; set; }
+    [Parameter] public string ComposerBlockReason { get; set; } = string.Empty;
+    [Parameter] public string ComposerHelperText { get; set; } = "Enter to send. Shift+Enter inserts a new line. Paste or upload images.";
     [Parameter] public string GhostSuffix { get; set; } = string.Empty;
     [Parameter] public EventCallback SubmitRequested { get; set; }
     [Parameter] public EventCallback OnImprove { get; set; }

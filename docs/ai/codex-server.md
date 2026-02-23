@@ -37,10 +37,8 @@ Task dispatch/control flow remains ControlPlane -> MagicOnion -> TaskRuntime.
 - `CODEX_APPROVAL_POLICY` (default `on-failure`, forced `never` for plan/review)
 - `CODEX_SANDBOX` (default `danger-full-access`)
 - `CODEX_MODEL` or `HARNESS_MODEL`
-- `TASK_MODE`/`RUN_MODE` (`default`, `plan`, `review`)
+- `HARNESS_MODE`/`TASK_MODE`/`RUN_MODE` (`default`, `plan`, `review`)
 - `CODEX_MAX_TOKENS` or `HARNESS_MAX_TOKENS`
-
-- `CODEX_TRANSPORT` and `CODEX_MODE` default to `stdio` from dispatch settings.
 - `CODEX_SERVER_*` variables are not used by the runtime launcher in this implementation.
 
 ## Failure Modes

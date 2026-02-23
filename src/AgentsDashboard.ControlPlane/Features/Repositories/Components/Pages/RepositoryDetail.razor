@@ -338,11 +338,6 @@ else
                                 <MudTextField @bind-Value="_opencodeToken" Label="OpenCode API Key" InputType="InputType.Password" />
                             </SettingsHintedField>
                         </MudItem>
-                        <MudItem xs="12" md="6">
-                            <SettingsHintedField ContainerClass="" Hint="Key used by LlmTornado-backed features requiring Anthropic auth.">
-                                <MudTextField @bind-Value="_llmTornadoToken" Label="LlmTornado Key (ANTHROPIC_AUTH_TOKEN)" InputType="InputType.Password" />
-                            </SettingsHintedField>
-                        </MudItem>
                     </MudGrid>
                     <MudButton Variant="Variant.Filled"
                                Color="Color.Primary"
@@ -385,7 +380,6 @@ else
     private string _githubToken = string.Empty;
     private string _codexToken = string.Empty;
     private string _opencodeToken = string.Empty;
-    private string _llmTornadoToken = string.Empty;
     private string _saveMessage = string.Empty;
     private readonly List<InstructionFileEdit> _repoInstructionFiles = [];
     private readonly Dictionary<int, StandaloneCodeEditor> _instructionEditors = [];
@@ -738,22 +732,15 @@ else
 
         try
         {
-            var title = await WorkspaceAiService.GenerateTaskTitleAsync(_repository.Id, prompt, CancellationToken.None);
-            var taskName = title.Success && !string.IsNullOrWhiteSpace(title.Text)
-                ? title.Text
-                : BuildFallbackTaskName(prompt);
+            var taskName = BuildFallbackTaskName(prompt);
 
             var request = new CreateTaskRequest(
                 RepositoryId: _repository.Id,
                 Prompt: prompt,
                 Name: taskName);
 
-            await TaskStore.CreateTaskAsync(request, CancellationToken.None);
-
-            if (title.UsedFallback && !string.IsNullOrWhiteSpace(title.Message))
-            {
-                Snackbar.Add(title.Message, Severity.Warning);
-            }
+            var createdTask = await TaskStore.CreateTaskAsync(request, CancellationToken.None);
+            QueueTaskTitleRefinement(createdTask.Id, _repository.Id, prompt);
 
             _taskPrompt = "Describe the task objective and expected output in JSON envelope format.";
             await SyncTaskPromptEditorAsync();
@@ -767,6 +754,79 @@ else
         {
             _isCreatingTask = false;
         }
+    }
+
+    private void QueueTaskTitleRefinement(string taskId, string repositoryId, string prompt)
+    {
+        _ = RefineTaskTitleInBackgroundAsync(taskId, repositoryId, prompt);
+    }
+
+    private async Task RefineTaskTitleInBackgroundAsync(string taskId, string repositoryId, string prompt)
+    {
+        try
+        {
+            var titleResult = await WorkspaceAiService.GenerateTaskTitleAsync(repositoryId, prompt, CancellationToken.None);
+            if (!titleResult.Success || titleResult.UsedFallback || string.IsNullOrWhiteSpace(titleResult.Text))
+            {
+                return;
+            }
+
+            var existingTask = await TaskStore.GetTaskAsync(taskId, CancellationToken.None);
+            if (existingTask is null)
+            {
+                return;
+            }
+
+            var normalizedTitle = titleResult.Text.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedTitle) ||
+                string.Equals(existingTask.Name, normalizedTitle, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var updateRequest = BuildTaskUpdateRequest(existingTask, normalizedTitle);
+            var updatedTask = await TaskStore.UpdateTaskAsync(taskId, updateRequest, CancellationToken.None);
+            if (updatedTask is null)
+            {
+                return;
+            }
+
+            await InvokeAsync(() =>
+            {
+                var index = _tasks.FindIndex(task => string.Equals(task.Id, updatedTask.Id, StringComparison.OrdinalIgnoreCase));
+                if (index >= 0)
+                {
+                    _tasks[index] = updatedTask;
+                }
+
+                StateHasChanged();
+            });
+        }
+        catch
+        {
+        }
+    }
+
+    private static UpdateTaskRequest BuildTaskUpdateRequest(TaskDocument task, string newName)
+    {
+        return new UpdateTaskRequest(
+            Name: newName,
+            Harness: task.Harness,
+            Prompt: task.Prompt,
+            Command: task.Command,
+            AutoCreatePullRequest: task.AutoCreatePullRequest,
+            Enabled: task.Enabled,
+            RetryPolicy: task.RetryPolicy,
+            Timeouts: task.Timeouts,
+            SandboxProfile: task.SandboxProfile,
+            ArtifactPolicy: task.ArtifactPolicy,
+            ApprovalProfile: task.ApprovalProfile,
+            ConcurrencyLimit: task.ConcurrencyLimit,
+            InstructionFiles: task.InstructionFiles.Count > 0 ? [.. task.InstructionFiles] : null,
+            ArtifactPatterns: task.ArtifactPatterns.Count > 0 ? [.. task.ArtifactPatterns] : null,
+            LinkedFailureRuns: task.LinkedFailureRuns.Count > 0 ? [.. task.LinkedFailureRuns] : null,
+            ExecutionModeDefault: task.ExecutionModeDefault,
+            SessionProfileId: task.SessionProfileId);
     }
 
     private async Task SyncTaskPromptEditorAsync()
@@ -911,7 +971,7 @@ else
         await SaveSecretIfPresentAsync("github", _githubToken);
         await SaveSecretIfPresentAsync("codex", _codexToken);
         await SaveSecretIfPresentAsync("opencode", _opencodeToken);
-        await SaveSecretIfPresentAsync("llmtornado", _llmTornadoToken);
+        await RepositoryStore.DeleteProviderSecretAsync(_repository.Id, "zai", CancellationToken.None);
 
         _saveMessage = "Secrets saved.";
         await RefreshAsync();

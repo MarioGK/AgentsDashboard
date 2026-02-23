@@ -89,6 +89,9 @@
                                                         ComposerImages="@_composerImages"
                                                         OnComposerImagesChanged="OnComposerImagesChangedAsync"
                                                         IsSubmitting="@_isSubmittingComposer"
+                                                        IsComposerBlocked="@IsComposerBlocked"
+                                                        ComposerBlockReason="@ComposerBlockedReason"
+                                                        ComposerHelperText="@ComposerHelperText"
                                                         GhostSuffix="@_composerGhostSuffix"
                                                         SubmitRequested="SubmitComposerAsync"
                                                         OnImprove="OpenImprovePromptDraftDialogAsync"
@@ -484,7 +487,7 @@
     <TitleContent>
         <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
             <MudText Typo="Typo.h6">@GetPromptDraftTitle()</MudText>
-            @if (_isPromptDraftLoading)
+            @if (_isPromptDraftLoading || _isPromptDraftRefining)
             {
                 <MudProgressCircular Indeterminate="true" Size="Size.Small" />
             }
@@ -525,7 +528,7 @@
         <MudButton Variant="Variant.Outlined"
                    Color="Color.Secondary"
                    OnClick="RefreshPromptDraftPreviewAsync"
-                   Disabled="@_isPromptDraftLoading">
+                   Disabled="@(_isPromptDraftLoading || _isPromptDraftRefining)">
             Refresh Preview
         </MudButton>
         <MudButton Variant="Variant.Filled"

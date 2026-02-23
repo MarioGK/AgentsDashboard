@@ -466,24 +466,6 @@ public sealed partial class HarnessExecutor(
         HarnessExecutionMode requestedMode,
         IReadOnlyDictionary<string, string> environment)
     {
-        if (environment.TryGetValue("HARNESS_RUNTIME_MODE", out var runtimeMode) &&
-            !string.IsNullOrWhiteSpace(runtimeMode))
-        {
-            if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
-            {
-                return "stdio";
-            }
-
-            if (string.Equals(harness, "opencode", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(harness, "open-code", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(harness, "open code", StringComparison.OrdinalIgnoreCase))
-            {
-                return "sse";
-            }
-
-            return runtimeMode.Trim();
-        }
-
         if (string.Equals(harness, "codex", StringComparison.OrdinalIgnoreCase))
         {
             return "stdio";
@@ -500,12 +482,6 @@ public sealed partial class HarnessExecutor(
             !string.IsNullOrWhiteSpace(harnessMode))
         {
             return harnessMode.Trim();
-        }
-
-        if (environment.TryGetValue("HARNESS_EXECUTION_MODE", out var executionMode) &&
-            !string.IsNullOrWhiteSpace(executionMode))
-        {
-            return executionMode.Trim();
         }
 
         if (requestedMode != HarnessExecutionMode.Default)

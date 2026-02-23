@@ -9,7 +9,6 @@
     <PackageReference Include="BlazorMonaco" />
     <PackageReference Include="Docker.DotNet" />
     <PackageReference Include="LiteDB" />
-    <PackageReference Include="LlmTornado" />
     <PackageReference Include="MudBlazor" />
     <PackageReference Include="SharpZipLib" />
     <PackageReference Include="SixLabors.ImageSharp" />

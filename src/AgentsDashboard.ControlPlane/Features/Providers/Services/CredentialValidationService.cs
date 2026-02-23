@@ -13,7 +13,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
             "github" => await ValidateGitHubAsync(secretValue, ct),
             "codex" => await ValidateOpenAiAsync(secretValue, ct),
             "opencode" => await ValidateOpenAiAsync(secretValue, ct),
-            "llmtornado" => await ValidateLlmTornadoAsync(secretValue, ct),
+            "zai" => await ValidateZAiAsync(secretValue, ct),
             _ => (false, $"Unknown provider: {provider}")
         };
     }
@@ -67,7 +67,7 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
         }
     }
 
-    private async Task<(bool Success, string Message)> ValidateLlmTornadoAsync(string apiKey, CancellationToken ct)
+    private async Task<(bool Success, string Message)> ValidateZAiAsync(string apiKey, CancellationToken ct)
     {
         try
         {
@@ -84,16 +84,16 @@ public sealed class CredentialValidationService(IHttpClientFactory httpClientFac
 
             var response = await client.PostAsJsonAsync("https://api.z.ai/api/anthropic/v1/messages", body, ct);
             if (response.IsSuccessStatusCode || (int)response.StatusCode == 429)
-                return (true, "LlmTornado/Z.ai key is valid");
+                return (true, "Z.AI key is valid");
 
             if ((int)response.StatusCode == 401)
-                return (false, "Invalid LlmTornado/Z.ai API key");
+                return (false, "Invalid Z.AI API key");
 
-            return (false, $"LlmTornado/Z.ai API returned {(int)response.StatusCode}: {response.ReasonPhrase}");
+            return (false, $"Z.AI API returned {(int)response.StatusCode}: {response.ReasonPhrase}");
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "LlmTornado credential validation failed");
+            logger.LogWarning(ex, "Z.AI credential validation failed");
             return (false, $"Connection failed: {ex.Message}");
         }
     }

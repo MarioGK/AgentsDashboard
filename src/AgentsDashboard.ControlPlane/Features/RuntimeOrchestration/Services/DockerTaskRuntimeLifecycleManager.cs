@@ -36,6 +36,7 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
     private const string WorkerHomePath = "/home/agent";
     private const string WorkerSshDirectoryPath = "/home/agent/.ssh";
     private const string WorkerSshAgentSocketPath = "/ssh-agent.sock";
+    private static readonly TimeSpan EventHubProbeTimeout = TimeSpan.FromSeconds(2);
     private const int MaxOrphanContainerPrunesPerTick = 16;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ScaleOutAttemptWindow = TimeSpan.FromMinutes(10);
@@ -69,6 +70,7 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
 
     private readonly object _budgetLock = new();
     private readonly object _concurrencyLock = new();
+    private static readonly ITaskRuntimeEventReceiver s_eventHubProbeReceiver = new EventHubProbeReceiver();
 
     private DateTime _lastRefreshUtc = DateTime.MinValue;
     private DateTime _startBudgetWindowUtc = DateTime.UtcNow;
@@ -2121,6 +2123,21 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                         continue;
                     }
 
+                    var eventHubEndpoint = await ResolveWorkerEventHubEndpointAsync(state, cancellationToken);
+                    if (string.IsNullOrWhiteSpace(eventHubEndpoint))
+                    {
+                        logger.LogDebug(
+                            "Worker event hub probe did not complete for readiness on {TaskRuntimeId}; waiting for runtime.",
+                            state.TaskRuntimeId);
+                        await Task.Delay(delay, cancellationToken);
+                        continue;
+                    }
+
+                    if (!string.Equals(state.GrpcEndpoint, eventHubEndpoint, StringComparison.OrdinalIgnoreCase))
+                    {
+                        state.GrpcEndpoint = eventHubEndpoint;
+                    }
+
                     state.LifecycleState = TaskRuntimeLifecycleState.Ready;
                     await PersistTaskRuntimeStateAsync(
                         state,
@@ -2139,6 +2156,48 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         }
 
         return null;
+    }
+
+    private async Task<string?> ResolveWorkerEventHubEndpointAsync(TaskRuntimeStateEntry state, CancellationToken cancellationToken)
+    {
+        if (await CanConnectToEventHubAsync(state.TaskRuntimeId, state.GrpcEndpoint, cancellationToken))
+        {
+            return state.GrpcEndpoint;
+        }
+
+        if (!string.IsNullOrWhiteSpace(state.ProxyEndpoint) &&
+            !string.Equals(state.ProxyEndpoint, state.GrpcEndpoint, StringComparison.OrdinalIgnoreCase) &&
+            await CanConnectToEventHubAsync(state.TaskRuntimeId, state.ProxyEndpoint, cancellationToken))
+        {
+            return state.ProxyEndpoint;
+        }
+
+        return null;
+    }
+
+    private async Task<bool> CanConnectToEventHubAsync(string runtimeId, string endpoint, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return false;
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(EventHubProbeTimeout);
+        try
+        {
+            var hub = await clientFactory.ConnectEventHubAsync(runtimeId, endpoint, s_eventHubProbeReceiver, timeout.Token);
+            await hub.DisposeAsync();
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task PersistTaskRuntimeStateAsync(
@@ -2396,27 +2455,25 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
 
     private (string grpcEndpoint, string proxyEndpoint) ResolveWorkerEndpoints(ContainerListResponse container, string containerName, OrchestratorRuntimeSettings runtime)
     {
+        var hostEndpoint = ResolveHostPortEndpoint(container);
+        var dockerEndpoint = $"http://{containerName}:{WorkerGrpcPort}";
         var mode = ResolveConnectivityMode(runtime);
         if (mode == TaskRuntimeConnectivityMode.DockerDnsOnly)
         {
-            var endpoint = $"http://{containerName}:{WorkerGrpcPort}";
-            return (endpoint, endpoint);
+            return (dockerEndpoint, hostEndpoint);
         }
 
         if (mode == TaskRuntimeConnectivityMode.HostPortOnly)
         {
-            var hostEndpoint = ResolveHostPortEndpoint(container);
-            return (hostEndpoint, hostEndpoint);
+            return (hostEndpoint, dockerEndpoint);
         }
 
         if (IsRunningInsideContainer())
         {
-            var endpoint = $"http://{containerName}:{WorkerGrpcPort}";
-            return (endpoint, endpoint);
+            return (dockerEndpoint, hostEndpoint);
         }
 
-        var fallbackHostEndpoint = ResolveHostPortEndpoint(container);
-        return (fallbackHostEndpoint, fallbackHostEndpoint);
+        return (hostEndpoint, dockerEndpoint);
     }
 
     private string ResolveHostPortEndpoint(ContainerListResponse container)
@@ -2590,6 +2647,17 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         }
 
         return (double)usage / limit * 100.0;
+    }
+
+    private sealed class EventHubProbeReceiver : ITaskRuntimeEventReceiver
+    {
+        public void OnJobEvent(JobEventMessage eventMessage)
+        {
+        }
+
+        public void OnTaskRuntimeStatusChanged(TaskRuntimeStatusMessage statusMessage)
+        {
+        }
     }
 
 }

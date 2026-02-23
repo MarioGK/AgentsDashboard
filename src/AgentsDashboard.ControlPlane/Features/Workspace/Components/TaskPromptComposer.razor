@@ -1,6 +1,7 @@
 @namespace AgentsDashboard.ControlPlane.Components.Shared
 @implements IAsyncDisposable
 
+@using System.IO
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
 
@@ -141,6 +142,15 @@
         "image/gif",
     ];
 
+    private static readonly Dictionary<string, string> s_extensionToMimeType = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".png"] = "image/png",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".webp"] = "image/webp",
+        [".gif"] = "image/gif",
+    };
+
     private readonly string _fileInputId = $"composer-file-{Guid.NewGuid():N}";
     private List<WorkspaceImageInput> _images = [];
     private IJSObjectReference? _workspaceJsModule;
@@ -241,7 +251,8 @@
 
         foreach (var file in selected)
         {
-            if (!s_allowedMimeTypes.Contains(file.ContentType))
+            var normalizedMimeType = NormalizeImageMimeType(file.ContentType, file.Name);
+            if (!s_allowedMimeTypes.Contains(normalizedMimeType))
             {
                 await NotifyValidationErrorAsync($"Unsupported image type '{file.ContentType}'.");
                 continue;
@@ -258,12 +269,12 @@
             await read.CopyToAsync(memory);
             var bytes = memory.ToArray();
             var payload = Convert.ToBase64String(bytes);
-            var dataUrl = $"data:{file.ContentType};base64,{payload}";
+            var dataUrl = $"data:{normalizedMimeType};base64,{payload}";
 
             incoming.Add(new WorkspaceImageInput(
                 Id: Guid.NewGuid().ToString("N"),
                 FileName: file.Name,
-                MimeType: file.ContentType,
+                MimeType: normalizedMimeType,
                 SizeBytes: bytes.Length,
                 DataUrl: dataUrl));
         }
@@ -284,7 +295,7 @@
         var incoming = new List<WorkspaceImageInput>(pastedImages.Count);
         foreach (var pasted in pastedImages)
         {
-            var mimeType = pasted.MimeType ?? string.Empty;
+            var mimeType = NormalizeImageMimeType(pasted.MimeType, pasted.FileName);
             if (!s_allowedMimeTypes.Contains(mimeType))
             {
                 await NotifyValidationErrorAsync($"Unsupported image type '{mimeType}'.");
@@ -314,6 +325,26 @@
 
         await AppendImagesAsync(incoming);
         await InvokeAsync(StateHasChanged);
+    }
+
+    private static string NormalizeImageMimeType(string? mimeType, string fileName)
+    {
+        var normalizedMimeType = (mimeType ?? string.Empty).Trim().ToLowerInvariant();
+
+        if (string.Equals(normalizedMimeType, "image/jpg", StringComparison.OrdinalIgnoreCase))
+        {
+            return "image/jpeg";
+        }
+
+        if (normalizedMimeType.Length > 0)
+        {
+            return normalizedMimeType;
+        }
+
+        var extension = Path.GetExtension(fileName ?? string.Empty);
+        return s_extensionToMimeType.TryGetValue(extension, out var inferredMimeType)
+            ? inferredMimeType
+            : string.Empty;
     }
 
     private async Task AppendImagesAsync(IReadOnlyList<WorkspaceImageInput> incoming)
