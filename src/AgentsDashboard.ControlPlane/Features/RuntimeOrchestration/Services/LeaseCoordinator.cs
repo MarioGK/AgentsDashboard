@@ -7,7 +7,7 @@ public interface ILeaseCoordinator
     Task<IAsyncDisposable?> TryAcquireAsync(string leaseName, TimeSpan ttl, CancellationToken cancellationToken);
 }
 
-public sealed class LeaseCoordinator(IOrchestratorStore store) : ILeaseCoordinator
+public sealed class LeaseCoordinator(IRuntimeStore store) : ILeaseCoordinator
 {
     private readonly string _ownerId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
 
@@ -22,7 +22,7 @@ public sealed class LeaseCoordinator(IOrchestratorStore store) : ILeaseCoordinat
         return new LeaseHandle(store, leaseName, _ownerId);
     }
 
-    private sealed class LeaseHandle(IOrchestratorStore store, string leaseName, string ownerId) : IAsyncDisposable
+    private sealed class LeaseHandle(IRuntimeStore store, string leaseName, string ownerId) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {

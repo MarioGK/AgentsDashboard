@@ -15,7 +15,7 @@ public sealed record DeadRunDetectionResult
 }
 
 public sealed class RecoveryService(
-    IOrchestratorStore store,
+    IRunStore store,
     IRunEventPublisher publisher,
     IContainerReaper containerReaper,
     IOptions<OrchestratorOptions> options,

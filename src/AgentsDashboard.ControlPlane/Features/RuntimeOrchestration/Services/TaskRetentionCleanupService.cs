@@ -17,7 +17,9 @@ public sealed record TaskCleanupRunSummary(
     string Reason);
 
 public sealed class TaskRetentionCleanupService(
-    IOrchestratorStore store,
+    ITaskStore taskStore,
+    IRunStore runStore,
+    ISystemStore systemStore,
     ILeaseCoordinator leaseCoordinator,
     ILogger<TaskRetentionCleanupService> logger,
     TimeProvider? timeProvider = null) : BackgroundService
@@ -34,7 +36,7 @@ public sealed class TaskRetentionCleanupService(
 
             try
             {
-                var settingsDocument = await store.GetSettingsAsync(stoppingToken);
+                var settingsDocument = await systemStore.GetSettingsAsync(stoppingToken);
                 var settings = settingsDocument.Orchestrator ?? new OrchestratorSettings();
                 delay = ResolveCleanupInterval(settings.CleanupIntervalMinutes);
                 await RunCleanupCycleAsync(settings, stoppingToken);
@@ -54,7 +56,7 @@ public sealed class TaskRetentionCleanupService(
 
     public async Task<TaskCleanupRunSummary> RunCleanupCycleAsync(CancellationToken cancellationToken)
     {
-        var settingsDocument = await store.GetSettingsAsync(cancellationToken);
+        var settingsDocument = await systemStore.GetSettingsAsync(cancellationToken);
         return await RunCleanupCycleAsync(settingsDocument.Orchestrator ?? new OrchestratorSettings(), cancellationToken);
     }
 
@@ -120,7 +122,7 @@ public sealed class TaskRetentionCleanupService(
         var softLimitBytes = ToBytes(softLimitGb);
         var targetBytes = ToBytes(targetGb);
 
-        var initialSnapshot = await store.GetStorageSnapshotAsync(cancellationToken);
+        var initialSnapshot = await taskStore.GetStorageSnapshotAsync(cancellationToken);
         var remainingDeleteBudget = maxTasksPerTick;
         var ageCleanupApplied = false;
         var sizeCleanupApplied = false;
@@ -128,13 +130,13 @@ public sealed class TaskRetentionCleanupService(
         var totalFailedTasks = 0;
         var totalDeletedRows = 0;
         var structuredPruneBatchSize = Math.Max(100, maxTasksPerTick * 50);
-        var structuredPrune = await store.PruneStructuredRunDataAsync(
+        var structuredPrune = await runStore.PruneStructuredRunDataAsync(
             ageOlderThanUtc,
             structuredPruneBatchSize,
             cancellationToken);
         totalDeletedRows += CountDeletedRows(structuredPrune);
 
-        var ageCandidates = await store.ListTaskCleanupCandidatesAsync(
+        var ageCandidates = await taskStore.ListTaskCleanupCandidatesAsync(
             new TaskCleanupQuery(
                 OlderThanUtc: ageOlderThanUtc,
                 ProtectedSinceUtc: protectedSinceUtc,
@@ -149,7 +151,7 @@ public sealed class TaskRetentionCleanupService(
 
         if (ageCandidates.Count > 0)
         {
-            var ageBatch = await store.DeleteTasksCascadeAsync(ageCandidates.Select(x => x.TaskId).ToList(), cancellationToken);
+            var ageBatch = await taskStore.DeleteTasksCascadeAsync(ageCandidates.Select(x => x.TaskId).ToList(), cancellationToken);
             ageCleanupApplied = ageBatch.TasksDeleted > 0 || ageBatch.FailedTasks > 0;
             remainingDeleteBudget = Math.Max(0, remainingDeleteBudget - ageBatch.TasksDeleted - ageBatch.FailedTasks);
             totalTasksDeleted += ageBatch.TasksDeleted;
@@ -157,13 +159,13 @@ public sealed class TaskRetentionCleanupService(
             totalDeletedRows += CountDeletedRows(ageBatch);
         }
 
-        var currentSnapshot = await store.GetStorageSnapshotAsync(cancellationToken);
+        var currentSnapshot = await taskStore.GetStorageSnapshotAsync(cancellationToken);
         if (currentSnapshot.TotalBytes > softLimitBytes && remainingDeleteBudget > 0)
         {
             while (remainingDeleteBudget > 0 && currentSnapshot.TotalBytes > targetBytes)
             {
                 var batchSize = Math.Min(25, remainingDeleteBudget);
-                var pressureCandidates = await store.ListTaskCleanupCandidatesAsync(
+                var pressureCandidates = await taskStore.ListTaskCleanupCandidatesAsync(
                     new TaskCleanupQuery(
                         OlderThanUtc: nowUtc,
                         ProtectedSinceUtc: protectedSinceUtc,
@@ -181,7 +183,7 @@ public sealed class TaskRetentionCleanupService(
                     break;
                 }
 
-                var pressureBatch = await store.DeleteTasksCascadeAsync(pressureCandidates.Select(x => x.TaskId).ToList(), cancellationToken);
+                var pressureBatch = await taskStore.DeleteTasksCascadeAsync(pressureCandidates.Select(x => x.TaskId).ToList(), cancellationToken);
                 sizeCleanupApplied = pressureBatch.TasksDeleted > 0 || pressureBatch.FailedTasks > 0;
                 remainingDeleteBudget = Math.Max(0, remainingDeleteBudget - pressureBatch.TasksDeleted - pressureBatch.FailedTasks);
                 totalTasksDeleted += pressureBatch.TasksDeleted;
@@ -193,7 +195,7 @@ public sealed class TaskRetentionCleanupService(
                     break;
                 }
 
-                currentSnapshot = await store.GetStorageSnapshotAsync(cancellationToken);
+                currentSnapshot = await taskStore.GetStorageSnapshotAsync(cancellationToken);
             }
         }
 
@@ -202,9 +204,9 @@ public sealed class TaskRetentionCleanupService(
             settings.EnableVacuumAfterPressureCleanup &&
             totalDeletedRows >= Math.Max(1, settings.VacuumMinDeletedRows))
         {
-            await store.VacuumAsync(cancellationToken);
+            await taskStore.VacuumAsync(cancellationToken);
             vacuumExecuted = true;
-            currentSnapshot = await store.GetStorageSnapshotAsync(cancellationToken);
+            currentSnapshot = await taskStore.GetStorageSnapshotAsync(cancellationToken);
         }
 
         var summary = new TaskCleanupRunSummary(

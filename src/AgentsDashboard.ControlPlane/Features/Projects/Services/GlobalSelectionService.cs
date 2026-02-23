@@ -40,7 +40,7 @@ public interface IGlobalSelectionService
     IDisposable Subscribe(Action<SelectionChangedEventArgs> handler);
 }
 
-public sealed class GlobalSelectionService(IOrchestratorStore store, ILocalStorageService localStorage) : IGlobalSelectionService, IDisposable
+public sealed class GlobalSelectionService(IRepositoryStore store, ILocalStorageService localStorage) : IGlobalSelectionService, IDisposable
 {
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly List<Action<SelectionChangedEventArgs>> _subscribers = [];

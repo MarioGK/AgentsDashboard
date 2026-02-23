@@ -59,7 +59,7 @@ public interface IRunStructuredViewService
     Task<RunStructuredViewSnapshot> GetViewAsync(string runId, CancellationToken cancellationToken);
 }
 
-public sealed class RunStructuredViewService(IOrchestratorStore store) : IRunStructuredViewService
+public sealed class RunStructuredViewService(IRunStore store) : IRunStructuredViewService
 {
     private const int StructuredLoadLimit = 4000;
     private const int TimelineCap = 1200;

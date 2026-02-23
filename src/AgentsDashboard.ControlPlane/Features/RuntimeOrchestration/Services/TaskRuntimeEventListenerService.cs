@@ -9,7 +9,10 @@ namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 public sealed class TaskRuntimeEventListenerService(
     IMagicOnionClientFactory clientFactory,
     ITaskRuntimeLifecycleManager lifecycleManager,
-    IOrchestratorStore store,
+    IRepositoryStore repositoryStore,
+    ITaskStore taskStore,
+    IRunStore runStore,
+    IRuntimeStore runtimeStore,
     ITaskSemanticEmbeddingService taskSemanticEmbeddingService,
     ITaskRuntimeRegistryService workerRegistry,
     IRunEventPublisher publisher,
@@ -38,7 +41,7 @@ public sealed class TaskRuntimeEventListenerService(
             try
             {
                 await SyncConnectionsAsync(stoppingToken);
-                await store.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TaskRuntimeTtl, stoppingToken);
+                await runtimeStore.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TaskRuntimeTtl, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -198,7 +201,7 @@ public sealed class TaskRuntimeEventListenerService(
                 TimestampUtc = timestamp,
             };
 
-            await store.AddRunLogAsync(logEvent, CancellationToken.None);
+            await runStore.AddRunLogAsync(logEvent, CancellationToken.None);
             await publisher.PublishLogAsync(logEvent, CancellationToken.None);
 
             if (!string.Equals(message.EventType, "completed", StringComparison.OrdinalIgnoreCase))
@@ -225,7 +228,7 @@ public sealed class TaskRuntimeEventListenerService(
                     failureClass = "Timeout";
             }
 
-            var completedRun = await store.MarkRunCompletedAsync(
+            var completedRun = await runStore.MarkRunCompletedAsync(
                 message.RunId,
                 succeeded,
                 envelope.Summary,
@@ -239,7 +242,7 @@ public sealed class TaskRuntimeEventListenerService(
 
             if (isObsoleteDisposition)
             {
-                var obsoleteRun = await store.MarkRunObsoleteAsync(message.RunId, CancellationToken.None);
+                var obsoleteRun = await runStore.MarkRunObsoleteAsync(message.RunId, CancellationToken.None);
                 if (obsoleteRun is not null)
                 {
                     completedRun = obsoleteRun;
@@ -251,7 +254,7 @@ public sealed class TaskRuntimeEventListenerService(
             var gitSyncError = ResolveGitSyncError(envelope);
             try
             {
-                await store.UpdateTaskGitMetadataAsync(
+                await taskStore.UpdateTaskGitMetadataAsync(
                     completedRun.TaskId,
                     timestamp,
                     gitSyncError,
@@ -295,7 +298,7 @@ public sealed class TaskRuntimeEventListenerService(
 
         try
         {
-            var stored = await store.AppendRunStructuredEventAsync(structuredEvent, CancellationToken.None);
+            var stored = await runStore.AppendRunStructuredEventAsync(structuredEvent, CancellationToken.None);
             var decoded = RunStructuredEventCodec.Decode(stored);
 
             var projectionDelta = await _runStructuredViewService.ApplyStructuredEventAsync(stored, CancellationToken.None);
@@ -311,7 +314,7 @@ public sealed class TaskRuntimeEventListenerService(
             if (projectionDelta.DiffUpdated is not null)
             {
                 var diff = projectionDelta.DiffUpdated;
-                await store.UpsertRunDiffSnapshotAsync(
+                await runStore.UpsertRunDiffSnapshotAsync(
                     new RunDiffSnapshotDocument
                     {
                         RunId = stored.RunId,
@@ -502,7 +505,7 @@ public sealed class TaskRuntimeEventListenerService(
                 statusMessage.MaxSlots,
                 CancellationToken.None);
 
-            await store.UpsertTaskRuntimeRegistrationHeartbeatAsync(
+            await runtimeStore.UpsertTaskRuntimeRegistrationHeartbeatAsync(
                 statusMessage.TaskRuntimeId,
                 endpoint ?? statusMessage.TaskRuntimeId,
                 statusMessage.ActiveSlots,
@@ -535,7 +538,7 @@ public sealed class TaskRuntimeEventListenerService(
 
     private async Task TryRetryAsync(RunDocument failedRun)
     {
-        var task = await store.GetTaskAsync(failedRun.TaskId, CancellationToken.None);
+        var task = await taskStore.GetTaskAsync(failedRun.TaskId, CancellationToken.None);
         if (task is null)
             return;
 
@@ -543,7 +546,7 @@ public sealed class TaskRuntimeEventListenerService(
         if (maxAttempts <= 1 || failedRun.Attempt >= maxAttempts)
             return;
 
-        var repo = await store.GetRepositoryAsync(task.RepositoryId, CancellationToken.None);
+        var repo = await repositoryStore.GetRepositoryAsync(task.RepositoryId, CancellationToken.None);
         if (repo is null)
             return;
 
@@ -555,7 +558,7 @@ public sealed class TaskRuntimeEventListenerService(
 
         await Task.Delay(TimeSpan.FromSeconds(Math.Min(delaySeconds, 300)));
 
-        var retryRun = await store.CreateRunAsync(
+        var retryRun = await runStore.CreateRunAsync(
             task,
             CancellationToken.None,
             nextAttempt,
@@ -787,7 +790,7 @@ public sealed class TaskRuntimeEventListenerService(
                 assembly.Persisted = true;
             }
 
-            await store.SaveArtifactAsync(assembly.RunId, assembly.FileName, assembly.Buffer, cancellationToken);
+            await runStore.SaveArtifactAsync(assembly.RunId, assembly.FileName, assembly.Buffer, cancellationToken);
         }
         catch (Exception ex)
         {

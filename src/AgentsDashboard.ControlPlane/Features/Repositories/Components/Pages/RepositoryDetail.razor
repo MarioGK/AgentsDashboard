@@ -2,7 +2,9 @@
 @page "/repositories/{RepositoryId}"
 @layout SettingsLayout
 @rendermode InteractiveServer
-@inject IOrchestratorStore Store
+@inject IRepositoryStore RepositoryStore
+@inject ITaskStore TaskStore
+@inject IRunStore RunStore
 @inject RunDispatcher Dispatcher
 @inject SecretCryptoService Crypto
 @inject IWorkspaceAiService WorkspaceAiService
@@ -441,14 +443,14 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        _repository = await Store.GetRepositoryAsync(RepositoryId, CancellationToken.None);
+        _repository = await RepositoryStore.GetRepositoryAsync(RepositoryId, CancellationToken.None);
 
         if (_repository is null)
         {
             return;
         }
 
-        await Store.TouchRepositoryAsync(_repository.Id, CancellationToken.None);
+        await RepositoryStore.TouchRepositoryAsync(_repository.Id, CancellationToken.None);
         ApplyRepositoryTaskDefaults(_repository);
         _taskPromptSkillAutocompleteBound = false;
         _taskPromptSkillAutocompleteSyncedVersion = -1;
@@ -482,7 +484,7 @@ else
                     _promptSkillContent,
                     _promptSkillDescription,
                     _promptSkillEnabled);
-                var updated = await Store.UpdatePromptSkillAsync(_editingPromptSkillId, updateRequest, CancellationToken.None);
+                var updated = await RepositoryStore.UpdatePromptSkillAsync(_editingPromptSkillId, updateRequest, CancellationToken.None);
                 if (updated is null)
                 {
                     Snackbar.Add("Skill not found.", Severity.Warning);
@@ -498,7 +500,7 @@ else
                     _promptSkillContent,
                     _promptSkillDescription,
                     _promptSkillEnabled);
-                await Store.CreatePromptSkillAsync(createRequest, CancellationToken.None);
+                await RepositoryStore.CreatePromptSkillAsync(createRequest, CancellationToken.None);
             }
 
             CancelPromptSkillEdit();
@@ -537,7 +539,7 @@ else
 
     private async Task DeletePromptSkillAsync(PromptSkillDocument skill)
     {
-        var deleted = await Store.DeletePromptSkillAsync(skill.Id, CancellationToken.None);
+        var deleted = await RepositoryStore.DeletePromptSkillAsync(skill.Id, CancellationToken.None);
         if (!deleted)
         {
             Snackbar.Add("Skill not found.", Severity.Warning);
@@ -560,7 +562,7 @@ else
             return;
         }
 
-        var skills = await Store.ListPromptSkillsAsync(_repository.Id, includeGlobal: true, CancellationToken.None);
+        var skills = await RepositoryStore.ListPromptSkillsAsync(_repository.Id, includeGlobal: true, CancellationToken.None);
 
         _repositoryPromptSkills.Clear();
         _repositoryPromptSkills.AddRange(
@@ -688,7 +690,7 @@ else
                 Enabled: _taskDefaultsEnabled,
                 SessionProfileId: null);
 
-            var updated = await Store.UpdateRepositoryTaskDefaultsAsync(_repository.Id, request, CancellationToken.None);
+            var updated = await RepositoryStore.UpdateRepositoryTaskDefaultsAsync(_repository.Id, request, CancellationToken.None);
             if (updated is null)
             {
                 Snackbar.Add("Repository not found.", Severity.Warning);
@@ -746,7 +748,7 @@ else
                 Prompt: prompt,
                 Name: taskName);
 
-            await Store.CreateTaskAsync(request, CancellationToken.None);
+            await TaskStore.CreateTaskAsync(request, CancellationToken.None);
 
             if (title.UsedFallback && !string.IsNullOrWhiteSpace(title.Message))
             {
@@ -797,7 +799,7 @@ else
 
     private async Task DeleteTaskAsync(TaskDocument task)
     {
-        await Store.DeleteTaskAsync(task.Id, CancellationToken.None);
+        await TaskStore.DeleteTaskAsync(task.Id, CancellationToken.None);
         await RefreshAsync();
     }
 
@@ -808,7 +810,7 @@ else
             return;
         }
 
-        var run = await Store.CreateRunAsync(task, CancellationToken.None);
+        var run = await RunStore.CreateRunAsync(task, CancellationToken.None);
         await Dispatcher.DispatchAsync(_repository, task, run, CancellationToken.None);
 
         await RefreshAsync();
@@ -825,10 +827,10 @@ else
         {
             var githubToken = await TryGetGithubTokenAsync(_repository.Id);
             var gitStatus = await GitWorkspace.RefreshStatusAsync(_repository, githubToken, fetchRemote: true, CancellationToken.None);
-            _repository = await Store.UpdateRepositoryGitStateAsync(_repository.Id, gitStatus, CancellationToken.None);
+            _repository = await RepositoryStore.UpdateRepositoryGitStateAsync(_repository.Id, gitStatus, CancellationToken.None);
             if (_repository is null)
             {
-                _repository = await Store.GetRepositoryAsync(RepositoryId, CancellationToken.None);
+                _repository = await RepositoryStore.GetRepositoryAsync(RepositoryId, CancellationToken.None);
             }
         }
         catch (Exception ex)
@@ -839,7 +841,7 @@ else
 
     private async Task<string?> TryGetGithubTokenAsync(string repositoryId)
     {
-        var secret = await Store.GetProviderSecretAsync(repositoryId, "github", CancellationToken.None);
+        var secret = await RepositoryStore.GetProviderSecretAsync(repositoryId, "github", CancellationToken.None);
         if (secret is null)
         {
             return null;
@@ -863,10 +865,10 @@ else
         }
 
         _tasks.Clear();
-        _tasks.AddRange(await Store.ListTasksAsync(_repository.Id, CancellationToken.None));
+        _tasks.AddRange(await TaskStore.ListTasksAsync(_repository.Id, CancellationToken.None));
 
         _runs.Clear();
-        _runs.AddRange(await Store.ListRunsByRepositoryAsync(_repository.Id, CancellationToken.None));
+        _runs.AddRange(await RunStore.ListRunsByRepositoryAsync(_repository.Id, CancellationToken.None));
         await RefreshLatestRunsByTaskAsync();
     }
 
@@ -884,7 +886,7 @@ else
                 return;
             }
 
-            var latestRunsByTaskId = await Store.GetLatestRunsByTaskIdsAsync(
+            var latestRunsByTaskId = await RunStore.GetLatestRunsByTaskIdsAsync(
                 _tasks.Select(task => task.Id).ToList(),
                 CancellationToken.None);
 
@@ -922,13 +924,13 @@ else
             return;
         }
 
-        await Store.UpsertProviderSecretAsync(_repository.Id, provider, Crypto.Encrypt(value.Trim()), CancellationToken.None);
+        await RepositoryStore.UpsertProviderSecretAsync(_repository.Id, provider, Crypto.Encrypt(value.Trim()), CancellationToken.None);
     }
 
     private async Task LoadInstructionFilesAsync()
     {
         if (_repository is null) return;
-        var files = await Store.GetRepositoryInstructionFilesAsync(_repository.Id, CancellationToken.None);
+        var files = await RepositoryStore.GetRepositoryInstructionFilesAsync(_repository.Id, CancellationToken.None);
         _repoInstructionFiles.Clear();
         _instructionEditors.Clear();
         foreach (var f in files.OrderBy(f => f.Order))
@@ -988,7 +990,7 @@ else
         var files = _repoInstructionFiles
             .Select(f => new InstructionFile(f.Name, f.Content, f.Order))
             .ToList();
-        await Store.UpdateRepositoryInstructionFilesAsync(_repository.Id, files, CancellationToken.None);
+        await RepositoryStore.UpdateRepositoryInstructionFilesAsync(_repository.Id, files, CancellationToken.None);
         _instructionSaveMessage = "Instructions saved.";
         StateHasChanged();
     }

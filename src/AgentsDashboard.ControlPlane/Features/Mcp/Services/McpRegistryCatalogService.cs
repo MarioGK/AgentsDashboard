@@ -7,7 +7,7 @@ namespace AgentsDashboard.ControlPlane.Features.Mcp.Services;
 
 public sealed partial class McpRegistryCatalogService(
     IHttpClientFactory httpClientFactory,
-    IOrchestratorStore store,
+    ISystemStore store,
     ILogger<McpRegistryCatalogService> logger)
 {
     private const string SourceOfficialRegistry = "official-registry";

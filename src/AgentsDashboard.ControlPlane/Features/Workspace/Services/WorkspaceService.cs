@@ -100,7 +100,10 @@ public sealed record WorkspaceSummaryRefreshResult(
     DateTime? NextAllowedRefreshAtUtc);
 
 public sealed class WorkspaceService(
-    IOrchestratorStore store,
+    IRepositoryStore repositoryStore,
+    ITaskStore taskStore,
+    IRunStore runStore,
+    ISystemStore systemStore,
     RunDispatcher dispatcher,
     IHarnessOutputParserService parserService,
     IWorkspaceAiService workspaceAiService,
@@ -132,9 +135,9 @@ public sealed class WorkspaceService(
         string? selectedRunId,
         CancellationToken cancellationToken)
     {
-        var repositoryTask = store.GetRepositoryAsync(repositoryId, cancellationToken);
-        var tasksTask = store.ListTasksAsync(repositoryId, cancellationToken);
-        var runsTask = store.ListRunsByRepositoryAsync(repositoryId, cancellationToken);
+        var repositoryTask = repositoryStore.GetRepositoryAsync(repositoryId, cancellationToken);
+        var tasksTask = taskStore.ListTasksAsync(repositoryId, cancellationToken);
+        var runsTask = runStore.ListRunsByRepositoryAsync(repositoryId, cancellationToken);
         await Task.WhenAll(repositoryTask, tasksTask, runsTask);
 
         var repository = repositoryTask.Result;
@@ -162,7 +165,7 @@ public sealed class WorkspaceService(
 
         if (selectedRun is not null)
         {
-            selectedRunLogs = await store.ListRunLogsAsync(selectedRun.Id, cancellationToken);
+            selectedRunLogs = await runStore.ListRunLogsAsync(selectedRun.Id, cancellationToken);
             parsedOutput = parserService.Parse(selectedRun.OutputJson, selectedRunLogs);
 
             var signature = ComputeSummarySignature(selectedRun, selectedRunLogs, parsedOutput);
@@ -187,7 +190,7 @@ public sealed class WorkspaceService(
         WorkspacePromptSubmissionRequest request,
         CancellationToken cancellationToken)
     {
-        var repository = await store.GetRepositoryAsync(repositoryId, cancellationToken);
+        var repository = await repositoryStore.GetRepositoryAsync(repositoryId, cancellationToken);
         if (repository is null)
         {
             return new WorkspacePromptSubmissionResult(
@@ -201,7 +204,7 @@ public sealed class WorkspaceService(
 
         logger.LogDebug("Submitting workspace prompt for repository {RepositoryId}", repositoryId);
 
-        var tasks = await store.ListTasksAsync(repositoryId, cancellationToken);
+        var tasks = await taskStore.ListTasksAsync(repositoryId, cancellationToken);
         var task = await ResolveTaskAsync(tasks, repositoryId, request, cancellationToken);
 
         if (task is null)
@@ -221,7 +224,7 @@ public sealed class WorkspaceService(
         RunSessionProfileDocument? sessionProfile = null;
         if (!string.IsNullOrWhiteSpace(requestedSessionProfileId))
         {
-            sessionProfile = await store.GetRunSessionProfileAsync(requestedSessionProfileId, cancellationToken);
+            sessionProfile = await repositoryStore.GetRunSessionProfileAsync(requestedSessionProfileId, cancellationToken);
             if (sessionProfile is null ||
                 !sessionProfile.Enabled ||
                 !(string.Equals(sessionProfile.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase) ||
@@ -241,7 +244,7 @@ public sealed class WorkspaceService(
             .Where(image => !string.IsNullOrWhiteSpace(image.DataUrl))
             .ToList() ?? [];
 
-        var runs = await store.ListRunsByRepositoryAsync(repositoryId, cancellationToken);
+        var runs = await runStore.ListRunsByRepositoryAsync(repositoryId, cancellationToken);
         var activeRun = runs
             .Where(run => run.TaskId == task.Id && s_activeStates.Contains(run.State))
             .OrderByDescending(run => run.CreatedAtUtc)
@@ -320,13 +323,13 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
-        var settings = await store.GetSettingsAsync(cancellationToken);
+        var settings = await systemStore.GetSettingsAsync(cancellationToken);
         var mcpConfigSnapshotJson = !string.IsNullOrWhiteSpace(sessionProfile?.McpConfigJson)
             ? sessionProfile.McpConfigJson
             : settings.Orchestrator.McpConfigJson;
 
         var effectiveModeOverride = request.ModeOverride ?? sessionProfile?.ExecutionModeDefault;
-        var run = await store.CreateRunAsync(
+        var run = await runStore.CreateRunAsync(
             task,
             cancellationToken,
             executionModeOverride: effectiveModeOverride,
@@ -344,7 +347,7 @@ public sealed class WorkspaceService(
                 cancellationToken);
             if (!stored.Success)
             {
-                var failedRun = await store.MarkRunCompletedAsync(
+                var failedRun = await runStore.MarkRunCompletedAsync(
                     run.Id,
                     succeeded: false,
                     summary: "Workspace image validation failed",
@@ -376,7 +379,7 @@ public sealed class WorkspaceService(
             sessionProfile,
             request.UserMessage,
             cancellationToken);
-        instructionStack = await store.UpsertRunInstructionStackAsync(instructionStack, cancellationToken);
+        instructionStack = await runStore.UpsertRunInstructionStackAsync(instructionStack, cancellationToken);
 
         var dispatchAccepted = await dispatcher.DispatchAsync(
             repository,
@@ -442,7 +445,7 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
-        var questionRequest = await store.GetRunQuestionRequestAsync(request.QuestionRequestId, cancellationToken);
+        var questionRequest = await runStore.GetRunQuestionRequestAsync(request.QuestionRequestId, cancellationToken);
         if (questionRequest is null ||
             !string.Equals(questionRequest.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase))
         {
@@ -462,7 +465,7 @@ public sealed class WorkspaceService(
                 Run: null);
         }
 
-        var task = await store.GetTaskAsync(questionRequest.TaskId, cancellationToken);
+        var task = await taskStore.GetTaskAsync(questionRequest.TaskId, cancellationToken);
         if (task is null || !string.Equals(task.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase))
         {
             return new WorkspaceQuestionAnswersSubmissionResult(
@@ -545,7 +548,7 @@ public sealed class WorkspaceService(
                 Run: submission.Run);
         }
 
-        var updatedQuestionRequest = await store.MarkRunQuestionRequestAnsweredAsync(
+        var updatedQuestionRequest = await runStore.MarkRunQuestionRequestAnsweredAsync(
             questionRequest.Id,
             normalizedAnswers,
             submission.Run.Id,
@@ -582,7 +585,7 @@ public sealed class WorkspaceService(
         bool force,
         CancellationToken cancellationToken)
     {
-        var run = await store.GetRunAsync(runId, cancellationToken);
+        var run = await runStore.GetRunAsync(runId, cancellationToken);
         if (run is null || !string.Equals(run.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase))
         {
             return new WorkspaceSummaryRefreshResult(
@@ -596,14 +599,14 @@ public sealed class WorkspaceService(
                 NextAllowedRefreshAtUtc: null);
         }
 
-        var cachedSummary = await store.GetRunAiSummaryAsync(runId, cancellationToken);
+        var cachedSummary = await runStore.GetRunAiSummaryAsync(runId, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(eventType))
         {
             NotifyRunEvent(runId, eventType, DateTime.UtcNow);
         }
 
-        var runLogs = await store.ListRunLogsAsync(runId, cancellationToken);
+        var runLogs = await runStore.ListRunLogsAsync(runId, cancellationToken);
         var parsedOutput = parserService.Parse(run.OutputJson, runLogs);
         var signature = ComputeSummarySignature(run, runLogs, parsedOutput);
 
@@ -662,7 +665,7 @@ public sealed class WorkspaceService(
             GeneratedAtUtc = now,
             ExpiresAtUtc = now.AddHours(24),
         };
-        await store.UpsertRunAiSummaryAsync(summaryDocument, cancellationToken);
+        await runStore.UpsertRunAiSummaryAsync(summaryDocument, cancellationToken);
 
         return new WorkspaceSummaryRefreshResult(
             Success: true,
@@ -704,7 +707,7 @@ public sealed class WorkspaceService(
                 return matchedTask;
             }
 
-            var loaded = await store.GetTaskAsync(request.TaskId, cancellationToken);
+            var loaded = await taskStore.GetTaskAsync(request.TaskId, cancellationToken);
             if (loaded is not null && string.Equals(loaded.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase))
             {
                 return loaded;
@@ -730,7 +733,7 @@ public sealed class WorkspaceService(
                 : request.Prompt.Trim(),
             Name: "Workspace Prompt Task");
 
-        return await store.CreateTaskAsync(createRequest, cancellationToken);
+        return await taskStore.CreateTaskAsync(createRequest, cancellationToken);
     }
 
     private async Task<RunInstructionStackDocument> BuildRunInstructionStackAsync(
@@ -741,11 +744,11 @@ public sealed class WorkspaceService(
         string? runOverrideMessage,
         CancellationToken cancellationToken)
     {
-        var settings = await store.GetSettingsAsync(cancellationToken);
+        var settings = await systemStore.GetSettingsAsync(cancellationToken);
         var globalRules = BuildGlobalRules(settings);
 
         var repositoryRuleParts = new List<string>();
-        var repositoryInstructions = await store.GetInstructionsAsync(repository.Id, cancellationToken);
+        var repositoryInstructions = await repositoryStore.GetInstructionsAsync(repository.Id, cancellationToken);
         foreach (var instruction in repositoryInstructions.Where(x => x.Enabled).OrderBy(x => x.Priority))
         {
             if (!string.IsNullOrWhiteSpace(instruction.Content))
@@ -1098,7 +1101,7 @@ public sealed class WorkspaceService(
                 image.Height
             }));
 
-        return await store.AppendWorkspacePromptEntryAsync(
+        return await runStore.AppendWorkspacePromptEntryAsync(
             new WorkspacePromptEntryDocument
             {
                 RepositoryId = repositoryId,

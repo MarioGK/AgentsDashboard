@@ -1,6 +1,7 @@
 @page "/providers"
 @rendermode InteractiveServer
-@inject IOrchestratorStore Store
+@inject IRepositoryStore RepositoryStore
+@inject ISystemStore SystemStore
 @inject SecretCryptoService SecretCrypto
 @inject CredentialValidationService CredentialValidator
 @inject ISnackbar Snackbar
@@ -277,7 +278,7 @@
         try
         {
             _repositories.Clear();
-            var repos = await Store.ListRepositoriesAsync(CancellationToken.None);
+            var repos = await RepositoryStore.ListRepositoriesAsync(CancellationToken.None);
             _repositories.AddRange(repos.Select(r => new RepositoryInfo
             {
                 Id = r.Id,
@@ -294,7 +295,7 @@
     {
         try
         {
-            var settings = await Store.GetSettingsAsync(CancellationToken.None);
+            var settings = await SystemStore.GetSettingsAsync(CancellationToken.None);
             _retentionDaysLogs = settings.RetentionDaysLogs;
             _retentionDaysRuns = settings.RetentionDaysRuns;
             _victoriaMetricsEndpoint = settings.VictoriaMetricsEndpoint;
@@ -311,7 +312,7 @@
     {
         try
         {
-            var secret = await Store.GetProviderSecretAsync(GlobalSecretsRepositoryId, "llmtornado", CancellationToken.None);
+            var secret = await RepositoryStore.GetProviderSecretAsync(GlobalSecretsRepositoryId, "llmtornado", CancellationToken.None);
             _globalLlmTornadoConfigured = secret is not null;
             _globalLlmTornadoUpdatedAt = secret?.UpdatedAtUtc;
             _globalLlmTornadoValue = string.Empty;
@@ -333,7 +334,7 @@
         try
         {
             var encrypted = SecretCrypto.Encrypt(_globalLlmTornadoValue.Trim());
-            await Store.UpsertProviderSecretAsync(
+            await RepositoryStore.UpsertProviderSecretAsync(
                 GlobalSecretsRepositoryId,
                 "llmtornado",
                 encrypted,
@@ -365,7 +366,7 @@
             }
             else if (_globalLlmTornadoConfigured)
             {
-                var secret = await Store.GetProviderSecretAsync(GlobalSecretsRepositoryId, "llmtornado", CancellationToken.None);
+                var secret = await RepositoryStore.GetProviderSecretAsync(GlobalSecretsRepositoryId, "llmtornado", CancellationToken.None);
                 if (secret is not null)
                 {
                     key = SecretCrypto.Decrypt(secret.EncryptedValue);
@@ -438,7 +439,7 @@
     {
         try
         {
-            var secrets = await Store.ListProviderSecretsAsync(_selectedRepositoryId, CancellationToken.None);
+            var secrets = await RepositoryStore.ListProviderSecretsAsync(_selectedRepositoryId, CancellationToken.None);
             foreach (var secret in secrets)
             {
                 var provider = _providers.FirstOrDefault(p => p.Provider == secret.Provider);
@@ -469,7 +470,7 @@
 
         try
         {
-            var settings = await Store.GetHarnessProviderSettingsAsync(_selectedRepositoryId, harness, CancellationToken.None);
+            var settings = await RepositoryStore.GetHarnessProviderSettingsAsync(_selectedRepositoryId, harness, CancellationToken.None);
             if (settings is not null)
             {
                 state.Model = settings.Model;
@@ -512,7 +513,7 @@
                 return;
             }
 
-            await Store.UpsertHarnessProviderSettingsAsync(
+            await RepositoryStore.UpsertHarnessProviderSettingsAsync(
                 _selectedRepositoryId,
                 harness,
                 state.Model,
@@ -675,7 +676,7 @@
         try
         {
             var encrypted = SecretCrypto.Encrypt(provider.Value.Trim());
-            await Store.UpsertProviderSecretAsync(
+            await RepositoryStore.UpsertProviderSecretAsync(
                 _selectedRepositoryId,
                 provider.Provider.Trim().ToLowerInvariant(),
                 encrypted,
@@ -708,7 +709,7 @@
             }
             else if (provider.HasValue)
             {
-                var secret = await Store.GetProviderSecretAsync(
+                var secret = await RepositoryStore.GetProviderSecretAsync(
                     _selectedRepositoryId,
                     provider.Provider.Trim().ToLowerInvariant(),
                     CancellationToken.None);
@@ -747,14 +748,14 @@
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .ToList();
 
-            var settings = await Store.GetSettingsAsync(CancellationToken.None);
+            var settings = await SystemStore.GetSettingsAsync(CancellationToken.None);
             settings.DockerAllowedImages = dockerImages;
             settings.RetentionDaysLogs = _retentionDaysLogs;
             settings.RetentionDaysRuns = _retentionDaysRuns;
             settings.VictoriaMetricsEndpoint = _victoriaMetricsEndpoint;
             settings.VmUiEndpoint = _vmUiEndpoint;
 
-            await Store.UpdateSettingsAsync(settings, CancellationToken.None);
+            await SystemStore.UpdateSettingsAsync(settings, CancellationToken.None);
             Snackbar.Add("System settings saved successfully", Severity.Success);
         }
         catch (Exception ex)

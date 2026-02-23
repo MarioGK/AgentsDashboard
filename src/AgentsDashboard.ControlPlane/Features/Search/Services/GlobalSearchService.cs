@@ -39,7 +39,9 @@ public sealed record GlobalSearchResult(
     IReadOnlyList<GlobalSearchHit> Hits);
 
 public sealed class GlobalSearchService(
-    IOrchestratorStore store,
+    IRepositoryStore repositoryStore,
+    ITaskStore taskStore,
+    IRunStore runStore,
     IWorkspaceAiService workspaceAiService,
     IHarnessOutputParserService parserService,
     ILiteDbVectorBootstrapService liteDbVectorBootstrapService,
@@ -85,7 +87,7 @@ public sealed class GlobalSearchService(
         }
 
         var normalizedLimit = NormalizeLimit(request.Limit);
-        var repositories = await store.ListRepositoriesAsync(cancellationToken);
+        var repositories = await repositoryStore.ListRepositoriesAsync(cancellationToken);
         var scopedRepositories = repositories
             .Where(repo =>
                 string.IsNullOrWhiteSpace(request.RepositoryId) ||
@@ -102,7 +104,7 @@ public sealed class GlobalSearchService(
         var kinds = NormalizeKinds(request.Kinds);
 
         var tasksByRepositoryTasks = scopedRepositories
-            .Select(repository => store.ListTasksAsync(repository.Id, cancellationToken))
+            .Select(repository => taskStore.ListTasksAsync(repository.Id, cancellationToken))
             .ToList();
         await Task.WhenAll(tasksByRepositoryTasks);
 
@@ -241,11 +243,11 @@ public sealed class GlobalSearchService(
     {
         if (!string.IsNullOrWhiteSpace(request.TaskId))
         {
-            return await store.ListRunsByTaskAsync(request.TaskId, 500, cancellationToken);
+            return await runStore.ListRunsByTaskAsync(request.TaskId, 500, cancellationToken);
         }
 
         var runTasks = scopedRepositories
-            .Select(repository => store.ListRunsByRepositoryAsync(repository.Id, cancellationToken))
+            .Select(repository => runStore.ListRunsByRepositoryAsync(repository.Id, cancellationToken))
             .ToList();
         await Task.WhenAll(runTasks);
 
@@ -270,7 +272,7 @@ public sealed class GlobalSearchService(
             .Take(MaxRunLogRuns)
             .ToList();
         var logTasks = selectedRuns
-            .Select(run => store.ListRunLogsAsync(run.Id, cancellationToken))
+            .Select(run => runStore.ListRunLogsAsync(run.Id, cancellationToken))
             .ToList();
         await Task.WhenAll(logTasks);
 
@@ -309,7 +311,7 @@ public sealed class GlobalSearchService(
 
             try
             {
-                var chunks = await store.SearchWorkspaceSemanticAsync(
+                var chunks = await runStore.SearchWorkspaceSemanticAsync(
                     task.Id,
                     queryText,
                     queryEmbeddingPayload,

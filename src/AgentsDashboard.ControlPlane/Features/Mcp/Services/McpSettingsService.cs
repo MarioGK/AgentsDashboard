@@ -3,7 +3,7 @@
 namespace AgentsDashboard.ControlPlane.Features.Mcp.Services;
 
 public sealed class McpSettingsService(
-    IOrchestratorStore store,
+    ISystemStore store,
     McpConfigJsonService jsonService,
     McpSettingsFileService fileService)
 {

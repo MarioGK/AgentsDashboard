@@ -9,7 +9,13 @@ namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 public sealed class OrchestratorStore(
     IOrchestratorRepositorySessionFactory liteDbScopeFactory,
     LiteDbExecutor liteDbExecutor,
-    LiteDbDatabase liteDbDatabase) : IOrchestratorStore, IAsyncDisposable
+    LiteDbDatabase liteDbDatabase) :
+    IRepositoryStore,
+    ITaskStore,
+    IRunStore,
+    IRuntimeStore,
+    ISystemStore,
+    IAsyncDisposable
 {
     private static readonly RunState[] ActiveStates = [RunState.Queued, RunState.Running, RunState.PendingApproval];
     private static readonly Regex PromptSkillTriggerRegex = new("^[a-z0-9-]+$", RegexOptions.Compiled);

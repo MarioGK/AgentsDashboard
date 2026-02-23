@@ -3,81 +3,48 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
-WATCH_PROJECT="${WATCH_PROJECT:-src/AgentsDashboard.ControlPlane}"
-AUTOFIX_LOG_DIR="${AUTOFIX_LOG_DIR:-/tmp/autofix/logs}"
-AUTOFIX_SINGLE_LOG_FILE="${AUTOFIX_SINGLE_LOG_FILE:-${AUTOFIX_LOG_DIR}/autofix.log}"
-WATCH_LOG_FILE="${WATCH_LOG_FILE:-$AUTOFIX_SINGLE_LOG_FILE}"
-MONITOR_NORMAL_LOGS="${MONITOR_NORMAL_LOGS:-false}"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+WATCH_PROJECT="src/AgentsDashboard.ControlPlane"
 
-LOG_DIR="${LOG_DIR:-${AUTOFIX_LOG_DIR}}"
-ERRORS_LOG_DIR="${ERRORS_LOG_DIR:-${AUTOFIX_LOG_DIR}}"
-UNIFIED_ERROR_LOG="${UNIFIED_ERROR_LOG:-$AUTOFIX_SINGLE_LOG_FILE}"
-DOTNET_WATCH_STDOUT_LOG="${DOTNET_WATCH_STDOUT_LOG:-$AUTOFIX_SINGLE_LOG_FILE}"
-DOTNET_WATCH_STDERR_LOG="${DOTNET_WATCH_STDERR_LOG:-$AUTOFIX_SINGLE_LOG_FILE}"
-AUTOFIX_DISPATCH_LOG="${AUTOFIX_DISPATCH_LOG:-$AUTOFIX_SINGLE_LOG_FILE}"
-AUTOFIX_STATE_FILE="${AUTOFIX_STATE_FILE:-${LOG_DIR}/autofix-state.log}"
+AUTOFIX_LOG_DIR="/tmp/autofix/logs"
+AUTOFIX_SINGLE_LOG_FILE="${AUTOFIX_LOG_DIR}/autofix.log"
 
-AUTOFIX_LOCK_DIR="${AUTOFIX_LOCK_DIR:-/tmp/autofix}"
-AUTOFIX_LOCK_FILE="${AUTOFIX_LOCK_FILE:-${AUTOFIX_LOCK_DIR}/launcher.lock}"
+WATCH_LOG_FILE="${AUTOFIX_SINGLE_LOG_FILE}"
+UNIFIED_ERROR_LOG="${AUTOFIX_SINGLE_LOG_FILE}"
+DOTNET_WATCH_STDOUT_LOG="${AUTOFIX_SINGLE_LOG_FILE}"
+DOTNET_WATCH_STDERR_LOG="${AUTOFIX_SINGLE_LOG_FILE}"
+AUTOFIX_DISPATCH_LOG="${AUTOFIX_SINGLE_LOG_FILE}"
+AUTOFIX_STATE_FILE="${AUTOFIX_LOG_DIR}/autofix-state.log"
 
-FIX_COOLDOWN_SECONDS="${FIX_COOLDOWN_SECONDS:-10}"
-COMPILE_COOLDOWN_SECONDS="${COMPILE_COOLDOWN_SECONDS:-30}"
-STARTUP_COOLDOWN_SECONDS="${STARTUP_COOLDOWN_SECONDS:-25}"
-RUNTIME_COOLDOWN_SECONDS="${RUNTIME_COOLDOWN_SECONDS:-10}"
-RESTART_DELAY_SECONDS="${RESTART_DELAY_SECONDS:-3}"
-RESTART_MAX_DELAY_SECONDS="${RESTART_MAX_DELAY_SECONDS:-30}"
+AUTOFIX_LOCK_DIR="/tmp/autofix"
+AUTOFIX_LOCK_FILE="${AUTOFIX_LOCK_DIR}/launcher.lock"
 
-PRESTART_CLEANUP_PORTS="${PRESTART_CLEANUP_PORTS:-5266,5267,5268}"
-PRESTART_CLEANUP_TIMEOUT_SECONDS="${PRESTART_CLEANUP_TIMEOUT_SECONDS:-10}"
-PRESTART_CLEANUP_DOTNET_WATCH="${PRESTART_CLEANUP_DOTNET_WATCH:-true}"
+DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME="192.168.10.101"
 
-HEALTH_CHECK_ENABLED="${HEALTH_CHECK_ENABLED:-true}"
-HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-https://localhost:5266/health}"
-HEALTH_CHECK_MAX_ATTEMPTS="${HEALTH_CHECK_MAX_ATTEMPTS:-10}"
-HEALTH_CHECK_MIN_INTERVAL_SECONDS="${HEALTH_CHECK_MIN_INTERVAL_SECONDS:-5}"
-HEALTH_CHECK_MAX_INTERVAL_SECONDS="${HEALTH_CHECK_MAX_INTERVAL_SECONDS:-10}"
-HEALTH_CHECK_TIMEOUT_SECONDS="${HEALTH_CHECK_TIMEOUT_SECONDS:-5}"
-HEALTH_CONTEXT_LINES="${HEALTH_CONTEXT_LINES:-120}"
-HEALTH_FIX_COOLDOWN_SECONDS="${HEALTH_FIX_COOLDOWN_SECONDS:-90}"
+FIX_COOLDOWN_SECONDS=10
+COMPILE_COOLDOWN_SECONDS=30
+STARTUP_COOLDOWN_SECONDS=25
+RUNTIME_COOLDOWN_SECONDS=10
+RESTART_DELAY_SECONDS=3
+RESTART_MAX_DELAY_SECONDS=30
 
-mkdir -p "$LOG_DIR"
-mkdir -p "$ERRORS_LOG_DIR"
-mkdir -p "$(dirname "$AUTOFIX_DISPATCH_LOG")"
+PRESTART_CLEANUP_PORTS="5266,5267,5268"
+PRESTART_CLEANUP_TIMEOUT_SECONDS=10
+PRESTART_CLEANUP_DOTNET_WATCH=true
+
+mkdir -p "$AUTOFIX_LOG_DIR"
 mkdir -p "$AUTOFIX_LOCK_DIR"
 
 AUTOFIX_LOCK_ACQUIRED=0
-declare -a TAIL_PIDS=()
+TAIL_PID=""
 CURRENT_DOTNET_WATCH_PID=""
-LAST_HEALTH_CHECK_ERROR=""
 declare -A DISPATCH_STORM_GATES=()
 
 declare -g FAILURE_TAXONOMY=""
 declare -g FAILURE_SEVERITY=""
 
-ERROR_LOGS=()
-
-append_log_file() {
-  local file="$1"
-  local existing
-  local seen=false
-
-  for existing in "${ERROR_LOGS[@]}"; do
-    if [[ "$existing" == "$file" ]]; then
-      seen=true
-      break
-    fi
-  done
-
-  if [[ "$seen" == "true" ]]; then
-    return
-  fi
-
-  ERROR_LOGS+=("$file")
-}
-
 log_event() {
-  printf '%s | %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')" "$1" >> "$AUTOFIX_DISPATCH_LOG"
+  printf '%s | AUTOFIX: %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')" "$1" >> "$AUTOFIX_DISPATCH_LOG"
 }
 
 acquire_launcher_lock() {
@@ -107,7 +74,6 @@ acquire_launcher_lock() {
     printf 'script=%s\n' "$SCRIPT_DIR/launch-and-fix.sh"
   } > "$AUTOFIX_LOCK_FILE"
   AUTOFIX_LOCK_ACQUIRED=1
-  trap release_launcher_lock EXIT INT TERM
 }
 
 release_launcher_lock() {
@@ -122,10 +88,31 @@ release_launcher_lock() {
 }
 
 cleanup_watchers() {
-  local pid
-  for pid in "${TAIL_PIDS[@]:-}"; do
-    kill "$pid" 2>/dev/null || true
-  done
+  if [[ -n "$TAIL_PID" ]]; then
+    kill "$TAIL_PID" 2>/dev/null || true
+  fi
+}
+
+stop_dotnet_watch_pid() {
+  local target_pid="$1"
+
+  if [[ -z "$target_pid" ]]; then
+    return
+  fi
+
+  if ! kill -0 "$target_pid" 2>/dev/null; then
+    return
+  fi
+
+  terminate_pid_with_wait "$target_pid" "dotnet-watch"
+}
+
+cleanup_exit() {
+  if [[ -n "$CURRENT_DOTNET_WATCH_PID" ]]; then
+    stop_dotnet_watch_pid "$CURRENT_DOTNET_WATCH_PID" || true
+  fi
+  cleanup_watchers
+  release_launcher_lock
 }
 
 is_fix_candidate_line() {
@@ -148,6 +135,20 @@ is_fix_candidate_line() {
     *"err"*) return 0;;
     *) return 1;;
   esac
+}
+
+is_internal_autofix_line() {
+  local event_line="$1"
+
+  if [[ "$event_line" == AUTOFIX:* ]]; then
+    return 0
+  fi
+
+  if [[ "$event_line" == *"| source="* && "$event_line" == *"| kind="* ]]; then
+    return 0
+  fi
+
+  return 1
 }
 
 normalize_ports() {
@@ -248,20 +249,6 @@ terminate_existing_dotnet_watch() {
   done
 }
 
-stop_dotnet_watch_pid() {
-  local target_pid="$1"
-
-  if [[ -z "$target_pid" ]]; then
-    return
-  fi
-
-  if ! kill -0 "$target_pid" 2>/dev/null; then
-    return
-  fi
-
-  terminate_pid_with_wait "$target_pid" "dotnet-watch"
-}
-
 preflight_cleanup() {
   local port
   local port_listeners
@@ -291,117 +278,6 @@ preflight_cleanup() {
       terminate_pid_with_wait "$listener_pid" "port-${port}"
     done <<< "$port_listeners"
   done <<< "$(normalize_ports)"
-}
-
-run_health_probe() {
-  local response
-  LAST_HEALTH_CHECK_ERROR=""
-
-  if [[ "${HEALTH_CHECK_ENABLED,,}" != "true" ]]; then
-    return 1
-  fi
-
-  if [[ -z "$HEALTH_CHECK_URL" ]]; then
-    LAST_HEALTH_CHECK_ERROR="HEALTH_CHECK_URL is not configured."
-    return 1
-  fi
-
-  if ! response="$(curl --fail --max-time "$HEALTH_CHECK_TIMEOUT_SECONDS" -sk "$HEALTH_CHECK_URL" 2>&1)"; then
-    LAST_HEALTH_CHECK_ERROR="${response//$'\n'/ }"
-    return 1
-  fi
-
-  return 0
-}
-
-health_retry_interval_seconds() {
-  local interval_range
-
-  if [[ "$HEALTH_CHECK_MIN_INTERVAL_SECONDS" -gt "$HEALTH_CHECK_MAX_INTERVAL_SECONDS" ]]; then
-    echo "$HEALTH_CHECK_MIN_INTERVAL_SECONDS"
-    return
-  fi
-
-  interval_range=$((HEALTH_CHECK_MAX_INTERVAL_SECONDS - HEALTH_CHECK_MIN_INTERVAL_SECONDS + 1))
-  if [[ $interval_range -le 1 ]]; then
-    echo "$HEALTH_CHECK_MIN_INTERVAL_SECONDS"
-    return
-  fi
-
-  echo "$((HEALTH_CHECK_MIN_INTERVAL_SECONDS + (RANDOM % interval_range)))"
-}
-
-build_health_context_file() {
-  local failure_count="$1"
-  local failure_reason="$2"
-  local context_file
-  local failure_ts
-
-  context_file="$(mktemp "${LOG_DIR}/autofix-health-context.XXXXXX")"
-  failure_ts="$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')"
-  {
-    echo "Health-check recovery path engaged"
-    echo "timestamp=${failure_ts}"
-    echo "url=${HEALTH_CHECK_URL}"
-    echo "max_attempts=${HEALTH_CHECK_MAX_ATTEMPTS}"
-    echo "failure_count=${failure_count}"
-    echo "failure_reason=${failure_reason}"
-    echo "failure_taxonomy=health"
-    echo "failure_severity=high"
-    echo "watch_project=${WATCH_PROJECT}"
-    echo "watch_pid=${CURRENT_DOTNET_WATCH_PID:-<not-running>}"
-    echo "repo_root=${REPO_ROOT}"
-    echo "watch_log_file=${WATCH_LOG_FILE}"
-    echo "---"
-    if [[ -f "$WATCH_LOG_FILE" ]]; then
-      echo "--- recent ${WATCH_LOG_FILE}"
-      tail -n "$HEALTH_CONTEXT_LINES" "$WATCH_LOG_FILE"
-    fi
-    if [[ -f "$UNIFIED_ERROR_LOG" ]]; then
-      echo "--- recent ${UNIFIED_ERROR_LOG}"
-      tail -n "$HEALTH_CONTEXT_LINES" "$UNIFIED_ERROR_LOG"
-    fi
-    if [[ -f "$DOTNET_WATCH_STDERR_LOG" ]]; then
-      echo "--- recent ${DOTNET_WATCH_STDERR_LOG}"
-      tail -n "$HEALTH_CONTEXT_LINES" "$DOTNET_WATCH_STDERR_LOG"
-    fi
-    if [[ -f "$DOTNET_WATCH_STDOUT_LOG" ]]; then
-      echo "--- recent ${DOTNET_WATCH_STDOUT_LOG}"
-      tail -n "$HEALTH_CONTEXT_LINES" "$DOTNET_WATCH_STDOUT_LOG"
-    fi
-    if [[ -f "$AUTOFIX_DISPATCH_LOG" ]]; then
-      echo "--- recent ${AUTOFIX_DISPATCH_LOG}"
-      tail -n "$HEALTH_CONTEXT_LINES" "$AUTOFIX_DISPATCH_LOG"
-    fi
-    echo "--- running dotnet processes"
-    pgrep -af "dotnet" || true
-  } > "$context_file"
-
-  echo "$context_file"
-}
-
-dispatch_health_fix() {
-  local fail_count="$1"
-  local reason="$2"
-  local context_file="$3"
-  local event_ts
-
-  event_ts="$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')"
-  "$SCRIPT_DIR/fix-dispatcher.sh" \
-    --repo-root "$REPO_ROOT" \
-    --source "$DOTNET_WATCH_STDERR_LOG" \
-    --timestamp "$event_ts" \
-    --line "Health check failed ${fail_count} consecutive attempts for ${HEALTH_CHECK_URL}. ${reason}" \
-    --event-kind "health-check" \
-    --failure-taxonomy "health" \
-    --failure-severity "high" \
-    --failure-signature "health-check:${HEALTH_CHECK_MAX_ATTEMPTS}" \
-    --context-file "$context_file" \
-    --context-lines "$HEALTH_CONTEXT_LINES" \
-    --cooldown "$HEALTH_FIX_COOLDOWN_SECONDS" \
-    --dispatch-log "$AUTOFIX_DISPATCH_LOG" \
-    --unified-log "$UNIFIED_ERROR_LOG" \
-    --state-file "$AUTOFIX_STATE_FILE"
 }
 
 build_event_signature() {
@@ -501,10 +377,6 @@ dispatch_runtime_fix() {
 }
 
 watch_file() {
-  local source_file="$1"
-  local short_source
-  short_source="$(basename "$source_file")"
-
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
     local event_ts
@@ -512,14 +384,17 @@ watch_file() {
 
     event_ts="$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')"
     payload="${line//$'\r'/}"
-    printf '%s | %s | %s\n' "$event_ts" "$short_source" "$payload" >> "$UNIFIED_ERROR_LOG"
+
+    if is_internal_autofix_line "$payload"; then
+      continue
+    fi
 
     if ! is_fix_candidate_line "$payload"; then
       continue
     fi
 
-    dispatch_runtime_fix "$source_file" "$event_ts" "$payload"
-  done < <(tail -n 0 -F -- "$source_file")
+    dispatch_runtime_fix "$WATCH_LOG_FILE" "$event_ts" "$payload"
+  done < <(tail -n 0 -F -- "$WATCH_LOG_FILE")
 }
 
 dotnet_watch_requested_restart() {
@@ -530,71 +405,20 @@ dotnet_watch_requested_restart() {
   [[ "$stdout_tail" == *"Restart is needed to apply the changes."* ]]
 }
 
-sanitize_positive_integer() {
-  local var_value="$1"
-  local default_value="$2"
-
-  if [[ "$var_value" =~ ^[0-9]+$ ]]; then
-    printf '%s' "$var_value"
-    return
-  fi
-
-  printf '%s' "$default_value"
-}
-
 initialize_runtime() {
-  shopt -s nullglob
-  for stale_log in "$LOG_DIR"/*.log "$LOG_DIR"/*.log.*; do
-    rm -f "$stale_log"
-  done
-  shopt -u nullglob
-
-  : > "$UNIFIED_ERROR_LOG"
-  : > "$DOTNET_WATCH_STDOUT_LOG"
-  : > "$DOTNET_WATCH_STDERR_LOG"
   : > "$AUTOFIX_DISPATCH_LOG"
   : > "$AUTOFIX_STATE_FILE"
-  : > "$WATCH_LOG_FILE"
-
-  ERROR_LOGS=("$WATCH_LOG_FILE")
-  append_log_file "$DOTNET_WATCH_STDOUT_LOG"
-  append_log_file "$DOTNET_WATCH_STDERR_LOG"
-
-  if [[ "${MONITOR_NORMAL_LOGS,,}" == "true" ]]; then
-    while IFS= read -r -d '' normal_log; do
-      append_log_file "$normal_log"
-    done < <(
-      find "$LOG_DIR" -maxdepth 1 -type f \( -name '*.log' -o -name '*.log.*' \) -print0
-    )
-  fi
-
-  FIX_COOLDOWN_SECONDS="$(sanitize_positive_integer "${FIX_COOLDOWN_SECONDS}" 10)"
-  COMPILE_COOLDOWN_SECONDS="$(sanitize_positive_integer "${COMPILE_COOLDOWN_SECONDS}" 30)"
-  STARTUP_COOLDOWN_SECONDS="$(sanitize_positive_integer "${STARTUP_COOLDOWN_SECONDS}" 25)"
-  RUNTIME_COOLDOWN_SECONDS="$(sanitize_positive_integer "${RUNTIME_COOLDOWN_SECONDS}" 10)"
-  RESTART_DELAY_SECONDS="$(sanitize_positive_integer "${RESTART_DELAY_SECONDS}" 3)"
-  RESTART_MAX_DELAY_SECONDS="$(sanitize_positive_integer "${RESTART_MAX_DELAY_SECONDS}" 30)"
-  PRESTART_CLEANUP_TIMEOUT_SECONDS="$(sanitize_positive_integer "${PRESTART_CLEANUP_TIMEOUT_SECONDS}" 10)"
-  HEALTH_CHECK_MAX_ATTEMPTS="$(sanitize_positive_integer "${HEALTH_CHECK_MAX_ATTEMPTS}" 10)"
-  HEALTH_CHECK_MIN_INTERVAL_SECONDS="$(sanitize_positive_integer "${HEALTH_CHECK_MIN_INTERVAL_SECONDS}" 5)"
-  HEALTH_CHECK_MAX_INTERVAL_SECONDS="$(sanitize_positive_integer "${HEALTH_CHECK_MAX_INTERVAL_SECONDS}" 10)"
-  HEALTH_CHECK_TIMEOUT_SECONDS="$(sanitize_positive_integer "${HEALTH_CHECK_TIMEOUT_SECONDS}" 5)"
-  HEALTH_CONTEXT_LINES="$(sanitize_positive_integer "${HEALTH_CONTEXT_LINES}" 120)"
-  HEALTH_FIX_COOLDOWN_SECONDS="$(sanitize_positive_integer "${HEALTH_FIX_COOLDOWN_SECONDS}" 90)"
 }
 
 acquire_launcher_lock
 initialize_runtime
+trap cleanup_exit EXIT INT TERM
 
-trap cleanup_watchers EXIT INT TERM
-
-for log_file in "${ERROR_LOGS[@]}"; do
-  watch_file "$log_file" &
-  TAIL_PIDS+=("$!")
-done
+watch_file "$WATCH_LOG_FILE" &
+TAIL_PID="$!"
 
 log_event "Starting dotnet watch for ${WATCH_PROJECT}"
-log_event "Monitoring log files: ${ERROR_LOGS[*]}"
+log_event "Monitoring log file: ${WATCH_LOG_FILE}"
 
 attempt=0
 while true; do
@@ -603,12 +427,11 @@ while true; do
   pre_stdout_lines="$(wc -l < "$DOTNET_WATCH_STDOUT_LOG")"
   watch_exit=0
   restart_requested=false
-  health_probe_failed=false
 
   DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 \
     DOTNET_WATCH_SUPPRESS_EMOJIS=1 \
     DOTNET_USE_POLLING_FILE_WATCHER=1 \
-    DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 \
+    DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME="$DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME" \
     ASPNETCORE_ENVIRONMENT=Development \
     DOTNET_WATCH_NONINTERACTIVE=1 \
     dotnet watch --non-interactive --project "$WATCH_PROJECT" \
@@ -618,45 +441,10 @@ while true; do
 
   log_event "dotnet watch started with pid ${CURRENT_DOTNET_WATCH_PID}"
 
-  if [[ "${HEALTH_CHECK_ENABLED,,}" == "true" ]]; then
-    health_fail_count=0
-    while kill -0 "$CURRENT_DOTNET_WATCH_PID" 2>/dev/null; do
-      if ! run_health_probe; then
-        health_fail_count=$((health_fail_count + 1))
-        log_event "Health probe failed (${health_fail_count}/${HEALTH_CHECK_MAX_ATTEMPTS}) for ${HEALTH_CHECK_URL}: ${LAST_HEALTH_CHECK_ERROR:-unknown}"
-        if [[ "$health_fail_count" -ge "$HEALTH_CHECK_MAX_ATTEMPTS" ]]; then
-          health_probe_failed=true
-          break
-        fi
-      else
-        if [[ "$health_fail_count" -gt 0 ]]; then
-          log_event "Health probe recovered after ${health_fail_count} failed checks."
-        fi
-        health_fail_count=0
-      fi
-
-      sleep "$(health_retry_interval_seconds)"
-    done
-  fi
-
-  if [[ "$health_probe_failed" == "true" ]]; then
-    log_event "Health checks exhausted after ${HEALTH_CHECK_MAX_ATTEMPTS} attempts; launching Codex fix attempt."
-    HEALTH_CONTEXT_FILE="$(build_health_context_file "$health_fail_count" "$LAST_HEALTH_CHECK_ERROR")"
-    dispatch_health_fix "$health_fail_count" "$LAST_HEALTH_CHECK_ERROR" "$HEALTH_CONTEXT_FILE"
-    rm -f "$HEALTH_CONTEXT_FILE"
-
-    stop_dotnet_watch_pid "$CURRENT_DOTNET_WATCH_PID"
-    if wait "$CURRENT_DOTNET_WATCH_PID"; then
-      watch_exit=0
-    else
-      watch_exit=$?
-    fi
+  if wait "$CURRENT_DOTNET_WATCH_PID"; then
+    watch_exit=0
   else
-    if wait "$CURRENT_DOTNET_WATCH_PID"; then
-      watch_exit=0
-    else
-      watch_exit=$?
-    fi
+    watch_exit=$?
   fi
   CURRENT_DOTNET_WATCH_PID=""
 

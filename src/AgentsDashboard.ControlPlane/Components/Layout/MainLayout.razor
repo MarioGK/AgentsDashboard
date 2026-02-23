@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
-@inject IOrchestratorStore Store
+@inject IRunStore RunStore
+@inject IRuntimeStore RuntimeStore
 @inject IGlobalSelectionService SelectionService
 @inject IJSRuntime JS
 @inject IUiRealtimeBroker UiRealtimeBroker
@@ -336,11 +337,11 @@
 
     private async Task LoadCheckHealthAsync()
     {
-        var workers = await Store.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
+        var workers = await RuntimeStore.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
         _totalWorkers = workers.Count;
         _onlineWorkers = workers.Count(w => w.Online);
 
-        var runs = await Store.ListRecentRunsAsync(CancellationToken.None);
+        var runs = await RunStore.ListRecentRunsAsync(CancellationToken.None);
         _activeRuns = runs.Count(r => r.State is RunState.Running or RunState.Queued);
 
         _healthLoaded = true;

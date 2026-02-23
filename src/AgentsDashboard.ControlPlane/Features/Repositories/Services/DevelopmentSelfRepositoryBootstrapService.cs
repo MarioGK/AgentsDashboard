@@ -8,7 +8,7 @@ namespace AgentsDashboard.ControlPlane.Features.Repositories.Services;
 public sealed class DevelopmentSelfRepositoryBootstrapService(
     IHostEnvironment hostEnvironment,
     IBackgroundWorkCoordinator backgroundWorkCoordinator,
-    IOrchestratorStore store,
+    IRepositoryStore store,
     IGitWorkspaceService gitWorkspace,
     ILogger<DevelopmentSelfRepositoryBootstrapService> logger) : IHostedService
 {

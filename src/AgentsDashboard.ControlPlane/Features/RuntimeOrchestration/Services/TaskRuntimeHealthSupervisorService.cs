@@ -7,7 +7,7 @@ namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 public sealed class TaskRuntimeHealthSupervisorService(
     ITaskRuntimeLifecycleManager lifecycleManager,
     IOrchestratorRuntimeSettingsProvider runtimeSettingsProvider,
-    IOrchestratorStore store,
+    IRuntimeStore store,
     INotificationService notificationService,
     IMagicOnionClientFactory clientFactory,
     ILogger<TaskRuntimeHealthSupervisorService> logger) : BackgroundService

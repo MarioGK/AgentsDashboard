@@ -7,7 +7,7 @@ public sealed class DataAccessArchitectureTests
     private static readonly Regex SqlitePattern = new("Sqlite|sqlite-vec|Microsoft\\.Data\\.Sqlite|UseSqlite", RegexOptions.Compiled);
     private static readonly Regex LiteDbUsingPattern = new("^using\\s+LiteDB;", RegexOptions.Compiled | RegexOptions.Multiline);
     private static readonly Regex ScopePattern = new("\\bILiteDbScopeFactory\\b|\\bLiteDbScope\\b|\\bLiteDbScopeFactory\\b|\\bLiteDbSet<", RegexOptions.Compiled);
-    private static readonly Regex OrchestratorStorePattern = new("\\bIOrchestratorStore\\b", RegexOptions.Compiled);
+    private static readonly Regex ControlPlaneStorePattern = new("\\bIControlPlaneStore\\b", RegexOptions.Compiled);
 
     private static readonly HashSet<string> AllowedLiteDbUsingFiles =
     [
@@ -59,12 +59,12 @@ public sealed class DataAccessArchitectureTests
     }
 
     [Test]
-    public async Task VectorAndWorkspaceServices_DoNotReferenceCentralOrchestratorStore()
+    public async Task VectorAndWorkspaceServices_DoNotReferenceAggregateControlPlaneStore()
     {
         var matches = FindMatches(
             rootFolder: "src/AgentsDashboard.ControlPlane/Features",
             includeFile: path => path.EndsWith(".cs", StringComparison.Ordinal),
-            pattern: OrchestratorStorePattern,
+            pattern: ControlPlaneStorePattern,
             pathFilter: RepositoryPatternServiceFiles.Contains);
 
         await Assert.That(matches).IsEmpty();

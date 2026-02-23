@@ -14,7 +14,8 @@ public interface ITaskSemanticEmbeddingService
 }
 
 public sealed class TaskSemanticEmbeddingService(
-    IOrchestratorStore store,
+    ITaskStore taskStore,
+    IRunStore runStore,
     IWorkspaceAiService workspaceAiService,
     ILogger<TaskSemanticEmbeddingService> logger) : BackgroundService, ITaskSemanticEmbeddingService
 {
@@ -91,15 +92,15 @@ public sealed class TaskSemanticEmbeddingService(
             return;
         }
 
-        var task = await store.GetTaskAsync(taskId, cancellationToken);
+        var task = await taskStore.GetTaskAsync(taskId, cancellationToken);
         if (task is null)
         {
             return;
         }
 
         var resolvedRepositoryId = string.IsNullOrWhiteSpace(repositoryId) ? task.RepositoryId : repositoryId;
-        var promptEntriesTask = store.ListWorkspacePromptEntriesForEmbeddingAsync(taskId, cancellationToken);
-        var completedRunsTask = store.ListCompletedRunsByTaskForEmbeddingAsync(taskId, cancellationToken);
+        var promptEntriesTask = runStore.ListWorkspacePromptEntriesForEmbeddingAsync(taskId, cancellationToken);
+        var completedRunsTask = runStore.ListCompletedRunsByTaskForEmbeddingAsync(taskId, cancellationToken);
         await Task.WhenAll(promptEntriesTask, completedRunsTask);
 
         var promptEntries = promptEntriesTask.Result
@@ -152,9 +153,9 @@ public sealed class TaskSemanticEmbeddingService(
                     cancellationToken);
             }
 
-            var runLogsTask = store.ListRunLogsAsync(run.Id, cancellationToken);
-            var structuredEventsTask = store.ListRunStructuredEventsAsync(run.Id, 5000, cancellationToken);
-            var artifactNamesTask = store.ListArtifactsAsync(run.Id, cancellationToken);
+            var runLogsTask = runStore.ListRunLogsAsync(run.Id, cancellationToken);
+            var structuredEventsTask = runStore.ListRunStructuredEventsAsync(run.Id, 5000, cancellationToken);
+            var artifactNamesTask = runStore.ListArtifactsAsync(run.Id, cancellationToken);
             await Task.WhenAll(runLogsTask, structuredEventsTask, artifactNamesTask);
 
             var runLogs = runLogsTask.Result;
@@ -249,7 +250,7 @@ public sealed class TaskSemanticEmbeddingService(
             return;
         }
 
-        await store.UpsertSemanticChunksAsync(taskId, chunks, cancellationToken);
+        await runStore.UpsertSemanticChunksAsync(taskId, chunks, cancellationToken);
         logger.LogDebug(
             "Task semantic embedding upserted {ChunkCount} chunk rows for task {TaskId} in repository {RepositoryId}",
             chunks.Count,
@@ -536,7 +537,7 @@ public sealed class TaskSemanticEmbeddingService(
 
     private async Task<string> ReadArtifactTextAsync(string runId, string artifactName, CancellationToken cancellationToken)
     {
-        await using var stream = await store.GetArtifactAsync(runId, artifactName, cancellationToken);
+        await using var stream = await runStore.GetArtifactAsync(runId, artifactName, cancellationToken);
         if (stream is null)
         {
             return string.Empty;

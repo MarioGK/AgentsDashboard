@@ -39,8 +39,11 @@ internal static class ControlPlaneServiceCollectionExtensions
         }
 
         services.AddSingleton<IOrchestratorRepositorySessionFactory, OrchestratorRepositorySessionFactory>();
-        services.AddSingleton<OrchestratorStore>();
-        services.AddSingleton<IOrchestratorStore>(sp => sp.GetRequiredService<OrchestratorStore>());
+        services.AddSingleton<IRepositoryStore, RepositoryStore>();
+        services.AddSingleton<ITaskStore, TaskStore>();
+        services.AddSingleton<IRunStore, RunStore>();
+        services.AddSingleton<IRuntimeStore, RuntimeStore>();
+        services.AddSingleton<ISystemStore, SystemStore>();
         services.AddHostedService<OrchestratorStoreInitializationService>();
         services.AddSingleton<ILiteDbVectorSearchStatusService, LiteDbVectorSearchStatusService>();
         services.AddSingleton<ILiteDbVectorBootstrapService>(sp =>

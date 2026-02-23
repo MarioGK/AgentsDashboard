@@ -22,13 +22,15 @@ public sealed class AlertingService(
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
 
                 await using var scope = scopeFactory.CreateAsyncScope();
-                var store = scope.ServiceProvider.GetRequiredService<IOrchestratorStore>();
+                var systemStore = scope.ServiceProvider.GetRequiredService<ISystemStore>();
+                var runStore = scope.ServiceProvider.GetRequiredService<IRunStore>();
+                var runtimeStore = scope.ServiceProvider.GetRequiredService<IRuntimeStore>();
 
-                var rules = await store.ListEnabledAlertRulesAsync(stoppingToken);
+                var rules = await systemStore.ListEnabledAlertRulesAsync(stoppingToken);
 
                 foreach (var rule in rules)
                 {
-                    await CheckRuleAsync(rule, store, stoppingToken);
+                    await CheckRuleAsync(rule, systemStore, runStore, runtimeStore, stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -42,7 +44,12 @@ public sealed class AlertingService(
         }
     }
 
-    private async Task CheckRuleAsync(AlertRuleDocument rule, IOrchestratorStore store, CancellationToken cancellationToken)
+    private async Task CheckRuleAsync(
+        AlertRuleDocument rule,
+        ISystemStore systemStore,
+        IRunStore runStore,
+        IRuntimeStore runtimeStore,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -58,17 +65,17 @@ public sealed class AlertingService(
 
             var (triggered, message) = rule.RuleType switch
             {
-                AlertRuleType.MissingHeartbeat => await CheckMissingHeartbeatAsync(rule, store, cancellationToken),
-                AlertRuleType.FailureRateSpike => await CheckFailureRateSpikeAsync(rule, store, cancellationToken),
-                AlertRuleType.QueueBacklog => await CheckQueueBacklogAsync(rule, store, cancellationToken),
-                AlertRuleType.RepeatedPrFailures => await CheckRepeatedPrFailuresAsync(rule, store, cancellationToken),
+                AlertRuleType.MissingHeartbeat => await CheckMissingHeartbeatAsync(rule, runtimeStore, cancellationToken),
+                AlertRuleType.FailureRateSpike => await CheckFailureRateSpikeAsync(rule, runStore, cancellationToken),
+                AlertRuleType.QueueBacklog => await CheckQueueBacklogAsync(rule, runStore, cancellationToken),
+                AlertRuleType.RepeatedPrFailures => await CheckRepeatedPrFailuresAsync(rule, runStore, cancellationToken),
                 _ => (false, string.Empty)
             };
 
             if (triggered)
             {
                 logger.LogWarning("Alert rule {RuleName} triggered: {Message}", rule.Name, message);
-                await FireAlertAsync(rule, message, store, cancellationToken);
+                await FireAlertAsync(rule, message, systemStore, cancellationToken);
             }
         }
         catch (Exception ex)
@@ -79,10 +86,10 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckMissingHeartbeatAsync(
         AlertRuleDocument rule,
-        IOrchestratorStore store,
+        IRuntimeStore runtimeStore,
         CancellationToken cancellationToken)
     {
-        var workers = await store.ListTaskRuntimeRegistrationsAsync(cancellationToken);
+        var workers = await runtimeStore.ListTaskRuntimeRegistrationsAsync(cancellationToken);
         var staleThreshold = DateTime.UtcNow.AddMinutes(-rule.Threshold);
 
         var staleWorkers = workers
@@ -100,10 +107,10 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckFailureRateSpikeAsync(
         AlertRuleDocument rule,
-        IOrchestratorStore store,
+        IRunStore runStore,
         CancellationToken cancellationToken)
     {
-        var failedRuns = await store.ListRunsByStateAsync(RunState.Failed, cancellationToken);
+        var failedRuns = await runStore.ListRunsByStateAsync(RunState.Failed, cancellationToken);
         var windowStart = DateTime.UtcNow.AddMinutes(-rule.WindowMinutes);
         var recentFailures = failedRuns.Where(r => r.EndedAtUtc >= windowStart).ToList();
 
@@ -117,10 +124,10 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckQueueBacklogAsync(
         AlertRuleDocument rule,
-        IOrchestratorStore store,
+        IRunStore runStore,
         CancellationToken cancellationToken)
     {
-        var queuedCount = await store.CountActiveRunsAsync(cancellationToken);
+        var queuedCount = await runStore.CountActiveRunsAsync(cancellationToken);
 
         if (queuedCount >= rule.Threshold)
         {
@@ -132,10 +139,10 @@ public sealed class AlertingService(
 
     private async Task<(bool triggered, string message)> CheckRepeatedPrFailuresAsync(
         AlertRuleDocument rule,
-        IOrchestratorStore store,
+        IRunStore runStore,
         CancellationToken cancellationToken)
     {
-        var failedRuns = await store.ListRunsByStateAsync(RunState.Failed, cancellationToken);
+        var failedRuns = await runStore.ListRunsByStateAsync(RunState.Failed, cancellationToken);
         var windowStart = DateTime.UtcNow.AddMinutes(-rule.WindowMinutes);
 
         var recentFailuresWithPr = failedRuns
@@ -157,7 +164,7 @@ public sealed class AlertingService(
     private async Task FireAlertAsync(
         AlertRuleDocument rule,
         string message,
-        IOrchestratorStore store,
+        ISystemStore systemStore,
         CancellationToken cancellationToken)
     {
         var alertEvent = new AlertEventDocument
@@ -169,10 +176,10 @@ public sealed class AlertingService(
             Resolved = false
         };
 
-        await store.RecordAlertEventAsync(alertEvent, cancellationToken);
+        await systemStore.RecordAlertEventAsync(alertEvent, cancellationToken);
 
         rule.LastFiredAtUtc = DateTime.UtcNow;
-        await store.UpdateAlertRuleAsync(rule.Id, rule, cancellationToken);
+        await systemStore.UpdateAlertRuleAsync(rule.Id, rule, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(rule.WebhookUrl))
         {

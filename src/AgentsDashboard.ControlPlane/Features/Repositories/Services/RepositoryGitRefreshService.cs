@@ -4,7 +4,7 @@
 namespace AgentsDashboard.ControlPlane.Features.Repositories.Services;
 
 public sealed class RepositoryGitRefreshService(
-    IOrchestratorStore store,
+    IRepositoryStore store,
     IGitWorkspaceService gitWorkspaceService,
     ISecretCryptoService secretCrypto,
     IBackgroundWorkCoordinator backgroundWorkCoordinator,

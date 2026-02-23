@@ -14,11 +14,12 @@ using Microsoft.Extensions.Options;
 
 namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 
-public sealed class DockerTaskRuntimeLifecycleManager(
+public sealed partial class DockerTaskRuntimeLifecycleManager(
     IOptions<OrchestratorOptions> options,
     IOrchestratorRuntimeSettingsProvider runtimeSettingsProvider,
     ILeaseCoordinator leaseCoordinator,
-    IOrchestratorStore store,
+    ITaskStore taskStore,
+    IRuntimeStore runtimeStore,
     IMagicOnionClientFactory clientFactory,
     ILogger<DockerTaskRuntimeLifecycleManager> logger) : ITaskRuntimeLifecycleManager
 {
@@ -397,14 +398,14 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         var workers = await ListTaskRuntimesAsync(cancellationToken);
         foreach (var worker in workers.Where(x => x.IsRunning))
         {
-            await store.UpsertTaskRuntimeRegistrationHeartbeatAsync(
+            await runtimeStore.UpsertTaskRuntimeRegistrationHeartbeatAsync(
                 worker.TaskRuntimeId,
                 worker.GrpcEndpoint,
                 worker.ActiveSlots,
                 worker.MaxSlots,
                 cancellationToken);
 
-            await store.UpsertTaskRuntimeStateAsync(
+            await runtimeStore.UpsertTaskRuntimeStateAsync(
                 new TaskRuntimeStateUpdate
                 {
                     RuntimeId = worker.TaskRuntimeId,
@@ -422,7 +423,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 cancellationToken);
         }
 
-        await store.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TimeSpan.FromMinutes(2), cancellationToken);
+        await runtimeStore.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TimeSpan.FromMinutes(2), cancellationToken);
     }
 
     public Task SetScaleOutPausedAsync(bool paused, CancellationToken cancellationToken)
@@ -2030,7 +2031,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
                 inactiveAfterUtc = now.AddMinutes(runtime.TaskRuntimeInactiveTimeoutMinutes);
             }
 
-            await store.UpsertTaskRuntimeStateAsync(
+            await runtimeStore.UpsertTaskRuntimeStateAsync(
                 new TaskRuntimeStateUpdate
                 {
                     RuntimeId = state.TaskRuntimeId,
@@ -2067,7 +2068,7 @@ public sealed class DockerTaskRuntimeLifecycleManager(
             return cached;
         }
 
-        var task = await store.GetTaskAsync(taskId, cancellationToken);
+        var task = await taskStore.GetTaskAsync(taskId, cancellationToken);
         if (task is null || string.IsNullOrWhiteSpace(task.RepositoryId))
         {
             return string.Empty;
@@ -2359,95 +2360,4 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         return (double)usage / limit * 100.0;
     }
 
-    private sealed class ConcurrencySlot(DockerTaskRuntimeLifecycleManager parent, bool isBuild) : IAsyncDisposable
-    {
-        public ValueTask DisposeAsync()
-        {
-            parent.ReleaseConcurrencySlot(isBuild);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    private sealed class TaskRuntimeStateEntry
-    {
-        public required string TaskRuntimeId { get; init; }
-        public required string TaskId { get; set; }
-        public required string ContainerId { get; set; }
-        public required string ContainerName { get; set; }
-        public required bool IsRunning { get; set; }
-        public required TaskRuntimeLifecycleState LifecycleState { get; set; }
-        public required bool IsDraining { get; set; }
-        public required string GrpcEndpoint { get; set; }
-        public required string ProxyEndpoint { get; set; }
-        public required int ActiveSlots { get; set; }
-        public required int MaxSlots { get; set; }
-        public required double CpuPercent { get; set; }
-        public required double MemoryPercent { get; set; }
-        public required DateTime LastActivityUtc { get; set; }
-        public required DateTime StartedAtUtc { get; set; }
-        public required DateTime DrainingSinceUtc { get; set; }
-        public required DateTime LastPressureSampleUtc { get; set; }
-        public required int DispatchCount { get; set; }
-        public required string ImageRef { get; set; }
-        public required string ImageDigest { get; set; }
-        public required string ImageSource { get; set; }
-
-        public static TaskRuntimeStateEntry Create(
-            string workerId,
-            string taskId,
-            string containerId,
-            string containerName,
-            string grpcEndpoint,
-            string proxyEndpoint,
-            bool isRunning,
-            int slotsPerWorker)
-        {
-            return new TaskRuntimeStateEntry
-            {
-                TaskRuntimeId = workerId,
-                TaskId = taskId,
-                ContainerId = containerId,
-                ContainerName = containerName,
-                IsRunning = isRunning,
-                LifecycleState = isRunning ? TaskRuntimeLifecycleState.Ready : TaskRuntimeLifecycleState.Stopped,
-                IsDraining = false,
-                GrpcEndpoint = grpcEndpoint,
-                ProxyEndpoint = proxyEndpoint,
-                ActiveSlots = 0,
-                MaxSlots = slotsPerWorker,
-                CpuPercent = 0,
-                MemoryPercent = 0,
-                LastActivityUtc = DateTime.UtcNow,
-                StartedAtUtc = DateTime.UtcNow,
-                DrainingSinceUtc = DateTime.MinValue,
-                LastPressureSampleUtc = DateTime.MinValue,
-                DispatchCount = 0,
-                ImageRef = string.Empty,
-                ImageDigest = string.Empty,
-                ImageSource = string.Empty
-            };
-        }
-
-        public TaskRuntimeInstance ToRuntime()
-            => new(
-                TaskRuntimeId,
-                TaskId,
-                ContainerId,
-                ContainerName,
-                IsRunning,
-                LifecycleState,
-                IsDraining,
-                GrpcEndpoint,
-                ProxyEndpoint,
-                ActiveSlots,
-                MaxSlots,
-                CpuPercent,
-                MemoryPercent,
-                LastActivityUtc,
-                StartedAtUtc,
-                DispatchCount,
-                ImageRef,
-                ImageDigest,
-                ImageSource);
-    }
 }

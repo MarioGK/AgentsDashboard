@@ -10,7 +10,10 @@ namespace AgentsDashboard.ControlPlane.Features.Runs.Services;
 
 public sealed class RunDispatcher(
     IMagicOnionClientFactory clientFactory,
-    IOrchestratorStore store,
+    IRepositoryStore repositoryStore,
+    ITaskStore taskStore,
+    IRunStore runStore,
+    ISystemStore systemStore,
     ITaskRuntimeLifecycleManager workerLifecycleManager,
     ISecretCryptoService secretCrypto,
     IRunEventPublisher publisher,
@@ -60,7 +63,7 @@ public sealed class RunDispatcher(
 
         if (task.ApprovalProfile.RequireApproval)
         {
-            var pendingRun = await store.MarkRunPendingApprovalAsync(run.Id, cancellationToken);
+            var pendingRun = await runStore.MarkRunPendingApprovalAsync(run.Id, cancellationToken);
             if (pendingRun is not null)
             {
                 await publisher.PublishStatusAsync(pendingRun, cancellationToken);
@@ -74,11 +77,11 @@ public sealed class RunDispatcher(
             ? CreateFallbackRuntimeSettings(opts)
             : await runtimeSettingsProvider.GetAsync(cancellationToken);
 
-        var queuedRuns = await store.CountRunsByStateAsync(RunState.Queued, cancellationToken);
+        var queuedRuns = await runStore.CountRunsByStateAsync(RunState.Queued, cancellationToken);
         if (queuedRuns > runtime.MaxQueueDepth)
         {
             logger.LogWarning("Admission rejected for run {RunId}: queue depth {QueuedRuns} exceeds configured limit {Limit}", run.Id, queuedRuns, runtime.MaxQueueDepth);
-            var rejected = await store.MarkRunCompletedAsync(
+            var rejected = await runStore.MarkRunCompletedAsync(
                 run.Id,
                 succeeded: false,
                 summary: "Admission rejected: queue depth limit reached",
@@ -93,14 +96,14 @@ public sealed class RunDispatcher(
             return false;
         }
 
-        var globalActive = await store.CountActiveRunsAsync(cancellationToken);
+        var globalActive = await runStore.CountActiveRunsAsync(cancellationToken);
         if (globalActive >= opts.MaxGlobalConcurrentRuns)
         {
             logger.LogWarning("Global concurrency limit reached ({Limit}), leaving run {RunId} queued", opts.MaxGlobalConcurrentRuns, run.Id);
             return false;
         }
 
-        var repoActive = await store.CountActiveRunsByRepoAsync(repository.Id, cancellationToken);
+        var repoActive = await runStore.CountActiveRunsByRepoAsync(repository.Id, cancellationToken);
         if (repoActive >= opts.PerRepoConcurrencyLimit)
         {
             logger.LogWarning("Repo concurrency limit reached for {RepositoryId}, leaving run {RunId} queued", repository.Id, run.Id);
@@ -129,7 +132,7 @@ public sealed class RunDispatcher(
 
         try
         {
-            await store.UpdateTaskGitMetadataAsync(
+            await taskStore.UpdateTaskGitMetadataAsync(
                 task.Id,
                 null,
                 string.Empty,
@@ -153,7 +156,7 @@ public sealed class RunDispatcher(
             ["GH_REPO"] = ParseGitHubRepoSlug(repository.GitUrl),
         };
 
-        var secrets = await store.ListProviderSecretsAsync(repository.Id, cancellationToken);
+        var secrets = await repositoryStore.ListProviderSecretsAsync(repository.Id, cancellationToken);
         var secretsDict = new Dictionary<string, string>();
 
         foreach (var secret in secrets)
@@ -181,7 +184,7 @@ public sealed class RunDispatcher(
             }
         }
 
-        var harnessSettings = await store.GetHarnessProviderSettingsAsync(repository.Id, task.Harness, cancellationToken);
+        var harnessSettings = await repositoryStore.GetHarnessProviderSettingsAsync(repository.Id, task.Harness, cancellationToken);
         if (harnessSettings is not null)
         {
             AddHarnessSettingsEnvironmentVariables(envVars, task.Harness, harnessSettings);
@@ -252,7 +255,7 @@ public sealed class RunDispatcher(
         if (!response.Success)
         {
             logger.LogWarning("Worker rejected run {RunId}: {Reason}", run.Id, response.ErrorMessage);
-            var failed = await store.MarkRunCompletedAsync(run.Id, false, $"Dispatch failed: {response.ErrorMessage}", "{}", cancellationToken);
+            var failed = await runStore.MarkRunCompletedAsync(run.Id, false, $"Dispatch failed: {response.ErrorMessage}", "{}", cancellationToken);
             if (failed is not null)
             {
                 await publisher.PublishStatusAsync(failed, cancellationToken);
@@ -262,7 +265,7 @@ public sealed class RunDispatcher(
 
         await workerLifecycleManager.RecordDispatchActivityAsync(workerLease.TaskRuntimeId, cancellationToken);
 
-        var started = await store.MarkRunStartedAsync(
+        var started = await runStore.MarkRunStartedAsync(
             run.Id,
             workerLease.TaskRuntimeId,
             cancellationToken,
@@ -284,19 +287,19 @@ public sealed class RunDispatcher(
             return false;
         }
 
-        var task = await store.GetTaskAsync(taskId, cancellationToken);
+        var task = await taskStore.GetTaskAsync(taskId, cancellationToken);
         if (task is null)
         {
             return false;
         }
 
-        var repository = await store.GetRepositoryAsync(task.RepositoryId, cancellationToken);
+        var repository = await repositoryStore.GetRepositoryAsync(task.RepositoryId, cancellationToken);
         if (repository is null)
         {
             return false;
         }
 
-        var taskRuns = await store.ListRunsByTaskAsync(taskId, TaskRunWindowLimit, cancellationToken) ?? [];
+        var taskRuns = await runStore.ListRunsByTaskAsync(taskId, TaskRunWindowLimit, cancellationToken) ?? [];
         var nextQueuedRun = taskRuns
             .Where(x => x.State == RunState.Queued)
             .OrderBy(x => x.CreatedAtUtc)
@@ -315,7 +318,7 @@ public sealed class RunDispatcher(
     {
         try
         {
-            var run = await store.GetRunAsync(runId, cancellationToken);
+            var run = await runStore.GetRunAsync(runId, cancellationToken);
             if (run is null || string.IsNullOrWhiteSpace(run.TaskRuntimeId))
             {
                 logger.LogWarning("Skipping cancel for run {RunId}: no assigned worker", runId);
@@ -345,7 +348,7 @@ public sealed class RunDispatcher(
             return null;
         }
 
-        var taskRuns = await store.ListRunsByTaskAsync(taskId, TaskRunWindowLimit, cancellationToken) ?? [];
+        var taskRuns = await runStore.ListRunsByTaskAsync(taskId, TaskRunWindowLimit, cancellationToken) ?? [];
         return taskRuns
             .Where(x => IsTaskQueueState(x.State))
             .OrderBy(x => x.CreatedAtUtc)
@@ -478,7 +481,7 @@ public sealed class RunDispatcher(
         string defaultBranch,
         CancellationToken cancellationToken)
     {
-        var systemSettings = await store.GetSettingsAsync(cancellationToken);
+        var systemSettings = await systemStore.GetSettingsAsync(cancellationToken);
         var globalPrefix = string.IsNullOrWhiteSpace(systemSettings.Orchestrator.TaskPromptPrefix)
             ? BuildRequiredTaskPrefix(defaultBranch)
             : systemSettings.Orchestrator.TaskPromptPrefix;
@@ -486,7 +489,7 @@ public sealed class RunDispatcher(
             ? BuildRequiredTaskSuffix(defaultBranch)
             : systemSettings.Orchestrator.TaskPromptSuffix;
 
-        var repoInstructionsFromCollection = await store.GetInstructionsAsync(repository.Id, cancellationToken);
+        var repoInstructionsFromCollection = await repositoryStore.GetInstructionsAsync(repository.Id, cancellationToken);
         var enabledRepoInstructions = repoInstructionsFromCollection.Where(i => i.Enabled).OrderBy(i => i.Priority).ToList();
         var embeddedRepoInstructions = repository.InstructionFiles?.OrderBy(f => f.Order).ToList() ?? [];
 

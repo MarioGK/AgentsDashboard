@@ -63,7 +63,7 @@ public sealed record WorkspaceEmbeddingResult(
     string? Message);
 
 public sealed class WorkspaceAiService(
-    IOrchestratorStore store,
+    IRepositoryStore store,
     ISecretCryptoService secretCryptoService,
     LlmTornadoGatewayService llmTornadoGatewayService,
     IHarnessOutputParserService parserService,

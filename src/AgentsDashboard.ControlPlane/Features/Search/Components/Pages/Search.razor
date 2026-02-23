@@ -1,6 +1,7 @@
 @page "/search"
 @rendermode InteractiveServer
-@inject IOrchestratorStore Store
+@inject IRepositoryStore RepositoryStore
+@inject ITaskStore TaskStore
 @inject IGlobalSearchService SearchService
 @implements IAsyncDisposable
 
@@ -276,7 +277,7 @@
     {
         try
         {
-            _repositories = await Store.ListRepositoriesAsync(CancellationToken.None);
+            _repositories = await RepositoryStore.ListRepositoriesAsync(CancellationToken.None);
             _repositories = _repositories
                 .OrderBy(repository => repository.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -336,7 +337,7 @@
             return;
         }
 
-        var tasks = await Store.ListTasksAsync(_selectedRepositoryId, cancellationToken);
+        var tasks = await TaskStore.ListTasksAsync(_selectedRepositoryId, cancellationToken);
         var orderedTasks = tasks
             .OrderBy(task => task.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();

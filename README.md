@@ -32,13 +32,15 @@ All internal service-to-service communication is MagicOnion-based.
   - `RunStructuredEventDocument`
   - `RunDiffSnapshotDocument`
   - `RunToolProjectionDocument`
-- Alerts, findings, session profiles, skills, task runtimes, MCP settings
+- Alerts, session profiles, skills, task runtimes, MCP settings
 - Semantic chunk indexing/search with LiteDB-backed storage and in-process cosine fallback
 
 ## Persistence
 
 - LiteDB-only persistence (`LiteDB 6.0.0-prerelease.75`)
 - Repository access through `IRepository<>` abstractions
+- ControlPlane orchestration data split by domain store interfaces:
+  - `IRepositoryStore`, `ITaskStore`, `IRunStore`, `IRuntimeStore`, `ISystemStore`
 - DB access serialized through the LiteDB execution path
 - Run artifacts and workspace image payloads stored in LiteDB file storage
 - Workspace image uploads are compressed to lossless WebP before persistence

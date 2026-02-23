@@ -8,7 +8,9 @@
 @using System.Text.Json
 @using AgentsDashboard.ControlPlane.Components.Shared
 
-@inject IOrchestratorStore Store
+@inject IRepositoryStore RepositoryStore
+@inject ITaskStore TaskStore
+@inject IRunStore RunStore
 @inject RunDispatcher Dispatcher
 @inject IUiRealtimeBroker UiRealtimeBroker
 @inject IRunStructuredViewService RunStructuredViewService
@@ -458,27 +460,27 @@ else
             return;
         }
 
-        _run = await Store.GetRunAsync(Id, CancellationToken.None);
+        _run = await RunStore.GetRunAsync(Id, CancellationToken.None);
         if (_run is null)
         {
             return;
         }
 
-        _logs = await Store.ListRunLogsAsync(_run.Id, CancellationToken.None);
-        _storedArtifacts = await Store.ListArtifactsAsync(_run.Id, CancellationToken.None);
-        _structuredEvents = await Store.ListRunStructuredEventsAsync(_run.Id, 4000, CancellationToken.None);
-        _toolProjections = await Store.ListRunToolProjectionsAsync(_run.Id, CancellationToken.None);
-        _diffSnapshot = await Store.GetLatestRunDiffSnapshotAsync(_run.Id, CancellationToken.None);
+        _logs = await RunStore.ListRunLogsAsync(_run.Id, CancellationToken.None);
+        _storedArtifacts = await RunStore.ListArtifactsAsync(_run.Id, CancellationToken.None);
+        _structuredEvents = await RunStore.ListRunStructuredEventsAsync(_run.Id, 4000, CancellationToken.None);
+        _toolProjections = await RunStore.ListRunToolProjectionsAsync(_run.Id, CancellationToken.None);
+        _diffSnapshot = await RunStore.GetLatestRunDiffSnapshotAsync(_run.Id, CancellationToken.None);
         _structuredView = await RunStructuredViewService.GetViewAsync(_run.Id, CancellationToken.None);
 
-        _repositoryRuns = await Store.ListRunsByRepositoryAsync(_run.RepositoryId, CancellationToken.None);
+        _repositoryRuns = await RunStore.ListRunsByRepositoryAsync(_run.RepositoryId, CancellationToken.None);
         _runsById.Clear();
         foreach (var run in _repositoryRuns)
         {
             _runsById[run.Id] = run;
         }
 
-        var repositoryTasks = await Store.ListTasksAsync(_run.RepositoryId, CancellationToken.None);
+        var repositoryTasks = await TaskStore.ListTasksAsync(_run.RepositoryId, CancellationToken.None);
         _tasksById.Clear();
         foreach (var task in repositoryTasks)
         {
@@ -501,9 +503,9 @@ else
             return;
         }
 
-        _structuredEvents = await Store.ListRunStructuredEventsAsync(_run.Id, 4000, CancellationToken.None);
-        _toolProjections = await Store.ListRunToolProjectionsAsync(_run.Id, CancellationToken.None);
-        _diffSnapshot = await Store.GetLatestRunDiffSnapshotAsync(_run.Id, CancellationToken.None);
+        _structuredEvents = await RunStore.ListRunStructuredEventsAsync(_run.Id, 4000, CancellationToken.None);
+        _toolProjections = await RunStore.ListRunToolProjectionsAsync(_run.Id, CancellationToken.None);
+        _diffSnapshot = await RunStore.GetLatestRunDiffSnapshotAsync(_run.Id, CancellationToken.None);
         _structuredView = await RunStructuredViewService.GetViewAsync(_run.Id, CancellationToken.None);
     }
 
@@ -646,8 +648,8 @@ else
             return;
         }
 
-        var artifacts = await Store.ListArtifactsAsync(_run.Id, CancellationToken.None);
-        var instructionStack = await Store.GetRunInstructionStackAsync(_run.Id, CancellationToken.None);
+        var artifacts = await RunStore.ListArtifactsAsync(_run.Id, CancellationToken.None);
+        var instructionStack = await RunStore.GetRunInstructionStackAsync(_run.Id, CancellationToken.None);
         var payload = new
         {
             exportedAtUtc = DateTime.UtcNow,
@@ -670,7 +672,7 @@ else
             WriteIndented = true
         });
 
-        await Store.UpsertRunShareBundleAsync(new RunShareBundleDocument
+        await RunStore.UpsertRunShareBundleAsync(new RunShareBundleDocument
         {
             RunId = _run.Id,
             RepositoryId = _run.RepositoryId,
@@ -706,7 +708,7 @@ else
         var taskId = _run.TaskId;
 
         await Dispatcher.CancelAsync(_run.Id, CancellationToken.None);
-        var cancelled = await Store.MarkRunCancelledAsync(_run.Id, CancellationToken.None);
+        var cancelled = await RunStore.MarkRunCancelledAsync(_run.Id, CancellationToken.None);
         if (cancelled is not null)
         {
             _run = cancelled;
@@ -738,20 +740,20 @@ else
             return;
         }
 
-        var approved = await Store.ApproveRunAsync(_run.Id, CancellationToken.None);
+        var approved = await RunStore.ApproveRunAsync(_run.Id, CancellationToken.None);
         if (approved is null)
         {
             return;
         }
 
-        var task = await Store.GetTaskAsync(approved.TaskId, CancellationToken.None);
+        var task = await TaskStore.GetTaskAsync(approved.TaskId, CancellationToken.None);
         if (task is null)
         {
             _run = approved;
             return;
         }
 
-        var repository = await Store.GetRepositoryAsync(task.RepositoryId, CancellationToken.None);
+        var repository = await RepositoryStore.GetRepositoryAsync(task.RepositoryId, CancellationToken.None);
         if (repository is null)
         {
             _run = approved;
@@ -770,7 +772,7 @@ else
         }
 
         var taskId = _run.TaskId;
-        var rejected = await Store.RejectRunAsync(_run.Id, CancellationToken.None);
+        var rejected = await RunStore.RejectRunAsync(_run.Id, CancellationToken.None);
         if (rejected is not null)
         {
             _run = rejected;
@@ -786,7 +788,7 @@ else
             return;
         }
 
-        await using var stream = await Store.GetArtifactAsync(_run.Id, artifact, CancellationToken.None);
+        await using var stream = await RunStore.GetArtifactAsync(_run.Id, artifact, CancellationToken.None);
         if (stream is null)
         {
             return;

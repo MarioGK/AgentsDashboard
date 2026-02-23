@@ -70,7 +70,7 @@ public sealed record OrchestratorRuntimeSettings(
     int PressureSampleWindowSeconds);
 
 public sealed class OrchestratorRuntimeSettingsProvider(
-    IOrchestratorStore store,
+    ISystemStore store,
     IOptions<OrchestratorOptions> options) : IOrchestratorRuntimeSettingsProvider
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(10);

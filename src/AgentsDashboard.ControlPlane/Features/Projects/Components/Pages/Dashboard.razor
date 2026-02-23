@@ -1,6 +1,9 @@
 @page "/overview"
 @rendermode InteractiveServer
-@inject IOrchestratorStore Store
+@inject IRepositoryStore RepositoryStore
+@inject ITaskStore TaskStore
+@inject IRunStore RunStore
+@inject IRuntimeStore RuntimeStore
 @inject IGlobalSelectionService SelectionService
 @inject ITaskRuntimeLifecycleManager WorkerLifecycle
 @inject TaskRuntimeHealthSupervisorService TaskRuntimeHealthSupervisor
@@ -673,15 +676,15 @@ else
 
         try
         {
-            _repositories = await Store.ListRepositoriesAsync(CancellationToken.None);
+            _repositories = await RepositoryStore.ListRepositoriesAsync(CancellationToken.None);
 
             if (SelectionService.SelectedRepositoryId is not null)
             {
-                _runs = await Store.ListRunsByRepositoryAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
+                _runs = await RunStore.ListRunsByRepositoryAsync(SelectionService.SelectedRepositoryId, CancellationToken.None);
             }
             else
             {
-                _runs = await Store.ListRecentRunsAsync(CancellationToken.None);
+                _runs = await RunStore.ListRecentRunsAsync(CancellationToken.None);
             }
 
             _activeRuns = _runs.Count(r => TaskRunStatusPresentation.FromRunState(r.State).IsWorking);
@@ -749,9 +752,9 @@ else
         _workerCpuMaxPercent = 0;
         _workerMemoryAvgPercent = 0;
         _workerMemoryMaxPercent = 0;
-        _taskRuntimeTelemetry = await Store.GetTaskRuntimeTelemetryAsync(CancellationToken.None);
+        _taskRuntimeTelemetry = await RuntimeStore.GetTaskRuntimeTelemetryAsync(CancellationToken.None);
 
-        var runtimeRegistrations = await Store.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
+        var runtimeRegistrations = await RuntimeStore.ListTaskRuntimeRegistrationsAsync(CancellationToken.None);
         _workerContainersTotal = runtimeRegistrations.Count;
         _workerContainersRunning = runtimeRegistrations.Count(w => w.Online);
         _workerOfflineCount = _workerContainersTotal - _workerContainersRunning;
@@ -797,7 +800,7 @@ else
     {
         try
         {
-            var snapshot = await Store.GetStorageSnapshotAsync(CancellationToken.None);
+            var snapshot = await TaskStore.GetStorageSnapshotAsync(CancellationToken.None);
             _dbSnapshotAvailable = snapshot.Exists;
             _databasePath = string.IsNullOrWhiteSpace(snapshot.DatabasePath)
                 ? "Unknown path"

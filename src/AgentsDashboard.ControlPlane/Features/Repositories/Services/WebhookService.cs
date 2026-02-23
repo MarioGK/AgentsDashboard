@@ -4,7 +4,7 @@
 
 namespace AgentsDashboard.ControlPlane.Features.Repositories.Services;
 
-public sealed class WebhookService(IOrchestratorStore store, ILogger<WebhookService> logger)
+public sealed class WebhookService(IRepositoryStore store, ILogger<WebhookService> logger)
 {
     public async Task<WebhookRegistration> RegisterAsync(CreateWebhookRequest request, CancellationToken cancellationToken)
     {
