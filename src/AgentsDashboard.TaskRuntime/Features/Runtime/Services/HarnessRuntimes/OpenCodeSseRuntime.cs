@@ -535,8 +535,14 @@ public sealed class OpenCodeSseRuntime(
                 ["diffFileCount"] = distinctFiles.Count.ToString(CultureInfo.InvariantCulture),
                 ["diffAdditions"] = additions.ToString(CultureInfo.InvariantCulture),
                 ["diffDeletions"] = deletions.ToString(CultureInfo.InvariantCulture),
+                ["mcpConfigPresent"] = (!string.IsNullOrWhiteSpace(request.McpConfigSnapshotJson)).ToString().ToLowerInvariant(),
             }
         };
+
+        if (!string.IsNullOrWhiteSpace(request.McpConfigFilePath))
+        {
+            envelope.Metadata["mcpConfigPath"] = request.McpConfigFilePath;
+        }
 
         if (!string.IsNullOrWhiteSpace(assistantMessageId))
         {

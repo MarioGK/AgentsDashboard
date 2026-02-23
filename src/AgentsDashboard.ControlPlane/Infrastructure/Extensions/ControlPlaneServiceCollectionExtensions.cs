@@ -94,6 +94,10 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddSingleton<IHostFileExplorerService, HostFileExplorerService>();
         services.AddSingleton<ImageBuilderService>();
         services.AddSingleton<CredentialValidationService>();
+        services.AddSingleton<McpConfigJsonService>();
+        services.AddSingleton<McpSettingsFileService>();
+        services.AddSingleton<McpSettingsService>();
+        services.AddSingleton<McpRegistryCatalogService>();
         services.AddHostedService<RepositoryGitRefreshService>();
         services.AddSingleton<IContainerReaper, ContainerReaper>();
 

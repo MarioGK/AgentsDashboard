@@ -15,6 +15,7 @@ public sealed partial class HarnessExecutor(
     HarnessAdapterFactory adapterFactory,
     IHarnessRuntimeFactory runtimeFactory,
     IArtifactExtractor artifactExtractor,
+    McpRuntimeBootstrapService mcpRuntimeBootstrap,
     ILogger<HarnessExecutor> logger) : IHarnessExecutor
 {
     private const string MainBranch = "main";
@@ -167,6 +168,21 @@ public sealed partial class HarnessExecutor(
         try
         {
             var runtimeRequest = BuildRuntimeRequest(request, workspaceHostPath);
+            var mcpBootstrap = await mcpRuntimeBootstrap.PrepareAsync(
+                request,
+                runtimeRequest.WorkspacePath,
+                runtimeRequest.Environment,
+                cancellationToken);
+
+            if (mcpBootstrap.HasConfig)
+            {
+                runtimeRequest = runtimeRequest with
+                {
+                    McpConfigSnapshotJson = mcpBootstrap.EffectiveJson,
+                    McpConfigFilePath = mcpBootstrap.ConfigPath
+                };
+            }
+
             var runtimeSelection = runtimeFactory.Select(runtimeRequest);
             logger.LogDebug(
                 "Harness runtime selected {@Data}",
@@ -181,6 +197,9 @@ public sealed partial class HarnessExecutor(
                     EnvironmentVarCount = runtimeRequest.Environment.Count,
                     ContainerLabelCount = runtimeRequest.ContainerLabels.Count,
                     WorkspacePath = runtimeRequest.WorkspacePath,
+                    McpConfigPath = mcpBootstrap.ConfigPath,
+                    McpConfigValid = mcpBootstrap.IsValid,
+                    McpInstallActions = mcpBootstrap.InstallActionCount,
                 });
 
             IHarnessEventSink sink = onLogChunk is null
@@ -230,6 +249,18 @@ public sealed partial class HarnessExecutor(
             envelope.TaskId = request.TaskId;
             envelope.Metadata["runtimeMode"] = runtimeSelection.RuntimeMode;
             envelope.Metadata["runtimeName"] = runtimeName;
+            envelope.Metadata["mcpConfigPresent"] = mcpBootstrap.HasConfig.ToString().ToLowerInvariant();
+            envelope.Metadata["mcpConfigValid"] = mcpBootstrap.IsValid.ToString().ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(mcpBootstrap.ConfigPath))
+            {
+                envelope.Metadata["mcpConfigPath"] = mcpBootstrap.ConfigPath;
+            }
+
+            envelope.Metadata["mcpInstallActionCount"] = mcpBootstrap.InstallActionCount.ToString();
+            if (mcpBootstrap.Diagnostics.Count > 0)
+            {
+                envelope.Metadata["mcpDiagnostics"] = string.Join(" | ", mcpBootstrap.Diagnostics.Take(4));
+            }
 
             if (structuredRuntimeFailure is not null)
             {
@@ -423,6 +454,7 @@ public sealed partial class HarnessExecutor(
             ImageAttachments = request.ImageAttachments is { Count: > 0 } ? [.. request.ImageAttachments] : [],
             PreferNativeMultimodal = request.PreferNativeMultimodal,
             MultimodalFallbackPolicy = request.MultimodalFallbackPolicy,
+            McpConfigSnapshotJson = request.McpConfigSnapshotJson,
         };
     }
 

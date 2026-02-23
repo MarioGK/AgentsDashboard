@@ -21,6 +21,11 @@ public interface IWorkspaceService
         WorkspacePromptSubmissionRequest request,
         CancellationToken cancellationToken);
 
+    Task<WorkspaceQuestionAnswersSubmissionResult> SubmitQuestionAnswersAsync(
+        string repositoryId,
+        WorkspaceQuestionAnswersSubmissionRequest request,
+        CancellationToken cancellationToken);
+
     void NotifyRunEvent(string runId, string eventType, DateTime eventTimestampUtc);
 
     Task<WorkspaceSummaryRefreshResult> RefreshRunSummaryAsync(
@@ -67,6 +72,21 @@ public sealed record WorkspacePromptSubmissionResult(
     bool DispatchAccepted,
     string Message,
     TaskDocument? Task,
+    RunDocument? Run);
+
+public sealed record WorkspaceQuestionAnswerInput(
+    string QuestionId,
+    string SelectedOptionValue,
+    string AdditionalContext);
+
+public sealed record WorkspaceQuestionAnswersSubmissionRequest(
+    string QuestionRequestId,
+    IReadOnlyList<WorkspaceQuestionAnswerInput> Answers);
+
+public sealed record WorkspaceQuestionAnswersSubmissionResult(
+    bool Success,
+    string Message,
+    RunQuestionRequestDocument? QuestionRequest,
     RunDocument? Run);
 
 public sealed record WorkspaceSummaryRefreshResult(
@@ -404,6 +424,137 @@ public sealed class WorkspaceService(
                 : $"Run {run.Id} created and queued.",
             Task: task,
             Run: run);
+    }
+
+    public async Task<WorkspaceQuestionAnswersSubmissionResult> SubmitQuestionAnswersAsync(
+        string repositoryId,
+        WorkspaceQuestionAnswersSubmissionRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(repositoryId) ||
+            string.IsNullOrWhiteSpace(request.QuestionRequestId))
+        {
+            return new WorkspaceQuestionAnswersSubmissionResult(
+                Success: false,
+                Message: "Question request could not be resolved.",
+                QuestionRequest: null,
+                Run: null);
+        }
+
+        var questionRequest = await store.GetRunQuestionRequestAsync(request.QuestionRequestId, cancellationToken);
+        if (questionRequest is null ||
+            !string.Equals(questionRequest.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase))
+        {
+            return new WorkspaceQuestionAnswersSubmissionResult(
+                Success: false,
+                Message: "Question request was not found for this repository.",
+                QuestionRequest: null,
+                Run: null);
+        }
+
+        if (questionRequest.Status == RunQuestionRequestStatus.Answered)
+        {
+            return new WorkspaceQuestionAnswersSubmissionResult(
+                Success: false,
+                Message: "This question request was already answered.",
+                QuestionRequest: questionRequest,
+                Run: null);
+        }
+
+        var task = await store.GetTaskAsync(questionRequest.TaskId, cancellationToken);
+        if (task is null || !string.Equals(task.RepositoryId, repositoryId, StringComparison.OrdinalIgnoreCase))
+        {
+            return new WorkspaceQuestionAnswersSubmissionResult(
+                Success: false,
+                Message: "Task for this question request was not found.",
+                QuestionRequest: questionRequest,
+                Run: null);
+        }
+
+        var submittedAnswersByQuestionId = request.Answers
+            .Where(answer => !string.IsNullOrWhiteSpace(answer.QuestionId))
+            .GroupBy(answer => answer.QuestionId.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+        var normalizedAnswers = new List<RunQuestionAnswerDocument>();
+        foreach (var question in questionRequest.Questions.OrderBy(x => x.Order))
+        {
+            var questionId = question.Id?.Trim() ?? string.Empty;
+            if (questionId.Length == 0 || !submittedAnswersByQuestionId.TryGetValue(questionId, out var submitted))
+            {
+                return new WorkspaceQuestionAnswersSubmissionResult(
+                    Success: false,
+                    Message: "All questions must be answered before submitting.",
+                    QuestionRequest: questionRequest,
+                    Run: null);
+            }
+
+            var selectedOptionValue = submitted.SelectedOptionValue?.Trim() ?? string.Empty;
+            if (selectedOptionValue.Length == 0)
+            {
+                return new WorkspaceQuestionAnswersSubmissionResult(
+                    Success: false,
+                    Message: "All questions must be answered before submitting.",
+                    QuestionRequest: questionRequest,
+                    Run: null);
+            }
+
+            var option = question.Options.FirstOrDefault(candidate =>
+                string.Equals(candidate.Value, selectedOptionValue, StringComparison.OrdinalIgnoreCase));
+            if (option is null)
+            {
+                return new WorkspaceQuestionAnswersSubmissionResult(
+                    Success: false,
+                    Message: $"Selected option is invalid for question '{questionId}'.",
+                    QuestionRequest: questionRequest,
+                    Run: null);
+            }
+
+            normalizedAnswers.Add(new RunQuestionAnswerDocument
+            {
+                QuestionId = questionId,
+                SelectedOptionValue = option.Value,
+                SelectedOptionLabel = option.Label,
+                SelectedOptionDescription = option.Description,
+                AdditionalContext = submitted.AdditionalContext?.Trim() ?? string.Empty,
+            });
+        }
+
+        var answerPrompt = BuildQuestionAnswerPrompt(questionRequest, normalizedAnswers);
+        var submission = await SubmitPromptAsync(
+            repositoryId,
+            new WorkspacePromptSubmissionRequest(
+                Prompt: AppendPromptSuffix(task.Prompt, answerPrompt),
+                TaskId: task.Id,
+                Harness: task.Harness,
+                Command: task.Command,
+                ForceNewRun: true,
+                UserMessage: answerPrompt,
+                ModeOverride: HarnessExecutionMode.Plan,
+                Images: null,
+                PreferNativeMultimodal: true,
+                SessionProfileId: null),
+            cancellationToken);
+
+        if (!submission.Success || submission.Run is null)
+        {
+            return new WorkspaceQuestionAnswersSubmissionResult(
+                Success: false,
+                Message: submission.Message,
+                QuestionRequest: questionRequest,
+                Run: submission.Run);
+        }
+
+        var updatedQuestionRequest = await store.MarkRunQuestionRequestAnsweredAsync(
+            questionRequest.Id,
+            normalizedAnswers,
+            submission.Run.Id,
+            cancellationToken);
+
+        return new WorkspaceQuestionAnswersSubmissionResult(
+            Success: true,
+            Message: $"Answers submitted via run {submission.Run.Id}.",
+            QuestionRequest: updatedQuestionRequest ?? questionRequest,
+            Run: submission.Run);
     }
 
     public void NotifyRunEvent(string runId, string eventType, DateTime eventTimestampUtc)
@@ -1038,6 +1189,41 @@ public sealed class WorkspaceService(
         }
 
         return $"{prompt.TrimEnd()}\n\n{suffix.Trim()}";
+    }
+
+    private static string BuildQuestionAnswerPrompt(
+        RunQuestionRequestDocument questionRequest,
+        IReadOnlyList<RunQuestionAnswerDocument> answers)
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            type = "plan_mode_question_answers",
+            questionRequestId = questionRequest.Id,
+            sourceRunId = questionRequest.RunId,
+            sourceToolCallId = questionRequest.SourceToolCallId,
+            sourceSequence = questionRequest.SourceSequence,
+            answers = answers.Select(answer => new
+            {
+                questionId = answer.QuestionId,
+                selectedOptionValue = answer.SelectedOptionValue,
+                selectedOptionLabel = answer.SelectedOptionLabel,
+                selectedOptionDescription = answer.SelectedOptionDescription,
+                additionalContext = answer.AdditionalContext,
+            })
+        }, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+
+        var builder = new StringBuilder();
+        builder.AppendLine("Plan mode follow-up answers for pending tool questions.");
+        builder.AppendLine($"QuestionRequestId: {questionRequest.Id}");
+        builder.AppendLine($"SourceRunId: {questionRequest.RunId}");
+        builder.AppendLine();
+        builder.AppendLine("```json");
+        builder.AppendLine(payload);
+        builder.AppendLine("```");
+        return builder.ToString().Trim();
     }
 
     private sealed class SummaryRefreshState

@@ -68,6 +68,14 @@ public interface IOrchestratorStore
     Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptHistoryAsync(string taskId, int limit, CancellationToken cancellationToken);
     Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptEntriesForEmbeddingAsync(string taskId, CancellationToken cancellationToken);
     Task<WorkspacePromptEntryDocument> AppendWorkspacePromptEntryAsync(WorkspacePromptEntryDocument promptEntry, CancellationToken cancellationToken);
+    Task<RunQuestionRequestDocument?> UpsertRunQuestionRequestAsync(RunQuestionRequestDocument questionRequest, CancellationToken cancellationToken);
+    Task<List<RunQuestionRequestDocument>> ListPendingRunQuestionRequestsAsync(string taskId, string runId, CancellationToken cancellationToken);
+    Task<RunQuestionRequestDocument?> GetRunQuestionRequestAsync(string questionRequestId, CancellationToken cancellationToken);
+    Task<RunQuestionRequestDocument?> MarkRunQuestionRequestAnsweredAsync(
+        string questionRequestId,
+        IReadOnlyList<RunQuestionAnswerDocument> answers,
+        string answeredRunId,
+        CancellationToken cancellationToken);
     Task<RunAiSummaryDocument> UpsertRunAiSummaryAsync(RunAiSummaryDocument summary, CancellationToken cancellationToken);
     Task<RunAiSummaryDocument?> GetRunAiSummaryAsync(string runId, CancellationToken cancellationToken);
     Task<ReliabilityMetrics> GetReliabilityMetricsByRepositoryAsync(string repositoryId, CancellationToken cancellationToken);
@@ -150,6 +158,10 @@ public interface IOrchestratorStore
 
     Task<SystemSettingsDocument> GetSettingsAsync(CancellationToken cancellationToken);
     Task<SystemSettingsDocument> UpdateSettingsAsync(SystemSettingsDocument settings, CancellationToken cancellationToken);
+    Task<List<McpRegistryServerDocument>> ListMcpRegistryServersAsync(CancellationToken cancellationToken);
+    Task ReplaceMcpRegistryServersAsync(List<McpRegistryServerDocument> servers, CancellationToken cancellationToken);
+    Task<McpRegistryStateDocument> GetMcpRegistryStateAsync(CancellationToken cancellationToken);
+    Task<McpRegistryStateDocument> UpsertMcpRegistryStateAsync(McpRegistryStateDocument state, CancellationToken cancellationToken);
     Task<bool> TryAcquireLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken);
     Task<bool> RenewLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken);
     Task ReleaseLeaseAsync(string leaseName, string ownerId, CancellationToken cancellationToken);

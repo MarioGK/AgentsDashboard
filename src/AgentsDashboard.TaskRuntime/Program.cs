@@ -61,6 +61,7 @@ builder.Services.AddSingleton<WorkspacePathGuard>();
 builder.Services.AddSingleton<TaskRuntimeFileSystemService>();
 builder.Services.AddSingleton<TaskRuntimeCommandService>();
 builder.Services.AddSingleton<SecretRedactor>();
+builder.Services.AddSingleton<McpRuntimeBootstrapService>();
 builder.Services.AddSingleton<HarnessAdapterFactory>();
 builder.Services.AddSingleton<CodexAppServerRuntime>();
 builder.Services.AddSingleton<OpenCodeSseRuntime>();

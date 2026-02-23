@@ -7,6 +7,7 @@ public sealed class OrchestratorRepositorySessionFactory(
     IRepository<TaskDocument> tasks,
     IRepository<RunDocument> runs,
     IRepository<WorkspacePromptEntryDocument> workspacePromptEntries,
+    IRepository<RunQuestionRequestDocument> runQuestionRequests,
     IRepository<SemanticChunkDocument> semanticChunks,
     IRepository<RunAiSummaryDocument> runAiSummaries,
     IRepository<RunLogEvent> runEvents,
@@ -28,6 +29,8 @@ public sealed class OrchestratorRepositorySessionFactory(
     IRepository<RepositoryInstructionDocument> repositoryInstructions,
     IRepository<HarnessProviderSettingsDocument> harnessProviderSettings,
     IRepository<PromptSkillDocument> promptSkills,
+    IRepository<McpRegistryServerDocument> mcpRegistryServers,
+    IRepository<McpRegistryStateDocument> mcpRegistryState,
     LiteDbExecutor liteDbExecutor,
     LiteDbDatabase liteDbDatabase)
     : IOrchestratorRepositorySessionFactory
@@ -41,6 +44,7 @@ public sealed class OrchestratorRepositorySessionFactory(
             tasks,
             runs,
             workspacePromptEntries,
+            runQuestionRequests,
             semanticChunks,
             runAiSummaries,
             runEvents,
@@ -62,6 +66,8 @@ public sealed class OrchestratorRepositorySessionFactory(
             repositoryInstructions,
             harnessProviderSettings,
             promptSkills,
+            mcpRegistryServers,
+            mcpRegistryState,
             liteDbExecutor,
             liteDbDatabase);
 

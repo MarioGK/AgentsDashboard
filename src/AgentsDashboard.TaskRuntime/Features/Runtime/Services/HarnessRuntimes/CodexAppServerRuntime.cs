@@ -425,8 +425,14 @@ public sealed partial class CodexAppServerRuntime(
                     ["reasoningChars"] = reasoningBuffer.Length.ToString(CultureInfo.InvariantCulture),
                     ["commandOutputChars"] = commandBuffer.Length.ToString(CultureInfo.InvariantCulture),
                     ["diffChars"] = latestDiff.Length.ToString(CultureInfo.InvariantCulture),
+                    ["mcpConfigPresent"] = (!string.IsNullOrWhiteSpace(request.McpConfigSnapshotJson)).ToString().ToLowerInvariant(),
                 },
             };
+
+            if (!string.IsNullOrWhiteSpace(request.McpConfigFilePath))
+            {
+                envelope.Metadata["mcpConfigPath"] = request.McpConfigFilePath;
+            }
 
             if (!string.IsNullOrWhiteSpace(stderrLog.ToString()))
             {

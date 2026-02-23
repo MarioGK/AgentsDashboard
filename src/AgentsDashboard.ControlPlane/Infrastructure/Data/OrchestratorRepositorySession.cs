@@ -11,6 +11,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         IRepository<TaskDocument> tasks,
         IRepository<RunDocument> runs,
         IRepository<WorkspacePromptEntryDocument> workspacePromptEntries,
+        IRepository<RunQuestionRequestDocument> runQuestionRequests,
         IRepository<SemanticChunkDocument> semanticChunks,
         IRepository<RunAiSummaryDocument> runAiSummaries,
         IRepository<RunLogEvent> runEvents,
@@ -32,6 +33,8 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         IRepository<RepositoryInstructionDocument> repositoryInstructions,
         IRepository<HarnessProviderSettingsDocument> harnessProviderSettings,
         IRepository<PromptSkillDocument> promptSkills,
+        IRepository<McpRegistryServerDocument> mcpRegistryServers,
+        IRepository<McpRegistryStateDocument> mcpRegistryState,
         LiteDbExecutor liteDbExecutor,
         LiteDbDatabase liteDbDatabase)
     {
@@ -39,6 +42,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         Tasks = new TrackedRepositorySet<TaskDocument>(tasks);
         Runs = new TrackedRepositorySet<RunDocument>(runs);
         WorkspacePromptEntries = new TrackedRepositorySet<WorkspacePromptEntryDocument>(workspacePromptEntries);
+        RunQuestionRequests = new TrackedRepositorySet<RunQuestionRequestDocument>(runQuestionRequests);
         SemanticChunks = new TrackedRepositorySet<SemanticChunkDocument>(semanticChunks);
         RunAiSummaries = new TrackedRepositorySet<RunAiSummaryDocument>(runAiSummaries);
         RunEvents = new TrackedRepositorySet<RunLogEvent>(runEvents);
@@ -60,6 +64,8 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         RepositoryInstructions = new TrackedRepositorySet<RepositoryInstructionDocument>(repositoryInstructions);
         HarnessProviderSettings = new TrackedRepositorySet<HarnessProviderSettingsDocument>(harnessProviderSettings);
         PromptSkills = new TrackedRepositorySet<PromptSkillDocument>(promptSkills);
+        McpRegistryServers = new TrackedRepositorySet<McpRegistryServerDocument>(mcpRegistryServers);
+        McpRegistryState = new TrackedRepositorySet<McpRegistryStateDocument>(mcpRegistryState);
         Database = new LiteDbExecutionDatabase(liteDbExecutor, liteDbDatabase);
 
         _sets =
@@ -68,6 +74,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
             Tasks,
             Runs,
             WorkspacePromptEntries,
+            RunQuestionRequests,
             SemanticChunks,
             RunAiSummaries,
             RunEvents,
@@ -89,6 +96,8 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
             RepositoryInstructions,
             HarnessProviderSettings,
             PromptSkills,
+            McpRegistryServers,
+            McpRegistryState,
         ];
     }
 
@@ -97,6 +106,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
     public TrackedRepositorySet<TaskDocument> Tasks { get; }
     public TrackedRepositorySet<RunDocument> Runs { get; }
     public TrackedRepositorySet<WorkspacePromptEntryDocument> WorkspacePromptEntries { get; }
+    public TrackedRepositorySet<RunQuestionRequestDocument> RunQuestionRequests { get; }
     public TrackedRepositorySet<SemanticChunkDocument> SemanticChunks { get; }
     public TrackedRepositorySet<RunAiSummaryDocument> RunAiSummaries { get; }
     public TrackedRepositorySet<RunLogEvent> RunEvents { get; }
@@ -118,6 +128,8 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
     public TrackedRepositorySet<RepositoryInstructionDocument> RepositoryInstructions { get; }
     public TrackedRepositorySet<HarnessProviderSettingsDocument> HarnessProviderSettings { get; }
     public TrackedRepositorySet<PromptSkillDocument> PromptSkills { get; }
+    public TrackedRepositorySet<McpRegistryServerDocument> McpRegistryServers { get; }
+    public TrackedRepositorySet<McpRegistryStateDocument> McpRegistryState { get; }
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {

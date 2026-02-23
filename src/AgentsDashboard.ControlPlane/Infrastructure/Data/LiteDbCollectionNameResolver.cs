@@ -11,6 +11,7 @@ public sealed class LiteDbCollectionNameResolver : ILiteDbCollectionNameResolver
             [typeof(TaskDocument)] = new("tasks", nameof(TaskDocument.Id)),
             [typeof(RunDocument)] = new("runs", nameof(RunDocument.Id)),
             [typeof(WorkspacePromptEntryDocument)] = new("workspace_prompt_entries", nameof(WorkspacePromptEntryDocument.Id)),
+            [typeof(RunQuestionRequestDocument)] = new("run_question_requests", nameof(RunQuestionRequestDocument.Id)),
             [typeof(SemanticChunkDocument)] = new("semantic_chunks", nameof(SemanticChunkDocument.Id)),
             [typeof(RunAiSummaryDocument)] = new("run_ai_summaries", nameof(RunAiSummaryDocument.RunId)),
             [typeof(RunLogEvent)] = new("run_events", nameof(RunLogEvent.Id)),
@@ -33,6 +34,8 @@ public sealed class LiteDbCollectionNameResolver : ILiteDbCollectionNameResolver
             [typeof(HarnessProviderSettingsDocument)] = new("harness_provider_settings", nameof(HarnessProviderSettingsDocument.Id)),
             [typeof(PromptSkillDocument)] = new("prompt_skills", nameof(PromptSkillDocument.Id)),
             [typeof(RunArtifactDocument)] = new("run_artifacts", nameof(RunArtifactDocument.Id)),
+            [typeof(McpRegistryServerDocument)] = new("mcp_registry_servers", nameof(McpRegistryServerDocument.Id)),
+            [typeof(McpRegistryStateDocument)] = new("mcp_registry_state", nameof(McpRegistryStateDocument.Id)),
         };
 
     public LiteDbCollectionDefinition Resolve<T>()

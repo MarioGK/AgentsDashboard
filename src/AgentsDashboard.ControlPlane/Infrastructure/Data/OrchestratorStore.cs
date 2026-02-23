@@ -947,6 +947,7 @@ public sealed class OrchestratorStore(
             _ = await db.RunStructuredEvents.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
             _ = await db.RunDiffSnapshots.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
             _ = await db.RunToolProjections.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+            _ = await db.RunQuestionRequests.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
             deletedFindings = await db.Findings.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         }
 
@@ -1334,6 +1335,128 @@ public sealed class OrchestratorStore(
         db.WorkspacePromptEntries.Add(promptEntry);
         await db.SaveChangesAsync(cancellationToken);
         return promptEntry;
+    }
+
+    public async Task<RunQuestionRequestDocument?> UpsertRunQuestionRequestAsync(RunQuestionRequestDocument questionRequest, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(questionRequest.RunId) ||
+            string.IsNullOrWhiteSpace(questionRequest.TaskId) ||
+            questionRequest.SourceSequence <= 0 ||
+            questionRequest.Questions.Count == 0)
+        {
+            return null;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+
+        var existing = await db.RunQuestionRequests.FirstOrDefaultAsync(
+            x => x.RunId == questionRequest.RunId && x.SourceSequence == questionRequest.SourceSequence,
+            cancellationToken);
+
+        var normalizedQuestions = NormalizeQuestionItems(questionRequest.Questions);
+        if (normalizedQuestions.Count == 0)
+        {
+            return null;
+        }
+
+        if (existing is null)
+        {
+            if (string.IsNullOrWhiteSpace(questionRequest.Id))
+            {
+                questionRequest.Id = Guid.NewGuid().ToString("N");
+            }
+
+            questionRequest.RepositoryId = questionRequest.RepositoryId?.Trim() ?? string.Empty;
+            questionRequest.TaskId = questionRequest.TaskId?.Trim() ?? string.Empty;
+            questionRequest.RunId = questionRequest.RunId?.Trim() ?? string.Empty;
+            questionRequest.SourceToolCallId = questionRequest.SourceToolCallId?.Trim() ?? string.Empty;
+            questionRequest.SourceToolName = questionRequest.SourceToolName?.Trim() ?? string.Empty;
+            questionRequest.SourceSchemaVersion = questionRequest.SourceSchemaVersion?.Trim() ?? string.Empty;
+            questionRequest.Status = RunQuestionRequestStatus.Pending;
+            questionRequest.Questions = normalizedQuestions;
+            questionRequest.Answers = [];
+            questionRequest.AnsweredRunId = string.Empty;
+            questionRequest.AnsweredAtUtc = null;
+            questionRequest.CreatedAtUtc = questionRequest.CreatedAtUtc == default ? now : questionRequest.CreatedAtUtc;
+            questionRequest.UpdatedAtUtc = now;
+
+            db.RunQuestionRequests.Add(questionRequest);
+            await db.SaveChangesAsync(cancellationToken);
+            return questionRequest;
+        }
+
+        if (existing.Status == RunQuestionRequestStatus.Answered)
+        {
+            return existing;
+        }
+
+        existing.RepositoryId = string.IsNullOrWhiteSpace(questionRequest.RepositoryId) ? existing.RepositoryId : questionRequest.RepositoryId.Trim();
+        existing.TaskId = string.IsNullOrWhiteSpace(questionRequest.TaskId) ? existing.TaskId : questionRequest.TaskId.Trim();
+        existing.RunId = string.IsNullOrWhiteSpace(questionRequest.RunId) ? existing.RunId : questionRequest.RunId.Trim();
+        existing.SourceToolCallId = questionRequest.SourceToolCallId?.Trim() ?? existing.SourceToolCallId;
+        existing.SourceToolName = questionRequest.SourceToolName?.Trim() ?? existing.SourceToolName;
+        existing.SourceSchemaVersion = questionRequest.SourceSchemaVersion?.Trim() ?? existing.SourceSchemaVersion;
+        existing.Questions = normalizedQuestions;
+        existing.UpdatedAtUtc = now;
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<List<RunQuestionRequestDocument>> ListPendingRunQuestionRequestsAsync(string taskId, string runId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId) || string.IsNullOrWhiteSpace(runId))
+        {
+            return [];
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        return await db.RunQuestionRequests.AsNoTracking()
+            .Where(x => x.TaskId == taskId && x.RunId == runId && x.Status == RunQuestionRequestStatus.Pending)
+            .OrderBy(x => x.SourceSequence)
+            .ThenBy(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RunQuestionRequestDocument?> GetRunQuestionRequestAsync(string questionRequestId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(questionRequestId))
+        {
+            return null;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        return await db.RunQuestionRequests.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == questionRequestId, cancellationToken);
+    }
+
+    public async Task<RunQuestionRequestDocument?> MarkRunQuestionRequestAnsweredAsync(
+        string questionRequestId,
+        IReadOnlyList<RunQuestionAnswerDocument> answers,
+        string answeredRunId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(questionRequestId))
+        {
+            return null;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var existing = await db.RunQuestionRequests.FirstOrDefaultAsync(x => x.Id == questionRequestId, cancellationToken);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var now = DateTime.UtcNow;
+        existing.Status = RunQuestionRequestStatus.Answered;
+        existing.AnsweredRunId = answeredRunId?.Trim() ?? string.Empty;
+        existing.AnsweredAtUtc = now;
+        existing.UpdatedAtUtc = now;
+        existing.Answers = NormalizeQuestionAnswers(answers);
+
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
     }
 
     public async Task<RunAiSummaryDocument> UpsertRunAiSummaryAsync(RunAiSummaryDocument summary, CancellationToken cancellationToken)
@@ -1906,27 +2029,25 @@ public sealed class OrchestratorStore(
             structuredEvent.TimestampUtc = structuredEvent.CreatedAtUtc;
         }
 
-        if (string.IsNullOrWhiteSpace(structuredEvent.RepositoryId) || string.IsNullOrWhiteSpace(structuredEvent.TaskId))
-        {
-            var runMetadata = await db.Runs.AsNoTracking()
-                .Where(x => x.Id == structuredEvent.RunId)
-                .Select(x => new
-                {
-                    x.RepositoryId,
-                    x.TaskId
-                })
-                .FirstOrDefaultAsync(cancellationToken);
-            if (runMetadata is not null)
+        var runMetadata = await db.Runs.AsNoTracking()
+            .Where(x => x.Id == structuredEvent.RunId)
+            .Select(x => new
             {
-                if (string.IsNullOrWhiteSpace(structuredEvent.RepositoryId))
-                {
-                    structuredEvent.RepositoryId = runMetadata.RepositoryId;
-                }
+                x.RepositoryId,
+                x.TaskId,
+                x.ExecutionMode,
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (runMetadata is not null)
+        {
+            if (string.IsNullOrWhiteSpace(structuredEvent.RepositoryId))
+            {
+                structuredEvent.RepositoryId = runMetadata.RepositoryId;
+            }
 
-                if (string.IsNullOrWhiteSpace(structuredEvent.TaskId))
-                {
-                    structuredEvent.TaskId = runMetadata.TaskId;
-                }
+            if (string.IsNullOrWhiteSpace(structuredEvent.TaskId))
+            {
+                structuredEvent.TaskId = runMetadata.TaskId;
             }
         }
 
@@ -2002,6 +2123,30 @@ public sealed class OrchestratorStore(
                 {
                     existingProjection.ToolCallId = projection.ToolCallId;
                 }
+            }
+        }
+
+        var questionRequest = CreateQuestionRequestProjection(
+            stored,
+            runMetadata?.ExecutionMode ?? HarnessExecutionMode.Default);
+        if (questionRequest is not null)
+        {
+            var existingQuestionRequest = await db.RunQuestionRequests.FirstOrDefaultAsync(
+                x => x.RunId == questionRequest.RunId && x.SourceSequence == questionRequest.SourceSequence,
+                cancellationToken);
+            if (existingQuestionRequest is null)
+            {
+                db.RunQuestionRequests.Add(questionRequest);
+            }
+            else if (existingQuestionRequest.Status != RunQuestionRequestStatus.Answered)
+            {
+                existingQuestionRequest.RepositoryId = questionRequest.RepositoryId;
+                existingQuestionRequest.TaskId = questionRequest.TaskId;
+                existingQuestionRequest.SourceToolCallId = questionRequest.SourceToolCallId;
+                existingQuestionRequest.SourceToolName = questionRequest.SourceToolName;
+                existingQuestionRequest.SourceSchemaVersion = questionRequest.SourceSchemaVersion;
+                existingQuestionRequest.Questions = questionRequest.Questions;
+                existingQuestionRequest.UpdatedAtUtc = DateTime.UtcNow;
             }
         }
 
@@ -2337,6 +2482,7 @@ public sealed class OrchestratorStore(
         var deletedStructuredEvents = await db.RunStructuredEvents.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         var deletedDiffSnapshots = await db.RunDiffSnapshots.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         var deletedToolProjections = await db.RunToolProjections.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
+        _ = await db.RunQuestionRequests.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
         return new StructuredRunDataPruneResult(
@@ -2747,6 +2893,65 @@ public sealed class OrchestratorStore(
         return existing;
     }
 
+    public async Task<List<McpRegistryServerDocument>> ListMcpRegistryServersAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        return await db.McpRegistryServers.AsNoTracking()
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.DisplayName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task ReplaceMcpRegistryServersAsync(List<McpRegistryServerDocument> servers, CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+
+        var existing = await db.McpRegistryServers.ToListAsync(cancellationToken);
+        foreach (var entry in existing)
+        {
+            db.McpRegistryServers.Remove(entry);
+        }
+
+        foreach (var server in servers)
+        {
+            if (string.IsNullOrWhiteSpace(server.Id))
+            {
+                server.Id = Guid.NewGuid().ToString("N");
+            }
+
+            server.UpdatedAtUtc = DateTime.UtcNow;
+            db.McpRegistryServers.Add(server);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<McpRegistryStateDocument> GetMcpRegistryStateAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var state = await db.McpRegistryState.AsNoTracking().FirstOrDefaultAsync(x => x.Id == "singleton", cancellationToken);
+        return state ?? new McpRegistryStateDocument();
+    }
+
+    public async Task<McpRegistryStateDocument> UpsertMcpRegistryStateAsync(McpRegistryStateDocument state, CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        state.Id = "singleton";
+        state.UpdatedAtUtc = DateTime.UtcNow;
+
+        var existing = await db.McpRegistryState.FirstOrDefaultAsync(x => x.Id == "singleton", cancellationToken);
+        if (existing is null)
+        {
+            db.McpRegistryState.Add(state);
+            await db.SaveChangesAsync(cancellationToken);
+            return state;
+        }
+
+        db.Entry(existing).CurrentValues.SetValues(state);
+        await db.SaveChangesAsync(cancellationToken);
+        return existing;
+    }
+
     public async Task<bool> TryAcquireLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
@@ -3089,6 +3294,384 @@ public sealed class OrchestratorStore(
             TimestampUtc = structuredEvent.TimestampUtc,
             CreatedAtUtc = structuredEvent.CreatedAtUtc,
         };
+    }
+
+    private static RunQuestionRequestDocument? CreateQuestionRequestProjection(
+        RunStructuredEventDocument structuredEvent,
+        HarnessExecutionMode executionMode)
+    {
+        if (executionMode != HarnessExecutionMode.Plan || string.IsNullOrWhiteSpace(structuredEvent.PayloadJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var payloadDocument = JsonDocument.Parse(structuredEvent.PayloadJson);
+            if (payloadDocument.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var payloadRoot = payloadDocument.RootElement;
+            var toolName = ReadJsonString(
+                payloadRoot,
+                "toolName",
+                "tool_name",
+                "name",
+                "tool",
+                "function",
+                "function_name");
+            if (!string.Equals(toolName, "request_user_input", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var questions = ParseQuestionItems(payloadRoot);
+            if (questions.Count == 0)
+            {
+                return null;
+            }
+
+            var toolCallId = ReadJsonString(payloadRoot, "toolCallId", "tool_call_id", "callId", "call_id", "id");
+            var createdAtUtc = structuredEvent.CreatedAtUtc == default
+                ? DateTime.UtcNow
+                : structuredEvent.CreatedAtUtc;
+            var timestampUtc = structuredEvent.TimestampUtc == default
+                ? createdAtUtc
+                : structuredEvent.TimestampUtc;
+
+            return new RunQuestionRequestDocument
+            {
+                RepositoryId = structuredEvent.RepositoryId,
+                TaskId = structuredEvent.TaskId,
+                RunId = structuredEvent.RunId,
+                SourceToolCallId = toolCallId,
+                SourceToolName = toolName,
+                SourceSequence = structuredEvent.Sequence,
+                SourceSchemaVersion = structuredEvent.SchemaVersion?.Trim() ?? string.Empty,
+                Status = RunQuestionRequestStatus.Pending,
+                Questions = questions,
+                Answers = [],
+                CreatedAtUtc = timestampUtc,
+                UpdatedAtUtc = timestampUtc,
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static List<RunQuestionItemDocument> ParseQuestionItems(JsonElement payloadRoot)
+    {
+        if (!TryResolveQuestionArray(payloadRoot, out var questionsArray))
+        {
+            return [];
+        }
+
+        var questions = new List<RunQuestionItemDocument>();
+        var index = 0;
+        foreach (var questionElement in questionsArray.EnumerateArray())
+        {
+            if (questionElement.ValueKind != JsonValueKind.Object)
+            {
+                index++;
+                continue;
+            }
+
+            var questionId = ReadJsonString(questionElement, "id", "questionId", "question_id");
+            if (string.IsNullOrWhiteSpace(questionId))
+            {
+                questionId = $"question-{index + 1}";
+            }
+
+            var prompt = ReadJsonString(questionElement, "question", "prompt", "text");
+            if (string.IsNullOrWhiteSpace(prompt))
+            {
+                prompt = ReadJsonRaw(questionElement, "question", "prompt", "text");
+            }
+
+            var header = ReadJsonString(questionElement, "header", "title", "name");
+            var options = ParseQuestionOptions(questionElement);
+            if (string.IsNullOrWhiteSpace(prompt) || options.Count == 0)
+            {
+                index++;
+                continue;
+            }
+
+            questions.Add(new RunQuestionItemDocument
+            {
+                Id = questionId.Trim(),
+                Header = header.Trim(),
+                Prompt = prompt.Trim(),
+                Order = index,
+                Options = options,
+            });
+
+            index++;
+        }
+
+        return NormalizeQuestionItems(questions);
+    }
+
+    private static List<RunQuestionOptionDocument> ParseQuestionOptions(JsonElement questionElement)
+    {
+        if (!TryResolveOptionsArray(questionElement, out var optionsArray))
+        {
+            return [];
+        }
+
+        var options = new List<RunQuestionOptionDocument>();
+        var index = 0;
+        foreach (var optionElement in optionsArray.EnumerateArray())
+        {
+            if (optionElement.ValueKind != JsonValueKind.Object &&
+                optionElement.ValueKind != JsonValueKind.String)
+            {
+                index++;
+                continue;
+            }
+
+            var value = string.Empty;
+            var label = string.Empty;
+            var description = string.Empty;
+            if (optionElement.ValueKind == JsonValueKind.String)
+            {
+                label = optionElement.GetString() ?? string.Empty;
+                value = label;
+            }
+            else
+            {
+                value = ReadJsonString(optionElement, "value", "id", "key", "label");
+                label = ReadJsonString(optionElement, "label", "title", "name", "value");
+                description = ReadJsonString(optionElement, "description", "detail", "hint");
+            }
+
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                index++;
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                value = label;
+            }
+
+            options.Add(new RunQuestionOptionDocument
+            {
+                Value = value.Trim(),
+                Label = label.Trim(),
+                Description = description.Trim(),
+            });
+
+            index++;
+        }
+
+        return options;
+    }
+
+    private static bool TryResolveQuestionArray(JsonElement payloadRoot, out JsonElement questionsArray)
+    {
+        if (TryGetArrayProperty(payloadRoot, "questions", out questionsArray))
+        {
+            return true;
+        }
+
+        if (TryGetObjectProperty(payloadRoot, "input", out var inputObject) &&
+            TryGetArrayProperty(inputObject, "questions", out questionsArray))
+        {
+            return true;
+        }
+
+        if (TryGetObjectProperty(payloadRoot, "arguments", out var argumentsObject) &&
+            TryGetArrayProperty(argumentsObject, "questions", out questionsArray))
+        {
+            return true;
+        }
+
+        if (TryGetObjectProperty(payloadRoot, "params", out var paramsObject) &&
+            TryGetArrayProperty(paramsObject, "questions", out questionsArray))
+        {
+            return true;
+        }
+
+        if (TryGetObjectProperty(payloadRoot, "request", out var requestObject) &&
+            TryGetArrayProperty(requestObject, "questions", out questionsArray))
+        {
+            return true;
+        }
+
+        questionsArray = default;
+        return false;
+    }
+
+    private static bool TryResolveOptionsArray(JsonElement questionElement, out JsonElement optionsArray)
+    {
+        if (TryGetArrayProperty(questionElement, "options", out optionsArray))
+        {
+            return true;
+        }
+
+        if (TryGetArrayProperty(questionElement, "choices", out optionsArray))
+        {
+            return true;
+        }
+
+        optionsArray = default;
+        return false;
+    }
+
+    private static bool TryGetObjectProperty(JsonElement element, string propertyName, out JsonElement propertyValue)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            propertyValue = default;
+            return false;
+        }
+
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (property.Value.ValueKind != JsonValueKind.Object)
+            {
+                break;
+            }
+
+            propertyValue = property.Value;
+            return true;
+        }
+
+        propertyValue = default;
+        return false;
+    }
+
+    private static bool TryGetArrayProperty(JsonElement element, string propertyName, out JsonElement propertyValue)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            propertyValue = default;
+            return false;
+        }
+
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (property.Value.ValueKind != JsonValueKind.Array)
+            {
+                break;
+            }
+
+            propertyValue = property.Value;
+            return true;
+        }
+
+        propertyValue = default;
+        return false;
+    }
+
+    private static List<RunQuestionItemDocument> NormalizeQuestionItems(IReadOnlyList<RunQuestionItemDocument> source)
+    {
+        if (source.Count == 0)
+        {
+            return [];
+        }
+
+        var normalized = new List<RunQuestionItemDocument>(source.Count);
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < source.Count; index++)
+        {
+            var item = source[index];
+            var id = item.Id?.Trim() ?? string.Empty;
+            if (id.Length == 0 || !seenIds.Add(id))
+            {
+                id = $"question-{index + 1}";
+                while (!seenIds.Add(id))
+                {
+                    id = $"{id}-x";
+                }
+            }
+
+            var prompt = item.Prompt?.Trim() ?? string.Empty;
+            if (prompt.Length == 0)
+            {
+                continue;
+            }
+
+            var options = item.Options
+                .Where(option => !string.IsNullOrWhiteSpace(option.Label))
+                .Select(option =>
+                {
+                    var value = option.Value?.Trim() ?? string.Empty;
+                    var label = option.Label.Trim();
+                    if (value.Length == 0)
+                    {
+                        value = label;
+                    }
+
+                    return new RunQuestionOptionDocument
+                    {
+                        Value = value,
+                        Label = label,
+                        Description = option.Description?.Trim() ?? string.Empty,
+                    };
+                })
+                .ToList();
+            if (options.Count == 0)
+            {
+                continue;
+            }
+
+            normalized.Add(new RunQuestionItemDocument
+            {
+                Id = id,
+                Header = item.Header?.Trim() ?? string.Empty,
+                Prompt = prompt,
+                Order = index,
+                Options = options,
+            });
+        }
+
+        return normalized;
+    }
+
+    private static List<RunQuestionAnswerDocument> NormalizeQuestionAnswers(IReadOnlyList<RunQuestionAnswerDocument> answers)
+    {
+        if (answers.Count == 0)
+        {
+            return [];
+        }
+
+        var normalized = new List<RunQuestionAnswerDocument>(answers.Count);
+        foreach (var answer in answers)
+        {
+            var questionId = answer.QuestionId?.Trim() ?? string.Empty;
+            var selectedOptionLabel = answer.SelectedOptionLabel?.Trim() ?? string.Empty;
+            if (questionId.Length == 0 || selectedOptionLabel.Length == 0)
+            {
+                continue;
+            }
+
+            normalized.Add(new RunQuestionAnswerDocument
+            {
+                QuestionId = questionId,
+                SelectedOptionValue = answer.SelectedOptionValue?.Trim() ?? string.Empty,
+                SelectedOptionLabel = selectedOptionLabel,
+                SelectedOptionDescription = answer.SelectedOptionDescription?.Trim() ?? string.Empty,
+                AdditionalContext = answer.AdditionalContext?.Trim() ?? string.Empty,
+            });
+        }
+
+        return normalized;
     }
 
     private static string ReadJsonString(JsonElement root, params string[] propertyNames)

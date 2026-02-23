@@ -75,8 +75,10 @@ The codebase follows a **vertical slice architecture**. Each feature is self-con
 Preferred watch command:
 
 ```bash
-DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development dotnet watch --non-interactive --project src/AgentsDashboard.ControlPlane
+DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1 DOTNET_WATCH_SUPPRESS_EMOJIS=1 DOTNET_USE_POLLING_FILE_WATCHER=1 DOTNET_WATCH_AUTO_RELOAD_WS_HOSTNAME=192.168.10.101 ASPNETCORE_ENVIRONMENT=Development dotnet watch --non-interactive --project src/AgentsDashboard.ControlPlane
 ```
+
+To force non-interactive, always-restart-on-rude-edit behavior in unattended runs, keep `DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1` and `dotnet watch --non-interactive`.
 
 ## Logging
 - Use `ZLogger` in both ControlPlane and TaskRuntimeGateway.
