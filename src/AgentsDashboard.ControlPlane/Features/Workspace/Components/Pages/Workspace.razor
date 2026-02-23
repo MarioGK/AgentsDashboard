@@ -6,14 +6,14 @@
 @using AgentsDashboard.ControlPlane.Components.Shared
 @using AgentsDashboard.ControlPlane.Components.Workspace
 @using AgentsDashboard.ControlPlane.Components.Workspace.Models
-@using AgentsDashboard.ControlPlane.Services
-@inject Data.IOrchestratorStore Store
-@inject Services.IGlobalSelectionService SelectionService
-@inject Services.IWorkspaceService WorkspaceService
-@inject Services.IWorkspaceAiService WorkspaceAiService
-@inject Services.IRunStructuredViewService RunStructuredViewService
-@inject Services.IHarnessOutputParserService HarnessOutputParser
-@inject Services.IUiRealtimeBroker UiRealtimeBroker
+
+@inject IOrchestratorStore Store
+@inject IGlobalSelectionService SelectionService
+@inject IWorkspaceService WorkspaceService
+@inject IWorkspaceAiService WorkspaceAiService
+@inject IRunStructuredViewService RunStructuredViewService
+@inject IHarnessOutputParserService HarnessOutputParser
+@inject IUiRealtimeBroker UiRealtimeBroker
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 @inject IDialogService DialogService
@@ -704,11 +704,11 @@
         {
             _ = InvokeAsync(OnExternalSelectionChangedAsync);
         });
-        _runLogSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunLogChunkEvent>(OnRunLogChunkAsync);
-        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(OnRunStatusChangedAsync);
-        _structuredSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStructuredEventChangedEvent>(OnRunStructuredEventChangedAsync);
-        _diffSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunDiffUpdatedEvent>(OnRunDiffUpdatedAsync);
-        _toolSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunToolTimelineUpdatedEvent>(OnRunToolTimelineUpdatedAsync);
+        _runLogSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunLogChunkEvent>(OnRunLogChunkAsync);
+        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunStatusChangedEvent>(OnRunStatusChangedAsync);
+        _structuredSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunStructuredEventChangedEvent>(OnRunStructuredEventChangedAsync);
+        _diffSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunDiffUpdatedEvent>(OnRunDiffUpdatedAsync);
+        _toolSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunToolTimelineUpdatedEvent>(OnRunToolTimelineUpdatedAsync);
         RefreshComposerSuggestionFallback();
         await LoadWorkspaceAsync();
     }
@@ -1128,7 +1128,7 @@
         MarkThreadActivity(run.TaskId, DateTime.UtcNow, false);
     }
 
-    private async Task OnRunLogChunkAsync(AgentsDashboard.Contracts.SignalR.RunLogChunkEvent logEvent)
+    private async Task OnRunLogChunkAsync(AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunLogChunkEvent logEvent)
     {
         var run = _selectedRepositoryRuns.FirstOrDefault(item => string.Equals(item.Id, logEvent.RunId, StringComparison.OrdinalIgnoreCase));
         if (run is not null)
@@ -1154,7 +1154,7 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task OnRunStatusChangedAsync(AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent statusEvent)
+    private async Task OnRunStatusChangedAsync(AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunStatusChangedEvent statusEvent)
     {
         if (_selectedRepository is null)
         {
@@ -1194,7 +1194,7 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task OnRunStructuredEventChangedAsync(AgentsDashboard.Contracts.SignalR.RunStructuredEventChangedEvent structuredEvent)
+    private async Task OnRunStructuredEventChangedAsync(AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunStructuredEventChangedEvent structuredEvent)
     {
         var run = _selectedRepositoryRuns.FirstOrDefault(item => string.Equals(item.Id, structuredEvent.RunId, StringComparison.OrdinalIgnoreCase));
         if (run is not null)
@@ -1213,7 +1213,7 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task OnRunDiffUpdatedAsync(AgentsDashboard.Contracts.SignalR.RunDiffUpdatedEvent diffEvent)
+    private async Task OnRunDiffUpdatedAsync(AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunDiffUpdatedEvent diffEvent)
     {
         var run = _selectedRepositoryRuns.FirstOrDefault(item => string.Equals(item.Id, diffEvent.RunId, StringComparison.OrdinalIgnoreCase));
         if (run is not null)
@@ -1231,7 +1231,7 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task OnRunToolTimelineUpdatedAsync(AgentsDashboard.Contracts.SignalR.RunToolTimelineUpdatedEvent toolEvent)
+    private async Task OnRunToolTimelineUpdatedAsync(AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunToolTimelineUpdatedEvent toolEvent)
     {
         var run = _selectedRepositoryRuns.FirstOrDefault(item => string.Equals(item.Id, toolEvent.RunId, StringComparison.OrdinalIgnoreCase));
         if (run is not null)
@@ -1827,6 +1827,8 @@ Composer Focus:
         Theme = "agents-dashboard-dark",
         Minimap = new EditorMinimapOptions { Enabled = false },
         WordWrap = "on",
+        FontFamily = "\"JetBrains Mono\", SFMono-Regular, monospace",
+        FontLigatures = true,
         FontSize = 13,
         Value = _promptDraftValue,
     };

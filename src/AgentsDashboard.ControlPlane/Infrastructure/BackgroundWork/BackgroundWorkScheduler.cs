@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Infrastructure.BackgroundWork;
 
 public sealed class BackgroundWorkScheduler(ILogger<BackgroundWorkScheduler> logger)
     : BackgroundService, IBackgroundWorkCoordinator

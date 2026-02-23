@@ -1,4 +1,4 @@
-namespace AgentsDashboard.TaskRuntime.Services;
+namespace AgentsDashboard.TaskRuntime.Features.Events.Services;
 
 public sealed class TaskRuntimeEventBroadcastService(
     TaskRuntimeEventBus eventBus,

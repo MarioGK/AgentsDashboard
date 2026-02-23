@@ -1,8 +1,8 @@
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Data;
+
+
 using Microsoft.JSInterop;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Projects.Services;
 
 public interface ILocalStorageService
 {
@@ -56,30 +56,30 @@ public sealed class GlobalSelectionService(IOrchestratorStore store, ILocalStora
 
     public event EventHandler<SelectionChangedEventArgs>? SelectionChanged;
 
-public async Task InitializeAsync(CancellationToken cancellationToken)
-{
-    bool entered = false;
-    try
+    public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        await _initLock.WaitAsync(cancellationToken);
-        entered = true;
-    }
-    catch (ObjectDisposedException)
-    {
-        return;
-    }
-
-    try
-    {
-        if (_disposed)
+        bool entered = false;
+        try
+        {
+            await _initLock.WaitAsync(cancellationToken);
+            entered = true;
+        }
+        catch (ObjectDisposedException)
         {
             return;
         }
 
-        if (_initialized)
+        try
         {
-            return;
-        }
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (_initialized)
+            {
+                return;
+            }
 
             RepositoryList = await store.ListRepositoriesAsync(cancellationToken);
 
@@ -96,23 +96,23 @@ public async Task InitializeAsync(CancellationToken cancellationToken)
                 await localStorage.SetItemAsync("selectedRepositoryId", SelectedRepositoryId);
             }
 
-        _initialized = true;
-        RaiseSelectionChanged();
-    }
-    finally
-    {
-        if (entered && !_disposed)
+            _initialized = true;
+            RaiseSelectionChanged();
+        }
+        finally
         {
-            try
+            if (entered && !_disposed)
             {
-                _initLock.Release();
-            }
-            catch (ObjectDisposedException)
-            {
+                try
+                {
+                    _initLock.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
             }
         }
     }
-}
 
     public async Task SelectRepositoryAsync(string? repositoryId, CancellationToken cancellationToken)
     {

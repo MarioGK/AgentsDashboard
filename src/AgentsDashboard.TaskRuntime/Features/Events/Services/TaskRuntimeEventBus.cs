@@ -1,7 +1,7 @@
 using System.Threading.Channels;
-using AgentsDashboard.Contracts.TaskRuntime;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+namespace AgentsDashboard.TaskRuntime.Features.Events.Services;
 
 public sealed class TaskRuntimeEventBus
 {

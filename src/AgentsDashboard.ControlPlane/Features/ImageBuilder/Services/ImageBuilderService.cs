@@ -5,7 +5,7 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using ICSharpCode.SharpZipLib.Tar;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.ImageBuilder.Services;
 
 public record ImageBuildResult(bool Success, string ImageId, List<string> Logs);
 public record ImageInfo(string Tag, string Id, long Size, DateTime Created);

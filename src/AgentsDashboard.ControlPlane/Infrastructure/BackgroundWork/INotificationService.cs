@@ -1,4 +1,4 @@
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Infrastructure.BackgroundWork;
 
 public interface INotificationService : INotificationSink
 {

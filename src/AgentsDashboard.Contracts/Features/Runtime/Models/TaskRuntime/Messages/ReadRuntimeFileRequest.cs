@@ -1,6 +1,6 @@
 using MessagePack;
 
-namespace AgentsDashboard.Contracts.TaskRuntime;
+namespace AgentsDashboard.Contracts.Features.Runtime.Models.TaskRuntime.Messages;
 
 [MessagePackObject]
 public sealed record ReadRuntimeFileRequest

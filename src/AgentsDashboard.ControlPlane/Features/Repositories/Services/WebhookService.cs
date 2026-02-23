@@ -1,8 +1,8 @@
-using AgentsDashboard.Contracts.Api;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Data;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+
+
+namespace AgentsDashboard.ControlPlane.Features.Repositories.Services;
 
 public sealed class WebhookService(IOrchestratorStore store, ILogger<WebhookService> logger)
 {

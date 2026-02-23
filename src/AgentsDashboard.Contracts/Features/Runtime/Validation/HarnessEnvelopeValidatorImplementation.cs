@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace AgentsDashboard.Contracts.Validation;
+namespace AgentsDashboard.Contracts.Features.Runtime.Validation;
 
 
 public sealed class HarnessEnvelopeValidator

@@ -1,4 +1,4 @@
-namespace AgentsDashboard.TaskRuntime.Services;
+namespace AgentsDashboard.TaskRuntime.Features.Health.Services;
 
 
 public sealed record TaskRuntimeHarnessToolHealth(

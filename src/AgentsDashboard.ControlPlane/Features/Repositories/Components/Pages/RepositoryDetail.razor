@@ -2,15 +2,15 @@
 @page "/repositories/{RepositoryId}"
 @layout SettingsLayout
 @rendermode InteractiveServer
-@inject Data.IOrchestratorStore Store
-@inject Services.RunDispatcher Dispatcher
-@inject Services.SecretCryptoService Crypto
-@inject Services.IWorkspaceAiService WorkspaceAiService
-@inject Services.IGitWorkspaceService GitWorkspace
+@inject IOrchestratorStore Store
+@inject RunDispatcher Dispatcher
+@inject SecretCryptoService Crypto
+@inject IWorkspaceAiService WorkspaceAiService
+@inject IGitWorkspaceService GitWorkspace
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
-@using AgentsDashboard.ControlPlane.Services
-@using AgentsDashboard.Contracts.Domain
+
+
 @implements IAsyncDisposable
 
 @namespace AgentsDashboard.ControlPlane.Components.Pages
@@ -427,6 +427,8 @@ else
             Theme = MonacoTheme,
             Minimap = new EditorMinimapOptions { Enabled = false },
             WordWrap = "on",
+            FontFamily = "\"JetBrains Mono\", SFMono-Regular, monospace",
+            FontLigatures = true,
             FontSize = 13,
             Value = GetInstructionEditorValue(editor),
         };
@@ -449,6 +451,8 @@ else
             Theme = MonacoTheme,
             Minimap = new EditorMinimapOptions { Enabled = false },
             WordWrap = "on",
+            FontFamily = "\"JetBrains Mono\", SFMono-Regular, monospace",
+            FontLigatures = true,
             FontSize = 13,
             Value = _taskPrompt,
         };

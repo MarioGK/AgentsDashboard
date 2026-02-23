@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace AgentsDashboard.ControlPlane;
+namespace AgentsDashboard.ControlPlane.Infrastructure;
 
 internal static class RepositoryPathResolver
 {

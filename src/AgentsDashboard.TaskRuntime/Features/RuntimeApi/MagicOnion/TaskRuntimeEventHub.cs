@@ -1,10 +1,10 @@
 using System.Linq;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Services;
+
+
 using MagicOnion.Server.Hubs;
 using Microsoft.Extensions.Logging;
 
-namespace AgentsDashboard.TaskRuntime.MagicOnion;
+namespace AgentsDashboard.TaskRuntime.Features.RuntimeApi.MagicOnion;
 
 /// <summary>
 /// StreamingHub for broadcasting job events from task runtime to control plane.

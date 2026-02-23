@@ -1,14 +1,14 @@
 using System.Reflection;
 using System.Text.Json;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Services;
+
+
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;
 
 public sealed class RunStructuredEventCodecTests
 {
     private static readonly Type CodecType = typeof(RunStructuredViewService).Assembly
-        .GetType("AgentsDashboard.ControlPlane.Services.RunStructuredEventCodec", throwOnError: true)!;
+        .GetType("AgentsDashboard.ControlPlane.Features.Runs.Services.RunStructuredEventCodec", throwOnError: true)!;
 
     [Test]
     public async Task NormalizePayloadJson_NormalizesValidJsonAndEscapesInvalidPayloads()

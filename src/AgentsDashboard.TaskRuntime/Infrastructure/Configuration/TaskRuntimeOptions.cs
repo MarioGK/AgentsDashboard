@@ -1,4 +1,4 @@
-namespace AgentsDashboard.TaskRuntime.Configuration;
+namespace AgentsDashboard.TaskRuntime.Infrastructure.Configuration;
 
 public sealed class TaskRuntimeOptions
 {

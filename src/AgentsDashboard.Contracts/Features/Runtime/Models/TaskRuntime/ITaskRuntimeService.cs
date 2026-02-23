@@ -1,6 +1,6 @@
 using MagicOnion;
 
-namespace AgentsDashboard.Contracts.TaskRuntime;
+namespace AgentsDashboard.Contracts.Features.Runtime.Models.TaskRuntime;
 
 public interface ITaskRuntimeService : IService<ITaskRuntimeService>
 {

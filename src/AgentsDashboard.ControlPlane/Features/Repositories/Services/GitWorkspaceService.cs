@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
-using AgentsDashboard.Contracts.Domain;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+namespace AgentsDashboard.ControlPlane.Features.Repositories.Services;
 
 public interface IGitWorkspaceService
 {

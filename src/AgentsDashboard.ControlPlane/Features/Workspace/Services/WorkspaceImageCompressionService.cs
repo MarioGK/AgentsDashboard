@@ -1,7 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Webp;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Workspace.Services;
 
 public sealed class WorkspaceImageCompressionService : IWorkspaceImageCompressionService
 {

@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using AgentsDashboard.ControlPlane.Services;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Services;

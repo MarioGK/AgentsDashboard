@@ -1,10 +1,10 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using AgentsDashboard.Contracts.Api;
-using AgentsDashboard.Contracts.Domain;
 
-namespace AgentsDashboard.ControlPlane.Data;
+
+
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class OrchestratorStore(
     IOrchestratorRepositorySessionFactory liteDbScopeFactory,

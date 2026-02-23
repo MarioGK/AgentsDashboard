@@ -1,7 +1,7 @@
-using AgentsDashboard.Contracts.Api;
-using AgentsDashboard.Contracts.Domain;
 
-namespace AgentsDashboard.ControlPlane.Data;
+
+
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public interface IOrchestratorStore
 {

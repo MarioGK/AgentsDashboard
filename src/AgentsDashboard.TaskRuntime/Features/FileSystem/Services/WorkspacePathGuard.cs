@@ -1,6 +1,6 @@
-using AgentsDashboard.TaskRuntime.Configuration;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+namespace AgentsDashboard.TaskRuntime.Features.FileSystem.Services;
 
 public sealed class WorkspacePathGuard(TaskRuntimeOptions options)
 {

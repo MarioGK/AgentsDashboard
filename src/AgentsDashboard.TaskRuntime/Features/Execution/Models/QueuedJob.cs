@@ -1,6 +1,6 @@
-using AgentsDashboard.Contracts.TaskRuntime;
 
-namespace AgentsDashboard.TaskRuntime.Models;
+
+namespace AgentsDashboard.TaskRuntime.Features.Execution.Models;
 
 public sealed class QueuedJob
 {

@@ -1,4 +1,4 @@
-namespace AgentsDashboard.ControlPlane.Data;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public interface ITrackedRepositorySet
 {

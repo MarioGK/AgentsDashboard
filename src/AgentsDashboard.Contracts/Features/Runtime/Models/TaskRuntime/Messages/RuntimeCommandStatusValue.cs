@@ -1,4 +1,4 @@
-namespace AgentsDashboard.Contracts.TaskRuntime;
+namespace AgentsDashboard.Contracts.Features.Runtime.Models.TaskRuntime.Messages;
 
 public enum RuntimeCommandStatusValue
 {

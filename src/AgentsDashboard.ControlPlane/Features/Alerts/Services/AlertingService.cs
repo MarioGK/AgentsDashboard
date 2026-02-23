@@ -1,9 +1,9 @@
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Alerts.Services;
 
 using System.Text;
 using System.Text.Json;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Data;
+
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

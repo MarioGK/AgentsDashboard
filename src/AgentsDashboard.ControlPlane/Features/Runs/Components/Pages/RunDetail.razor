@@ -7,8 +7,8 @@
 
 @using System.Text.Json
 @using AgentsDashboard.ControlPlane.Components.Shared
-@using AgentsDashboard.ControlPlane.Services
-@inject Data.IOrchestratorStore Store
+
+@inject IOrchestratorStore Store
 @inject RunDispatcher Dispatcher
 @inject IUiRealtimeBroker UiRealtimeBroker
 @inject IRunStructuredViewService RunStructuredViewService
@@ -389,7 +389,7 @@ else
     {
         await LoadRunAsync();
 
-        _runLogSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunLogChunkEvent>(logEvent =>
+        _runLogSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunLogChunkEvent>(logEvent =>
         {
             if (_run is null || logEvent.RunId != _run.Id)
             {
@@ -407,7 +407,7 @@ else
             return InvokeAsync(StateHasChanged);
         });
 
-        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(async status =>
+        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunStatusChangedEvent>(async status =>
         {
             if (_run is null || status.RunId != _run.Id)
             {
@@ -417,7 +417,7 @@ else
             await RefreshAsync();
         });
 
-        _structuredSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStructuredEventChangedEvent>(async evt =>
+        _structuredSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunStructuredEventChangedEvent>(async evt =>
         {
             if (_run is null || evt.RunId != _run.Id)
             {
@@ -428,7 +428,7 @@ else
             await InvokeAsync(StateHasChanged);
         });
 
-        _diffSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunDiffUpdatedEvent>(async evt =>
+        _diffSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunDiffUpdatedEvent>(async evt =>
         {
             if (_run is null || evt.RunId != _run.Id)
             {
@@ -439,7 +439,7 @@ else
             await InvokeAsync(StateHasChanged);
         });
 
-        _toolSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunToolTimelineUpdatedEvent>(async evt =>
+        _toolSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunToolTimelineUpdatedEvent>(async evt =>
         {
             if (_run is null || evt.RunId != _run.Id)
             {

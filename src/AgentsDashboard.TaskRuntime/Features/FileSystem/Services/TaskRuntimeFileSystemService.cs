@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Configuration;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+
+namespace AgentsDashboard.TaskRuntime.Features.FileSystem.Services;
 
 public sealed class TaskRuntimeFileSystemService(
     WorkspacePathGuard workspacePathGuard,

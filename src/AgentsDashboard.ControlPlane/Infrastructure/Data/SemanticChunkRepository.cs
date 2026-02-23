@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
-using AgentsDashboard.Contracts.Domain;
 
-namespace AgentsDashboard.ControlPlane.Data;
+
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class SemanticChunkRepository(
     IRepository<TaskDocument> tasks,

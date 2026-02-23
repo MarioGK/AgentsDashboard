@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+namespace AgentsDashboard.TaskRuntime.Features.Health.Services;
 
 public sealed partial class TaskRuntimeHarnessToolHealthService
 {

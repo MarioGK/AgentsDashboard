@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using AgentsDashboard.Contracts.TaskRuntime;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+namespace AgentsDashboard.TaskRuntime.Features.Mcp.Services;
 
 public sealed class McpRuntimeBootstrapService(ILogger<McpRuntimeBootstrapService> logger)
 {

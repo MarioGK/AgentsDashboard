@@ -1,7 +1,7 @@
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Configuration;
-using AgentsDashboard.TaskRuntime.MagicOnion;
-using AgentsDashboard.TaskRuntime.Services;
+
+
+using AgentsDashboard.TaskRuntime.Features.RuntimeApi.MagicOnion;
+
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 

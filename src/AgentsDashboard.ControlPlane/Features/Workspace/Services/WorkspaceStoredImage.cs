@@ -1,4 +1,4 @@
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Workspace.Services;
 
 
 public sealed record WorkspaceStoredImage(

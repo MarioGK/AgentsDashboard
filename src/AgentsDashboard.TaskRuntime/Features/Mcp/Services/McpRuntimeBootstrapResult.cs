@@ -1,4 +1,4 @@
-namespace AgentsDashboard.TaskRuntime.Services;
+namespace AgentsDashboard.TaskRuntime.Features.Mcp.Services;
 
 public sealed record McpRuntimeBootstrapResult
 {

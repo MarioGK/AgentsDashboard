@@ -1,4 +1,4 @@
-namespace AgentsDashboard.Contracts.SignalR;
+namespace AgentsDashboard.Contracts.Features.Realtime.Models.Events;
 
 public sealed record RunToolTimelineUpdatedEvent(
     string RunId,

@@ -1,4 +1,4 @@
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Mcp.Services.Models;
 
 public sealed record McpCatalogEntry
 {

@@ -1,10 +1,10 @@
-using AgentsDashboard.ControlPlane.Data;
-using AgentsDashboard.ControlPlane.Services;
+
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace AgentsDashboard.ControlPlane;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Extensions;
 
 internal static class HealthChecksExtensions
 {
@@ -12,7 +12,10 @@ internal static class HealthChecksExtensions
     {
         services
             .AddHealthChecks()
-            .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
+            .AddCheck(
+                "self",
+                () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(),
+                ["live", "ready"])
             .AddCheck<DatabaseReadyHealthCheck>(
                 "database",
                 tags: ["ready"])

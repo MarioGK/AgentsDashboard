@@ -2,11 +2,11 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Configuration;
+
+
 using Microsoft.Extensions.Options;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+namespace AgentsDashboard.TaskRuntime.Features.Commands.Services;
 
 public sealed class TaskRuntimeCommandService(
     TaskRuntimeEventBus eventBus,

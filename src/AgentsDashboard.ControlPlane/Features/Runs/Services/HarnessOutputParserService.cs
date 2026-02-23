@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using AgentsDashboard.Contracts.Domain;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+namespace AgentsDashboard.ControlPlane.Features.Runs.Services;
 
 public interface IHarnessOutputParserService
 {

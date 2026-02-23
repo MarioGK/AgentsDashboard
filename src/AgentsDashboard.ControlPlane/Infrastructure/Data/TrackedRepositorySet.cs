@@ -2,7 +2,7 @@ using System.Collections;
 using System.Linq.Expressions;
 using System.Text.Json;
 
-namespace AgentsDashboard.ControlPlane.Data;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class TrackedRepositorySet<T>(IRepository<T> repository) : IEnumerable<T>, ITrackedRepositorySet
     where T : class

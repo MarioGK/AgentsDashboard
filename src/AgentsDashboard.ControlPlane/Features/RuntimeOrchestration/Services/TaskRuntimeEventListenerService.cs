@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.ControlPlane.Data;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+
+
+namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 
 public sealed class TaskRuntimeEventListenerService(
     IMagicOnionClientFactory clientFactory,

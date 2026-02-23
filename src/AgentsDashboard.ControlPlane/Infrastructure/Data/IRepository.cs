@@ -1,6 +1,6 @@
 using System.Linq.Expressions;
 
-namespace AgentsDashboard.ControlPlane.Data;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public interface IRepository<T>
     where T : class

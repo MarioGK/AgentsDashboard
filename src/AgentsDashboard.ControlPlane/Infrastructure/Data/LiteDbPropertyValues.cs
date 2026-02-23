@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace AgentsDashboard.ControlPlane.Data;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class LiteDbPropertyValues(object target)
 {

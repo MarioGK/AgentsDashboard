@@ -1,6 +1,6 @@
-using AgentsDashboard.ControlPlane.Data;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+namespace AgentsDashboard.ControlPlane.Features.Mcp.Services;
 
 public sealed class McpSettingsService(
     IOrchestratorStore store,

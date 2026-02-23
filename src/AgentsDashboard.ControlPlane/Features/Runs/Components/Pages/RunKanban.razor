@@ -3,8 +3,8 @@
 @rendermode InteractiveServer
 @implements IDisposable
 
-@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
-@inject AgentsDashboard.ControlPlane.Services.IUiRealtimeBroker UiRealtimeBroker
+@inject IOrchestratorStore Store
+@inject IUiRealtimeBroker UiRealtimeBroker
 
 @namespace AgentsDashboard.ControlPlane.Components.Pages
 <PageTitle>Runs - AgentsDashboard</PageTitle>
@@ -107,7 +107,7 @@ else
     {
         await LoadAsync();
 
-        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(
+        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunStatusChangedEvent>(
             async _ =>
         {
             await InvokeAsync(async () =>

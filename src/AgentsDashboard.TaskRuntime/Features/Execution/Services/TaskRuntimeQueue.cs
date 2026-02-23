@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using AgentsDashboard.TaskRuntime.Configuration;
-using AgentsDashboard.TaskRuntime.Models;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+
+namespace AgentsDashboard.TaskRuntime.Features.Execution.Services;
 
 public sealed class TaskRuntimeQueue : ITaskRuntimeQueue
 {

@@ -1,7 +1,7 @@
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Configuration;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+
+namespace AgentsDashboard.TaskRuntime.Features.Health.Services;
 
 public sealed class TaskRuntimeHeartbeatService(
     TaskRuntimeOptions options,

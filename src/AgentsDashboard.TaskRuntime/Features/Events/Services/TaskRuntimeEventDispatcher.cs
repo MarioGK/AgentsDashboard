@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using AgentsDashboard.Contracts.TaskRuntime;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+namespace AgentsDashboard.TaskRuntime.Features.Events.Services;
 
 public sealed class TaskRuntimeEventDispatcher(
     ILogger<TaskRuntimeEventDispatcher> logger)

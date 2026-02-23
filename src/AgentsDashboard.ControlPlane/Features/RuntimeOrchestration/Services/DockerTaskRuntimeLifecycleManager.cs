@@ -4,15 +4,15 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.ControlPlane.Configuration;
-using AgentsDashboard.ControlPlane.Data;
+
+
+
+
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Options;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 
 public sealed class DockerTaskRuntimeLifecycleManager(
     IOptions<OrchestratorOptions> options,
@@ -1393,11 +1393,11 @@ public sealed class DockerTaskRuntimeLifecycleManager(
         }
     }
 
-        private async Task<bool> PullWorkerContainerImageAsync(
-        string imageReference,
-        OrchestratorRuntimeSettings runtime,
-        IProgress<BackgroundWorkSnapshot>? progress,
-        CancellationToken cancellationToken)
+    private async Task<bool> PullWorkerContainerImageAsync(
+    string imageReference,
+    OrchestratorRuntimeSettings runtime,
+    IProgress<BackgroundWorkSnapshot>? progress,
+    CancellationToken cancellationToken)
     {
         await using var slot = await AcquireConcurrencySlotAsync(isBuild: false, runtime.MaxConcurrentPulls, cancellationToken);
 

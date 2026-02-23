@@ -1,7 +1,7 @@
 using System.Text.Json;
-using AgentsDashboard.Contracts.Domain;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+namespace AgentsDashboard.ControlPlane.Features.Runs.Services;
 
 internal sealed record DecodedRunStructuredEvent(
     string EventType,

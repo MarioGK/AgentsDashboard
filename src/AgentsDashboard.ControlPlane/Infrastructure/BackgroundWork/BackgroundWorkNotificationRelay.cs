@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Infrastructure.BackgroundWork;
 
 public sealed class BackgroundWorkNotificationRelay(
     IBackgroundWorkCoordinator backgroundWorkCoordinator,

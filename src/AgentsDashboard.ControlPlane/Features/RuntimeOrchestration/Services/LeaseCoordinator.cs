@@ -1,6 +1,6 @@
-using AgentsDashboard.ControlPlane.Data;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 
 public interface ILeaseCoordinator
 {

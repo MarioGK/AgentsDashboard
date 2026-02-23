@@ -1,12 +1,12 @@
 using System.Diagnostics;
 using System.Text.Json;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Configuration;
-using AgentsDashboard.TaskRuntime.Services;
+
+
+
+
 using Microsoft.Extensions.Options;
 
-namespace AgentsDashboard.TaskRuntime.Adapters;
+namespace AgentsDashboard.TaskRuntime.Features.HarnessAdapters.Adapters;
 
 public abstract class HarnessAdapterBase(
     IOptions<TaskRuntimeOptions> options,

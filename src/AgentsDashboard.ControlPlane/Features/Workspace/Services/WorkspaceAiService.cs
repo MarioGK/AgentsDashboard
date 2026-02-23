@@ -2,13 +2,13 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Data;
+
+
 using LlmTornado;
 using LlmTornado.Code;
 using LlmTornado.Embedding.Models;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Workspace.Services;
 
 public interface IWorkspaceAiService
 {

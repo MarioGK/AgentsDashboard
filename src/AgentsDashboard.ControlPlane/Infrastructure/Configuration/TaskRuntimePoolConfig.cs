@@ -1,4 +1,4 @@
-namespace AgentsDashboard.ControlPlane.Configuration;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Configuration;
 
 public sealed class TaskRuntimePoolConfig
 {

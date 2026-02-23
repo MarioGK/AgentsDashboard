@@ -1,6 +1,6 @@
-using AgentsDashboard.Contracts.TaskRuntime;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 
 public sealed class TaskRuntimeCommandGateway(
     IMagicOnionClientFactory clientFactory,

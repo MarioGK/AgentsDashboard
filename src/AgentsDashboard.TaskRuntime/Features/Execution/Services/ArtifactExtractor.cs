@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.TaskRuntime.Configuration;
+
+
 using Microsoft.Extensions.Options;
 
 public interface IArtifactExtractor

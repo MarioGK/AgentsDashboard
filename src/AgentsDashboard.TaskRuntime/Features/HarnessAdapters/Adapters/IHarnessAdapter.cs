@@ -1,7 +1,7 @@
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.TaskRuntime;
 
-namespace AgentsDashboard.TaskRuntime.Adapters;
+
+
+namespace AgentsDashboard.TaskRuntime.Features.HarnessAdapters.Adapters;
 
 public interface IHarnessAdapter
 {

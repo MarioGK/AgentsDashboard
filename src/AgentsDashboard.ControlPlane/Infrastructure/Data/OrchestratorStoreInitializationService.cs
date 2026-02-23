@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Hosting;
 
-namespace AgentsDashboard.ControlPlane.Data;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class OrchestratorStoreInitializationService(
     IOrchestratorStore store) : IHostedService

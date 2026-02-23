@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace AgentsDashboard.ControlPlane.Configuration;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Configuration;
 
 
 public enum TaskRuntimeConnectivityMode

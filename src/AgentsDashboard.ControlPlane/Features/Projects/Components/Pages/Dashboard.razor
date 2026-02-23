@@ -1,14 +1,14 @@
 @page "/overview"
 @rendermode InteractiveServer
-@inject Data.IOrchestratorStore Store
-@inject Services.IGlobalSelectionService SelectionService
-@inject Services.ITaskRuntimeLifecycleManager WorkerLifecycle
-@inject Services.TaskRuntimeHealthSupervisorService TaskRuntimeHealthSupervisor
-@inject Services.IBackgroundWorkCoordinator BackgroundWorkCoordinator
-@inject Microsoft.Extensions.Options.IOptions<Configuration.OrchestratorOptions> OrchestratorOptions
+@inject IOrchestratorStore Store
+@inject IGlobalSelectionService SelectionService
+@inject ITaskRuntimeLifecycleManager WorkerLifecycle
+@inject TaskRuntimeHealthSupervisorService TaskRuntimeHealthSupervisor
+@inject IBackgroundWorkCoordinator BackgroundWorkCoordinator
+@inject Microsoft.Extensions.Options.IOptions<OrchestratorOptions> OrchestratorOptions
 @inject NavigationManager NavigationManager
 @implements IDisposable
-@using AgentsDashboard.ControlPlane.Services
+
 @using System.Diagnostics
 
 @namespace AgentsDashboard.ControlPlane.Components.Pages

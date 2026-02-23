@@ -1,12 +1,12 @@
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using AgentsDashboard.ControlPlane.Configuration;
+
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace AgentsDashboard.ControlPlane;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Extensions;
 
 internal static class ProgramExtensions
 {

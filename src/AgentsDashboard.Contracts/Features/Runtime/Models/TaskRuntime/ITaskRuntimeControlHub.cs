@@ -1,7 +1,7 @@
 using MagicOnion;
 using MessagePack;
 
-namespace AgentsDashboard.Contracts.TaskRuntime;
+namespace AgentsDashboard.Contracts.Features.Runtime.Models.TaskRuntime;
 
 /// <summary>
 /// Receiver interface for broadcast commands FROM control plane TO task runtimes.

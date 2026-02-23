@@ -1,4 +1,4 @@
-namespace AgentsDashboard.Contracts.Domain;
+namespace AgentsDashboard.Contracts.Features.Mcp.Models.Domain;
 
 public sealed class McpRegistryServerDocument
 {

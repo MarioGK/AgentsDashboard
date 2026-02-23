@@ -3,10 +3,10 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.TaskRuntime;
 
-namespace AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
+
+
+namespace AgentsDashboard.TaskRuntime.Features.HarnessRuntimes.Services;
 
 public sealed class OpenCodeSseRuntime(
     SecretRedactor secretRedactor,

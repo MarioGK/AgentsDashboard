@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace AgentsDashboard.TaskRuntime;
+namespace AgentsDashboard.TaskRuntime.Infrastructure;
 
 internal static class RepositoryPathResolver
 {

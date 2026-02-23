@@ -4,7 +4,7 @@ using LlmTornado;
 using LlmTornado.Chat.Models;
 using LlmTornado.Code;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Ai;
 
 public sealed record TaskPromptGenerationRequest(
     string RepositoryName,

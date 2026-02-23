@@ -1,9 +1,9 @@
 using System.Text.Json;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Models;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+using AgentsDashboard.TaskRuntime;
+
+
+namespace AgentsDashboard.TaskRuntime.Features.Execution.Services;
 
 public class JobProcessorService(
     ITaskRuntimeQueue queue,
@@ -190,9 +190,9 @@ public class JobProcessorService(
         }
         catch (OperationCanceledException)
         {
-                await eventBus.PublishAsync(
-                CreateEvent(request.RunId, request.TaskId, executionToken, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
-                CancellationToken.None);
+            await eventBus.PublishAsync(
+            CreateEvent(request.RunId, request.TaskId, executionToken, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
+            CancellationToken.None);
 
             logger.LogWarning(
                 "Job processing cancelled {@Cancellation}",

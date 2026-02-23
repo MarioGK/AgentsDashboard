@@ -1,4 +1,4 @@
-namespace AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
+namespace AgentsDashboard.TaskRuntime.Features.HarnessRuntimes.Services;
 
 public interface IHarnessRuntimeFactory
 {

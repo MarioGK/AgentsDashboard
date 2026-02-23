@@ -1,11 +1,11 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using System.Text.Json;
 
-namespace AgentsDashboard.TaskRuntime;
+namespace AgentsDashboard.TaskRuntime.Infrastructure.Extensions;
 
 internal static class HealthChecksExtensions
 {
@@ -13,7 +13,10 @@ internal static class HealthChecksExtensions
     {
         services
             .AddHealthChecks()
-            .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"]);
+            .AddCheck(
+                "self",
+                () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(),
+                ["live", "ready"]);
 
         return services;
     }

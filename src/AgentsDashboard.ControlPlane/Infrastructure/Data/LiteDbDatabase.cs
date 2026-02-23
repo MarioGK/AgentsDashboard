@@ -1,8 +1,8 @@
-using AgentsDashboard.ControlPlane.Configuration;
+
 using LiteDB;
 using Microsoft.Extensions.Options;
 
-namespace AgentsDashboard.ControlPlane.Data;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class LiteDbDatabase(IOptions<OrchestratorOptions> orchestratorOptions) : IHostedService, IAsyncDisposable
 {

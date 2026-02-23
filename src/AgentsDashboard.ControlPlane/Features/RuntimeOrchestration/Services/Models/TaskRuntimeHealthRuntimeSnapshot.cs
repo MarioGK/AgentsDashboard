@@ -1,4 +1,4 @@
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services.Models;
 
 public sealed record TaskRuntimeHealthRuntimeSnapshot(
     string RuntimeId,

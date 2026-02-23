@@ -1,6 +1,6 @@
 using LiteDB;
 
-namespace AgentsDashboard.ControlPlane.Data;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class LiteDbExecutor(LiteDbDatabase database)
 {

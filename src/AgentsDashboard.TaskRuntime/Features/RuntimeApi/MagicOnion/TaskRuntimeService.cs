@@ -1,10 +1,10 @@
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Models;
-using AgentsDashboard.TaskRuntime.Services;
+
+
+
 using MagicOnion;
 using MagicOnion.Server;
 
-namespace AgentsDashboard.TaskRuntime.MagicOnion;
+namespace AgentsDashboard.TaskRuntime.Features.RuntimeApi.MagicOnion;
 
 public sealed class TaskRuntimeService(
     ITaskRuntimeQueue queue,

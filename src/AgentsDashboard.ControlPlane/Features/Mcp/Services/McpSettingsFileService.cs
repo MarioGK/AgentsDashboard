@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Mcp.Services;
 
 public sealed class McpSettingsFileService
 {

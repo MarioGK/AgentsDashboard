@@ -1,6 +1,6 @@
-using AgentsDashboard.Contracts.Domain;
+
 using AgentsDashboard.ControlPlane.Components.Workspace.Models;
-using AgentsDashboard.ControlPlane.Services;
+
 
 namespace AgentsDashboard.ControlPlane.Components.Workspace;
 

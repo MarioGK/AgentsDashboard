@@ -1,7 +1,7 @@
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.SignalR;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+
+namespace AgentsDashboard.ControlPlane.Features.Runs.Services;
 
 public sealed class BlazorRunEventPublisher(IUiRealtimeBroker broker) : IRunEventPublisher
 {

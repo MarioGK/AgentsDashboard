@@ -1,14 +1,14 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.TaskRuntime.Adapters;
-using AgentsDashboard.TaskRuntime.Configuration;
-using AgentsDashboard.TaskRuntime.Models;
-using AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
+
+
+
+
+
+
 using Microsoft.Extensions.Options;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+namespace AgentsDashboard.TaskRuntime.Features.Execution.Services;
 
 public sealed partial class HarnessExecutor(
     IOptions<TaskRuntimeOptions> options,
@@ -299,11 +299,11 @@ public sealed partial class HarnessExecutor(
             }
             catch (Exception ex)
             {
-                    logger.LogWarning(
-                        ex,
-                        "Failed to create harness adapter {@Data}",
-                        new
-                        {
+                logger.LogWarning(
+                    ex,
+                    "Failed to create harness adapter {@Data}",
+                    new
+                    {
                         request.RunId,
                         request.TaskId,
                         request.HarnessType,
@@ -367,10 +367,10 @@ public sealed partial class HarnessExecutor(
                     envelope.Artifacts = extractedArtifacts.Select(a => a.DestinationPath).ToList();
                     envelope.Metadata["extractedArtifactCount"] = extractedArtifacts.Count.ToString();
                     envelope.Metadata["extractedArtifactSize"] = extractedArtifacts.Sum(a => a.SizeBytes).ToString();
-                        logger.LogDebug(
-                            "Extracted runtime artifacts {@Data}",
-                            new
-                            {
+                    logger.LogDebug(
+                        "Extracted runtime artifacts {@Data}",
+                        new
+                        {
                             request.RunId,
                             request.TaskId,
                             ExtractedArtifactCount = extractedArtifacts.Count,

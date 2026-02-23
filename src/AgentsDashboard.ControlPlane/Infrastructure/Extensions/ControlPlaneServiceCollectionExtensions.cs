@@ -1,14 +1,14 @@
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.ControlPlane.Configuration;
-using AgentsDashboard.ControlPlane.Data;
-using AgentsDashboard.ControlPlane.Services;
+
+
+
+
 using MagicOnion.Serialization.MessagePack;
 using MagicOnion.Server;
 using MessagePack;
 using MessagePack.Resolvers;
 using MudBlazor.Services;
 
-namespace AgentsDashboard.ControlPlane;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Extensions;
 
 internal static class ControlPlaneServiceCollectionExtensions
 {

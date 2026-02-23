@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Data;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+
+namespace AgentsDashboard.ControlPlane.Features.Mcp.Services;
 
 public sealed partial class McpRegistryCatalogService(
     IHttpClientFactory httpClientFactory,

@@ -1,7 +1,7 @@
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.TaskRuntime.Models;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+
+namespace AgentsDashboard.TaskRuntime.Features.Execution.Services;
 
 public interface IHarnessExecutor
 {

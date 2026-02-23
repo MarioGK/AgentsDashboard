@@ -1,4 +1,4 @@
-using AgentsDashboard.Contracts.Domain;
+
 using AgentsDashboard.ControlPlane.Components.Workspace;
 
 namespace AgentsDashboard.UnitTests.ControlPlane.Components;

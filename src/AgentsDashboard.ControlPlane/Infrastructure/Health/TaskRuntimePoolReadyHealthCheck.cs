@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Health;
 
 public sealed class TaskRuntimePoolReadyHealthCheck(
     TaskRuntimeHealthSupervisorService healthSupervisor) : IHealthCheck
 {
-    public Task<HealthCheckResult> CheckHealthAsync(
+    public Task<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
@@ -29,14 +29,14 @@ public sealed class TaskRuntimePoolReadyHealthCheck(
             var message = snapshot.ReadinessBlockedSinceUtc.HasValue
                 ? $"Task runtime readiness blocked since {snapshot.ReadinessBlockedSinceUtc.Value:O}"
                 : "Task runtime readiness blocked";
-            return Task.FromResult(HealthCheckResult.Degraded(message, data: data));
+            return Task.FromResult(Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Degraded(message, data: data));
         }
 
         if (snapshot.UnhealthyRuntimes > 0 || snapshot.DegradedRuntimes > 0)
         {
-            return Task.FromResult(HealthCheckResult.Degraded("Task runtime pool is degraded", data: data));
+            return Task.FromResult(Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Degraded("Task runtime pool is degraded", data: data));
         }
 
-        return Task.FromResult(HealthCheckResult.Healthy("Task runtime pool is healthy", data: data));
+        return Task.FromResult(Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("Task runtime pool is healthy", data: data));
     }
 }

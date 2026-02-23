@@ -1,7 +1,7 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.RuntimeOrchestration.Services;
 
 public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContainerReaper
 {

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Providers.Services;
 
 public static class HostCredentialDiscovery
 {

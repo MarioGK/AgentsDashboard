@@ -1,4 +1,4 @@
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Repositories.Services;
 
 public sealed record HostDirectoryEntry(string Name, string FullPath, bool HasChildren);
 

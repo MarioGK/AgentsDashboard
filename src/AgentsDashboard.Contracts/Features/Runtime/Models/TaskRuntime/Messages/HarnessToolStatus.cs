@@ -1,8 +1,9 @@
 using System.Collections.Generic;
-using AgentsDashboard.Contracts.Domain;
+
 using MessagePack;
 
-namespace AgentsDashboard.Contracts.TaskRuntime;
+namespace AgentsDashboard.Contracts.Features.Runtime.Models.TaskRuntime.Messages;
+
 [MessagePackObject]
 
 public record HarnessToolStatus

@@ -1,12 +1,12 @@
-using AgentsDashboard.ControlPlane.Data;
+
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Health;
 
 public sealed class DatabaseReadyHealthCheck(
     LiteDbDatabase database) : IHealthCheck
 {
-    public async Task<HealthCheckResult> CheckHealthAsync(
+    public async Task<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
@@ -17,7 +17,7 @@ public sealed class DatabaseReadyHealthCheck(
             var path = database.DatabasePath;
             if (string.IsNullOrWhiteSpace(path))
             {
-                return HealthCheckResult.Unhealthy("LiteDB path is not configured");
+                return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy("LiteDB path is not configured");
             }
 
             await database.ExecuteAsync(
@@ -28,11 +28,11 @@ public sealed class DatabaseReadyHealthCheck(
                 },
                 cancellationToken);
 
-            return HealthCheckResult.Healthy("LiteDB is ready");
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("LiteDB is ready");
         }
         catch (Exception ex)
         {
-            return HealthCheckResult.Unhealthy("LiteDB readiness check failed", ex);
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy("LiteDB readiness check failed", ex);
         }
     }
 }

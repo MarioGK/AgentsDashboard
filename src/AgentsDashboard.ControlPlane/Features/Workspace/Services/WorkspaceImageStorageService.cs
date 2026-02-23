@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
-using AgentsDashboard.ControlPlane.Data;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+namespace AgentsDashboard.ControlPlane.Features.Workspace.Services;
 
 public sealed class WorkspaceImageStorageService(
     IRunArtifactStorage artifactStorage,

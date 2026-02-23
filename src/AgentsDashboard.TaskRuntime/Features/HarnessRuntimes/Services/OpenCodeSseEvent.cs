@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
-namespace AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
+namespace AgentsDashboard.TaskRuntime.Features.HarnessRuntimes.Services;
 
 
 internal sealed record OpenCodeSseEvent(

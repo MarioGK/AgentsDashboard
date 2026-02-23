@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Realtime;
 
 public interface IUiRealtimeBroker
 {

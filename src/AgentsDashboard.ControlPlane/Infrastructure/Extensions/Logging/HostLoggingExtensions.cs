@@ -4,7 +4,7 @@ using ZLogger;
 using ZLogger.Formatters;
 using ZLogger.Providers;
 
-namespace AgentsDashboard.ControlPlane;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Extensions.Logging;
 
 internal static class HostLoggingExtensions
 {

@@ -2,15 +2,15 @@
 @page "/settings/repositories"
 @layout SettingsLayout
 @rendermode InteractiveServer
-@inject Data.IOrchestratorStore Store
-@inject Services.IGitWorkspaceService GitWorkspace
-@inject Services.IHostFileExplorerService FileExplorer
-@inject Services.SecretCryptoService Crypto
+@inject IOrchestratorStore Store
+@inject IGitWorkspaceService GitWorkspace
+@inject IHostFileExplorerService FileExplorer
+@inject SecretCryptoService Crypto
 @inject NavigationManager Nav
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @using System.IO
-@using AgentsDashboard.ControlPlane.Services
+
 
 @namespace AgentsDashboard.ControlPlane.Components.Pages
 <PageTitle>Repositories</PageTitle>

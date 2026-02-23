@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace AgentsDashboard.ControlPlane;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Extensions.Logging;
 
 internal sealed class WarningErrorFileLogger(
     string categoryName,

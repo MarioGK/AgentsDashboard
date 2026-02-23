@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace AgentsDashboard.TaskRuntime;
+namespace AgentsDashboard.TaskRuntime.Infrastructure.Extensions.Logging;
 
 internal sealed class WarningErrorFileLoggerProvider : ILoggerProvider, ISupportExternalScope
 {

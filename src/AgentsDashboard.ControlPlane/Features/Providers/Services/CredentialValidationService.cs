@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
-namespace AgentsDashboard.ControlPlane.Services;
+namespace AgentsDashboard.ControlPlane.Features.Providers.Services;
 
 public sealed class CredentialValidationService(IHttpClientFactory httpClientFactory, ILogger<CredentialValidationService> logger)
 {

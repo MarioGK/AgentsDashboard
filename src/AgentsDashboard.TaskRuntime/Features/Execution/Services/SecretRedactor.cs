@@ -1,7 +1,7 @@
-using AgentsDashboard.TaskRuntime.Configuration;
+
 using Microsoft.Extensions.Options;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+namespace AgentsDashboard.TaskRuntime.Features.Execution.Services;
 
 public sealed class SecretRedactor(IOptions<TaskRuntimeOptions> options)
 {

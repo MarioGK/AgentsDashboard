@@ -1,9 +1,9 @@
-using AgentsDashboard.Contracts.TaskRuntime;
+
 using MagicOnion.Server;
 using MagicOnion.Server.Hubs;
 using Microsoft.Extensions.Logging;
 
-namespace AgentsDashboard.TaskRuntime.MagicOnion;
+namespace AgentsDashboard.TaskRuntime.Features.RuntimeApi.MagicOnion;
 
 /// <summary>
 /// StreamingHub for task runtime control.

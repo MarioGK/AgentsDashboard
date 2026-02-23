@@ -11,20 +11,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Features/ControlPlane/Runs/Services/RunDispatcherTests.cs" />
-    <Compile Remove="Features/ControlPlane/Runs/Services/RunDispatcherTests_SutBuilder.cs" />
-    <Compile Remove="Features/ControlPlane/Runs/Services/RunStructuredViewServiceTests.cs" />
-    <Compile Remove="Features/ControlPlane/RuntimeOrchestration/Services/TaskRetentionCleanupServiceTests.cs" />
-    <Compile Remove="Features/ControlPlane/RuntimeOrchestration/Services/TaskRetentionCleanupServiceTests_StaticTimeProvider.cs" />
-    <Compile Remove="Features/ControlPlane/RuntimeOrchestration/Services/RecoveryServiceTests.cs" />
-    <Compile Remove="Features/ControlPlane/RuntimeOrchestration/Services/RecoveryServiceTests_StaticTimeProvider.cs" />
-    <Compile Remove="Features/ControlPlane/Search/Services/LiteDbVectorSearchStatusServiceTests.cs" />
-    <Compile Remove="Features/ControlPlane/RuntimeOrchestration/Services/TaskRuntimeEventListenerServiceTests.cs" />
-    <Compile Remove="Features/ControlPlane/RuntimeOrchestration/Services/OrchestratorRuntimeSettingsProviderTests.cs" />
-    <Compile Remove="Features/TaskRuntime/RuntimeApi/MagicOnion/TaskRuntimeServiceTests.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\src\AgentsDashboard.Contracts\AgentsDashboard.Contracts.csproj" />
     <ProjectReference Include="..\..\src\AgentsDashboard.TaskRuntime\AgentsDashboard.TaskRuntime.csproj" />
     <ProjectReference Include="..\..\src\AgentsDashboard.ControlPlane\AgentsDashboard.ControlPlane.csproj" />

@@ -2,8 +2,8 @@
 @layout SettingsLayout
 @rendermode InteractiveServer
 @using BlazorMonaco.Editor
-@using AgentsDashboard.ControlPlane.Services
-@using AgentsDashboard.ControlPlane.Data
+
+
 @inject ImageBuilderService ImageBuilderService
 @inject IOrchestratorStore Store
 @inject ISecretCryptoService SecretCrypto
@@ -218,9 +218,9 @@
 
     @if (_buildLogs.Count > 0)
     {
-        <MudPaper Elevation="2" Class="pa-4 mb-4">
+                <MudPaper Elevation="2" Class="pa-4 mb-4">
             <MudText Typo="Typo.h6" Class="mb-2">Build Logs</MudText>
-            <MudPaper Elevation="0" Class="pa-3" Style="max-height: 400px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;">
+            <MudPaper Elevation="0" Class="pa-3" Style="max-height: 400px; overflow-y: auto; background-color: #1e1e1e; color: #d4d4d4; font-family: 'JetBrains Mono', 'SFMono-Regular', monospace; font-size: 12px;">
                 @foreach (var log in _buildLogs)
                 {
                     <div>@log</div>
@@ -523,6 +523,8 @@ CMD [""/bin/bash""]"
         Theme = MonacoTheme,
         AutomaticLayout = true,
         Minimap = new EditorMinimapOptions { Enabled = false },
+        FontFamily = "\"JetBrains Mono\", SFMono-Regular, monospace",
+        FontLigatures = true,
         FontSize = 13,
         TabSize = 4,
         ScrollBeyondLastLine = false,

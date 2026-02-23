@@ -1,12 +1,12 @@
 @inherits LayoutComponentBase
-@inject Data.IOrchestratorStore Store
-@inject Services.IGlobalSelectionService SelectionService
+@inject IOrchestratorStore Store
+@inject IGlobalSelectionService SelectionService
 @inject IJSRuntime JS
-@inject Services.IUiRealtimeBroker UiRealtimeBroker
-@inject Services.INotificationService NotificationService
-@inject Services.IBackgroundWorkCoordinator BackgroundWorkCoordinator
+@inject IUiRealtimeBroker UiRealtimeBroker
+@inject INotificationService NotificationService
+@inject IBackgroundWorkCoordinator BackgroundWorkCoordinator
 @inject ISnackbar Snackbar
-@using AgentsDashboard.ControlPlane.Services
+
 @implements IAsyncDisposable
 
 <MudThemeProvider IsDarkMode="true" Theme="_theme" />
@@ -233,7 +233,7 @@
         BackgroundWorkCoordinator.Updated += _backgroundWorkUpdatedHandler;
 
         _selectionSubscription = SelectionService.Subscribe(_ => InvokeAsync(StateHasChanged));
-        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.SignalR.RunStatusChangedEvent>(async runStatus =>
+        _runStatusSubscription = UiRealtimeBroker.Subscribe<AgentsDashboard.Contracts.Features.Realtime.Models.Events.RunStatusChangedEvent>(async runStatus =>
         {
             var runCompletionState = GetRunCompletionState(runStatus.State);
             if (runCompletionState is null)

@@ -1,6 +1,6 @@
-using AgentsDashboard.Contracts.Domain;
 
-namespace AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
+
+namespace AgentsDashboard.TaskRuntime.Features.HarnessRuntimes.Services;
 
 public sealed class HarnessRuntimeResult
 {

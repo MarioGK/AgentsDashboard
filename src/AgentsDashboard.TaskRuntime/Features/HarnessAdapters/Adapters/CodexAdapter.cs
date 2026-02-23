@@ -1,9 +1,9 @@
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.TaskRuntime.Configuration;
-using AgentsDashboard.TaskRuntime.Services;
+
+
+
 using Microsoft.Extensions.Options;
 
-namespace AgentsDashboard.TaskRuntime.Adapters;
+namespace AgentsDashboard.TaskRuntime.Features.HarnessAdapters.Adapters;
 
 public sealed class CodexAdapter(
     IOptions<TaskRuntimeOptions> options,

@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using AgentsDashboard.Contracts.TaskRuntime;
 
-namespace AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
+
+namespace AgentsDashboard.TaskRuntime.Features.HarnessRuntimes.Services;
 
 internal enum OpenCodeRuntimeMode
 {

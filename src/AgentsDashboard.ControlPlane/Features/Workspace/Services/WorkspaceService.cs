@@ -2,12 +2,12 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using AgentsDashboard.Contracts.Api;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.Contracts.TaskRuntime;
-using AgentsDashboard.ControlPlane.Data;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+
+
+
+namespace AgentsDashboard.ControlPlane.Features.Workspace.Services;
 
 public interface IWorkspaceService
 {

@@ -1,4 +1,4 @@
-namespace AgentsDashboard.Contracts.Domain;
+namespace AgentsDashboard.Contracts.Features.Workspace.Models.Domain;
 
 public sealed class RunQuestionAnswerDocument
 {

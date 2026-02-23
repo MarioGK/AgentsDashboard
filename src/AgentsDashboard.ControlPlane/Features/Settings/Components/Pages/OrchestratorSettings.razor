@@ -1,13 +1,13 @@
 @page "/settings/task-runtimes"
 @layout SettingsLayout
 @rendermode InteractiveServer
-@using AgentsDashboard.Contracts.Domain
-@using AgentsDashboard.ControlPlane.Services
-@using OrchestratorConfig = AgentsDashboard.Contracts.Domain.OrchestratorSettings
-@inject AgentsDashboard.ControlPlane.Data.IOrchestratorStore Store
-@inject AgentsDashboard.ControlPlane.Services.ITaskRuntimeLifecycleManager WorkerLifecycle
-@inject AgentsDashboard.ControlPlane.Services.IOrchestratorRuntimeSettingsProvider RuntimeSettingsProvider
-@inject AgentsDashboard.ControlPlane.Services.IBackgroundWorkCoordinator BackgroundWorkCoordinator
+
+
+@using OrchestratorConfig = AgentsDashboard.Contracts.Features.Settings.Models.Domain.OrchestratorSettings
+@inject IOrchestratorStore Store
+@inject ITaskRuntimeLifecycleManager WorkerLifecycle
+@inject IOrchestratorRuntimeSettingsProvider RuntimeSettingsProvider
+@inject IBackgroundWorkCoordinator BackgroundWorkCoordinator
 @inject ISnackbar Snackbar
 @implements IDisposable
 

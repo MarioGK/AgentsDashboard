@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Text.Json;
 using LiteDB;
 
-namespace AgentsDashboard.ControlPlane.Data;
+namespace AgentsDashboard.ControlPlane.Infrastructure.Data;
 
 public sealed class LiteDbRepository<T>(
     LiteDbExecutor executor,

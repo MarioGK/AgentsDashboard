@@ -1,7 +1,7 @@
 using System.Text.Json;
-using AgentsDashboard.TaskRuntime.Services.HarnessRuntimes;
 
-namespace AgentsDashboard.TaskRuntime.Services;
+
+namespace AgentsDashboard.TaskRuntime.Features.Execution.Services;
 
 public sealed partial class HarnessExecutor
 {

@@ -1,6 +1,6 @@
-using AgentsDashboard.Contracts.Domain;
 
-namespace AgentsDashboard.Contracts.Api;
+
+namespace AgentsDashboard.Contracts.Features.Repositories.Models.Api;
 
 public sealed record UpdateRepositoryTaskDefaultsRequest(
     string Harness,

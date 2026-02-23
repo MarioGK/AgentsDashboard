@@ -2,10 +2,10 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
-using AgentsDashboard.Contracts.Domain;
-using AgentsDashboard.ControlPlane.Data;
 
-namespace AgentsDashboard.ControlPlane.Services;
+
+
+namespace AgentsDashboard.ControlPlane.Features.Search.Services;
 
 public interface ITaskSemanticEmbeddingService
 {
