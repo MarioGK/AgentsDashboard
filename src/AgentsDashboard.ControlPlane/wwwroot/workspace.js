@@ -245,7 +245,9 @@ export function registerChatAutoScroll(elementId, dotNetRef) {
     const isNearBottom = () => distanceFromBottom() <= atBottomThreshold;
 
     const notify = () => {
-        dotNetRef.invokeMethodAsync("OnChatAutoScrollStateChanged", state.sticky, state.pending);
+        dotNetRef
+            .invokeMethodAsync("OnChatAutoScrollStateChanged", state.sticky, state.pending)
+            .catch(() => {});
     };
 
     const setSticky = sticky => {

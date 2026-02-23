@@ -223,6 +223,19 @@ public sealed class TaskRetentionCleanupService(
             DeletedRows: totalDeletedRows,
             Reason: BuildReason(ageCleanupApplied, sizeCleanupApplied, totalTasksDeleted, totalFailedTasks));
 
+        if (summary.Reason == "no-op")
+        {
+            logger.LogDebug(
+                "Task cleanup cycle completed: reason={Reason}, tasksDeleted={TasksDeleted}, failedTasks={FailedTasks}, initialBytes={InitialBytes}, finalBytes={FinalBytes}, vacuum={VacuumExecuted}",
+                summary.Reason,
+                summary.TasksDeleted,
+                summary.FailedTasks,
+                summary.InitialBytes,
+                summary.FinalBytes,
+                summary.VacuumExecuted);
+            return summary;
+        }
+
         logger.LogInformation(
             "Task cleanup cycle completed: reason={Reason}, tasksDeleted={TasksDeleted}, failedTasks={FailedTasks}, initialBytes={InitialBytes}, finalBytes={FinalBytes}, vacuum={VacuumExecuted}",
             summary.Reason,

@@ -1,6 +1,7 @@
 @namespace AgentsDashboard.ControlPlane.Components.Shared
 @implements IAsyncDisposable
 @using AgentsDashboard.ControlPlane.Services
+@using Microsoft.JSInterop
 @inject IJSRuntime JS
 
 <div class="workspace-composer-surface">
@@ -86,7 +87,6 @@
                   value="@Value"
                   @oninput="OnInputChangedAsync"
                   @onkeydown="OnKeyDownAsync"
-                  placeholder="@Placeholder"
                   disabled="@Disabled"></textarea>
 
         @if (ShowSubmitButton && OnSubmit.HasDelegate)
@@ -117,7 +117,6 @@
     [Parameter] public EventCallback OnGenerate { get; set; }
     [Parameter] public bool ShowGhostSuggestion { get; set; }
     [Parameter] public string GhostSuffix { get; set; } = string.Empty;
-    [Parameter] public string Placeholder { get; set; } = string.Empty;
     [Parameter] public string HelperText { get; set; } = "Enter to send. Shift+Enter inserts a new line. Paste or upload images.";
     [Parameter] public bool ShowSubmitButton { get; set; }
     [Parameter] public string SubmitTooltip { get; set; } = "Send";

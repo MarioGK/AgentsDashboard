@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using AgentsDashboard.Contracts.Api;
 using AgentsDashboard.Contracts.Domain;
-using LiteDB;
 
 namespace AgentsDashboard.ControlPlane.Data;
 
@@ -4048,7 +4047,7 @@ public sealed class OrchestratorStore(
             cancellationToken);
     }
 
-    private static void RemoveTaskKindFields(ILiteCollection<BsonDocument> collection, params string[] fieldNames)
+    private static void RemoveTaskKindFields(LiteDB.ILiteCollection<LiteDB.BsonDocument> collection, params string[] fieldNames)
     {
         foreach (var document in collection.FindAll())
         {
@@ -4069,7 +4068,7 @@ public sealed class OrchestratorStore(
     }
 
     private static void RemoveNestedTaskDefaultsKindFields(
-        ILiteCollection<BsonDocument> collection,
+        LiteDB.ILiteCollection<LiteDB.BsonDocument> collection,
         string nestedDocumentField,
         params string[] fieldNames)
     {

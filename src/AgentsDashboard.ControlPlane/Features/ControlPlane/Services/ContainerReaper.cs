@@ -58,7 +58,7 @@ public sealed class ContainerReaper(ILogger<ContainerReaper> logger) : IContaine
     public async Task<int> ReapOrphanedContainersAsync(IEnumerable<string> activeRunIds, CancellationToken cancellationToken)
     {
         var active = new HashSet<string>(activeRunIds, StringComparer.OrdinalIgnoreCase);
-        logger.LogInformation("Scanning for orphaned containers with {Count} active run IDs", active.Count);
+        logger.LogDebug("Scanning for orphaned containers with {Count} active run IDs", active.Count);
 
         try
         {

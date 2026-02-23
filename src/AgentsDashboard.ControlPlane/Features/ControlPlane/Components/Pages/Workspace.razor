@@ -45,7 +45,7 @@
                                OnRepositorySelected="SelectRepositoryFromRailAsync"
                                OnThreadSelected="SelectTaskAsync"
                                OnThreadDeleteRequested="DeleteTaskAsync"
-                               OnNewTask="OpenCreateTaskFormAsync" />
+                               OnNewTask="StartNewTaskComposerAsync" />
 
             <div class="workspace-chat-main-pane">
                 @if (_selectedRepository is null)
@@ -55,78 +55,22 @@
                         <MudText Typo="Typo.body2" Color="Color.Secondary">Add a repository in settings, then return to Workspace.</MudText>
                     </MudPaper>
                 }
-                else if (_isCreateTaskMode)
-                {
-                    <MudPaper Class="workspace-create-task-panel workspace-create-task-chat-panel" Elevation="0">
-                        <MudStack Row AlignItems="AlignItems.Center" Class="mb-2">
-                            <MudText Typo="Typo.h5">Create Task</MudText>
-                            <MudSpacer />
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_selectedRepository.Name</MudChip>
-                        </MudStack>
-
-                        <MudGrid>
-                            <MudItem xs="12">
-                                <TaskPromptComposer InputId="@_createTaskPromptInputId"
-                                                    Value="@_createTaskPrompt"
-                                                    ValueChanged="OnCreateTaskPromptChangedAsync"
-                                                    Images="@_createTaskPromptImages"
-                                                    ImagesChanged="OnCreateTaskPromptImagesChangedAsync"
-                                                    Placeholder="Describe the goal, constraints, validation, and output format."
-                                                    HelperText="Paste or upload images as task context."
-                                                    Rows="14"
-                                                    PasteBridgeKey="create-task"
-                                                    OnValidationError="ShowComposerValidationAsync" />
-                            </MudItem>
-                        </MudGrid>
-
-                        <MudStack Row Spacing="1" Class="mt-2">
-                            <MudSpacer />
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Default"
-                                       OnClick="CloseCreateTaskForm"
-                                       Disabled="_isCreatingTask"
-                                       data-testid="workspace-create-task-cancel">
-                                Cancel
-                            </MudButton>
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       OnClick="CreateTaskAsync"
-                                       Disabled="@_isCreatingTask"
-                                       data-testid="workspace-create-task-submit">
-                                @if (_isCreatingTask)
-                                {
-                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
-                                    <span>Creating...</span>
-                                }
-                                else
-                                {
-                                    <span>Create Task</span>
-                                }
-                            </MudButton>
-                        </MudStack>
-                    </MudPaper>
-                }
-                else if (_selectedTask is null)
-                {
-                    <MudPaper Class="workspace-empty-state" Elevation="0">
-                        <MudText Typo="Typo.h6">No task selected</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">Pick a task thread to submit guidance and inspect run updates.</MudText>
-                    </MudPaper>
-                }
                 else
                 {
-                    <WorkspaceThreadChat TaskName="@_selectedTask.Name"
-                                         Harness="@_selectedTask.Harness"
-                                         TaskStateLabel="@GetTaskStateLabel(_selectedTask)"
-                                         TaskStateColor="@GetTaskStateColor(_selectedTask)"
+                    <WorkspaceThreadChat TaskName="@GetActiveTaskTitle()"
+                                         Harness="@GetActiveTaskHarness()"
+                                         TaskStateLabel="@GetActiveTaskStateLabel()"
+                                         TaskStateColor="@GetActiveTaskStateColor()"
                                          RunIdLabel="@GetSelectedRunShortId()"
                                          RunStateLabel="@GetSelectedRunStateLabel()"
                                          RunStateColor="@GetSelectedRunStateColor()"
                                          IsRunActive="@IsSelectedRunActive"
+                                         IsPlanModeEnabled="@(_composerModeOverride == HarnessExecutionMode.Plan)"
                                          CanRefreshSummary="@(_selectedRun is not null)"
                                          IsAdvancedOpen="@_historyPanelOpen"
                                          OnRefreshSummary="RefreshSelectedRunSummaryAsync"
                                          OnRefreshRuns="RefreshSelectedRepositoryAsync"
+                                         OnPlanModeChanged="OnPlanModeChangedAsync"
                                          OnToggleAdvanced="ToggleHistoryPanel">
                         <MessageList>
                             <WorkspaceThreadMessageList Messages="@ProjectedMessages" />
@@ -144,8 +88,7 @@
                                                         OnComposerImagesChanged="OnComposerImagesChangedAsync"
                                                         IsSubmitting="@_isSubmittingComposer"
                                                         GhostSuffix="@_composerGhostSuffix"
-                                                        ModeOverride="@_composerModeOverride"
-                                                        OnModeOverrideChanged="OnModeOverrideChangedAsync"
+                                                        SubmitRequested="SubmitComposerAsync"
                                                         OnImprove="OpenImprovePromptDraftDialogAsync"
                                                         OnGenerate="OpenGeneratePromptDraftDialogAsync"
                                                         OnComposerKeyDown="OnComposerKeyDown"
@@ -630,13 +573,6 @@
     private string _taskFilter = TaskFilterAll;
     private int _recentTaskTargetCount = 5;
 
-    private bool _isCreateTaskMode;
-    private bool _isCreatingTask;
-
-    private string _createTaskPrompt = "Describe the goal, constraints, validation, and output format.";
-    private IReadOnlyList<WorkspaceImageInput> _createTaskPromptImages = [];
-    private readonly string _createTaskPromptInputId = $"workspace-create-task-prompt-{Guid.NewGuid():N}";
-
     private bool _isSubmittingComposer;
     private bool _isSubmittingQuestionAnswers;
     private HarnessExecutionMode? _composerModeOverride;
@@ -648,6 +584,7 @@
     private CancellationTokenSource? _composerSuggestionCts;
     private readonly WorkspaceChatProjectionBuilder _chatProjectionBuilder = new();
     private readonly Dictionary<string, WorkspaceThreadUiCache> _threadUiCacheByTaskId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<WorkspaceChatMessage> _optimisticMessages = [];
     private bool _leftRailCollapsed;
 
     private bool _historyPanelOpen;
@@ -724,14 +661,30 @@
             .Select(BuildThreadState)
             .ToList();
 
-    private IReadOnlyList<WorkspaceChatMessage> ProjectedMessages =>
-        _chatProjectionBuilder.Build(
-            _selectedTaskPromptHistory,
-            _selectedRun,
-            _selectedRunAiSummary,
-            _selectedRunParsed,
-            _selectedRunStructuredView,
-            _selectedRunLogs);
+    private IReadOnlyList<WorkspaceChatMessage> ProjectedMessages
+    {
+        get
+        {
+            var projected = _chatProjectionBuilder.Build(
+                    _selectedTaskPromptHistory,
+                    _selectedRun,
+                    _selectedRunAiSummary,
+                    _selectedRunParsed,
+                    _selectedRunStructuredView,
+                    _selectedRunLogs)
+                .ToList();
+
+            if (_optimisticMessages.Count > 0)
+            {
+                projected.AddRange(_optimisticMessages);
+            }
+
+            return projected
+                .OrderBy(message => message.TimestampUtc)
+                .ThenBy(message => message.Id, StringComparer.Ordinal)
+                .ToList();
+        }
+    }
 
     private List<RunDocument> SelectedTaskRuns =>
         _selectedTask is null
@@ -821,9 +774,9 @@
         return SelectRepositoryAsync(repositoryId, syncSelection: true);
     }
 
-    private Task OnModeOverrideChangedAsync(HarnessExecutionMode? modeOverride)
+    private Task OnPlanModeChangedAsync(bool enabled)
     {
-        _composerModeOverride = modeOverride;
+        _composerModeOverride = enabled ? HarnessExecutionMode.Plan : null;
         return Task.CompletedTask;
     }
 
@@ -852,6 +805,48 @@
         return _leftRailCollapsed
             ? "workspace-chat-shell workspace-chat-shell-rail-collapsed"
             : "workspace-chat-shell";
+    }
+
+    private string GetActiveTaskTitle()
+    {
+        if (_selectedTask is not null)
+        {
+            return _selectedTask.Name;
+        }
+
+        return _selectedRepository is null
+            ? "Workspace"
+            : $"New Task in {_selectedRepository.Name}";
+    }
+
+    private string GetActiveTaskHarness()
+    {
+        if (_selectedTask is not null)
+        {
+            return _selectedTask.Harness;
+        }
+
+        return _selectedRepository?.TaskDefaults.Harness ?? "codex";
+    }
+
+    private string GetActiveTaskStateLabel()
+    {
+        if (_selectedTask is null)
+        {
+            return "Ready to start";
+        }
+
+        return GetTaskStateLabel(_selectedTask);
+    }
+
+    private Color GetActiveTaskStateColor()
+    {
+        if (_selectedTask is null)
+        {
+            return Color.Info;
+        }
+
+        return GetTaskStateColor(_selectedTask);
     }
 
     private string GetSelectedRunShortId()
@@ -934,6 +929,7 @@
                 _selectedRunParsed = null;
                 ClearSelectedRunStructuredState();
                 _selectedRunAiSummary = null;
+                _selectedRunQuestionRequests = [];
                 _selectedTaskPromptHistory = [];
                 _composerValue = string.Empty;
                 _composerImages = [];
@@ -976,19 +972,20 @@
         }
 
         _selectedRepository = repository;
-        _isCreateTaskMode = false;
         _selectedTask = null;
         _selectedRun = null;
         _selectedRunLogs = [];
         _selectedRunParsed = null;
         ClearSelectedRunStructuredState();
         _selectedRunAiSummary = null;
+        _selectedRunQuestionRequests = [];
         _selectedTaskPromptHistory = [];
         _composerValue = string.Empty;
         _composerImages = [];
         _composerGhostSuggestion = string.Empty;
         _composerGhostSuffix = string.Empty;
         _threadUiCacheByTaskId.Clear();
+        _optimisticMessages.Clear();
         _historyPanelOpen = false;
 
         if (syncSelection && SelectionService.SelectedRepositoryId != repositoryId)
@@ -1033,6 +1030,7 @@
                 _selectedTaskPromptHistory = [];
                 _composerValue = string.Empty;
                 _composerImages = [];
+                _optimisticMessages.Clear();
                 return;
             }
 
@@ -1057,9 +1055,9 @@
         }
 
         PersistActiveThreadCache();
-        _isCreateTaskMode = false;
         _selectedTask = task;
         _composerModeOverride = null;
+        _optimisticMessages.Clear();
         RestoreThreadDraft(task.Id);
         _selectedTaskPromptHistory = await Store.ListWorkspacePromptHistoryAsync(task.Id, 80, CancellationToken.None);
 
@@ -1445,7 +1443,7 @@
         }
     }
 
-    private async Task OpenCreateTaskFormAsync()
+    private async Task StartNewTaskComposerAsync()
     {
         if (_selectedRepository is null)
         {
@@ -1459,38 +1457,41 @@
         }
 
         PersistActiveThreadCache();
-        ResetCreateTaskForm();
-        _isCreateTaskMode = true;
+        _selectedTask = null;
+        _selectedRun = null;
+        _selectedRunLogs = [];
+        _selectedRunParsed = null;
+        _selectedRunStructuredEvents = [];
+        _selectedRunDiffSnapshot = null;
+        _selectedRunStructuredView = new RunStructuredViewSnapshot(string.Empty, 0, [], [], [], null, DateTime.UtcNow);
+        _selectedRunAiSummary = null;
+        _selectedRunQuestionRequests = [];
+        _selectedTaskPromptHistory = [];
+        _composerValue = string.Empty;
+        _composerImages = [];
+        _composerGhostSuggestion = string.Empty;
+        _composerGhostSuffix = string.Empty;
+        _composerModeOverride = null;
+        _optimisticMessages.Clear();
         _historyPanelOpen = false;
+        await InvokeAsync(StateHasChanged);
     }
 
-    private void CloseCreateTaskForm()
-    {
-        _isCreateTaskMode = false;
-        _createTaskPromptImages = [];
-    }
-
-    private void ResetCreateTaskForm()
-    {
-        _createTaskPrompt = "Describe the goal, constraints, validation, and output format.";
-        _createTaskPromptImages = [];
-    }
-
-    private async Task CreateTaskAsync()
+    private async Task<string?> CreateTaskFromComposerAsync(
+        string composerText,
+        IReadOnlyList<WorkspaceImageInput> composerImages)
     {
         if (_selectedRepository is null)
         {
-            return;
+            return null;
         }
 
-        var taskPrompt = AppendCreateTaskPromptImageReferences(_createTaskPrompt, _createTaskPromptImages).Trim();
+        var taskPrompt = AppendCreateTaskPromptImageReferences(composerText, composerImages).Trim();
         if (string.IsNullOrWhiteSpace(taskPrompt))
         {
             Snackbar.Add("Task prompt is required.", Severity.Warning);
-            return;
+            return null;
         }
-
-        _isCreatingTask = true;
 
         try
         {
@@ -1505,7 +1506,6 @@
                 Name: taskName);
 
             var created = await Store.CreateTaskAsync(request, CancellationToken.None);
-            _isCreateTaskMode = false;
             await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: false);
             await SelectTaskAsync(created.Id);
 
@@ -1515,20 +1515,18 @@
             }
 
             Snackbar.Add("Task created.", Severity.Success);
+            return created.Id;
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Failed to create task: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _isCreatingTask = false;
+            return null;
         }
     }
 
     private async Task SubmitComposerAsync()
     {
-        if (_selectedRepository is null || _selectedTask is null)
+        if (_selectedRepository is null)
         {
             return;
         }
@@ -1542,9 +1540,30 @@
         }
 
         _isSubmittingComposer = true;
+        var optimisticMessageId = AddOptimisticUserMessage(composerText, _composerImages.Count);
 
         try
         {
+            if (_selectedTask is null)
+            {
+                var createdTaskId = await CreateTaskFromComposerAsync(composerText, _composerImages);
+                if (!string.IsNullOrWhiteSpace(createdTaskId))
+                {
+                    _composerValue = string.Empty;
+                    _composerImages = [];
+                    _composerGhostSuggestion = string.Empty;
+                    _composerGhostSuffix = string.Empty;
+                    RemoveOptimisticUserMessage(optimisticMessageId);
+                    _ = QueueComposerSuggestionAsync();
+                }
+                else
+                {
+                    RemoveOptimisticUserMessage(optimisticMessageId);
+                }
+
+                return;
+            }
+
             var submission = await WorkspaceService.SubmitPromptAsync(
                 _selectedRepository.Id,
                 new WorkspacePromptSubmissionRequest(
@@ -1555,12 +1574,13 @@
                     ForceNewRun: true,
                     UserMessage: composerText,
                     ModeOverride: _composerModeOverride,
-                    Images: _composerImages,
+                    Images: _composerImages.ToList(),
                     SessionProfileId: null),
                 CancellationToken.None);
 
             if (!submission.Success)
             {
+                RemoveOptimisticUserMessage(optimisticMessageId);
                 Snackbar.Add(submission.Message, Severity.Warning);
                 return;
             }
@@ -1574,6 +1594,7 @@
             _composerImages = [];
             UpdateActiveThreadCache();
             _ = QueueComposerSuggestionAsync();
+            RemoveOptimisticUserMessage(optimisticMessageId);
 
             await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
 
@@ -1586,12 +1607,41 @@
         }
         catch (Exception ex)
         {
+            RemoveOptimisticUserMessage(optimisticMessageId);
             Snackbar.Add($"Submit failed: {ex.Message}", Severity.Error);
         }
         finally
         {
             _isSubmittingComposer = false;
         }
+    }
+
+    private string AddOptimisticUserMessage(string composerText, int imageCount)
+    {
+        var normalizedText = string.IsNullOrWhiteSpace(composerText)
+            ? $"Sent {imageCount} image(s)."
+            : composerText;
+
+        var message = new WorkspaceChatMessage(
+            Id: $"optimistic-{Guid.NewGuid():N}",
+            Kind: WorkspaceChatMessageKind.User,
+            Title: "You",
+            Content: normalizedText,
+            TimestampUtc: DateTime.UtcNow,
+            Meta: "Sending...");
+        _optimisticMessages.Add(message);
+        return message.Id;
+    }
+
+    private void RemoveOptimisticUserMessage(string? optimisticMessageId)
+    {
+        if (string.IsNullOrWhiteSpace(optimisticMessageId))
+        {
+            return;
+        }
+
+        _optimisticMessages.RemoveAll(message =>
+            string.Equals(message.Id, optimisticMessageId, StringComparison.Ordinal));
     }
 
     private async Task SubmitQuestionAnswersAsync(WorkspaceQuestionAnswersSubmissionRequest request)
@@ -1781,18 +1831,6 @@ Composer Focus:
         Value = _promptDraftValue,
     };
 
-    private Task OnCreateTaskPromptChangedAsync(string value)
-    {
-        _createTaskPrompt = value;
-        return Task.CompletedTask;
-    }
-
-    private Task OnCreateTaskPromptImagesChangedAsync(IReadOnlyList<WorkspaceImageInput> images)
-    {
-        _createTaskPromptImages = images;
-        return Task.CompletedTask;
-    }
-
     private async Task OnComposerValueChangedAsync(string value)
     {
         _composerValue = value;
@@ -1953,7 +1991,7 @@ Composer Focus:
 
     private bool ShouldAttachComposerBridge()
     {
-        return _selectedTask is not null && !_isCreateTaskMode;
+        return _selectedRepository is not null;
     }
 
     private WorkspaceRepositoryListItem BuildRepositoryListItem(RepositoryDocument repository)
@@ -1978,7 +2016,7 @@ Composer Focus:
             lastActivityUtc = cache.LastActivityUtc;
         }
 
-        var latestStateLabel = latestRun?.State.ToString() ?? (task.Enabled ? "Idle" : "Disabled");
+        var latestStateLabel = WorkspaceStatusTextFormatter.FormatTaskStateLabel(task, latestRun);
         var latestStateColor = latestRun is null
             ? (task.Enabled ? Color.Default : Color.Secondary)
             : GetStateColor(latestRun.State);
@@ -2308,12 +2346,7 @@ Composer Focus:
     private string GetTaskStateLabel(TaskDocument task)
     {
         var latestRun = GetLatestRun(task.Id);
-        if (latestRun is null)
-        {
-            return task.Enabled ? "Idle" : "Disabled";
-        }
-
-        return latestRun.State.ToString();
+        return WorkspaceStatusTextFormatter.FormatTaskStateLabel(task, latestRun);
     }
 
     private static Color GetStateColor(RunState state)

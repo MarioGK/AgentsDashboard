@@ -52,7 +52,7 @@ bash .codex/skills/dotnet-watch-error-fixer/launch-and-fix.sh
 - `CODEX_CLI` (default `codex`)
 - `CODEX_CLI_ARGS` (optional additional args)
 - `HEALTH_CHECK_ENABLED` (default `true`)
-- `HEALTH_CHECK_URL` (default `https://192.168.10.101:5266/health`)
+- `HEALTH_CHECK_URL` (default `https://localhost:5266/health`)
 - `HEALTH_CHECK_MAX_ATTEMPTS` (default `10`)
 - `HEALTH_CHECK_MIN_INTERVAL_SECONDS` (default `5`)
 - `HEALTH_CHECK_MAX_INTERVAL_SECONDS` (default `10`)

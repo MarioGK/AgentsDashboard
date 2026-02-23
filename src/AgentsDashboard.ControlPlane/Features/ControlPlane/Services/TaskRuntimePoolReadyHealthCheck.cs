@@ -29,7 +29,7 @@ public sealed class TaskRuntimePoolReadyHealthCheck(
             var message = snapshot.ReadinessBlockedSinceUtc.HasValue
                 ? $"Task runtime readiness blocked since {snapshot.ReadinessBlockedSinceUtc.Value:O}"
                 : "Task runtime readiness blocked";
-            return Task.FromResult(HealthCheckResult.Unhealthy(message, data: data));
+            return Task.FromResult(HealthCheckResult.Degraded(message, data: data));
         }
 
         if (snapshot.UnhealthyRuntimes > 0 || snapshot.DegradedRuntimes > 0)

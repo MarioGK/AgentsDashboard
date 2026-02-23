@@ -17,6 +17,7 @@ AUTOFIX_DISPATCH_LOG=""
 AUTOFIX_STATE_FILE=""
 CODEX_CLI="${CODEX_CLI:-codex}"
 CODEX_CLI_ARGS="${CODEX_CLI_ARGS:-}"
+LAST_CODEX_OUTPUT_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -95,9 +96,9 @@ if ! [[ "$CONTEXT_LINES" =~ ^[0-9]+$ ]]; then
   CONTEXT_LINES=120
 fi
 
-LOG_DIR="$REPO_ROOT/data/logs"
+LOG_DIR="${AUTOFIX_LOG_DIR:-/tmp/autofix/logs}"
 UNIFIED_ERROR_LOG="${UNIFIED_ERROR_LOG:-${LOG_DIR}/autofix-unified-errors.log}"
-AUTOFIX_DISPATCH_LOG="${AUTOFIX_DISPATCH_LOG:-/tmp/logs/autofix-dispatch.log}"
+AUTOFIX_DISPATCH_LOG="${AUTOFIX_DISPATCH_LOG:-${LOG_DIR}/autofix-dispatch.log}"
 AUTOFIX_STATE_FILE="${AUTOFIX_STATE_FILE:-${LOG_DIR}/autofix-state.log}"
 
 mkdir -p "$LOG_DIR"
@@ -134,9 +135,17 @@ fi
 log_dispatch() {
   local status="$1"
   local output="$2"
+  local output_file="$3"
   local output_line="${output//$'\n'/ }"
+  local output_file_value=""
 
-  printf '%s | source=%s | kind=%s | taxonomy=%s | severity=%s | signature=%s | status=%s | line_hash=%s | exit=%s | output=%s\n' \
+  if [[ -n "$output_file" ]]; then
+    output_file_value="$output_file"
+  else
+    output_file_value="<not-run>"
+  fi
+
+  printf '%s | source=%s | kind=%s | taxonomy=%s | severity=%s | signature=%s | status=%s | line_hash=%s | exit=%s | output=%s | output_file=%s\n' \
     "$(date -u +'%Y-%m-%dT%H:%M:%S.%3NZ')" \
     "$SOURCE_FILE" \
     "$EVENT_KIND" \
@@ -146,7 +155,8 @@ log_dispatch() {
     "$status" \
     "$ERROR_HASH" \
     "$CODEx_EXIT_CODE" \
-    "$output_line" >> "$AUTOFIX_DISPATCH_LOG"
+    "$output_line" \
+    "$output_file_value" >> "$AUTOFIX_DISPATCH_LOG"
 }
 
 if ! command -v "$CODEX_CLI" >/dev/null 2>&1; then
@@ -218,18 +228,31 @@ run_codex_attempt() {
   local output_file
   local output
 
-  output_file="$(mktemp "${LOG_DIR}/.autofix-codex-output.XXXXXX")"
+  output_file="${LOG_DIR}/.autofix-codex-output.${EVENT_TS//[:.]/-}.$$.$RANDOM.log"
+  LAST_CODEX_OUTPUT_FILE="$output_file"
+
+  {
+    printf 'timestamp=%s\n' "$EVENT_TS";
+    printf 'source=%s\n' "$SOURCE_FILE";
+    printf 'event_kind=%s\n' "$EVENT_KIND";
+    printf 'failure_taxonomy=%s\n' "$FAILURE_TAXONOMY";
+    printf 'failure_severity=%s\n' "$FAILURE_SEVERITY";
+    printf 'failure_signature=%s\n' "$FAILURE_SIGNATURE";
+    printf 'error_line=%s\n' "$ERROR_LINE";
+    printf 'prompt_lines=%s\n' "${CONTEXT_LINES}";
+    printf '%s\n' '--- codex output ---';
+  } > "$output_file"
+
   if command -v timeout >/dev/null 2>&1; then
-    timeout 900 "$CODEX_CLI" "${args[@]}" "$FIX_PROMPT" > "$output_file" 2>&1
+    timeout 900 "$CODEX_CLI" "${args[@]}" "$FIX_PROMPT" >> "$output_file" 2>&1
     CODEx_EXIT_CODE=$?
   else
-    "$CODEX_CLI" "${args[@]}" "$FIX_PROMPT" > "$output_file" 2>&1
+    "$CODEX_CLI" "${args[@]}" "$FIX_PROMPT" >> "$output_file" 2>&1
     CODEx_EXIT_CODE=$?
   fi
 
   output="$(cat "$output_file")"
   FIX_OUTPUT="${output//$'\n'/ }"
-  rm -f "$output_file"
 }
 
 base_attempt_args=(
@@ -248,9 +271,9 @@ fi
 
 run_codex_attempt "${base_attempt_args[@]}"
 if [[ "$CODEx_EXIT_CODE" -eq 0 ]]; then
-  log_dispatch "dispatched" "success: codex ${CODEX_CLI} executed"
+  log_dispatch "dispatched" "success: codex ${CODEX_CLI} executed" "$LAST_CODEX_OUTPUT_FILE"
   exit 0
 fi
 
-log_dispatch "failed" "${FIX_OUTPUT}"
+log_dispatch "failed" "${FIX_OUTPUT}" "$LAST_CODEX_OUTPUT_FILE"
 exit 0
