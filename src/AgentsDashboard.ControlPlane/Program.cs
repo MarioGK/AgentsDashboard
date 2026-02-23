@@ -2,6 +2,7 @@ using AgentsDashboard.ControlPlane;
 using AgentsDashboard.ControlPlane.Components;
 using AgentsDashboard.ControlPlane.Configuration;
 using AgentsDashboard.ControlPlane.Services;
+using System.Security.Cryptography.X509Certificates;
 using ZLogger;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
@@ -33,6 +34,8 @@ if (startupOptions is not null)
 
 builder.Services.AddControlPlaneServices(builder.Environment.IsDevelopment());
 
+UseTerrascaleCertificateIfAvailable(builder);
+
 var app = builder.Build();
 Microsoft.AspNetCore.Hosting.StaticWebAssets.StaticWebAssetsLoader.UseStaticWebAssets(app.Environment, app.Configuration);
 
@@ -56,3 +59,35 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.MapControlPlaneHealthChecks();
 
 app.Run();
+
+static void UseTerrascaleCertificateIfAvailable(WebApplicationBuilder builder)
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        return;
+    }
+
+    var configuredCertificatePath = builder.Configuration["ASPNETCORE_Kestrel__Certificates__Default__Path"];
+    var configuredCertificateKeyPath = builder.Configuration["ASPNETCORE_Kestrel__Certificates__Default__KeyPath"];
+    if (!string.IsNullOrWhiteSpace(configuredCertificatePath) || !string.IsNullOrWhiteSpace(configuredCertificateKeyPath))
+    {
+        return;
+    }
+
+    var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+    var certPath = Path.Combine(localAppData, "mkcert", "terrascale-dev.pem");
+    var keyPath = Path.Combine(localAppData, "mkcert", "terrascale-dev-key.pem");
+    if (!File.Exists(certPath) || !File.Exists(keyPath))
+    {
+        return;
+    }
+
+    var certificate = X509Certificate2.CreateFromPemFile(certPath, keyPath);
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ConfigureHttpsDefaults(httpsDefaults =>
+        {
+            httpsDefaults.ServerCertificate = certificate;
+        });
+    });
+}

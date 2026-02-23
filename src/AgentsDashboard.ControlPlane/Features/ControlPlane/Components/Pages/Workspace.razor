@@ -16,6 +16,7 @@
 @inject Services.IUiRealtimeBroker UiRealtimeBroker
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@inject IDialogService DialogService
 @implements IAsyncDisposable
 
 @namespace AgentsDashboard.ControlPlane.Components.Pages
@@ -43,6 +44,7 @@
                                OnTaskFilterChanged="OnTaskFilterChangedAsync"
                                OnRepositorySelected="SelectRepositoryFromRailAsync"
                                OnThreadSelected="SelectTaskAsync"
+                               OnThreadDeleteRequested="DeleteTaskAsync"
                                OnNewTask="OpenCreateTaskFormAsync" />
 
             <div class="workspace-chat-main-pane">
@@ -70,7 +72,7 @@
                                                     Images="@_createTaskPromptImages"
                                                     ImagesChanged="OnCreateTaskPromptImagesChangedAsync"
                                                     Placeholder="Describe the goal, constraints, validation, and output format."
-                                                    HelperText="Paste or upload images and add references when needed."
+                                                    HelperText="Paste or upload images as task context."
                                                     Rows="14"
                                                     PasteBridgeKey="create-task"
                                                     OnValidationError="ShowComposerValidationAsync" />
@@ -138,14 +140,8 @@
                                                         OnComposerImagesChanged="OnComposerImagesChangedAsync"
                                                         IsSubmitting="@_isSubmittingComposer"
                                                         GhostSuffix="@_composerGhostSuffix"
-                                                        SessionProfiles="@_sessionProfiles"
-                                                        SelectedSessionProfileId="@_selectedSessionProfileId"
-                                                        OnSessionProfileChanged="OnSessionProfileChangedAsync"
                                                         ModeOverride="@_composerModeOverride"
                                                         OnModeOverrideChanged="OnModeOverrideChangedAsync"
-                                                        CanRunAgain="@(_selectedRun is not null)"
-                                                        OnSubmit="SubmitComposerAsync"
-                                                        OnRunAgain="RunAgainWithEditsAsync"
                                                         OnImprove="OpenImprovePromptDraftDialogAsync"
                                                         OnGenerate="OpenGeneratePromptDraftDialogAsync"
                                                         OnComposerKeyDown="OnComposerKeyDown"
@@ -625,8 +621,6 @@
     private RunStructuredViewSnapshot _selectedRunStructuredView = new(string.Empty, 0, [], [], [], null, DateTime.UtcNow);
     private RunAiSummaryDocument? _selectedRunAiSummary;
     private List<WorkspacePromptEntryDocument> _selectedTaskPromptHistory = [];
-    private List<RunSessionProfileDocument> _sessionProfiles = [];
-    private string _selectedSessionProfileId = string.Empty;
     private string _repositoryFilter = RepositoryFilterAll;
     private string _taskFilter = TaskFilterAll;
     private int _recentTaskTargetCount = 5;
@@ -821,13 +815,6 @@
         return SelectRepositoryAsync(repositoryId, syncSelection: true);
     }
 
-    private Task OnSessionProfileChangedAsync(string profileId)
-    {
-        _selectedSessionProfileId = profileId ?? string.Empty;
-        UpdateActiveThreadCache();
-        return Task.CompletedTask;
-    }
-
     private Task OnModeOverrideChangedAsync(HarnessExecutionMode? modeOverride)
     {
         _composerModeOverride = modeOverride;
@@ -898,6 +885,18 @@
         return Task.FromResult(accepted);
     }
 
+    [JSInvokable]
+    public async Task<bool> TrySubmitComposerFromJs()
+    {
+        if (_isSubmittingComposer)
+        {
+            return true;
+        }
+
+        await SubmitComposerAsync();
+        return true;
+    }
+
     private async Task LoadWorkspaceAsync()
     {
         _loading = true;
@@ -930,8 +929,6 @@
                 ClearSelectedRunStructuredState();
                 _selectedRunAiSummary = null;
                 _selectedTaskPromptHistory = [];
-                _sessionProfiles = [];
-                _selectedSessionProfileId = string.Empty;
                 _composerValue = string.Empty;
                 _composerImages = [];
                 _threadUiCacheByTaskId.Clear();
@@ -981,7 +978,6 @@
         ClearSelectedRunStructuredState();
         _selectedRunAiSummary = null;
         _selectedTaskPromptHistory = [];
-        _selectedSessionProfileId = string.Empty;
         _composerValue = string.Empty;
         _composerImages = [];
         _composerGhostSuggestion = string.Empty;
@@ -1005,7 +1001,6 @@
         {
             _selectedRepositoryTasks = await Store.ListTasksAsync(repositoryId, CancellationToken.None);
             _selectedRepositoryRuns = await Store.ListRunsByRepositoryAsync(repositoryId, CancellationToken.None);
-            _sessionProfiles = await Store.ListRunSessionProfilesAsync(repositoryId, includeGlobal: true, CancellationToken.None);
             _selectedRepositoryRuns = _selectedRepositoryRuns.OrderByDescending(run => run.CreatedAtUtc).ToList();
 
             RebuildLatestRunsIndex();
@@ -1059,7 +1054,6 @@
         _isCreateTaskMode = false;
         _selectedTask = task;
         _composerModeOverride = null;
-        _selectedSessionProfileId = ResolveSessionProfileForTask(task);
         RestoreThreadDraft(task.Id);
         _selectedTaskPromptHistory = await Store.ListWorkspacePromptHistoryAsync(task.Id, 80, CancellationToken.None);
 
@@ -1330,6 +1324,86 @@
         await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
     }
 
+    private async Task DeleteTaskAsync(string taskId)
+    {
+        if (_selectedRepository is null)
+        {
+            return;
+        }
+
+        var task = _selectedRepositoryTasks.FirstOrDefault(item => string.Equals(item.Id, taskId, StringComparison.OrdinalIgnoreCase));
+        if (task is null)
+        {
+            return;
+        }
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Delete Task",
+            $"Delete task '{task.Name}' and all related task data?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await Store.DeleteTaskCascadeAsync(taskId, CancellationToken.None);
+            if (!result.TaskDeleted)
+            {
+                Snackbar.Add("Task was already deleted or not found.", Severity.Warning);
+            }
+            else
+            {
+                var details = new List<string>();
+
+                if (result.DeletedRuns > 0)
+                {
+                    details.Add($"{result.DeletedRuns} run(s)");
+                }
+
+                if (result.DeletedPromptEntries > 0)
+                {
+                    details.Add($"{result.DeletedPromptEntries} prompt history entries");
+                }
+
+                if (result.DeletedRunLogs > 0)
+                {
+                    details.Add($"{result.DeletedRunLogs} run log line(s)");
+                }
+
+                if (result.DeletedRunSummaries > 0)
+                {
+                    details.Add($"{result.DeletedRunSummaries} summary(s)");
+                }
+
+                if (result.DeletedTaskWorkspaceDirectories > 0)
+                {
+                    details.Add($"{result.DeletedTaskWorkspaceDirectories} workspace directory(ies)");
+                }
+
+                if (details.Count == 0)
+                {
+                    Snackbar.Add("Task deleted.", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add($"Task deleted with {string.Join(", ", details)}.", Severity.Success);
+                }
+
+                _threadUiCacheByTaskId.Remove(taskId);
+            }
+
+            await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to delete task: {ex.Message}", Severity.Error);
+        }
+    }
+
     private async Task OpenCreateTaskFormAsync()
     {
         if (_selectedRepository is null)
@@ -1411,12 +1485,7 @@
         }
     }
 
-    private Task SubmitComposerAsync()
-    {
-        return SubmitComposerAsync(forceNewRun: false);
-    }
-
-    private async Task SubmitComposerAsync(bool forceNewRun)
+    private async Task SubmitComposerAsync()
     {
         if (_selectedRepository is null || _selectedTask is null)
         {
@@ -1442,11 +1511,11 @@
                     TaskId: _selectedTask.Id,
                     Harness: _selectedTask.Harness,
                     Command: _selectedTask.Command,
-                    ForceNewRun: forceNewRun,
+                    ForceNewRun: true,
                     UserMessage: composerText,
                     ModeOverride: _composerModeOverride,
                     Images: _composerImages,
-                    SessionProfileId: string.IsNullOrWhiteSpace(_selectedSessionProfileId) ? null : _selectedSessionProfileId),
+                    SessionProfileId: null),
                 CancellationToken.None);
 
             if (!submission.Success)
@@ -1482,25 +1551,6 @@
         {
             _isSubmittingComposer = false;
         }
-    }
-
-    private async Task RunAgainWithEditsAsync()
-    {
-        if (_selectedRun is null)
-        {
-            Snackbar.Add("Select a historical run first.", Severity.Info);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_composerValue) && _composerImages.Count == 0)
-        {
-            _composerValue = $"Follow-up based on run {_selectedRun.Id[..Math.Min(8, _selectedRun.Id.Length)]}: ";
-            _ = QueueComposerSuggestionAsync();
-            Snackbar.Add("Composer prefilled. Edit and submit.", Severity.Info);
-            return;
-        }
-
-        await SubmitComposerAsync(forceNewRun: true);
     }
 
     private async Task OpenPromptDraftDialogAsync(PromptDraftMode mode)
@@ -1763,13 +1813,6 @@ Composer Focus:
             {
                 await InvokeAsync(StateHasChanged);
             }
-
-            return;
-        }
-
-        if (args.Key == "Enter" && !args.ShiftKey)
-        {
-            await SubmitComposerAsync();
         }
     }
 
@@ -2300,23 +2343,6 @@ Composer Focus:
         }
 
         return $"{currentPrompt.TrimEnd()}\n\n{suffix}";
-    }
-
-    private string ResolveSessionProfileForTask(TaskDocument task)
-    {
-        if (!string.IsNullOrWhiteSpace(task.SessionProfileId) &&
-            _sessionProfiles.Any(x => x.Enabled && string.Equals(x.Id, task.SessionProfileId, StringComparison.Ordinal)))
-        {
-            return task.SessionProfileId;
-        }
-
-        var byHarness = _sessionProfiles.FirstOrDefault(x =>
-            x.Enabled &&
-            (string.IsNullOrWhiteSpace(x.Harness) ||
-             string.Equals(x.Harness, "any", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(x.Harness, task.Harness, StringComparison.OrdinalIgnoreCase)));
-
-        return byHarness?.Id ?? string.Empty;
     }
 
     private static string AppendCreateTaskPromptImageReferences(string prompt, IReadOnlyList<WorkspaceImageInput> images)

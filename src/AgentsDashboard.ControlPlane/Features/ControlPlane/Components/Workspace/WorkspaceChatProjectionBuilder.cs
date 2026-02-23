@@ -78,17 +78,6 @@ public sealed class WorkspaceChatProjectionBuilder
             }
         }
 
-        if (messages.Count == 0)
-        {
-            messages.Add(new WorkspaceChatMessage(
-                Id: "workspace-chat-empty",
-                Kind: WorkspaceChatMessageKind.System,
-                Title: "No conversation yet",
-                Content: "Use the composer to submit guidance for this task.",
-                TimestampUtc: DateTime.UtcNow,
-                Meta: string.Empty));
-        }
-
         return messages
             .OrderBy(x => x.TimestampUtc)
             .ToList();

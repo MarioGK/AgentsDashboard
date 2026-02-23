@@ -112,7 +112,11 @@ public sealed class TaskRuntimeEventListenerService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Worker event hub connection failed for {TaskRuntimeId}", connection.TaskRuntimeId);
+                logger.LogWarning(
+                    "Worker event hub connection failed for {TaskRuntimeId}: {ErrorMessage}",
+                    connection.TaskRuntimeId,
+                    ex.Message.ReplaceLineEndings(" "));
+                logger.LogDebug(ex, "Worker event hub connection failure details for {TaskRuntimeId}", connection.TaskRuntimeId);
                 await Task.Delay(reconnectDelay, cancellationToken);
                 reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
             }

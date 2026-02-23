@@ -50,7 +50,7 @@ internal static class HostLoggingExtensions
             (timestamp, sequence) => GetLogFilePath(serviceName, timestamp, sequence),
             RollingInterval.Day,
             MaxLogFileSizeKb);
-        logging.AddProvider(new WarningErrorFileLoggerProvider(GetWarningErrorLogFilePath(serviceName), MaxWarningErrorLogFileSizeBytes));
+        logging.AddProvider(new WarningErrorFileLoggerProvider(GetErrorLogFilePath(), MaxWarningErrorLogFileSizeBytes));
 
         return logging;
     }
@@ -62,11 +62,11 @@ internal static class HostLoggingExtensions
         return Path.Combine(logsDirectory, $"{serviceName}-{timestamp:yyyy-MM-dd}.{sequence:D4}.log");
     }
 
-    private static string GetWarningErrorLogFilePath(string serviceName)
+    private static string GetErrorLogFilePath()
     {
-        var logsDirectory = RepositoryPathResolver.GetDataPath("logs");
-        Directory.CreateDirectory(logsDirectory);
-        return Path.Combine(logsDirectory, $"{serviceName}-warnings-errors.log");
+        var dataDirectory = RepositoryPathResolver.GetDataPath();
+        Directory.CreateDirectory(dataDirectory);
+        return Path.Combine(dataDirectory, "errors.log");
     }
 
     private static bool ShouldEnableAnsi()

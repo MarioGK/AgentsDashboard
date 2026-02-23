@@ -80,21 +80,32 @@ export function registerComposerKeyBridge(elementId, dotNetRef) {
 
     const id = `composer-${++composerCounter}`;
     const handler = async event => {
-        if (event.key !== "Tab" && event.key !== "ArrowRight") {
+        if (event.isComposing) {
             return;
         }
 
-        const selectionStart = typeof element.selectionStart === "number" ? element.selectionStart : element.value.length;
-        const selectionEnd = typeof element.selectionEnd === "number" ? element.selectionEnd : element.value.length;
+        if (event.key === "Tab" || event.key === "ArrowRight") {
+            const selectionStart = typeof element.selectionStart === "number" ? element.selectionStart : element.value.length;
+            const selectionEnd = typeof element.selectionEnd === "number" ? element.selectionEnd : element.value.length;
 
-        const accepted = await dotNetRef.invokeMethodAsync(
-            "TryAcceptGhostSuggestionFromJs",
-            event.key,
-            selectionStart,
-            selectionEnd);
+            const accepted = await dotNetRef.invokeMethodAsync(
+                "TryAcceptGhostSuggestionFromJs",
+                event.key,
+                selectionStart,
+                selectionEnd);
 
-        if (accepted) {
-            event.preventDefault();
+            if (accepted) {
+                event.preventDefault();
+            }
+
+            return;
+        }
+
+        if (event.key === "Enter" && !event.shiftKey) {
+            const submitted = await dotNetRef.invokeMethodAsync("TrySubmitComposerFromJs");
+            if (submitted) {
+                event.preventDefault();
+            }
         }
     };
 

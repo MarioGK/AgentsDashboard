@@ -127,6 +127,15 @@
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Info">New</MudChip>
                                 }
+                                <MudTooltip Text="Delete task" Placement="Placement.Top">
+                                    <span @onclick="() => {}" @onclick:stopPropagation="true">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                       Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       OnClick="() => OnThreadDeleteRequested.InvokeAsync(thread.TaskId)"
+                                                       data-testid="@($"workspace-task-delete-{thread.TaskId}")" />
+                                    </span>
+                                </MudTooltip>
                             }
                         </MudStack>
                         @if (!IsCollapsed)
@@ -156,6 +165,7 @@
     [Parameter] public EventCallback<string> OnTaskFilterChanged { get; set; }
     [Parameter] public EventCallback<string> OnRepositorySelected { get; set; }
     [Parameter] public EventCallback<string> OnThreadSelected { get; set; }
+    [Parameter] public EventCallback<string> OnThreadDeleteRequested { get; set; }
     [Parameter] public EventCallback OnNewTask { get; set; }
 
     private Task OnRepositoryFilterInternalAsync(string value)

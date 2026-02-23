@@ -5,6 +5,74 @@
 
 <div class="workspace-composer-surface">
     <div class="workspace-composer-wrap">
+        <InputFile id="@_fileInputId"
+                   class="workspace-hidden-file-input"
+                   OnChange="OnFileUploadChangedAsync"
+                   accept="image/png,image/jpeg,image/webp,image/gif"
+                   multiple />
+
+        <div class="workspace-composer-topbar">
+            <div class="workspace-composer-topbar-left">
+                <MudTooltip Text="Upload image">
+                    <label for="@_fileInputId" class="workspace-composer-icon-action workspace-composer-icon-action-upload @(Disabled ? "workspace-composer-icon-action-disabled" : string.Empty)">
+                        <MudIcon Icon="@Icons.Material.Filled.Upload" Size="Size.Small" />
+                    </label>
+                </MudTooltip>
+
+                @if (_images.Count == 0)
+                {
+                    <span class="workspace-composer-attachments-empty">No files</span>
+                }
+                else
+                {
+                    @foreach (var image in _images)
+                    {
+                        <span class="workspace-composer-file-chip" title="@image.FileName">
+                            <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" />
+                            <span class="workspace-composer-file-chip-name">@image.FileName</span>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Size="Size.Small"
+                                           Class="workspace-composer-file-chip-close"
+                                           OnClick="() => RemoveImageAsync(image.Id)"
+                                           Disabled="@Disabled" />
+                        </span>
+                    }
+                }
+            </div>
+
+            <div class="workspace-composer-topbar-right">
+                @if (OnImprove.HasDelegate)
+                {
+                    <MudTooltip Text="Improve prompt">
+                        <MudIconButton Icon="@Icons.Material.Filled.Tune"
+                                       Size="Size.Small"
+                                       Class="workspace-composer-action-button"
+                                       OnClick="TriggerImproveAsync"
+                                       Disabled="@Disabled" />
+                    </MudTooltip>
+                }
+
+                @if (OnGenerate.HasDelegate)
+                {
+                    <MudTooltip Text="Generate prompt from context">
+                        <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome"
+                                       Size="Size.Small"
+                                       Class="workspace-composer-action-button workspace-composer-generate-action"
+                                       OnClick="TriggerGenerateAsync"
+                                       Disabled="@Disabled" />
+                    </MudTooltip>
+                }
+
+                <MudTooltip Text="Clear prompt and files">
+                    <MudIconButton Icon="@Icons.Material.Filled.Clear"
+                                   Size="Size.Small"
+                                   Class="workspace-composer-action-button"
+                                   OnClick="ClearComposerAsync"
+                                   Disabled="@(Disabled || !CanClearComposer)" />
+                </MudTooltip>
+            </div>
+        </div>
+
         @if (ShowGhostSuggestion)
         {
             <div class="workspace-composer-ghost-layer" aria-hidden="true">
@@ -22,57 +90,7 @@
                   disabled="@Disabled"></textarea>
     </div>
 
-    <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="workspace-image-toolbar">
-        <MudText Typo="Typo.caption" Color="Color.Secondary">@HelperText</MudText>
-        <MudSpacer />
-
-        <InputFile id="@_fileInputId"
-                   class="workspace-hidden-file-input"
-                   OnChange="OnFileUploadChangedAsync"
-                   accept="image/png,image/jpeg,image/webp,image/gif"
-                   multiple />
-
-        <label for="@_fileInputId" class="workspace-image-upload-label @(Disabled ? "workspace-image-upload-label-disabled" : string.Empty)">
-            <MudIcon Icon="@Icons.Material.Filled.Upload" Size="Size.Small" />
-            <span>Upload</span>
-        </label>
-
-        <MudButton Variant="Variant.Text"
-                   Color="Color.Default"
-                   Size="Size.Small"
-                   OnClick="ClearImagesAsync"
-                   Disabled="@(Disabled || _images.Count == 0)">
-            Clear
-        </MudButton>
-    </MudStack>
-
-    @if (_images.Count > 0)
-    {
-        <div class="workspace-image-strip">
-            @foreach (var image in _images)
-            {
-                <MudPaper Class="workspace-image-card" Elevation="0">
-                    <img src="@image.DataUrl" alt="@image.FileName" class="workspace-image-card-preview" />
-                    <div class="workspace-image-card-meta">
-                        <MudText Typo="Typo.caption">@image.FileName</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">@FormatSize(image.SizeBytes)</MudText>
-                    </div>
-                    <MudStack Row Spacing="0">
-                        <MudIconButton Icon="@Icons.Material.Filled.ShortText"
-                                       Size="Size.Small"
-                                       Color="Color.Primary"
-                                       OnClick="() => InsertImageReferenceAsync(image)"
-                                       Disabled="@Disabled" />
-                        <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                       Size="Size.Small"
-                                       Color="Color.Error"
-                                       OnClick="() => RemoveImageAsync(image.Id)"
-                                       Disabled="@Disabled" />
-                    </MudStack>
-                </MudPaper>
-            }
-        </div>
-    }
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="workspace-composer-helper-text">@HelperText</MudText>
 </div>
 
 @code {
@@ -83,10 +101,12 @@
     [Parameter] public EventCallback<IReadOnlyList<WorkspaceImageInput>> ImagesChanged { get; set; }
     [Parameter] public EventCallback<KeyboardEventArgs> OnKeyDown { get; set; }
     [Parameter] public EventCallback<string> OnValidationError { get; set; }
+    [Parameter] public EventCallback OnImprove { get; set; }
+    [Parameter] public EventCallback OnGenerate { get; set; }
     [Parameter] public bool ShowGhostSuggestion { get; set; }
     [Parameter] public string GhostSuffix { get; set; } = string.Empty;
     [Parameter] public string Placeholder { get; set; } = string.Empty;
-    [Parameter] public string HelperText { get; set; } = "Paste image with Ctrl/Cmd+V or upload from disk.";
+    [Parameter] public string HelperText { get; set; } = "Enter to send. Shift+Enter inserts a new line. Paste or upload images.";
     [Parameter] public int Rows { get; set; } = 6;
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public string PasteBridgeKey { get; set; } = string.Empty;
@@ -106,6 +126,8 @@
     private IJSObjectReference? _workspaceJsModule;
     private DotNetObjectReference<TaskPromptComposer>? _dotNetRef;
     private string? _pasteBridgeHandle;
+
+    private bool CanClearComposer => !string.IsNullOrEmpty(Value) || _images.Count > 0;
 
     protected override void OnParametersSet()
     {
@@ -143,6 +165,41 @@
         if (OnKeyDown.HasDelegate)
         {
             await OnKeyDown.InvokeAsync(args);
+        }
+    }
+
+    private async Task TriggerImproveAsync()
+    {
+        if (!Disabled && OnImprove.HasDelegate)
+        {
+            await OnImprove.InvokeAsync();
+        }
+    }
+
+    private async Task TriggerGenerateAsync()
+    {
+        if (!Disabled && OnGenerate.HasDelegate)
+        {
+            await OnGenerate.InvokeAsync();
+        }
+    }
+
+    private async Task ClearComposerAsync()
+    {
+        if (Disabled || !CanClearComposer)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(Value))
+        {
+            await ValueChanged.InvokeAsync(string.Empty);
+        }
+
+        if (_images.Count > 0)
+        {
+            _images.Clear();
+            await ImagesChanged.InvokeAsync(_images.ToList());
         }
     }
 
@@ -271,75 +328,12 @@
         }
     }
 
-    private async Task ClearImagesAsync()
-    {
-        if (Disabled || _images.Count == 0)
-        {
-            return;
-        }
-
-        _images.Clear();
-        await ImagesChanged.InvokeAsync(_images.ToList());
-    }
-
-    private async Task InsertImageReferenceAsync(WorkspaceImageInput image)
-    {
-        if (Disabled)
-        {
-            return;
-        }
-
-        var reference = $"[Image: {image.FileName} ({image.MimeType})]";
-        var current = Value ?? string.Empty;
-        var insertion = string.IsNullOrWhiteSpace(current)
-            ? reference
-            : $"\n{reference}";
-
-        if (_workspaceJsModule is null)
-        {
-            await ValueChanged.InvokeAsync(string.Concat(current, insertion));
-            return;
-        }
-
-        var selection = await _workspaceJsModule.InvokeAsync<int[]>("getInputSelection", InputId);
-        if (selection is not [var start, var end])
-        {
-            await ValueChanged.InvokeAsync(string.Concat(current, insertion));
-            return;
-        }
-
-        var safeStart = Math.Clamp(start, 0, current.Length);
-        var safeEnd = Math.Clamp(end, safeStart, current.Length);
-        var updated = string.Concat(
-            current[..safeStart],
-            reference,
-            current[safeEnd..]);
-
-        await ValueChanged.InvokeAsync(updated);
-    }
-
     private async Task NotifyValidationErrorAsync(string message)
     {
         if (OnValidationError.HasDelegate)
         {
             await OnValidationError.InvokeAsync(message);
         }
-    }
-
-    private static string FormatSize(long sizeBytes)
-    {
-        if (sizeBytes < 1024)
-        {
-            return $"{sizeBytes} B";
-        }
-
-        var kiloBytes = sizeBytes / 1024d;
-        if (kiloBytes < 1024)
-        {
-            return $"{kiloBytes:F1} KB";
-        }
-
-        return $"{kiloBytes / 1024d:F1} MB";
     }
 
     public async ValueTask DisposeAsync()

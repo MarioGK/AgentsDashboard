@@ -68,6 +68,7 @@ deploy/
 - .NET SDK `10.0.100` (see `global.json`)
 - Docker (required for runtime container lifecycle in normal local orchestration)
 - Node.js 20+ (Playwright suite)
+- Local mkcert root CA for trusted HTTPS (see `docs/INSTALL_CA_CLIENT.md`)
 
 ## Local Run
 
@@ -95,6 +96,7 @@ dotnet run --project src/AgentsDashboard.ControlPlane
 ```
 
 Default launch profile URL is `https://0.0.0.0:5266`.
+- ControlPlane is configured to use `/home/mariogk/.local/share/mkcert/terrascale-dev.pem` when available, matching the TerraScale dev cert.
 
 ### Docker Compose
 
@@ -156,6 +158,8 @@ npm test
 
 ## Additional Docs
 
+- `docs/HTTPS.md`
+- `docs/INSTALL_CA_CLIENT.md`
 - `docs/ai/codex-server.md`
 - `docs/ai/opencode-server.md`
 - `docs/logging.md`

@@ -13,7 +13,10 @@ internal static class HealthChecksExtensions
         services
             .AddHealthChecks()
             .AddCheck("self", () => HealthCheckResult.Healthy(), ["live", "ready"])
-            .AddCheck<DatabaseReadyHealthCheck>("database", tags: ["ready"]);
+            .AddCheck<DatabaseReadyHealthCheck>(
+                "database",
+                tags: ["ready"],
+                timeout: TimeSpan.FromSeconds(15));
 
         return services;
     }

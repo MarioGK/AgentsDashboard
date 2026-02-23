@@ -26,6 +26,11 @@ builder.Logging
     .AddZLoggerConsole(options => options.UsePlainTextFormatter());
 ```
 
+Warning and error events are now written through the shared provider `WarningErrorFileLoggerProvider` into:
+
+- `data/errors.log`
+- Files rotate by size using the existing provider behavior (e.g., `errors.0001.log`, etc.) when the size limit is exceeded.
+
 ## Usage Pattern
 
 Use `ZLog*` methods with named variables for structure:

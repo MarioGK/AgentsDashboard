@@ -119,15 +119,6 @@ else
                                 <MudSelectItem T="HarnessExecutionMode" Value="@HarnessExecutionMode.Review">Review</MudSelectItem>
                             </MudSelect>
                         </MudItem>
-                        <MudItem xs="12" md="3">
-                            <MudSelect T="string" @bind-Value="_taskDefaultsSessionProfileId" Label="Session Profile">
-                                <MudSelectItem T="string" Value="@string.Empty">None</MudSelectItem>
-                                @foreach (var profile in _sessionProfiles.Where(x => x.Enabled))
-                                {
-                                    <MudSelectItem T="string" Value="@profile.Id">@profile.Name</MudSelectItem>
-                                }
-                            </MudSelect>
-                        </MudItem>
                     </MudGrid>
                     <MudGrid Class="mt-2">
                         <MudItem xs="12" md="10">
@@ -364,7 +355,6 @@ else
     private readonly List<FindingDocument> _findings = [];
     private readonly Dictionary<string, RunDocument?> _latestRunsByTaskId = new(StringComparer.Ordinal);
     private bool _taskStatusLoading;
-    private List<RunSessionProfileDocument> _sessionProfiles = [];
     private readonly List<PromptSkillDocument> _repositoryPromptSkills = [];
     private readonly List<PromptSkillDocument> _globalPromptSkills = [];
 
@@ -372,7 +362,6 @@ else
     private TaskKind _taskDefaultsKind = TaskKind.OneShot;
     private string _taskDefaultsHarness = "codex";
     private HarnessExecutionMode _taskDefaultsExecutionMode = HarnessExecutionMode.Default;
-    private string _taskDefaultsSessionProfileId = string.Empty;
     private string _taskDefaultsCommand = "echo '{\"status\":\"succeeded\",\"summary\":\"Sample run\",\"artifacts\":[]}'";
     private bool _taskDefaultsAutoPr;
     private bool _taskDefaultsEnabled = true;
@@ -443,7 +432,6 @@ else
         }
 
         await Store.TouchRepositoryAsync(_repository.Id, CancellationToken.None);
-        _sessionProfiles = await Store.ListRunSessionProfilesAsync(_repository.Id, includeGlobal: true, CancellationToken.None);
         ApplyRepositoryTaskDefaults(_repository);
         _taskPromptSkillAutocompleteBound = false;
         _taskPromptSkillAutocompleteSyncedVersion = -1;
@@ -660,7 +648,6 @@ else
         _taskDefaultsKind = defaults.Kind;
         _taskDefaultsHarness = defaults.Harness;
         _taskDefaultsExecutionMode = defaults.ExecutionModeDefault;
-        _taskDefaultsSessionProfileId = defaults.SessionProfileId;
         _taskDefaultsCommand = defaults.Command;
         _taskDefaultsAutoPr = defaults.AutoCreatePullRequest;
         _taskDefaultsEnabled = defaults.Enabled;
@@ -684,7 +671,7 @@ else
                 Command: _taskDefaultsCommand,
                 AutoCreatePullRequest: _taskDefaultsAutoPr,
                 Enabled: _taskDefaultsEnabled,
-                SessionProfileId: string.IsNullOrWhiteSpace(_taskDefaultsSessionProfileId) ? null : _taskDefaultsSessionProfileId);
+                SessionProfileId: null);
 
             var updated = await Store.UpdateRepositoryTaskDefaultsAsync(_repository.Id, request, CancellationToken.None);
             if (updated is null)

@@ -509,7 +509,6 @@ else
         new("Runs", "Inspect queues, active and finished runs", "/settings/runs", Icons.Material.Filled.PlayCircle),
         new("Findings", "Triage failures and quality issues", "/settings/findings", Icons.Material.Filled.BugReport),
         new("Repositories", "Manage git-linked repositories", "/settings/repositories", Icons.Material.Filled.AccountTree),
-        new("Session Profiles", "Manage per-run behavior presets", "/settings/session-profiles", Icons.Material.Filled.Person),
         new("Orchestrator", "Inspect task runtime status and queueing", "/settings/task-runtimes", Icons.Material.Filled.Engineering),
         new("MCP", "Configure model context protocol routing snapshot", "/settings/mcp", Icons.Material.Filled.Extension),
         new("Orchestrator Policy", "Tune task runtime reliability and scaling", "/settings/task-runtimes", Icons.Material.Filled.Memory),
@@ -1311,7 +1310,6 @@ else
         if (normalized.Contains("run")) return "/settings/runs";
         if (normalized.Contains("finding")) return "/settings/findings";
         if (normalized.Contains("project") || normalized.Contains("repo")) return "/settings/repositories";
-        if (normalized.Contains("session") || normalized.Contains("profile")) return "/settings/session-profiles";
         if (normalized.Contains("mcp")) return "/settings/mcp";
         if (normalized.Contains("provider")) return "/providers";
         if (normalized.Contains("tool")) return "/settings/task-runtimes";
