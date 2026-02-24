@@ -10,10 +10,14 @@ public sealed class TaskRuntimeQueue : ITaskRuntimeQueue
     private readonly Channel<QueuedJob> _channel = Channel.CreateUnbounded<QueuedJob>();
     private readonly ConcurrentDictionary<string, QueuedJob> _activeJobs = new(StringComparer.OrdinalIgnoreCase);
     private readonly int _maxSlots;
+    private readonly TaskRuntimeRunLedgerStore _runLedgerStore;
 
-    public TaskRuntimeQueue(TaskRuntimeOptions options)
+    public TaskRuntimeQueue(TaskRuntimeOptions options, TaskRuntimeRunLedgerStore runLedgerStore)
     {
         _maxSlots = Math.Max(1, options.MaxSlots);
+        _runLedgerStore = runLedgerStore;
+
+        InitializePendingQueue();
     }
 
     public int MaxSlots => _maxSlots;
@@ -24,10 +28,11 @@ public sealed class TaskRuntimeQueue : ITaskRuntimeQueue
 
     public bool CanAcceptJob() => ActiveSlots < _maxSlots;
 
-    public ValueTask EnqueueAsync(QueuedJob job, CancellationToken cancellationToken)
+    public async ValueTask EnqueueAsync(QueuedJob job, CancellationToken cancellationToken)
     {
+        await _runLedgerStore.UpsertQueuedAsync(job.Request, cancellationToken);
         _activeJobs[job.Request.RunId] = job;
-        return _channel.Writer.WriteAsync(job, cancellationToken);
+        await _channel.Writer.WriteAsync(job, cancellationToken);
     }
 
     public IAsyncEnumerable<QueuedJob> ReadAllAsync(CancellationToken cancellationToken)
@@ -41,11 +46,36 @@ public sealed class TaskRuntimeQueue : ITaskRuntimeQueue
         }
 
         job.CancellationSource.Cancel();
+        _ = _runLedgerStore.MarkCompletedAsync(
+            runId,
+            job.Request.TaskId,
+            TaskRuntimeExecutionState.Cancelled,
+            "Cancelled",
+            string.Empty,
+            CancellationToken.None);
         return true;
     }
 
     public void MarkCompleted(string runId)
     {
         _activeJobs.TryRemove(runId, out _);
+    }
+
+    private void InitializePendingQueue()
+    {
+        _runLedgerStore.RecoverStaleRunningRunsAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+        var queuedRequests = _runLedgerStore.ListQueuedRequestsAsync(CancellationToken.None).GetAwaiter().GetResult();
+        foreach (var request in queuedRequests)
+        {
+            if (string.IsNullOrWhiteSpace(request.RunId))
+            {
+                continue;
+            }
+
+            var queuedJob = new QueuedJob { Request = request };
+            _activeJobs[request.RunId] = queuedJob;
+            _channel.Writer.TryWrite(queuedJob);
+        }
     }
 }

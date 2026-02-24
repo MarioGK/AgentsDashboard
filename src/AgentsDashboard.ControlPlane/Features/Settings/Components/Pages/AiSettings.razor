@@ -226,7 +226,7 @@ else
                 catch (Exception ex)
                 {
                     _apiKeyInput = string.Empty;
-                    Snackbar.Add($"Failed to decrypt stored API key: {ex.Message}", Severity.Error);
+                    Snackbar.AddImportant($"Failed to decrypt stored API key: {ex.Message}", Severity.Error);
                 }
             }
             else
@@ -238,7 +238,7 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load AI settings: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to load AI settings: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -266,11 +266,11 @@ else
             _baseUrl = settings.ZAi.BaseUrl;
             _savedBaseUrl = _baseUrl;
             _savedApiKeyInput = NormalizeApiKey(_apiKeyInput);
-            Snackbar.Add("AI settings saved", Severity.Success);
+            Snackbar.AddImportant("AI settings saved", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to save AI settings: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to save AI settings: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -296,18 +296,18 @@ else
         var normalizedInput = NormalizeApiKey(_apiKeyInput);
         if (string.IsNullOrWhiteSpace(normalizedInput))
         {
-            Snackbar.Add("API key cannot be empty.", Severity.Warning);
+            Snackbar.AddImportant("API key cannot be empty.", Severity.Warning);
             return;
         }
 
         try
         {
             await SaveGlobalKeyInternalAsync(normalizedInput, showSnackbar: false);
-            Snackbar.Add("Global Z.AI API key saved.", Severity.Success);
+            Snackbar.AddImportant("Global Z.AI API key saved.", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to save API key: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to save API key: {ex.Message}", Severity.Error);
         }
     }
 
@@ -324,7 +324,7 @@ else
 
         if (showSnackbar)
         {
-            Snackbar.Add("Global Z.AI API key saved.", Severity.Success);
+            Snackbar.AddImportant("Global Z.AI API key saved.", Severity.Success);
         }
     }
 
@@ -344,7 +344,7 @@ else
                     StatusCode: 0,
                     DurationMs: 0,
                     ResponsePreview: string.Empty);
-                Snackbar.Add("No API key configured.", Severity.Error);
+                Snackbar.AddImportant("No API key configured.", Severity.Error);
                 return;
             }
 
@@ -353,7 +353,7 @@ else
                 NormalizeBaseUrl(_baseUrl),
                 CancellationToken.None);
 
-            Snackbar.Add(
+            Snackbar.AddImportant(
                 _connectivityResult.Success ? "Connectivity test succeeded." : $"Connectivity test failed: {_connectivityResult.Message}",
                 _connectivityResult.Success ? Severity.Success : Severity.Error);
         }
@@ -366,7 +366,7 @@ else
                 StatusCode: 0,
                 DurationMs: 0,
                 ResponsePreview: string.Empty);
-            Snackbar.Add($"Connectivity test failed: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Connectivity test failed: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -390,7 +390,7 @@ else
                     StatusCode: 0,
                     DurationMs: 0,
                     ResponsePreview: string.Empty);
-                Snackbar.Add("No API key configured.", Severity.Error);
+                Snackbar.AddImportant("No API key configured.", Severity.Error);
                 return;
             }
 
@@ -400,7 +400,7 @@ else
                 _chatPrompt,
                 CancellationToken.None);
 
-            Snackbar.Add(
+            Snackbar.AddImportant(
                 _chatResult.Success ? "Chat smoke test succeeded." : $"Chat smoke test failed: {_chatResult.Message}",
                 _chatResult.Success ? Severity.Success : Severity.Error);
         }
@@ -413,7 +413,7 @@ else
                 StatusCode: 0,
                 DurationMs: 0,
                 ResponsePreview: string.Empty);
-            Snackbar.Add($"Chat smoke test failed: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Chat smoke test failed: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -440,7 +440,7 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to decrypt stored API key: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to decrypt stored API key: {ex.Message}", Severity.Error);
             return null;
         }
     }

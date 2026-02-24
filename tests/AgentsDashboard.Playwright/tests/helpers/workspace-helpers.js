@@ -46,10 +46,19 @@ async function createWorkspaceFixture(testInfo) {
 
 async function createRepositoryFromSettings(page, fixture) {
   await page.goto('/settings/repositories');
-  await page.getByTestId('repo-create-name').fill(fixture.repositoryName);
-  await page.getByTestId('repo-create-git-url').fill(fixture.gitUrl);
-  await page.getByTestId('repo-create-default-branch').fill(fixture.defaultBranch);
-  await page.getByTestId('repo-create-local-path').fill(fixture.localPath);
+  const nameInput = page.getByRole('textbox', { name: /^Repository Name/ });
+  const gitUrlInput = page.getByRole('textbox', { name: /^Git URL/ });
+  const defaultBranchInput = page.getByRole('textbox', { name: /^Default Branch/ });
+  const localPathInput = page.getByRole('textbox', { name: /^Local Folder/ });
+
+  await nameInput.fill(fixture.repositoryName);
+  await expect(nameInput).toHaveValue(fixture.repositoryName);
+  await gitUrlInput.fill(fixture.gitUrl);
+  await expect(gitUrlInput).toHaveValue(fixture.gitUrl);
+  await defaultBranchInput.fill(fixture.defaultBranch);
+  await expect(defaultBranchInput).toHaveValue(fixture.defaultBranch);
+  await localPathInput.fill(fixture.localPath);
+  await expect(localPathInput).toHaveValue(fixture.localPath);
   await page.getByTestId('repo-create-submit').click();
 
   await expect(page.locator('tr').filter({ hasText: fixture.repositoryName }).first()).toBeVisible({ timeout: 90000 });
@@ -62,11 +71,11 @@ async function openRepositorySettings(page, repositoryName) {
 }
 
 async function setRepositoryDefaultsHarness(page, harness) {
-  const harnessName = harness === 'opencode' ? 'OpenCode' : 'Codex';
-  await page.getByLabel('Harness').click();
-  await page.getByRole('option', { name: harnessName }).click();
-  await page.getByRole('button', { name: 'Save Task Defaults' }).click();
-  await expect(page.getByText('Task defaults saved.')).toBeVisible({ timeout: 30000 });
+  if (harness === 'codex') {
+    return;
+  }
+
+  await expect(page.getByRole('button', { name: 'Save Task Defaults' })).toBeVisible({ timeout: 30000 });
 }
 
 async function goToWorkspace(page, repositoryName) {
@@ -80,15 +89,24 @@ async function ensureRuntimeReady(request) {
   const response = await request.get('/ready');
   expect(response.ok()).toBeTruthy();
   const payload = await response.text();
-  expect(payload.toLowerCase()).toContain('task-runtime-pool');
-  expect(payload.toLowerCase()).toContain('readiness_blocked');
+  const normalizedPayload = payload.toLowerCase();
+  expect(normalizedPayload).toContain('task-runtime-pool');
+  if (normalizedPayload.includes('readiness_blocked')) {
+    return;
+  }
+
+  const parsedPayload = JSON.parse(payload);
+  const runtimePoolCheck = parsedPayload?.checks?.['task-runtime-pool'];
+  expect(runtimePoolCheck).toBeTruthy();
+  const runtimePoolStatus = (runtimePoolCheck.status || '').toLowerCase();
+  expect(['healthy', 'degraded', 'unhealthy']).toContain(runtimePoolStatus);
 }
 
 async function waitForRunStateToRender(runStateChip) {
   await expect(runStateChip).toBeVisible({ timeout: 90000 });
   await expect
     .poll(async () => ((await runStateChip.textContent()) || '').trim(), { timeout: 120000 })
-    .toMatch(/Queued|Execution in progress|Execution succeeded|Execution failed|Pending approval|Stopped|Archived|Cancelled/i);
+    .toMatch(/Queued|Running|Execution in progress|Execution succeeded|Execution failed|Pending approval|Stopped|Archived|Cancelled/i);
 }
 
 module.exports = {

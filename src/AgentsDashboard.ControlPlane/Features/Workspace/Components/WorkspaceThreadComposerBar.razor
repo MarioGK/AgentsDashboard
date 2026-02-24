@@ -13,7 +13,7 @@
                         ShowGhostSuggestion="true"
                         GhostSuffix="@GhostSuffix"
                         PasteBridgeKey="workspace-composer"
-                        Disabled="@(IsSubmitting || IsComposerBlocked)"
+                        Disabled="@(IsSubmitting || IsQueueDraining || IsComposerBlocked)"
                         ShowSubmitButton="true"
                         SubmitTooltip="Send"
                         OnSubmit="SubmitRequested"
@@ -22,12 +22,58 @@
                         OnKeyDown="OnComposerKeyDown"
                         OnValidationError="OnValidationError" />
 
+    @if (QueuedMessages.Count > 0)
+    {
+        <MudPaper Class="workspace-thread-queue-panel" Elevation="0">
+            <MudStack Spacing="1">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                        @QueuedMessages.Count queued
+                    </MudChip>
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Outlined"
+                               Size="Size.Small"
+                               Color="Color.Info"
+                               OnClick="DrainQueuedRequested"
+                               Disabled="@IsQueueDraining">
+                        Send queued now
+                    </MudButton>
+                    <MudButton Variant="Variant.Text"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="ClearQueuedRequested"
+                               Disabled="@IsQueueDraining">
+                        Clear
+                    </MudButton>
+                </MudStack>
+
+                <div class="workspace-thread-queue-list">
+                    @foreach (var queuedMessage in QueuedMessages.Take(5))
+                    {
+                        <MudText Typo="Typo.caption" Class="workspace-thread-queue-item">@BuildQueuedPreview(queuedMessage)</MudText>
+                    }
+                    @if (QueuedMessages.Count > 5)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">+@(QueuedMessages.Count - 5) more</MudText>
+                    }
+                </div>
+            </MudStack>
+        </MudPaper>
+    }
+
     <MudStack Row AlignItems="AlignItems.Center" Spacing="1" Class="workspace-thread-composer-actions">
         @if (IsSubmitting)
         {
             <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined" Class="workspace-thread-composer-status-chip">
                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
                 Sending...
+            </MudChip>
+        }
+        @if (IsQueueDraining)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined" Class="workspace-thread-composer-status-chip">
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                Sending queue...
             </MudChip>
         }
         @if (IsComposerBlocked)
@@ -45,14 +91,35 @@
     [Parameter] public EventCallback<string> OnComposerValueChanged { get; set; }
     [Parameter] public IReadOnlyList<WorkspaceImageInput> ComposerImages { get; set; } = [];
     [Parameter] public EventCallback<IReadOnlyList<WorkspaceImageInput>> OnComposerImagesChanged { get; set; }
+    [Parameter] public IReadOnlyList<WorkspaceQueuedMessageDocument> QueuedMessages { get; set; } = [];
     [Parameter] public bool IsSubmitting { get; set; }
+    [Parameter] public bool IsQueueDraining { get; set; }
     [Parameter] public bool IsComposerBlocked { get; set; }
     [Parameter] public string ComposerBlockReason { get; set; } = string.Empty;
     [Parameter] public string ComposerHelperText { get; set; } = "Enter to send. Shift+Enter inserts a new line. Paste or upload images.";
     [Parameter] public string GhostSuffix { get; set; } = string.Empty;
     [Parameter] public EventCallback SubmitRequested { get; set; }
+    [Parameter] public EventCallback DrainQueuedRequested { get; set; }
+    [Parameter] public EventCallback ClearQueuedRequested { get; set; }
     [Parameter] public EventCallback OnImprove { get; set; }
     [Parameter] public EventCallback OnGenerate { get; set; }
     [Parameter] public EventCallback<KeyboardEventArgs> OnComposerKeyDown { get; set; }
     [Parameter] public EventCallback<string> OnValidationError { get; set; }
+
+    private static string BuildQueuedPreview(WorkspaceQueuedMessageDocument queuedMessage)
+    {
+        var text = queuedMessage.Content?.Trim() ?? string.Empty;
+        var prefix = queuedMessage.HasImages ? "[img] " : string.Empty;
+        if (text.Length == 0)
+        {
+            return $"{prefix}(image-only message)";
+        }
+
+        if (text.Length <= 120)
+        {
+            return prefix + text;
+        }
+
+        return prefix + text[..120].TrimEnd() + "...";
+    }
 }

@@ -123,7 +123,7 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load settings: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to load settings: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -150,11 +150,11 @@ else
 
             await Store.UpdateSettingsAsync(updated, CancellationToken.None);
             CaptureSavedState();
-            Snackbar.Add("Settings saved", Severity.Success);
+            Snackbar.AddImportant("Settings saved", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to save settings: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to save settings: {ex.Message}", Severity.Error);
         }
         finally
         {

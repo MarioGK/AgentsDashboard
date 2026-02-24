@@ -38,7 +38,7 @@
             <WorkspaceLeftRail IsCollapsed="@_leftRailCollapsed"
                                RepositoryFilter="@_repositoryFilter"
                                TaskFilter="@_taskFilter"
-                               NewTaskDisabled="@(_selectedRepository is null)"
+                               NewTaskDisabled="@(_selectedRepository is null || _isSubmittingComposer)"
                                RepositoryGroups="@LeftRailRepositoryGroups"
                                Threads="@ThreadStates"
                                OnToggleCollapsed="ToggleLeftRail"
@@ -75,7 +75,8 @@
                                          OnPlanModeChanged="OnPlanModeChangedAsync"
                                          OnToggleAdvanced="ToggleHistoryPanel">
                         <MessageList>
-                            <WorkspaceThreadMessageList Messages="@ProjectedMessages" />
+                            <WorkspaceThreadMessageList Messages="@ProjectedMessages"
+                                                        OnEditMessageRequested="HandleMessageEditRequestedAsync" />
                         </MessageList>
                         <ContextPanel>
                             <WorkspaceQuestionInbox QuestionRequests="@_selectedRunQuestionRequests"
@@ -88,12 +89,16 @@
                                                         OnComposerValueChanged="OnComposerValueChangedAsync"
                                                         ComposerImages="@_composerImages"
                                                         OnComposerImagesChanged="OnComposerImagesChangedAsync"
+                                                        QueuedMessages="@_selectedTaskQueuedMessages"
                                                         IsSubmitting="@_isSubmittingComposer"
+                                                        IsQueueDraining="@IsQueueDrainInProgress"
                                                         IsComposerBlocked="@IsComposerBlocked"
                                                         ComposerBlockReason="@ComposerBlockedReason"
                                                         ComposerHelperText="@ComposerHelperText"
                                                         GhostSuffix="@_composerGhostSuffix"
                                                         SubmitRequested="SubmitComposerAsync"
+                                                        DrainQueuedRequested="DrainQueuedMessagesForSelectedTaskAsync"
+                                                        ClearQueuedRequested="ClearQueuedMessagesForSelectedTaskAsync"
                                                         OnImprove="OpenImprovePromptDraftDialogAsync"
                                                         OnGenerate="OpenGeneratePromptDraftDialogAsync"
                                                         OnComposerKeyDown="OnComposerKeyDown"

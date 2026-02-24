@@ -6,4 +6,7 @@ public sealed record WorkspaceChatMessage(
     string Title,
     string Content,
     DateTime TimestampUtc,
-    string Meta);
+    string Meta,
+    string PromptEntryId = "",
+    bool IsEditable = false,
+    bool HasImages = false);

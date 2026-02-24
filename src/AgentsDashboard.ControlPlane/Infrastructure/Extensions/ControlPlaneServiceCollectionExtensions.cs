@@ -6,6 +6,7 @@ using MagicOnion.Serialization.MessagePack;
 using MagicOnion.Server;
 using MessagePack;
 using MessagePack.Resolvers;
+using MudBlazor;
 using MudBlazor.Services;
 
 namespace AgentsDashboard.ControlPlane.Infrastructure.Extensions;
@@ -76,6 +77,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddHostedService<RecoveryService>();
         services.AddHostedService<TaskRetentionCleanupService>();
         services.AddHostedService<TaskRuntimeEventListenerService>();
+        services.AddHostedService<RunQueueDrainService>();
         services.AddHostedService<TaskRuntimeIdleShutdownService>();
         services.AddHostedService<TaskRuntimePoolReconciliationService>();
         services.AddHostedService<AlertingService>();
@@ -96,6 +98,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddSingleton<ITaskSemanticEmbeddingService, TaskSemanticEmbeddingService>();
         services.AddHostedService(sp => (TaskSemanticEmbeddingService)sp.GetRequiredService<ITaskSemanticEmbeddingService>());
         services.AddSingleton<IWorkspaceService, WorkspaceService>();
+        services.AddHostedService<WorkspaceQueuedMessageDrainService>();
         services.AddSingleton<IGitWorkspaceService, GitWorkspaceService>();
         services.AddSingleton<IHostFileExplorerService, HostFileExplorerService>();
         services.AddSingleton<ImageBuilderService>();
@@ -118,7 +121,9 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddMudServices(config =>
         {
             config.PopoverOptions.CheckForPopoverProvider = false;
+            config.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.TopCenter;
         });
+        services.AddMudMarkdownServices();
 
         services.AddRazorComponents().AddInteractiveServerComponents();
         return services;

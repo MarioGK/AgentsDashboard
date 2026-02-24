@@ -3,6 +3,7 @@
 @using AgentsDashboard.ControlPlane.Components.Workspace.Models
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
 <div class="workspace-chat-stream-host">
     <div id="@_streamElementId" class="workspace-chat-stream" data-testid="workspace-chat-stream">
@@ -13,9 +14,35 @@
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                         <MudText Typo="Typo.caption">@message.Title</MudText>
                         <MudSpacer />
+                        <MudTooltip Text="@GetCopyTooltip(message)">
+                            <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
+                                           Size="Size.Small"
+                                           Color="Color.Inherit"
+                                           OnClick="() => CopyMessageAsync(message)"
+                                           data-testid="@($"workspace-chat-copy-{message.Id}")" />
+                        </MudTooltip>
+                        @if (CanEditMessage(message))
+                        {
+                            <MudTooltip Text="Edit and rerun from here">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Size="Size.Small"
+                                               Color="Color.Inherit"
+                                               OnClick="() => RequestEditMessageAsync(message)"
+                                               data-testid="@($"workspace-chat-edit-{message.Id}")" />
+                            </MudTooltip>
+                        }
                         <MudText Typo="Typo.caption" Color="Color.Secondary">@message.TimestampUtc.ToLocalTime().ToString("HH:mm:ss")</MudText>
                     </MudStack>
-                    <MudText Typo="Typo.body2" Class="workspace-chat-message-content">@message.Content</MudText>
+                    @if (IsMarkdownMessage(message))
+                    {
+                        <div class="workspace-chat-message-markdown">
+                            <MudMarkdown Value="@message.Content" />
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="workspace-chat-message-content">@message.Content</MudText>
+                    }
                     @if (!string.IsNullOrWhiteSpace(message.Meta))
                     {
                         <MudText Typo="Typo.caption" Color="Color.Secondary">@message.Meta</MudText>
@@ -38,8 +65,10 @@
 
 @code {
     [Parameter] public IReadOnlyList<WorkspaceChatMessage> Messages { get; set; } = [];
+    [Parameter] public EventCallback<WorkspaceChatMessage> OnEditMessageRequested { get; set; }
 
     private readonly string _streamElementId = $"workspace-chat-stream-{Guid.NewGuid():N}";
+    private static readonly WorkspaceMessageFormatDetector s_messageFormatDetector = new();
     private IJSObjectReference? _workspaceJsModule;
     private DotNetObjectReference<WorkspaceThreadMessageList>? _dotNetRef;
     private string? _autoScrollHandle;
@@ -94,6 +123,44 @@
             WorkspaceChatMessageKind.Event => "workspace-chat-bubble workspace-chat-bubble-event",
             _ => "workspace-chat-bubble workspace-chat-bubble-system",
         };
+    }
+
+    private static bool IsMarkdownMessage(WorkspaceChatMessage message)
+    {
+        return s_messageFormatDetector.Detect(message) == WorkspaceMessageFormat.Markdown;
+    }
+
+    private static bool CanEditMessage(WorkspaceChatMessage message)
+    {
+        return message.IsEditable && !string.IsNullOrWhiteSpace(message.PromptEntryId);
+    }
+
+    private static string GetCopyTooltip(WorkspaceChatMessage message)
+    {
+        return IsMarkdownMessage(message) ? "Copy raw markdown" : "Copy message";
+    }
+
+    private async Task CopyMessageAsync(WorkspaceChatMessage message)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", message.Content ?? string.Empty);
+            Snackbar.AddImportant(IsMarkdownMessage(message) ? "Raw markdown copied." : "Message copied.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.AddImportant("Clipboard write failed.", Severity.Warning);
+        }
+    }
+
+    private Task RequestEditMessageAsync(WorkspaceChatMessage message)
+    {
+        if (!CanEditMessage(message) || !OnEditMessageRequested.HasDelegate)
+        {
+            return Task.CompletedTask;
+        }
+
+        return OnEditMessageRequested.InvokeAsync(message);
     }
 
     public async ValueTask DisposeAsync()

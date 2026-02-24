@@ -35,6 +35,8 @@ public sealed class TaskRuntimeEventListenerService(
     private readonly ConcurrentDictionary<string, long> _structuredSequenceWatermarks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ArtifactAssemblyState> _artifactAssemblies = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _artifactRunByteTotals = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _backlogReplayInFlight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, long> _runtimeEventCheckpoints = new(StringComparer.OrdinalIgnoreCase);
     private readonly IRunStructuredViewService _runStructuredViewService = runStructuredViewService ?? NullRunStructuredViewService.Instance;
     private static readonly ITaskRuntimeEventReceiver s_eventHubProbeReceiver = new EventHubProbeReceiver();
 
@@ -46,6 +48,7 @@ public sealed class TaskRuntimeEventListenerService(
             {
                 await SyncConnectionsAsync(stoppingToken);
                 await runtimeStore.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TaskRuntimeTtl, stoppingToken);
+                await ReplayConnectedRuntimeBacklogsAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -126,8 +129,11 @@ public sealed class TaskRuntimeEventListenerService(
                     connection.Endpoint = endpoint;
                 }
 
+                await TryReplayRuntimeBacklogAsync(connection.TaskRuntimeId, connection.Endpoint, cancellationToken);
+
                 logger.LogInformation("Connecting worker event hub for {TaskRuntimeId} at {Endpoint}", connection.TaskRuntimeId, connection.Endpoint);
-                var hub = await clientFactory.ConnectEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, this, cancellationToken);
+                var receiver = new RuntimeScopedEventReceiver(connection.TaskRuntimeId, this);
+                var hub = await clientFactory.ConnectEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, receiver, cancellationToken);
                 connection.SetHub(hub);
                 _connectionFailures.TryRemove(connection.TaskRuntimeId, out _);
                 reconnectDelay = TimeSpan.FromSeconds(1);
@@ -162,6 +168,8 @@ public sealed class TaskRuntimeEventListenerService(
         }
 
         _connectionFailures.TryRemove(runtimeId, out _);
+        _backlogReplayInFlight.TryRemove(runtimeId, out _);
+        _runtimeEventCheckpoints.TryRemove(runtimeId, out _);
         connection.Cancellation.Cancel();
 
         try
@@ -184,12 +192,12 @@ public sealed class TaskRuntimeEventListenerService(
 
     void ITaskRuntimeEventReceiver.OnJobEvent(JobEventMessage eventMessage)
     {
-        _ = HandleJobEventAsync(eventMessage);
+        _ = HandleJobEventAsync(string.Empty, eventMessage);
     }
 
     void ITaskRuntimeEventReceiver.OnTaskRuntimeStatusChanged(TaskRuntimeStatusMessage statusMessage)
     {
-        _ = HandleTaskRuntimeStatusAsync(statusMessage);
+        _ = HandleTaskRuntimeStatusAsync(string.Empty, statusMessage);
     }
 
     private async Task<string?> ResolveWorkerEventHubEndpointAsync(string runtimeId, string preferredEndpoint, CancellationToken cancellationToken)
@@ -291,13 +299,19 @@ public sealed class TaskRuntimeEventListenerService(
             message);
     }
 
-    private async Task HandleJobEventAsync(JobEventMessage message)
+    private async Task HandleJobEventAsync(string runtimeId, JobEventMessage message)
     {
         try
         {
+            if (!await ShouldProcessDeliveryAsync(runtimeId, message.DeliveryId))
+            {
+                return;
+            }
+
             if (IsArtifactEvent(message.EventType))
             {
                 await HandleArtifactEventAsync(message, CancellationToken.None);
+                await AdvanceRuntimeCheckpointAsync(runtimeId, message.DeliveryId);
                 return;
             }
 
@@ -314,6 +328,7 @@ public sealed class TaskRuntimeEventListenerService(
                     TimestampUtc = timestamp,
                 };
                 await publisher.PublishLogAsync(logChunkEvent, CancellationToken.None);
+                await AdvanceRuntimeCheckpointAsync(runtimeId, message.DeliveryId);
                 return;
             }
 
@@ -329,7 +344,10 @@ public sealed class TaskRuntimeEventListenerService(
             await publisher.PublishLogAsync(logEvent, CancellationToken.None);
 
             if (!string.Equals(message.EventType, "completed", StringComparison.OrdinalIgnoreCase))
+            {
+                await AdvanceRuntimeCheckpointAsync(runtimeId, message.DeliveryId);
                 return;
+            }
 
             var payloadJson = message.Metadata?.GetValueOrDefault("payload");
             var envelope = ParseEnvelope(payloadJson);
@@ -354,7 +372,10 @@ public sealed class TaskRuntimeEventListenerService(
                 prUrl: prUrl);
 
             if (completedRun is null)
+            {
+                await AdvanceRuntimeCheckpointAsync(runtimeId, message.DeliveryId);
                 return;
+            }
 
             if (isObsoleteDisposition)
             {
@@ -398,6 +419,7 @@ public sealed class TaskRuntimeEventListenerService(
 
             ClearStructuredRunCaches(completedRun.Id);
             ClearArtifactCaches(completedRun.Id);
+            await AdvanceRuntimeCheckpointAsync(runtimeId, message.DeliveryId);
         }
         catch (Exception ex)
         {
@@ -601,36 +623,39 @@ public sealed class TaskRuntimeEventListenerService(
         _structuredPublishWatermarks.TryRemove($"tool:{runId}", out _);
     }
 
-    private async Task HandleTaskRuntimeStatusAsync(TaskRuntimeStatusMessage statusMessage)
+    private async Task HandleTaskRuntimeStatusAsync(string runtimeId, TaskRuntimeStatusMessage statusMessage)
     {
         try
         {
+            var resolvedRuntimeId = string.IsNullOrWhiteSpace(runtimeId)
+                ? statusMessage.TaskRuntimeId
+                : runtimeId;
             logger.LogDebug("Worker {TaskRuntimeId} status: {Status}, ActiveSlots: {ActiveSlots}/{MaxSlots}",
-                statusMessage.TaskRuntimeId, statusMessage.Status, statusMessage.ActiveSlots, statusMessage.MaxSlots);
+                resolvedRuntimeId, statusMessage.Status, statusMessage.ActiveSlots, statusMessage.MaxSlots);
 
-            var endpoint = await ResolveTaskRuntimeEndpointAsync(statusMessage.TaskRuntimeId);
+            var endpoint = await ResolveTaskRuntimeEndpointAsync(resolvedRuntimeId);
             workerRegistry.RecordHeartbeat(
-                statusMessage.TaskRuntimeId,
-                endpoint ?? statusMessage.TaskRuntimeId,
+                resolvedRuntimeId,
+                endpoint ?? resolvedRuntimeId,
                 statusMessage.ActiveSlots,
                 statusMessage.MaxSlots);
 
             await lifecycleManager.ReportTaskRuntimeHeartbeatAsync(
-                statusMessage.TaskRuntimeId,
+                resolvedRuntimeId,
                 statusMessage.ActiveSlots,
                 statusMessage.MaxSlots,
                 CancellationToken.None);
 
             await runtimeStore.UpsertTaskRuntimeRegistrationHeartbeatAsync(
-                statusMessage.TaskRuntimeId,
-                endpoint ?? statusMessage.TaskRuntimeId,
+                resolvedRuntimeId,
+                endpoint ?? resolvedRuntimeId,
                 statusMessage.ActiveSlots,
                 statusMessage.MaxSlots,
                 CancellationToken.None);
 
             await publisher.PublishTaskRuntimeHeartbeatAsync(
-                statusMessage.TaskRuntimeId,
-                endpoint ?? statusMessage.TaskRuntimeId,
+                resolvedRuntimeId,
+                endpoint ?? resolvedRuntimeId,
                 statusMessage.ActiveSlots,
                 statusMessage.MaxSlots,
                 CancellationToken.None);
@@ -639,6 +664,127 @@ public sealed class TaskRuntimeEventListenerService(
         {
             logger.LogError(ex, "Failed to handle worker status for worker {TaskRuntimeId}", statusMessage.TaskRuntimeId);
         }
+    }
+
+    private async Task ReplayConnectedRuntimeBacklogsAsync(CancellationToken cancellationToken)
+    {
+        var connections = _connections.Values.ToList();
+        foreach (var connection in connections)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await TryReplayRuntimeBacklogAsync(connection.TaskRuntimeId, connection.Endpoint, cancellationToken);
+        }
+    }
+
+    private async Task TryReplayRuntimeBacklogAsync(string runtimeId, string endpoint, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) ||
+            string.IsNullOrWhiteSpace(endpoint))
+        {
+            return;
+        }
+
+        if (!_backlogReplayInFlight.TryAdd(runtimeId, 0))
+        {
+            return;
+        }
+
+        try
+        {
+            var cursor = await GetRuntimeEventCheckpointAsync(runtimeId, cancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var client = clientFactory.CreateTaskRuntimeService(runtimeId, endpoint);
+                var backlog = await client.WithCancellationToken(cancellationToken).ReadEventBacklogAsync(new ReadEventBacklogRequest
+                {
+                    AfterDeliveryId = cursor,
+                    MaxEvents = 500
+                });
+
+                if (!backlog.Success)
+                {
+                    if (!string.IsNullOrWhiteSpace(backlog.ErrorMessage))
+                    {
+                        logger.LogDebug(
+                            "Runtime backlog replay failed for {TaskRuntimeId}: {ErrorMessage}",
+                            runtimeId,
+                            backlog.ErrorMessage);
+                    }
+
+                    break;
+                }
+
+                if (backlog.Events.Count == 0)
+                {
+                    break;
+                }
+
+                foreach (var replayEvent in backlog.Events.OrderBy(x => x.DeliveryId))
+                {
+                    await HandleJobEventAsync(runtimeId, replayEvent);
+                    cursor = Math.Max(cursor, replayEvent.DeliveryId);
+                }
+
+                if (!backlog.HasMore)
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Runtime backlog replay cycle failed for {TaskRuntimeId}", runtimeId);
+        }
+        finally
+        {
+            _backlogReplayInFlight.TryRemove(runtimeId, out _);
+        }
+    }
+
+    private async Task<bool> ShouldProcessDeliveryAsync(string runtimeId, long deliveryId)
+    {
+        if (deliveryId <= 0 || string.IsNullOrWhiteSpace(runtimeId))
+        {
+            return true;
+        }
+
+        if (!_runtimeEventCheckpoints.TryGetValue(runtimeId, out var knownCheckpoint))
+        {
+            knownCheckpoint = await GetRuntimeEventCheckpointAsync(runtimeId, CancellationToken.None);
+        }
+
+        return deliveryId > knownCheckpoint;
+    }
+
+    private async Task<long> GetRuntimeEventCheckpointAsync(string runtimeId, CancellationToken cancellationToken)
+    {
+        if (_runtimeEventCheckpoints.TryGetValue(runtimeId, out var cached))
+        {
+            return cached;
+        }
+
+        var stored = await runtimeStore.GetTaskRuntimeEventCheckpointAsync(runtimeId, cancellationToken);
+        var checkpoint = stored?.LastDeliveryId ?? 0;
+        _runtimeEventCheckpoints[runtimeId] = checkpoint;
+        return checkpoint;
+    }
+
+    private async Task AdvanceRuntimeCheckpointAsync(string runtimeId, long deliveryId)
+    {
+        if (deliveryId <= 0 || string.IsNullOrWhiteSpace(runtimeId))
+        {
+            return;
+        }
+
+        _runtimeEventCheckpoints.AddOrUpdate(
+            runtimeId,
+            deliveryId,
+            (_, existing) => Math.Max(existing, deliveryId));
+
+        await runtimeStore.UpsertTaskRuntimeEventCheckpointAsync(runtimeId, deliveryId, CancellationToken.None);
     }
 
     private async Task<string?> ResolveTaskRuntimeEndpointAsync(string runtimeId)
@@ -1185,6 +1331,21 @@ public sealed class TaskRuntimeEventListenerService(
             {
                 _hubLock.Release();
             }
+        }
+    }
+
+    private sealed class RuntimeScopedEventReceiver(
+        string runtimeId,
+        TaskRuntimeEventListenerService service) : ITaskRuntimeEventReceiver
+    {
+        public void OnJobEvent(JobEventMessage eventMessage)
+        {
+            _ = service.HandleJobEventAsync(runtimeId, eventMessage);
+        }
+
+        public void OnTaskRuntimeStatusChanged(TaskRuntimeStatusMessage statusMessage)
+        {
+            _ = service.HandleTaskRuntimeStatusAsync(runtimeId, statusMessage);
         }
     }
 

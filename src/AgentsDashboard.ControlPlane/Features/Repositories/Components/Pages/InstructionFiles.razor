@@ -154,14 +154,14 @@ else
     {
         if (string.IsNullOrWhiteSpace(_newName))
         {
-            Snackbar.Add("Name is required", Severity.Warning);
+            Snackbar.AddImportant("Name is required", Severity.Warning);
             return;
         }
 
         var request = new CreateRepositoryInstructionRequest(_newName, "", _newPriority, _newEnabled);
         var created = await Store.UpsertInstructionAsync(RepositoryId, null, request, CancellationToken.None);
         _showAddDialog = false;
-        Snackbar.Add("Instruction created", Severity.Success);
+        Snackbar.AddImportant("Instruction created", Severity.Success);
         await LoadInstructionsAsync();
     }
 
@@ -170,7 +170,7 @@ else
         await Store.UpsertInstructionAsync(RepositoryId, instruction.Id,
             new CreateRepositoryInstructionRequest(instruction.Name, instruction.Content, instruction.Priority, instruction.Enabled),
             CancellationToken.None);
-        Snackbar.Add("Instruction saved", Severity.Success);
+        Snackbar.AddImportant("Instruction saved", Severity.Success);
     }
 
     private async Task DeleteInstructionAsync(RepositoryInstructionDocument instruction)
@@ -178,12 +178,12 @@ else
         var deleted = await Store.DeleteInstructionAsync(instruction.Id, CancellationToken.None);
         if (deleted)
         {
-            Snackbar.Add("Instruction deleted", Severity.Success);
+            Snackbar.AddImportant("Instruction deleted", Severity.Success, importantSuccess: true);
             await LoadInstructionsAsync();
         }
         else
         {
-            Snackbar.Add("Failed to delete instruction", Severity.Error);
+            Snackbar.AddImportant("Failed to delete instruction", Severity.Error);
         }
     }
 

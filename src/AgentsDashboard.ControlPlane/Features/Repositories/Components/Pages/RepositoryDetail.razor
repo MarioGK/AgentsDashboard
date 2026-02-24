@@ -123,7 +123,7 @@ else
                     <MudGrid>
                         <MudItem xs="12" md="3">
                             <SettingsHintedField ContainerClass="" Hint="Execution harness used by default for tasks in this repository.">
-                                <MudSelect T="string" @bind-Value="_taskDefaultsHarness" Label="Harness">
+                                <MudSelect T="string" @bind-Value="_taskDefaultsHarness" Label="Harness" data-testid="repository-task-defaults-harness">
                                     <MudSelectItem T="string" Value='@("codex")'>Codex</MudSelectItem>
                                     <MudSelectItem T="string" Value='@("opencode")'>OpenCode</MudSelectItem>
                                 </MudSelect>
@@ -481,7 +481,7 @@ else
                 var updated = await RepositoryStore.UpdatePromptSkillAsync(_editingPromptSkillId, updateRequest, CancellationToken.None);
                 if (updated is null)
                 {
-                    Snackbar.Add("Skill not found.", Severity.Warning);
+                    Snackbar.AddImportant("Skill not found.", Severity.Warning);
                     return;
                 }
             }
@@ -499,15 +499,15 @@ else
 
             CancelPromptSkillEdit();
             await LoadPromptSkillsAsync();
-            Snackbar.Add("Skill saved.", Severity.Success);
+            Snackbar.AddImportant("Skill saved.", Severity.Success);
         }
         catch (ArgumentException ex)
         {
-            Snackbar.Add(ex.Message, Severity.Warning);
+            Snackbar.AddImportant(ex.Message, Severity.Warning);
         }
         catch (InvalidOperationException ex)
         {
-            Snackbar.Add(ex.Message, Severity.Warning);
+            Snackbar.AddImportant(ex.Message, Severity.Warning);
         }
     }
 
@@ -536,7 +536,7 @@ else
         var deleted = await RepositoryStore.DeletePromptSkillAsync(skill.Id, CancellationToken.None);
         if (!deleted)
         {
-            Snackbar.Add("Skill not found.", Severity.Warning);
+            Snackbar.AddImportant("Skill not found.", Severity.Warning);
             return;
         }
 
@@ -546,7 +546,7 @@ else
         }
 
         await LoadPromptSkillsAsync();
-        Snackbar.Add("Skill deleted.", Severity.Success);
+        Snackbar.AddImportant("Skill deleted.", Severity.Success, importantSuccess: true);
     }
 
     private async Task LoadPromptSkillsAsync()
@@ -687,21 +687,21 @@ else
             var updated = await RepositoryStore.UpdateRepositoryTaskDefaultsAsync(_repository.Id, request, CancellationToken.None);
             if (updated is null)
             {
-                Snackbar.Add("Repository not found.", Severity.Warning);
+                Snackbar.AddImportant("Repository not found.", Severity.Warning);
                 return;
             }
 
             _repository = updated;
             ApplyRepositoryTaskDefaults(updated);
-            Snackbar.Add("Task defaults saved.", Severity.Success);
+            Snackbar.AddImportant("Task defaults saved.", Severity.Success);
         }
         catch (ArgumentException ex)
         {
-            Snackbar.Add(ex.Message, Severity.Warning);
+            Snackbar.AddImportant(ex.Message, Severity.Warning);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to save task defaults: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to save task defaults: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -724,7 +724,7 @@ else
         var prompt = _taskPrompt.Trim();
         if (prompt.Length == 0)
         {
-            Snackbar.Add("Task prompt is required.", Severity.Warning);
+            Snackbar.AddImportant("Task prompt is required.", Severity.Warning);
             return;
         }
 
@@ -748,7 +748,7 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to create task: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to create task: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -895,7 +895,7 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Git refresh failed: {ex.Message}", Severity.Warning);
+            Snackbar.AddImportant($"Git refresh failed: {ex.Message}", Severity.Warning);
         }
     }
 

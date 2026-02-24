@@ -34,6 +34,7 @@ public partial class Workspace
 
     private const string DefaultComposerHelperText = "Enter to send. Shift+Enter inserts a new line. Paste or upload images.";
     private const string WorkspacePreparationFailureSummary = "Workspace preparation failed";
+    private const string QueuedMessageJoinSeparator = "\n\n";
 
     private static readonly HashSet<string> BlockingFailureClasses = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -62,6 +63,7 @@ public partial class Workspace
     private RunAiSummaryDocument? _selectedRunAiSummary;
     private List<RunQuestionRequestDocument> _selectedRunQuestionRequests = [];
     private List<WorkspacePromptEntryDocument> _selectedTaskPromptHistory = [];
+    private List<WorkspaceQueuedMessageDocument> _selectedTaskQueuedMessages = [];
     private string _repositoryFilter = RepositoryFilterAll;
     private string _taskFilter = TaskFilterAll;
     private int _recentTaskTargetCount = 5;
@@ -78,6 +80,8 @@ public partial class Workspace
     private readonly WorkspaceChatProjectionBuilder _chatProjectionBuilder = new();
     private readonly Dictionary<string, WorkspaceThreadUiCache> _threadUiCacheByTaskId = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<WorkspaceChatMessage> _optimisticMessages = [];
+    private readonly Dictionary<string, WorkspacePendingSubmissionState> _pendingSubmissionsByTaskId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _queueDrainInProgressTaskIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _leftRailCollapsed;
 
     private bool _historyPanelOpen;
@@ -99,6 +103,7 @@ public partial class Workspace
     private readonly DialogOptions _promptDraftDialogOptions = new() { MaxWidth = MaxWidth.False, FullWidth = true, CloseOnEscapeKey = true };
     private long _composerSuggestionRequestVersion;
     private long _runSummaryRequestVersion;
+    private long _repositoryRefreshRequestVersion;
 
     private IDisposable? _selectionSubscription;
     private IDisposable? _runLogSubscription;
@@ -374,6 +379,10 @@ public partial class Workspace
     private bool IsComposerBlocked =>
         IsBlockingRunFailure(_selectedRun);
 
+    private bool IsQueueDrainInProgress =>
+        _selectedTask is not null &&
+        _queueDrainInProgressTaskIds.Contains(_selectedTask.Id);
+
     private string ComposerBlockedReason =>
         ResolveComposerBlockedReason(_selectedRun) ?? string.Empty;
 
@@ -402,9 +411,15 @@ public partial class Workspace
             return false;
         }
 
+        if (IsQueueDrainInProgress)
+        {
+            Snackbar.AddImportant("Queued messages are being sent. Please wait.", Severity.Info);
+            return false;
+        }
+
         if (IsComposerBlocked)
         {
-            Snackbar.Add("Composer is blocked because the latest run has a blocking failure. Resolve it before submitting new input.", Severity.Warning);
+            Snackbar.AddImportant("Composer is blocked because the latest run has a blocking failure. Resolve it before submitting new input.", Severity.Warning);
             return false;
         }
 
@@ -436,6 +451,11 @@ public partial class Workspace
 
         return !string.IsNullOrWhiteSpace(run.FailureClass) &&
                IsBlockingFailureClass(run.FailureClass);
+    }
+
+    private static bool IsRunStateActive(RunState state)
+    {
+        return state is RunState.Queued or RunState.Running or RunState.PendingApproval;
     }
 
     private static string? ResolveComposerBlockedReason(RunDocument? run)
@@ -594,14 +614,17 @@ public partial class Workspace
                 _selectedRunAiSummary = null;
                 _selectedRunQuestionRequests = [];
                 _selectedTaskPromptHistory = [];
+                _selectedTaskQueuedMessages = [];
                 _composerValue = string.Empty;
                 _composerImages = [];
                 _threadUiCacheByTaskId.Clear();
+                _optimisticMessages.Clear();
+                _pendingSubmissionsByTaskId.Clear();
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load workspace: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to load workspace: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -628,6 +651,8 @@ public partial class Workspace
 
     private async Task SelectRepositoryAsync(string repositoryId, bool syncSelection)
     {
+        Interlocked.Increment(ref _repositoryRefreshRequestVersion);
+
         var repository = _repositories.FirstOrDefault(repo => repo.Id == repositoryId);
         if (repository is null)
         {
@@ -643,12 +668,14 @@ public partial class Workspace
         _selectedRunAiSummary = null;
         _selectedRunQuestionRequests = [];
         _selectedTaskPromptHistory = [];
+        _selectedTaskQueuedMessages = [];
         _composerValue = string.Empty;
         _composerImages = [];
         _composerGhostSuggestion = string.Empty;
         _composerGhostSuffix = string.Empty;
         _threadUiCacheByTaskId.Clear();
         _optimisticMessages.Clear();
+        _pendingSubmissionsByTaskId.Clear();
         _historyPanelOpen = false;
 
         if (syncSelection && SelectionService.SelectedRepositoryId != repositoryId)
@@ -691,9 +718,11 @@ public partial class Workspace
                 ClearSelectedRunStructuredState();
                 _selectedRunAiSummary = null;
                 _selectedTaskPromptHistory = [];
+                _selectedTaskQueuedMessages = [];
                 _composerValue = string.Empty;
                 _composerImages = [];
                 _optimisticMessages.Clear();
+                _pendingSubmissionsByTaskId.Clear();
                 return;
             }
 
@@ -723,6 +752,7 @@ public partial class Workspace
         _optimisticMessages.Clear();
         RestoreThreadDraft(task.Id);
         _selectedTaskPromptHistory = await RunStore.ListWorkspacePromptHistoryAsync(task.Id, 80, CancellationToken.None);
+        _selectedTaskQueuedMessages = await RunStore.ListWorkspaceQueuedMessagesAsync(task.Id, CancellationToken.None);
 
         var taskRuns = GetRunsForTask(task.Id);
         RunDocument? selectedRun = null;
@@ -760,6 +790,7 @@ public partial class Workspace
 
         MarkThreadActivity(task.Id, DateTime.UtcNow, false);
         ScheduleComposerSuggestionRefresh();
+        _ = TryDrainQueuedMessagesAsync(task.Id, notifyResult: false);
     }
 
     private async Task SelectRunAsync(string runId)
@@ -852,6 +883,11 @@ public partial class Workspace
         {
             _selectedRun = refreshed;
             _selectedRunParsed = HarnessOutputParser.Parse(_selectedRun.OutputJson, _selectedRunLogs);
+        }
+
+        if (!IsRunStateActive(refreshed.State))
+        {
+            _ = TryDrainQueuedMessagesAsync(refreshed.TaskId, notifyResult: false);
         }
 
         await InvokeAsync(StateHasChanged);
@@ -1077,6 +1113,7 @@ public partial class Workspace
             return;
         }
 
+        Interlocked.Increment(ref _repositoryRefreshRequestVersion);
         PersistActiveThreadCache();
         await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
     }
@@ -1110,7 +1147,7 @@ public partial class Workspace
             var result = await TaskStore.DeleteTaskCascadeAsync(taskId, CancellationToken.None);
             if (!result.TaskDeleted)
             {
-                Snackbar.Add("Task was already deleted or not found.", Severity.Warning);
+                Snackbar.AddImportant("Task was already deleted or not found.", Severity.Warning);
             }
             else
             {
@@ -1143,11 +1180,11 @@ public partial class Workspace
 
                 if (details.Count == 0)
                 {
-                    Snackbar.Add("Task deleted.", Severity.Success);
+                    Snackbar.AddImportant("Task deleted.", Severity.Success, importantSuccess: true);
                 }
                 else
                 {
-                    Snackbar.Add($"Task deleted with {string.Join(", ", details)}.", Severity.Success);
+                    Snackbar.AddImportant($"Task deleted with {string.Join(", ", details)}.", Severity.Success, importantSuccess: true);
                 }
 
                 _threadUiCacheByTaskId.Remove(taskId);
@@ -1157,7 +1194,7 @@ public partial class Workspace
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to delete task: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to delete task: {ex.Message}", Severity.Error);
         }
     }
 
@@ -1167,7 +1204,7 @@ public partial class Workspace
         {
             if (_repositories.Count == 0)
             {
-                Snackbar.Add("Create a repository first.", Severity.Warning);
+                Snackbar.AddImportant("Create a repository first.", Severity.Warning);
                 return;
             }
 
@@ -1185,53 +1222,284 @@ public partial class Workspace
         _selectedRunAiSummary = null;
         _selectedRunQuestionRequests = [];
         _selectedTaskPromptHistory = [];
+        _selectedTaskQueuedMessages = [];
         _composerValue = string.Empty;
         _composerImages = [];
         _composerGhostSuggestion = string.Empty;
         _composerGhostSuffix = string.Empty;
         _composerModeOverride = null;
         _optimisticMessages.Clear();
+        _pendingSubmissionsByTaskId.Clear();
         _historyPanelOpen = false;
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task<string?> CreateTaskFromComposerAsync(
-        string composerText,
-        IReadOnlyList<WorkspaceImageInput> composerImages)
+    private async Task<TaskDocument?> CreateTaskRecordAsync(
+        string repositoryId,
+        string taskPrompt,
+        string taskName)
     {
-        if (_selectedRepository is null)
+        var request = new CreateTaskRequest(
+            RepositoryId: repositoryId,
+            Prompt: taskPrompt,
+            Name: taskName);
+
+        return await TaskStore.CreateTaskAsync(request, CancellationToken.None);
+    }
+
+    private (TaskDocument Task, RunDocument Run, WorkspacePendingSubmissionState PendingState) CreateOptimisticNewTaskSubmission(
+        RepositoryDocument repository,
+        string taskPrompt,
+        string taskName)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var temporaryTaskId = $"pending-task-{Guid.NewGuid():N}";
+        var temporaryRunId = $"pending-run-{Guid.NewGuid():N}";
+
+        var optimisticTask = new TaskDocument
         {
-            return null;
+            Id = temporaryTaskId,
+            RepositoryId = repository.Id,
+            Name = taskName,
+            Harness = repository.TaskDefaults.Harness,
+            ExecutionModeDefault = repository.TaskDefaults.ExecutionModeDefault,
+            SessionProfileId = repository.TaskDefaults.SessionProfileId,
+            Prompt = taskPrompt,
+            Command = repository.TaskDefaults.Command,
+            AutoCreatePullRequest = repository.TaskDefaults.AutoCreatePullRequest,
+            Enabled = repository.TaskDefaults.Enabled,
+            CreatedAtUtc = nowUtc,
+            RetryPolicy = new RetryPolicyConfig(),
+            Timeouts = new TimeoutConfig(),
+            ApprovalProfile = new ApprovalProfileConfig(),
+            SandboxProfile = new SandboxProfileConfig(),
+            ArtifactPolicy = new ArtifactPolicyConfig(),
+            InstructionFiles = [],
+            ArtifactPatterns = [],
+            LinkedFailureRuns = [],
+            ConcurrencyLimit = 0,
+        };
+
+        var optimisticRun = new RunDocument
+        {
+            Id = temporaryRunId,
+            RepositoryId = repository.Id,
+            TaskId = temporaryTaskId,
+            State = RunState.Queued,
+            ExecutionMode = _composerModeOverride ?? repository.TaskDefaults.ExecutionModeDefault,
+            StructuredProtocol = "harness-structured-event-v2",
+            Summary = "Dispatching...",
+            CreatedAtUtc = nowUtc,
+        };
+
+        var pendingState = new WorkspacePendingSubmissionState
+        {
+            TaskId = temporaryTaskId,
+            OptimisticRunId = temporaryRunId,
+            StatusText = "Creating task...",
+        };
+
+        _pendingSubmissionsByTaskId[temporaryTaskId] = pendingState;
+        UpsertTaskInSelectedRepository(optimisticTask);
+        UpsertRunInSelectedRepository(optimisticRun);
+        SelectOptimisticTaskAndRun(optimisticTask, optimisticRun);
+
+        return (optimisticTask, optimisticRun, pendingState);
+    }
+
+    private void SelectOptimisticTaskAndRun(TaskDocument task, RunDocument run)
+    {
+        PersistActiveThreadCache();
+        _selectedTask = task;
+        _selectedRun = run;
+        _selectedRunLogs = [];
+        _selectedRunParsed = null;
+        ClearSelectedRunStructuredState();
+        _selectedRunAiSummary = null;
+        _selectedRunQuestionRequests = [];
+        _selectedTaskPromptHistory = [];
+        _selectedTaskQueuedMessages = [];
+        SetThreadSelectedRun(task.Id, run.Id);
+        MarkThreadActivity(task.Id, DateTime.UtcNow, false);
+    }
+
+    private void ReconcileOptimisticTaskToPersistedTask(WorkspacePendingSubmissionState pendingState, TaskDocument persistedTask)
+    {
+        var previousTaskId = pendingState.TaskId;
+
+        var optimisticTaskIndex = _selectedRepositoryTasks.FindIndex(task =>
+            string.Equals(task.Id, previousTaskId, StringComparison.OrdinalIgnoreCase));
+        if (optimisticTaskIndex >= 0)
+        {
+            _selectedRepositoryTasks[optimisticTaskIndex] = persistedTask;
+        }
+        else
+        {
+            UpsertTaskInSelectedRepository(persistedTask);
         }
 
-        var taskPrompt = AppendCreateTaskPromptImageReferences(composerText, composerImages).Trim();
-        if (string.IsNullOrWhiteSpace(taskPrompt))
+        for (var index = 0; index < _selectedRepositoryRuns.Count; index++)
         {
-            Snackbar.Add("Task prompt is required.", Severity.Warning);
-            return null;
+            var run = _selectedRepositoryRuns[index];
+            if (string.Equals(run.TaskId, previousTaskId, StringComparison.OrdinalIgnoreCase))
+            {
+                run.TaskId = persistedTask.Id;
+                _selectedRepositoryRuns[index] = run;
+            }
         }
 
+        if (_selectedTask is not null &&
+            string.Equals(_selectedTask.Id, previousTaskId, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedTask = persistedTask;
+        }
+
+        if (_selectedRun is not null &&
+            string.Equals(_selectedRun.TaskId, previousTaskId, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedRun.TaskId = persistedTask.Id;
+        }
+
+        if (_threadUiCacheByTaskId.TryGetValue(previousTaskId, out var cache))
+        {
+            _threadUiCacheByTaskId.Remove(previousTaskId);
+            _threadUiCacheByTaskId[persistedTask.Id] = cache;
+        }
+
+        _pendingSubmissionsByTaskId.Remove(previousTaskId);
+        pendingState.TaskId = persistedTask.Id;
+        pendingState.StatusText = "Dispatching run...";
+        _pendingSubmissionsByTaskId[persistedTask.Id] = pendingState;
+
+        RebuildLatestRunsIndex();
+    }
+
+    private void RollbackOptimisticSubmission(WorkspacePendingSubmissionState pendingState)
+    {
+        var taskId = pendingState.TaskId;
+        _pendingSubmissionsByTaskId.Remove(taskId);
+        _threadUiCacheByTaskId.Remove(taskId);
+        _selectedRepositoryTasks.RemoveAll(task => string.Equals(task.Id, taskId, StringComparison.OrdinalIgnoreCase));
+        _selectedRepositoryRuns.RemoveAll(run =>
+            string.Equals(run.TaskId, taskId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(run.Id, pendingState.OptimisticRunId, StringComparison.OrdinalIgnoreCase));
+        RebuildLatestRunsIndex();
+
+        if (_selectedTask is not null &&
+            string.Equals(_selectedTask.Id, taskId, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedTask = null;
+            _selectedRun = null;
+            _selectedRunLogs = [];
+            _selectedRunParsed = null;
+            ClearSelectedRunStructuredState();
+            _selectedRunAiSummary = null;
+            _selectedRunQuestionRequests = [];
+            _selectedTaskPromptHistory = [];
+            _selectedTaskQueuedMessages = [];
+        }
+    }
+
+    private void FinalizePendingSubmissionWithoutRun(WorkspacePendingSubmissionState pendingState)
+    {
+        _pendingSubmissionsByTaskId.Remove(pendingState.TaskId);
+        RemoveRunFromSelectedRepository(pendingState.OptimisticRunId);
+
+        if (_selectedRun is not null &&
+            string.Equals(_selectedRun.Id, pendingState.OptimisticRunId, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedRun = null;
+            _selectedRunLogs = [];
+            _selectedRunParsed = null;
+            ClearSelectedRunStructuredState();
+            _selectedRunAiSummary = null;
+            _selectedRunQuestionRequests = [];
+            if (_selectedTask is not null)
+            {
+                SetThreadSelectedRun(_selectedTask.Id, string.Empty);
+            }
+        }
+    }
+
+    private void ReplaceOptimisticRunWithPersistedRun(WorkspacePendingSubmissionState pendingState, RunDocument persistedRun)
+    {
+        _pendingSubmissionsByTaskId.Remove(pendingState.TaskId);
+        RemoveRunFromSelectedRepository(pendingState.OptimisticRunId);
+        UpsertRunInSelectedRepository(persistedRun);
+        SetThreadSelectedRun(persistedRun.TaskId, persistedRun.Id);
+    }
+
+    private void UpsertTaskInSelectedRepository(TaskDocument task)
+    {
+        var taskIndex = _selectedRepositoryTasks.FindIndex(item => string.Equals(item.Id, task.Id, StringComparison.OrdinalIgnoreCase));
+        if (taskIndex >= 0)
+        {
+            _selectedRepositoryTasks[taskIndex] = task;
+        }
+        else
+        {
+            _selectedRepositoryTasks.Add(task);
+            _selectedRepositoryTasks = _selectedRepositoryTasks
+                .OrderBy(item => item.CreatedAtUtc)
+                .ToList();
+        }
+    }
+
+    private void UpsertRunInSelectedRepository(RunDocument run)
+    {
+        var runIndex = _selectedRepositoryRuns.FindIndex(item => string.Equals(item.Id, run.Id, StringComparison.OrdinalIgnoreCase));
+        if (runIndex >= 0)
+        {
+            _selectedRepositoryRuns[runIndex] = run;
+        }
+        else
+        {
+            _selectedRepositoryRuns.Add(run);
+        }
+
+        _selectedRepositoryRuns = _selectedRepositoryRuns
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .ToList();
+        RebuildLatestRunsIndex();
+    }
+
+    private void RemoveRunFromSelectedRepository(string runId)
+    {
+        _selectedRepositoryRuns.RemoveAll(run => string.Equals(run.Id, runId, StringComparison.OrdinalIgnoreCase));
+        RebuildLatestRunsIndex();
+    }
+
+    private void ScheduleDelayedRepositoryRefresh(string repositoryId)
+    {
+        var requestVersion = Interlocked.Increment(ref _repositoryRefreshRequestVersion);
+        _ = RefreshRepositoryInBackgroundAsync(requestVersion, repositoryId);
+    }
+
+    private async Task RefreshRepositoryInBackgroundAsync(long requestVersion, string repositoryId)
+    {
         try
         {
-            var taskName = BuildFallbackTaskName(taskPrompt);
+            await Task.Delay(TimeSpan.FromSeconds(2), CancellationToken.None);
 
-            var request = new CreateTaskRequest(
-                RepositoryId: _selectedRepository.Id,
-                Prompt: taskPrompt,
-                Name: taskName);
+            await InvokeAsync(async () =>
+            {
+                if (requestVersion != _repositoryRefreshRequestVersion)
+                {
+                    return;
+                }
 
-            var created = await TaskStore.CreateTaskAsync(request, CancellationToken.None);
-            await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: false);
-            await SelectTaskAsync(created.Id);
-            QueueTaskTitleRefinement(created.Id, _selectedRepository.Id, taskPrompt);
+                if (_selectedRepository is null ||
+                    !string.Equals(_selectedRepository.Id, repositoryId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
 
-            Snackbar.Add("Task created.", Severity.Success);
-            return created.Id;
+                await LoadSelectedRepositoryDataAsync(repositoryId, preserveTaskSelection: true);
+                StateHasChanged();
+            });
         }
-        catch (Exception ex)
+        catch
         {
-            Snackbar.Add($"Failed to create task: {ex.Message}", Severity.Error);
-            return null;
         }
     }
 
@@ -1298,9 +1566,11 @@ public partial class Workspace
             return;
         }
 
+        var selectedRepositoryId = _selectedRepository.Id;
+
         if (IsComposerBlocked)
         {
-            Snackbar.Add("Composer is blocked because the latest run has a blocking failure. Resolve it before submitting new input.", Severity.Warning);
+            Snackbar.AddImportant("Composer is blocked because the latest run has a blocking failure. Resolve it before submitting new input.", Severity.Warning);
             return;
         }
 
@@ -1308,7 +1578,13 @@ public partial class Workspace
         var hasImages = _composerImages.Count > 0;
         if (string.IsNullOrWhiteSpace(composerText) && !hasImages)
         {
-            Snackbar.Add("Enter prompt guidance first.", Severity.Info);
+            Snackbar.AddImportant("Enter prompt guidance first.", Severity.Info);
+            return;
+        }
+
+        if (_selectedTask is not null && await ShouldQueueComposerSubmissionAsync(_selectedTask.Id))
+        {
+            await QueueComposerSubmissionAsync(_selectedRepository.Id, _selectedTask.Id, composerText, _composerImages, _composerModeOverride);
             return;
         }
 
@@ -1330,6 +1606,8 @@ public partial class Workspace
 
         _isSubmittingComposer = true;
         var optimisticMessageId = AddOptimisticUserMessage(composerText, _composerImages.Count);
+        WorkspacePendingSubmissionState? pendingSubmission = null;
+        TaskDocument? createdTaskDuringSubmission = null;
 
         try
         {
@@ -1343,30 +1621,57 @@ public partial class Workspace
             var promptForSubmission = string.Empty;
             if (taskForSubmission is null)
             {
-                var createdTaskId = await CreateTaskFromComposerAsync(composerText, submittedImages);
-                if (string.IsNullOrWhiteSpace(createdTaskId))
+                var repository = _selectedRepository;
+                if (repository is null)
                 {
                     RestoreComposerDraft();
                     RemoveOptimisticUserMessage(optimisticMessageId);
                     return;
                 }
 
-                if (_selectedTask is null ||
-                    !string.Equals(_selectedTask.Id, createdTaskId, StringComparison.OrdinalIgnoreCase))
-                {
-                    await SelectTaskAsync(createdTaskId);
-                }
-
-                taskForSubmission = _selectedTask;
-                if (taskForSubmission is null)
+                var taskPrompt = AppendCreateTaskPromptImageReferences(composerText, submittedImages).Trim();
+                if (string.IsNullOrWhiteSpace(taskPrompt))
                 {
                     RestoreComposerDraft();
                     RemoveOptimisticUserMessage(optimisticMessageId);
-                    Snackbar.Add("Task was created but could not be loaded for execution.", Severity.Warning);
+                    Snackbar.AddImportant("Task prompt is required.", Severity.Warning);
                     return;
                 }
 
+                var taskName = BuildFallbackTaskName(taskPrompt);
+                var optimisticSubmission = CreateOptimisticNewTaskSubmission(repository, taskPrompt, taskName);
+                pendingSubmission = optimisticSubmission.PendingState;
+                taskForSubmission = optimisticSubmission.Task;
                 promptForSubmission = taskForSubmission.Prompt;
+                await InvokeAsync(StateHasChanged);
+
+                try
+                {
+                    var createdTask = await CreateTaskRecordAsync(repository.Id, taskPrompt, taskName);
+                    if (createdTask is null)
+                    {
+                        RollbackOptimisticSubmission(pendingSubmission);
+                        RestoreComposerDraft();
+                        RemoveOptimisticUserMessage(optimisticMessageId);
+                        Snackbar.AddImportant("Failed to create task.", Severity.Error);
+                        return;
+                    }
+
+                    createdTaskDuringSubmission = createdTask;
+                    ReconcileOptimisticTaskToPersistedTask(pendingSubmission, createdTask);
+                    taskForSubmission = createdTask;
+                    promptForSubmission = createdTask.Prompt;
+                    QueueTaskTitleRefinement(createdTask.Id, repository.Id, taskPrompt);
+                    Snackbar.AddImportant("Task created.", Severity.Success);
+                }
+                catch (Exception ex)
+                {
+                    RollbackOptimisticSubmission(pendingSubmission);
+                    RestoreComposerDraft();
+                    RemoveOptimisticUserMessage(optimisticMessageId);
+                    Snackbar.AddImportant($"Failed to create task: {ex.Message}", Severity.Error);
+                    return;
+                }
             }
             else
             {
@@ -1374,7 +1679,7 @@ public partial class Workspace
             }
 
             var submission = await WorkspaceService.SubmitPromptAsync(
-                _selectedRepository.Id,
+                selectedRepositoryId,
                 new WorkspacePromptSubmissionRequest(
                     Prompt: promptForSubmission,
                     TaskId: taskForSubmission.Id,
@@ -1391,37 +1696,392 @@ public partial class Workspace
             {
                 RestoreComposerDraft();
                 RemoveOptimisticUserMessage(optimisticMessageId);
-                Snackbar.Add(submission.Message, Severity.Warning);
+
+                if (pendingSubmission is not null)
+                {
+                    if (createdTaskDuringSubmission is null)
+                    {
+                        RollbackOptimisticSubmission(pendingSubmission);
+                    }
+                    else
+                    {
+                        FinalizePendingSubmissionWithoutRun(pendingSubmission);
+                        _selectedTask = createdTaskDuringSubmission;
+                    }
+                }
+
+                Snackbar.AddImportant(submission.Message, Severity.Warning);
                 return;
             }
 
             if (submission.Task is not null)
             {
+                UpsertTaskInSelectedRepository(submission.Task);
                 _selectedTask = submission.Task;
+            }
+            else if (createdTaskDuringSubmission is not null)
+            {
+                UpsertTaskInSelectedRepository(createdTaskDuringSubmission);
+                _selectedTask = createdTaskDuringSubmission;
+            }
+
+            if (submission.Run is not null)
+            {
+                if (pendingSubmission is not null)
+                {
+                    ReplaceOptimisticRunWithPersistedRun(pendingSubmission, submission.Run);
+                }
+                else
+                {
+                    UpsertRunInSelectedRepository(submission.Run);
+                }
+            }
+            else if (pendingSubmission is not null)
+            {
+                FinalizePendingSubmissionWithoutRun(pendingSubmission);
             }
 
             ScheduleComposerSuggestionRefresh();
             RemoveOptimisticUserMessage(optimisticMessageId);
-
-            await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
 
             if (submission.Run is not null)
             {
                 await SelectRunAsync(submission.Run.Id);
             }
 
-            Snackbar.Add(submission.Message, submission.DispatchAccepted ? Severity.Success : Severity.Info);
+            ScheduleDelayedRepositoryRefresh(selectedRepositoryId);
+
+            Snackbar.AddImportant(submission.Message, submission.DispatchAccepted ? Severity.Success : Severity.Info);
         }
         catch (Exception ex)
         {
             RestoreComposerDraft();
             RemoveOptimisticUserMessage(optimisticMessageId);
-            Snackbar.Add($"Submit failed: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Submit failed: {ex.Message}", Severity.Error);
         }
         finally
         {
             _isSubmittingComposer = false;
         }
+    }
+
+    private async Task<bool> ShouldQueueComposerSubmissionAsync(string taskId)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return false;
+        }
+
+        if (_selectedTaskQueuedMessages.Count > 0)
+        {
+            return true;
+        }
+
+        if (_queueDrainInProgressTaskIds.Contains(taskId))
+        {
+            return true;
+        }
+
+        var activeRuns = await RunStore.CountActiveRunsByTaskAsync(taskId, CancellationToken.None);
+        return activeRuns > 0;
+    }
+
+    private async Task QueueComposerSubmissionAsync(
+        string repositoryId,
+        string taskId,
+        string composerText,
+        IReadOnlyList<WorkspaceImageInput> composerImages,
+        HarnessExecutionMode? modeOverride)
+    {
+        var queueItem = new WorkspaceQueuedMessageDocument
+        {
+            RepositoryId = repositoryId,
+            TaskId = taskId,
+            Content = composerText.Trim(),
+            HasImages = composerImages.Count > 0,
+            ImagePayloadJson = SerializeQueuedImagePayload(composerImages),
+            ModeOverride = modeOverride,
+            CreatedAtUtc = DateTime.UtcNow,
+        };
+
+        await RunStore.AppendWorkspaceQueuedMessageAsync(queueItem, CancellationToken.None);
+        _selectedTaskQueuedMessages = await RunStore.ListWorkspaceQueuedMessagesAsync(taskId, CancellationToken.None);
+
+        _composerValue = string.Empty;
+        _composerImages = [];
+        _composerGhostSuggestion = string.Empty;
+        _composerGhostSuffix = string.Empty;
+        UpdateActiveThreadCache();
+        ScheduleComposerSuggestionRefresh();
+        MarkThreadActivity(taskId, DateTime.UtcNow, false);
+        Snackbar.AddImportant($"Message queued ({_selectedTaskQueuedMessages.Count} pending).", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task DrainQueuedMessagesForSelectedTaskAsync()
+    {
+        if (_selectedTask is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return TryDrainQueuedMessagesAsync(_selectedTask.Id, notifyResult: true, force: true);
+    }
+
+    private async Task ClearQueuedMessagesForSelectedTaskAsync()
+    {
+        if (_selectedTask is null)
+        {
+            return;
+        }
+
+        var deleted = await RunStore.DeleteWorkspaceQueuedMessagesByTaskAsync(_selectedTask.Id, CancellationToken.None);
+        _selectedTaskQueuedMessages = [];
+        if (deleted > 0)
+        {
+            Snackbar.AddImportant($"Cleared {deleted} queued message(s).", Severity.Success, importantSuccess: true);
+        }
+        else
+        {
+            Snackbar.AddImportant("No queued messages to clear.", Severity.Info);
+        }
+    }
+
+    private async Task<bool> TryDrainQueuedMessagesAsync(string taskId, bool notifyResult, bool force = false)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return false;
+        }
+
+        if (!_queueDrainInProgressTaskIds.Add(taskId))
+        {
+            return false;
+        }
+
+        try
+        {
+            var drainResult = await WorkspaceService.DrainQueuedMessagesAsync(taskId, force, CancellationToken.None);
+            if (string.Equals(_selectedTask?.Id, taskId, StringComparison.OrdinalIgnoreCase))
+            {
+                _selectedTaskQueuedMessages = await RunStore.ListWorkspaceQueuedMessagesAsync(taskId, CancellationToken.None);
+            }
+
+            if (drainResult.Drained)
+            {
+                var run = drainResult.Run;
+                if (run is not null &&
+                    _selectedRepository is not null &&
+                    string.Equals(run.RepositoryId, _selectedRepository.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    UpsertRunInSelectedRepository(run);
+                    if (string.Equals(_selectedTask?.Id, taskId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        await SelectRunAsync(run.Id);
+                    }
+
+                    ScheduleDelayedRepositoryRefresh(run.RepositoryId);
+                }
+                else
+                {
+                    var task = await TaskStore.GetTaskAsync(taskId, CancellationToken.None);
+                    if (task is not null &&
+                        _selectedRepository is not null &&
+                        string.Equals(task.RepositoryId, _selectedRepository.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ScheduleDelayedRepositoryRefresh(task.RepositoryId);
+                    }
+                }
+            }
+
+            if (notifyResult)
+            {
+                var severity = drainResult.Success
+                    ? drainResult.Drained
+                        ? Severity.Success
+                        : Severity.Info
+                    : Severity.Warning;
+                Snackbar.AddImportant(drainResult.Message, severity);
+            }
+
+            return drainResult.Drained;
+        }
+        catch (Exception ex)
+        {
+            if (notifyResult)
+            {
+                Snackbar.AddImportant($"Failed to send queued messages: {ex.Message}", Severity.Warning);
+            }
+
+            return false;
+        }
+        finally
+        {
+            _queueDrainInProgressTaskIds.Remove(taskId);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task HandleMessageEditRequestedAsync(WorkspaceChatMessage message)
+    {
+        if (_selectedRepository is null || _selectedTask is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(message.PromptEntryId))
+        {
+            Snackbar.AddImportant("Message cannot be edited.", Severity.Warning);
+            return;
+        }
+
+        var targetPromptEntry = _selectedTaskPromptHistory.FirstOrDefault(entry =>
+            string.Equals(entry.Id, message.PromptEntryId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(entry.Role?.Trim(), "user", StringComparison.OrdinalIgnoreCase));
+        if (targetPromptEntry is null)
+        {
+            Snackbar.AddImportant("Prompt history entry was not found.", Severity.Warning);
+            return;
+        }
+
+        var editedContent = await JS.InvokeAsync<string?>(
+            "prompt",
+            "Edit message and rerun from this point.",
+            targetPromptEntry.Content ?? string.Empty);
+        if (editedContent is null)
+        {
+            return;
+        }
+
+        var normalizedEditedContent = editedContent.Trim();
+        if (normalizedEditedContent.Length == 0)
+        {
+            Snackbar.AddImportant("Edited message cannot be empty.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            var orderedEntries = _selectedTaskPromptHistory
+                .OrderBy(entry => entry.CreatedAtUtc)
+                .ThenBy(entry => entry.Id, StringComparer.Ordinal)
+                .ToList();
+            var targetEntryIndex = orderedEntries.FindIndex(entry =>
+                string.Equals(entry.Id, targetPromptEntry.Id, StringComparison.OrdinalIgnoreCase));
+            if (targetEntryIndex < 0)
+            {
+                Snackbar.AddImportant("Prompt history entry was not found.", Severity.Warning);
+                return;
+            }
+
+            var orderedUserEntries = orderedEntries
+                .Where(entry => string.Equals(entry.Role?.Trim(), "user", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var targetUserIndex = orderedUserEntries.FindIndex(entry =>
+                string.Equals(entry.Id, targetPromptEntry.Id, StringComparison.OrdinalIgnoreCase));
+            if (targetUserIndex < 0)
+            {
+                Snackbar.AddImportant("Only user messages can be edited.", Severity.Warning);
+                return;
+            }
+
+            var replaySegments = new List<string>();
+            for (var index = targetUserIndex; index < orderedUserEntries.Count; index++)
+            {
+                var candidate = orderedUserEntries[index];
+                var segment = string.Equals(candidate.Id, targetPromptEntry.Id, StringComparison.OrdinalIgnoreCase)
+                    ? normalizedEditedContent
+                    : candidate.Content?.Trim() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(segment))
+                {
+                    replaySegments.Add(segment);
+                }
+            }
+
+            var replayInput = string.Join(QueuedMessageJoinSeparator, replaySegments);
+            if (string.IsNullOrWhiteSpace(replayInput))
+            {
+                Snackbar.AddImportant("Rerun input became empty after editing.", Severity.Warning);
+                return;
+            }
+
+            var promptEntryIdsToDelete = orderedEntries
+                .Skip(targetEntryIndex + 1)
+                .Select(entry => entry.Id)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToList();
+
+            var taskRuns = await RunStore.ListRunsByTaskAsync(_selectedTask.Id, 2000, CancellationToken.None);
+            var runIdsToDelete = taskRuns
+                .Where(run =>
+                    run.CreatedAtUtc >= targetPromptEntry.CreatedAtUtc ||
+                    string.Equals(run.Id, targetPromptEntry.RunId, StringComparison.OrdinalIgnoreCase))
+                .Select(run => run.Id)
+                .Where(runId => !string.IsNullOrWhiteSpace(runId))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (await RunStore.UpdateWorkspacePromptEntryContentAsync(
+                    targetPromptEntry.Id,
+                    normalizedEditedContent,
+                    CancellationToken.None) is null)
+            {
+                Snackbar.AddImportant("Failed to persist the edited message.", Severity.Warning);
+                return;
+            }
+
+            var deletedPromptEntries = promptEntryIdsToDelete.Count == 0
+                ? 0
+                : await RunStore.DeleteWorkspacePromptEntriesAsync(promptEntryIdsToDelete, CancellationToken.None);
+            var deletedRuns = runIdsToDelete.Count == 0
+                ? 0
+                : await RunStore.DeleteRunsCascadeAsync(runIdsToDelete, CancellationToken.None);
+            _ = await RunStore.DeleteWorkspaceQueuedMessagesByTaskAsync(_selectedTask.Id, CancellationToken.None);
+
+            var submission = await WorkspaceService.SubmitPromptAsync(
+                _selectedRepository.Id,
+                new WorkspacePromptSubmissionRequest(
+                    Prompt: MergePrompt(_selectedTask.Prompt, replayInput),
+                    TaskId: _selectedTask.Id,
+                    Harness: _selectedTask.Harness,
+                    Command: _selectedTask.Command,
+                    ForceNewRun: true,
+                    UserMessage: replayInput,
+                    ModeOverride: _composerModeOverride,
+                    Images: null,
+                    SessionProfileId: null),
+                CancellationToken.None);
+
+            await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
+            if (submission.Run is not null)
+            {
+                await SelectRunAsync(submission.Run.Id);
+            }
+
+            if (!submission.Success)
+            {
+                Snackbar.AddImportant(submission.Message, Severity.Warning);
+                return;
+            }
+
+            Snackbar.AddImportant(
+                $"Timeline reset from edited message ({deletedPromptEntries} prompt entr{(deletedPromptEntries == 1 ? "y" : "ies")}, {deletedRuns} run(s) removed).",
+                Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.AddImportant($"Edit and rerun failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static string SerializeQueuedImagePayload(IReadOnlyList<WorkspaceImageInput> images)
+    {
+        if (images.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return JsonSerializer.Serialize(images);
     }
 
     private string AddOptimisticUserMessage(string composerText, int imageCount)
@@ -1469,7 +2129,7 @@ public partial class Workspace
 
             if (!result.Success)
             {
-                Snackbar.Add(result.Message, Severity.Warning);
+                Snackbar.AddImportant(result.Message, Severity.Warning);
                 await RefreshSelectedRunQuestionRequestsAsync(_selectedRun.Id, _selectedTask.Id);
                 return;
             }
@@ -1484,11 +2144,11 @@ public partial class Workspace
                 await SelectRunAsync(result.Run.Id);
             }
 
-            Snackbar.Add(result.Message, Severity.Success);
+            Snackbar.AddImportant(result.Message, Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to submit answers: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to submit answers: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -1501,7 +2161,7 @@ public partial class Workspace
     {
         if (_selectedRepository is null || _selectedTask is null)
         {
-            Snackbar.Add("Select a task first.", Severity.Warning);
+            Snackbar.AddImportant("Select a task first.", Severity.Warning);
             return;
         }
 
@@ -1645,7 +2305,7 @@ public partial class Workspace
 
         if (string.IsNullOrWhiteSpace(promptValue))
         {
-            Snackbar.Add("Draft is empty.", Severity.Warning);
+            Snackbar.AddImportant("Draft is empty.", Severity.Warning);
             return;
         }
 
@@ -1660,11 +2320,11 @@ public partial class Workspace
 
             _promptDraftDialogOpen = false;
             await LoadSelectedRepositoryDataAsync(_selectedRepository.Id, preserveTaskSelection: true);
-            Snackbar.Add("Task prompt updated.", Severity.Success);
+            Snackbar.AddImportant("Task prompt updated.", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to apply prompt: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to apply prompt: {ex.Message}", Severity.Error);
         }
     }
 
@@ -1723,7 +2383,7 @@ Composer Focus:
     {
         if (!string.IsNullOrWhiteSpace(message))
         {
-            Snackbar.Add(message, Severity.Warning);
+            Snackbar.AddImportant(message, Severity.Warning);
         }
 
         return Task.CompletedTask;
@@ -1892,10 +2552,18 @@ Composer Focus:
     {
         var latestRun = GetLatestRun(task.Id);
         var cache = GetThreadCache(task.Id);
+        var pendingState = GetPendingSubmission(task.Id);
         var lastActivityUtc = latestRun?.CreatedAtUtc ?? task.CreatedAtUtc;
         if (cache is not null && cache.LastActivityUtc > lastActivityUtc)
         {
             lastActivityUtc = cache.LastActivityUtc;
+        }
+
+        if (pendingState is not null)
+        {
+            lastActivityUtc = DateTime.UtcNow > lastActivityUtc
+                ? DateTime.UtcNow
+                : lastActivityUtc;
         }
 
         var latestStateLabel = WorkspaceStatusTextFormatter.FormatTaskStateLabel(task, latestRun);
@@ -1905,6 +2573,13 @@ Composer Focus:
         var latestRunHint = latestRun is null
             ? string.Empty
             : latestRun.CreatedAtUtc.ToLocalTime().ToString("g");
+        var pendingStatusText = pendingState?.StatusText ?? string.Empty;
+        if (pendingState is not null && !string.IsNullOrWhiteSpace(pendingStatusText))
+        {
+            latestStateLabel = pendingStatusText;
+            latestStateColor = Color.Info;
+            latestRunHint = "Pending";
+        }
 
         return new WorkspaceThreadState(
             TaskId: task.Id,
@@ -1915,13 +2590,22 @@ Composer Focus:
             IsSelected: string.Equals(task.Id, _selectedTask?.Id, StringComparison.OrdinalIgnoreCase),
             HasUnread: cache?.HasUnreadActivity == true,
             LastActivityUtc: lastActivityUtc,
-            LatestRunHint: latestRunHint);
+            LatestRunHint: latestRunHint,
+            IsPending: pendingState is not null,
+            PendingStatusText: pendingStatusText);
     }
 
     private WorkspaceThreadUiCache? GetThreadCache(string taskId)
     {
         return _threadUiCacheByTaskId.TryGetValue(taskId, out var cache)
             ? cache
+            : null;
+    }
+
+    private WorkspacePendingSubmissionState? GetPendingSubmission(string taskId)
+    {
+        return _pendingSubmissionsByTaskId.TryGetValue(taskId, out var pendingState)
+            ? pendingState
             : null;
     }
 
@@ -2030,6 +2714,23 @@ Composer Focus:
         foreach (var taskId in removeKeys)
         {
             _threadUiCacheByTaskId.Remove(taskId);
+        }
+
+        var stalePendingTaskIds = _pendingSubmissionsByTaskId.Keys
+            .Where(taskId => !validTaskIds.Contains(taskId))
+            .ToList();
+
+        foreach (var taskId in stalePendingTaskIds)
+        {
+            _pendingSubmissionsByTaskId.Remove(taskId);
+        }
+
+        var staleQueueDrainTaskIds = _queueDrainInProgressTaskIds
+            .Where(taskId => !validTaskIds.Contains(taskId))
+            .ToList();
+        foreach (var taskId in staleQueueDrainTaskIds)
+        {
+            _queueDrainInProgressTaskIds.Remove(taskId);
         }
     }
 
@@ -2301,11 +3002,11 @@ Composer Focus:
         try
         {
             await JS.InvokeVoidAsync("navigator.clipboard.writeText", GetSelectedRunStructuredEventsJson());
-            Snackbar.Add("Event JSON copied.", Severity.Success);
+            Snackbar.AddImportant("Event JSON copied.", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Unable to copy event JSON: {ex.Message}", Severity.Warning);
+            Snackbar.AddImportant($"Unable to copy event JSON: {ex.Message}", Severity.Warning);
         }
     }
 

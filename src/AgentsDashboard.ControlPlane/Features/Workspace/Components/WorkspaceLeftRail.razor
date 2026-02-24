@@ -129,20 +129,27 @@
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Info">New</MudChip>
                                 }
-                                <MudTooltip Text="Delete task" Placement="Placement.Top">
-                                    <span @onclick="() => {}" @onclick:stopPropagation="true">
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                       Size="Size.Small"
-                                                       Color="Color.Error"
-                                                       OnClick="() => OnThreadDeleteRequested.InvokeAsync(thread.TaskId)"
-                                                       data-testid="@($"workspace-task-delete-{thread.TaskId}")" />
-                                    </span>
-                                </MudTooltip>
+                                @if (thread.IsPending)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">Pending</MudChip>
+                                }
+                                else
+                                {
+                                    <MudTooltip Text="Delete task" Placement="Placement.Top">
+                                        <span @onclick="() => {}" @onclick:stopPropagation="true">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                           Size="Size.Small"
+                                                           Color="Color.Error"
+                                                           OnClick="() => OnThreadDeleteRequested.InvokeAsync(thread.TaskId)"
+                                                           data-testid="@($"workspace-task-delete-{thread.TaskId}")" />
+                                        </span>
+                                    </MudTooltip>
+                                }
                             }
                         </MudStack>
                         @if (!IsCollapsed)
                         {
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@thread.Harness · @thread.LatestStateLabel</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@thread.Harness · @GetThreadStateLabel(thread)</MudText>
                             @if (!string.IsNullOrWhiteSpace(thread.LatestRunHint))
                             {
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">@thread.LatestRunHint</MudText>
@@ -192,5 +199,12 @@
         return thread.IsSelected
             ? "workspace-task-card workspace-task-card-selected"
             : "workspace-task-card";
+    }
+
+    private static string GetThreadStateLabel(WorkspaceThreadState thread)
+    {
+        return thread.IsPending && !string.IsNullOrWhiteSpace(thread.PendingStatusText)
+            ? thread.PendingStatusText
+            : thread.LatestStateLabel;
     }
 }

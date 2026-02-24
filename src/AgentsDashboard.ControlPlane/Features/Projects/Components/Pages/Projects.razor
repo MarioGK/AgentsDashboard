@@ -213,7 +213,7 @@
             string.IsNullOrWhiteSpace(_newRepositoryGitUrl) ||
             string.IsNullOrWhiteSpace(_newRepositoryLocalPath))
         {
-            Snackbar.Add("Repository name, git URL, and local folder are required.", Severity.Warning);
+            Snackbar.AddImportant("Repository name, git URL, and local folder are required.", Severity.Warning);
             return;
         }
 
@@ -250,11 +250,11 @@
             _newRepositoryGithubToken = string.Empty;
 
             await LoadAsync();
-            Snackbar.Add("Repository created and cloned successfully.", Severity.Success);
+            Snackbar.AddImportant("Repository created and cloned successfully.", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Repository create failed: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Repository create failed: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -279,7 +279,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Refresh failed for {repository.Name}: {ex.Message}", Severity.Warning);
+            Snackbar.AddImportant($"Refresh failed for {repository.Name}: {ex.Message}", Severity.Warning);
         }
     }
 
@@ -325,7 +325,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Browse failed: {ex.Message}", Severity.Warning);
+            Snackbar.AddImportant($"Browse failed: {ex.Message}", Severity.Warning);
         }
     }
 
@@ -368,7 +368,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Cannot navigate up: {ex.Message}", Severity.Warning);
+            Snackbar.AddImportant($"Cannot navigate up: {ex.Message}", Severity.Warning);
         }
     }
 
@@ -405,7 +405,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Create folder failed: {ex.Message}", Severity.Warning);
+            Snackbar.AddImportant($"Create folder failed: {ex.Message}", Severity.Warning);
         }
     }
 }

@@ -11,6 +11,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         IRepository<TaskDocument> tasks,
         IRepository<RunDocument> runs,
         IRepository<WorkspacePromptEntryDocument> workspacePromptEntries,
+        IRepository<WorkspaceQueuedMessageDocument> workspaceQueuedMessages,
         IRepository<RunQuestionRequestDocument> runQuestionRequests,
         IRepository<SemanticChunkDocument> semanticChunks,
         IRepository<RunAiSummaryDocument> runAiSummaries,
@@ -24,6 +25,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         IRepository<ProviderSecretDocument> providerSecrets,
         IRepository<TaskRuntimeRegistration> taskRuntimeRegistrations,
         IRepository<TaskRuntimeDocument> taskRuntimes,
+        IRepository<TaskRuntimeEventCheckpointDocument> taskRuntimeEventCheckpoints,
         IRepository<WebhookRegistration> webhooks,
         IRepository<SystemSettingsDocument> settings,
         IRepository<OrchestratorLeaseDocument> leases,
@@ -41,6 +43,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         Tasks = new TrackedRepositorySet<TaskDocument>(tasks);
         Runs = new TrackedRepositorySet<RunDocument>(runs);
         WorkspacePromptEntries = new TrackedRepositorySet<WorkspacePromptEntryDocument>(workspacePromptEntries);
+        WorkspaceQueuedMessages = new TrackedRepositorySet<WorkspaceQueuedMessageDocument>(workspaceQueuedMessages);
         RunQuestionRequests = new TrackedRepositorySet<RunQuestionRequestDocument>(runQuestionRequests);
         SemanticChunks = new TrackedRepositorySet<SemanticChunkDocument>(semanticChunks);
         RunAiSummaries = new TrackedRepositorySet<RunAiSummaryDocument>(runAiSummaries);
@@ -54,6 +57,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
         ProviderSecrets = new TrackedRepositorySet<ProviderSecretDocument>(providerSecrets);
         TaskRuntimeRegistrations = new TrackedRepositorySet<TaskRuntimeRegistration>(taskRuntimeRegistrations);
         TaskRuntimes = new TrackedRepositorySet<TaskRuntimeDocument>(taskRuntimes);
+        TaskRuntimeEventCheckpoints = new TrackedRepositorySet<TaskRuntimeEventCheckpointDocument>(taskRuntimeEventCheckpoints);
         Webhooks = new TrackedRepositorySet<WebhookRegistration>(webhooks);
         Settings = new TrackedRepositorySet<SystemSettingsDocument>(settings);
         Leases = new TrackedRepositorySet<OrchestratorLeaseDocument>(leases);
@@ -72,6 +76,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
             Tasks,
             Runs,
             WorkspacePromptEntries,
+            WorkspaceQueuedMessages,
             RunQuestionRequests,
             SemanticChunks,
             RunAiSummaries,
@@ -85,6 +90,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
             ProviderSecrets,
             TaskRuntimeRegistrations,
             TaskRuntimes,
+            TaskRuntimeEventCheckpoints,
             Webhooks,
             Settings,
             Leases,
@@ -103,6 +109,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
     public TrackedRepositorySet<TaskDocument> Tasks { get; }
     public TrackedRepositorySet<RunDocument> Runs { get; }
     public TrackedRepositorySet<WorkspacePromptEntryDocument> WorkspacePromptEntries { get; }
+    public TrackedRepositorySet<WorkspaceQueuedMessageDocument> WorkspaceQueuedMessages { get; }
     public TrackedRepositorySet<RunQuestionRequestDocument> RunQuestionRequests { get; }
     public TrackedRepositorySet<SemanticChunkDocument> SemanticChunks { get; }
     public TrackedRepositorySet<RunAiSummaryDocument> RunAiSummaries { get; }
@@ -116,6 +123,7 @@ public sealed class OrchestratorRepositorySession : IAsyncDisposable
     public TrackedRepositorySet<ProviderSecretDocument> ProviderSecrets { get; }
     public TrackedRepositorySet<TaskRuntimeRegistration> TaskRuntimeRegistrations { get; }
     public TrackedRepositorySet<TaskRuntimeDocument> TaskRuntimes { get; }
+    public TrackedRepositorySet<TaskRuntimeEventCheckpointDocument> TaskRuntimeEventCheckpoints { get; }
     public TrackedRepositorySet<WebhookRegistration> Webhooks { get; }
     public TrackedRepositorySet<SystemSettingsDocument> Settings { get; }
     public TrackedRepositorySet<OrchestratorLeaseDocument> Leases { get; }

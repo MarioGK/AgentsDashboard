@@ -9,6 +9,7 @@ public class JobProcessorService(
     ITaskRuntimeQueue queue,
     IHarnessExecutor executor,
     TaskRuntimeEventBus eventBus,
+    TaskRuntimeRunLedgerStore runLedgerStore,
     TaskRuntimeArtifactStreamService artifactStreamService,
     ILogger<JobProcessorService> logger) : BackgroundService
 {
@@ -100,6 +101,7 @@ public class JobProcessorService(
 
         try
         {
+            await runLedgerStore.MarkRunningAsync(request.RunId, request.TaskId, cancellationToken);
             await eventBus.PublishAsync(CreateEvent(request.RunId, request.TaskId, executionToken, "log", "Job started", string.Empty), cancellationToken);
 
             async Task OnLogChunk(string chunk, CancellationToken ct)
@@ -171,6 +173,15 @@ public class JobProcessorService(
             await eventBus.PublishAsync(
                 CreateEvent(request.RunId, request.TaskId, executionToken, "completed", envelope.Summary, payload),
                 cancellationToken);
+            await runLedgerStore.MarkCompletedAsync(
+                request.RunId,
+                request.TaskId,
+                string.Equals(envelope.Status, "succeeded", StringComparison.OrdinalIgnoreCase)
+                    ? TaskRuntimeExecutionState.Succeeded
+                    : TaskRuntimeExecutionState.Failed,
+                envelope.Summary ?? string.Empty,
+                payload,
+                cancellationToken);
 
             logger.LogInformation(
                 "Job processing completed {@Result}",
@@ -193,6 +204,13 @@ public class JobProcessorService(
             await eventBus.PublishAsync(
             CreateEvent(request.RunId, request.TaskId, executionToken, "completed", "Job cancelled", "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}"),
             CancellationToken.None);
+            await runLedgerStore.MarkCompletedAsync(
+                request.RunId,
+                request.TaskId,
+                TaskRuntimeExecutionState.Cancelled,
+                "Cancelled",
+                "{\"status\":\"failed\",\"summary\":\"Cancelled\",\"error\":\"Cancelled\"}",
+                CancellationToken.None);
 
             logger.LogWarning(
                 "Job processing cancelled {@Cancellation}",
@@ -221,6 +239,13 @@ public class JobProcessorService(
                 });
             await eventBus.PublishAsync(
                 CreateEvent(request.RunId, request.TaskId, executionToken, "completed", "Job crashed", "{\"status\":\"failed\",\"summary\":\"Crash\",\"error\":\"Worker crashed\"}"),
+                CancellationToken.None);
+            await runLedgerStore.MarkCompletedAsync(
+                request.RunId,
+                request.TaskId,
+                TaskRuntimeExecutionState.Failed,
+                "Crash",
+                "{\"status\":\"failed\",\"summary\":\"Crash\",\"error\":\"Worker crashed\"}",
                 CancellationToken.None);
         }
         finally

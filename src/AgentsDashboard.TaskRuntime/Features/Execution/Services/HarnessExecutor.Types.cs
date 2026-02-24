@@ -15,7 +15,8 @@ public sealed partial class HarnessExecutor
     private sealed record WorkspaceContext(
         string WorkspacePath,
         string MainBranch,
-        string HeadBeforeRun);
+        string HeadBeforeRun,
+        GitCommandOptions GitCommandOptions);
 
     private sealed record GitCommandResult(
         int ExitCode,
@@ -25,7 +26,9 @@ public sealed partial class HarnessExecutor
     private sealed record GitCommandOptions(
         string CloneUrl,
         IReadOnlyList<string> ArgumentPrefix,
-        IReadOnlyDictionary<string, string> EnvironmentVariables);
+        IReadOnlyDictionary<string, string> EnvironmentVariables,
+        string? GitHubToken,
+        bool HasSshCredentials);
 
     private sealed class CallbackHarnessEventSink(
         Func<string, CancellationToken, Task> onLogChunk) : IHarnessEventSink

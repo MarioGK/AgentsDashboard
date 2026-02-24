@@ -386,7 +386,7 @@ else
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load orchestrator settings: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to load orchestrator settings: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -408,11 +408,11 @@ else
             _savedSettings = CloneOrchestratorSettings(_settings);
 
             _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
-            Snackbar.Add("Orchestrator settings saved", Severity.Success);
+            Snackbar.AddImportant("Orchestrator settings saved", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to save orchestrator settings: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to save orchestrator settings: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -436,21 +436,21 @@ else
     {
         await WorkerLifecycle.SetScaleOutPausedAsync(true, CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
-        Snackbar.Add("Scale-out paused", Severity.Info);
+        Snackbar.AddImportant("Scale-out paused", Severity.Info);
     }
 
     private async Task ResumeScaleOutAsync()
     {
         await WorkerLifecycle.SetScaleOutPausedAsync(false, CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
-        Snackbar.Add("Scale-out resumed", Severity.Success);
+        Snackbar.AddImportant("Scale-out resumed", Severity.Success);
     }
 
     private async Task ClearCooldownAsync()
     {
         await WorkerLifecycle.ClearScaleOutCooldownAsync(CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
-        Snackbar.Add("Scale-out cooldown cleared", Severity.Success);
+        Snackbar.AddImportant("Scale-out cooldown cleared", Severity.Success);
     }
 
     private async Task EnsureImageAsync()
@@ -467,21 +467,21 @@ else
             isCritical: false);
 
         RefreshImageBackgroundWork();
-        Snackbar.Add($"Task runtime image ensure queued ({workId[..8]})", Severity.Info);
+        Snackbar.AddImportant($"Task runtime image ensure queued ({workId[..8]})", Severity.Info);
     }
 
     private async Task RecyclePoolAsync()
     {
         await WorkerLifecycle.RecycleTaskRuntimePoolAsync(CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
-        Snackbar.Add("Worker pool marked for recycle", Severity.Info);
+        Snackbar.AddImportant("Worker pool marked for recycle", Severity.Info);
     }
 
     private async Task RunReconciliationAsync()
     {
         await WorkerLifecycle.RunReconciliationAsync(CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
-        Snackbar.Add("Reconciliation executed", Severity.Success);
+        Snackbar.AddImportant("Reconciliation executed", Severity.Success);
     }
 
     private async Task DrainWorkerAsync()
@@ -493,7 +493,7 @@ else
 
         await WorkerLifecycle.SetTaskRuntimeDrainingAsync(_workerActionId.Trim(), true, CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
-        Snackbar.Add($"Worker {_workerActionId.Trim()} marked as draining", Severity.Info);
+        Snackbar.AddImportant($"Worker {_workerActionId.Trim()} marked as draining", Severity.Info);
     }
 
     private async Task RecycleTaskRuntimeAsync()
@@ -505,7 +505,7 @@ else
 
         await WorkerLifecycle.RecycleTaskRuntimeAsync(_workerActionId.Trim(), CancellationToken.None);
         _health = await WorkerLifecycle.GetHealthSnapshotAsync(CancellationToken.None);
-        Snackbar.Add($"Worker {_workerActionId.Trim()} recycle requested", Severity.Info);
+        Snackbar.AddImportant($"Worker {_workerActionId.Trim()} recycle requested", Severity.Info);
     }
 
     private void OnBackgroundWorkUpdated(BackgroundWorkSnapshot snapshot)

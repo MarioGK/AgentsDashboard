@@ -8,6 +8,9 @@ namespace AgentsDashboard.TaskRuntime.Features.RuntimeApi.MagicOnion;
 
 public sealed class TaskRuntimeService(
     ITaskRuntimeQueue queue,
+    TaskRuntimeRunLedgerStore runLedgerStore,
+    TaskRuntimeEventOutboxService eventOutboxService,
+    TaskRuntimeOptions options,
     TaskRuntimeCommandService commandService,
     TaskRuntimeFileSystemService fileSystemService,
     ILogger<TaskRuntimeService> logger)
@@ -120,5 +123,32 @@ public sealed class TaskRuntimeService(
     public async UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request)
     {
         return await fileSystemService.DeleteRuntimeFileAsync(request, CancellationToken.None);
+    }
+
+    public async UnaryResult<ReadEventBacklogResult> ReadEventBacklogAsync(ReadEventBacklogRequest request)
+    {
+        return await eventOutboxService.ReadBacklogAsync(request, CancellationToken.None);
+    }
+
+    public async UnaryResult<RuntimeQueueSnapshotResult> GetRuntimeQueueSnapshotAsync(GetRuntimeQueueSnapshotRequest request)
+    {
+        var queuedRunIds = request.IncludeQueuedRuns
+            ? await runLedgerStore.ListQueuedRunIdsAsync(CancellationToken.None)
+            : [];
+
+        return new RuntimeQueueSnapshotResult
+        {
+            Success = true,
+            ErrorMessage = null,
+            TaskRuntimeId = options.TaskRuntimeId,
+            ActiveRunIds = [.. queue.ActiveRunIds],
+            QueuedRunIds = queuedRunIds,
+            CapturedAt = DateTimeOffset.UtcNow
+        };
+    }
+
+    public async UnaryResult<RunExecutionSnapshotResult> GetRunExecutionSnapshotAsync(GetRunExecutionSnapshotRequest request)
+    {
+        return await runLedgerStore.GetSnapshotAsync(request.RunId, CancellationToken.None);
     }
 }

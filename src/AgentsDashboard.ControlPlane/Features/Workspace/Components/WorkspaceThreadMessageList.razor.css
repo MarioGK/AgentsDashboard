@@ -60,6 +60,53 @@
     line-height: 1.42;
 }
 
+.workspace-chat-message-markdown {
+    margin-top: 0.2rem;
+    overflow-wrap: anywhere;
+}
+
+.workspace-chat-message-markdown .mud-markdown {
+    font-size: 0.875rem;
+    line-height: 1.45;
+}
+
+.workspace-chat-message-markdown .mud-markdown pre {
+    overflow-x: auto;
+    background: rgba(7, 13, 22, 0.86);
+    border: 1px solid rgba(159, 177, 201, 0.24);
+    border-radius: 10px;
+    padding: 0.55rem 0.65rem;
+}
+
+.workspace-chat-message-markdown .mud-markdown code {
+    font-size: 0.82rem;
+}
+
+.workspace-chat-message-markdown .mud-markdown blockquote {
+    margin-left: 0;
+    padding-left: 0.65rem;
+    border-left: 3px solid rgba(125, 188, 255, 0.55);
+    color: rgba(218, 233, 251, 0.9);
+}
+
+.workspace-chat-message-markdown .mud-markdown table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+}
+
+.workspace-chat-message-markdown .mud-markdown th,
+.workspace-chat-message-markdown .mud-markdown td {
+    padding: 0.2rem 0.45rem;
+    border: 1px solid rgba(159, 177, 201, 0.2);
+}
+
+.workspace-chat-message-markdown .mud-markdown p {
+    margin-top: 0.35rem;
+    margin-bottom: 0.35rem;
+}
+
 .workspace-chat-jump-latest {
     position: absolute !important;
     right: 1rem;

@@ -18,6 +18,8 @@ public sealed class RecoveryService(
     IRunStore store,
     IRunEventPublisher publisher,
     IContainerReaper containerReaper,
+    IMagicOnionClientFactory clientFactory,
+    ITaskRuntimeLifecycleManager lifecycleManager,
     IOptions<OrchestratorOptions> options,
     IHostApplicationLifetime applicationLifetime,
     IBackgroundWorkCoordinator backgroundWorkCoordinator,
@@ -34,6 +36,7 @@ public sealed class RecoveryService(
     private readonly object _lock = new();
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string StartupOperationKey = "startup:recovery";
+    private static readonly TimeSpan StartupRecoveryGrace = TimeSpan.FromMinutes(3);
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -307,24 +310,38 @@ public sealed class RecoveryService(
     {
         var runningRuns = await store.ListRunsByStateAsync(RunState.Running, cancellationToken);
         var recoveredCount = 0;
+        var deferredCount = 0;
+        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
 
         foreach (var run in runningRuns)
         {
             try
             {
-                logger.LogWarning("Orphaned running run detected: {RunId}. Marking as failed", run.Id);
-
-                var failed = await store.MarkRunCompletedAsync(
-                    run.Id,
-                    succeeded: false,
-                    summary: "Orphaned run recovered on startup",
-                    outputJson: "{}",
-                    cancellationToken,
-                    failureClass: "OrphanRecovery");
-
-                if (failed is not null)
+                if (await TryApplyRuntimeSnapshotRecoveryAsync(run, cancellationToken))
                 {
-                    await publisher.PublishStatusAsync(failed, cancellationToken);
+                    recoveredCount++;
+                    continue;
+                }
+
+                var startedAtUtc = run.StartedAtUtc ?? run.CreatedAtUtc;
+                if (nowUtc - startedAtUtc < StartupRecoveryGrace)
+                {
+                    deferredCount++;
+                    logger.LogInformation(
+                        "Deferring startup orphan recovery for run {RunId}; within grace window ({GraceMinutes}m)",
+                        run.Id,
+                        StartupRecoveryGrace.TotalMinutes);
+                    continue;
+                }
+
+                logger.LogWarning("Orphaned running run detected: {RunId}. Marking as failed", run.Id);
+                if (await MarkRunFailedAsync(
+                        run.Id,
+                        "Orphaned run recovered on startup",
+                        "{}",
+                        "OrphanRecovery",
+                        cancellationToken))
+                {
                     recoveredCount++;
                 }
             }
@@ -335,7 +352,119 @@ public sealed class RecoveryService(
         }
 
         if (recoveredCount > 0)
-            logger.LogInformation("Recovery complete: {Count} orphaned runs marked as failed", recoveredCount);
+        {
+            logger.LogInformation("Recovery complete: {Count} orphaned runs reconciled", recoveredCount);
+        }
+
+        if (deferredCount > 0)
+        {
+            logger.LogInformation("Deferred orphan recovery for {Count} run(s) within startup grace window", deferredCount);
+        }
+    }
+
+    private async Task<bool> TryApplyRuntimeSnapshotRecoveryAsync(RunDocument run, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(run.TaskRuntimeId))
+        {
+            return false;
+        }
+
+        var runtime = await lifecycleManager.GetTaskRuntimeAsync(run.TaskRuntimeId, cancellationToken);
+        if (runtime is null || !runtime.IsRunning || string.IsNullOrWhiteSpace(runtime.GrpcEndpoint))
+        {
+            return false;
+        }
+
+        RunExecutionSnapshotResult snapshot;
+        try
+        {
+            var client = clientFactory.CreateTaskRuntimeService(runtime.TaskRuntimeId, runtime.GrpcEndpoint);
+            snapshot = await client.WithCancellationToken(cancellationToken).GetRunExecutionSnapshotAsync(new GetRunExecutionSnapshotRequest
+            {
+                RunId = run.Id
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Unable to query runtime snapshot for run {RunId}", run.Id);
+            return false;
+        }
+
+        if (!snapshot.Success || !snapshot.Found)
+        {
+            return false;
+        }
+
+        if (snapshot.State is TaskRuntimeExecutionState.Queued or TaskRuntimeExecutionState.Running)
+        {
+            logger.LogInformation(
+                "Runtime snapshot indicates run {RunId} is still active ({State})",
+                run.Id,
+                snapshot.State);
+            return true;
+        }
+
+        if (snapshot.State == TaskRuntimeExecutionState.Cancelled)
+        {
+            var cancelled = await store.MarkRunCancelledAsync(run.Id, cancellationToken);
+            if (cancelled is not null)
+            {
+                await publisher.PublishStatusAsync(cancelled, cancellationToken);
+                logger.LogInformation("Recovered run {RunId} as cancelled from runtime snapshot", run.Id);
+                return true;
+            }
+
+            return false;
+        }
+
+        var succeeded = snapshot.State == TaskRuntimeExecutionState.Succeeded;
+        var summary = string.IsNullOrWhiteSpace(snapshot.Summary)
+            ? (succeeded ? "Recovered completion from runtime snapshot" : "Recovered failure from runtime snapshot")
+            : snapshot.Summary;
+        var outputJson = string.IsNullOrWhiteSpace(snapshot.PayloadJson) ? "{}" : snapshot.PayloadJson;
+        var failureClass = succeeded ? null : "RuntimeSnapshotFailure";
+
+        var completed = await store.MarkRunCompletedAsync(
+            run.Id,
+            succeeded,
+            summary,
+            outputJson,
+            cancellationToken,
+            failureClass: failureClass);
+        if (completed is null)
+        {
+            return false;
+        }
+
+        await publisher.PublishStatusAsync(completed, cancellationToken);
+        logger.LogInformation(
+            "Recovered run {RunId} from runtime snapshot with state {State}",
+            run.Id,
+            snapshot.State);
+        return true;
+    }
+
+    private async Task<bool> MarkRunFailedAsync(
+        string runId,
+        string summary,
+        string outputJson,
+        string failureClass,
+        CancellationToken cancellationToken)
+    {
+        var failed = await store.MarkRunCompletedAsync(
+            runId,
+            succeeded: false,
+            summary: summary,
+            outputJson: outputJson,
+            cancellationToken,
+            failureClass: failureClass);
+        if (failed is null)
+        {
+            return false;
+        }
+
+        await publisher.PublishStatusAsync(failed, cancellationToken);
+        return true;
     }
 
     private async Task LogPendingApprovalRunsAsync(CancellationToken cancellationToken)

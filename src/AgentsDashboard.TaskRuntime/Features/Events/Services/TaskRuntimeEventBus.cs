@@ -3,12 +3,15 @@ using System.Threading.Channels;
 
 namespace AgentsDashboard.TaskRuntime.Features.Events.Services;
 
-public sealed class TaskRuntimeEventBus
+public sealed class TaskRuntimeEventBus(TaskRuntimeEventOutboxService outboxService)
 {
     private readonly Channel<JobEventMessage> _channel = Channel.CreateUnbounded<JobEventMessage>();
 
-    public ValueTask PublishAsync(JobEventMessage message, CancellationToken cancellationToken)
-        => _channel.Writer.WriteAsync(message, cancellationToken);
+    public async ValueTask PublishAsync(JobEventMessage message, CancellationToken cancellationToken)
+    {
+        var persisted = await outboxService.AppendAsync(message, cancellationToken);
+        await _channel.Writer.WriteAsync(persisted, cancellationToken);
+    }
 
     public IAsyncEnumerable<JobEventMessage> ReadAllAsync(CancellationToken cancellationToken)
         => _channel.Reader.ReadAllAsync(cancellationToken);

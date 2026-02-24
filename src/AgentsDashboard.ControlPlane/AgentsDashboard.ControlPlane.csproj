@@ -10,6 +10,7 @@
     <PackageReference Include="Docker.DotNet" />
     <PackageReference Include="LiteDB" />
     <PackageReference Include="MudBlazor" />
+    <PackageReference Include="MudBlazor.Markdown" />
     <PackageReference Include="SharpZipLib" />
     <PackageReference Include="SixLabors.ImageSharp" />
     <PackageReference Include="MagicOnion.Client" />

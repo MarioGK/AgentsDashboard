@@ -20,6 +20,9 @@ builder.Services.PostConfigure<TaskRuntimeOptions>(options =>
     options.ArtifactStoragePath = RepositoryPathResolver.ResolveDataPath(
         options.ArtifactStoragePath,
         TaskRuntimeOptions.DefaultArtifactStoragePath);
+    options.LiteDbPath = RepositoryPathResolver.ResolveDataPath(
+        options.LiteDbPath,
+        TaskRuntimeOptions.DefaultLiteDbPath);
 });
 builder.Services.AddOptionsWithValidateOnStart<TaskRuntimeOptions>();
 builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TaskRuntimeOptions>>().Value);
@@ -28,6 +31,7 @@ var startupOptions = builder.Configuration.GetSection(TaskRuntimeOptions.Section
 if (startupOptions is not null)
 {
     EnsureArtifactStorageDirectoryExists(startupOptions.ArtifactStoragePath);
+    EnsureLiteDbDirectoryExists(startupOptions.LiteDbPath);
 }
 
 builder.WebHost.ConfigureKestrel(options =>
@@ -52,8 +56,12 @@ builder.Services.AddSingleton<TaskRuntimeEventDispatcher>();
 builder.Services.AddSingleton<ITaskRuntimeQueue>(sp =>
 {
     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TaskRuntimeOptions>>().Value;
-    return new TaskRuntimeQueue(options);
+    var runLedgerStore = sp.GetRequiredService<TaskRuntimeRunLedgerStore>();
+    return new TaskRuntimeQueue(options, runLedgerStore);
 });
+builder.Services.AddSingleton<TaskRuntimeLiteDbStore>();
+builder.Services.AddSingleton<TaskRuntimeEventOutboxService>();
+builder.Services.AddSingleton<TaskRuntimeRunLedgerStore>();
 builder.Services.AddSingleton<TaskRuntimeEventBus>();
 builder.Services.AddHostedService<TaskRuntimeEventBroadcastService>();
 builder.Services.AddSingleton<TaskRuntimeArtifactStreamService>();
@@ -98,4 +106,24 @@ static void EnsureArtifactStorageDirectoryExists(string? artifactStoragePath)
     }
 
     Directory.CreateDirectory(resolvedPath);
+}
+
+static void EnsureLiteDbDirectoryExists(string? liteDbPath)
+{
+    if (string.IsNullOrWhiteSpace(liteDbPath) ||
+        string.Equals(liteDbPath, ":memory:", StringComparison.OrdinalIgnoreCase))
+    {
+        return;
+    }
+
+    var resolvedPath = RepositoryPathResolver.ResolveDataPath(
+        liteDbPath,
+        TaskRuntimeOptions.DefaultLiteDbPath);
+    var directory = Path.GetDirectoryName(resolvedPath);
+    if (string.IsNullOrWhiteSpace(directory))
+    {
+        return;
+    }
+
+    Directory.CreateDirectory(directory);
 }

@@ -34,7 +34,10 @@ public sealed class WorkspaceChatProjectionBuilder
                 Title: title,
                 Content: entry.Content,
                 TimestampUtc: entry.CreatedAtUtc,
-                Meta: BuildPromptMeta(entry)));
+                Meta: BuildPromptMeta(entry),
+                PromptEntryId: entry.Id,
+                IsEditable: kind == WorkspaceChatMessageKind.User,
+                HasImages: entry.HasImages));
         }
 
         if (selectedRun is not null)

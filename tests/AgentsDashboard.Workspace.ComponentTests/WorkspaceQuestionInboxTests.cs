@@ -10,7 +10,7 @@ public sealed class WorkspaceQuestionInboxTests
     [Test]
     public async Task SubmitRemainsDisabledUntilAllQuestionsAreAnsweredThenSendsAnswersAsync()
     {
-        using var context = WorkspaceBunitTestContext.Create();
+        await using var context = WorkspaceBunitTestContext.Create();
 
         WorkspaceQuestionAnswersSubmissionRequest? submitted = null;
 
@@ -48,7 +48,7 @@ public sealed class WorkspaceQuestionInboxTests
             ]
         };
 
-        var component = context.RenderComponent<WorkspaceQuestionInbox>(parameters => parameters
+        var component = context.Render<WorkspaceQuestionInbox>(parameters => parameters
             .Add(p => p.QuestionRequests, new List<RunQuestionRequestDocument> { request })
             .Add(p => p.OnSubmit, (WorkspaceQuestionAnswersSubmissionRequest model) => submitted = model));
 

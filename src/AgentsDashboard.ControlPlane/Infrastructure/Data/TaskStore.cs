@@ -409,6 +409,8 @@ public sealed class TaskStore(
             _ = await db.RunQuestionRequests.DeleteWhereAsync(x => runIds.Contains(x.RunId), cancellationToken);
         }
 
+        _ = await db.WorkspaceQueuedMessages.DeleteWhereAsync(x => x.TaskId == taskId, cancellationToken);
+
         deletedPromptEntries = await db.WorkspacePromptEntries.DeleteWhereAsync(x => x.TaskId == taskId, cancellationToken);
         if (runIds.Count > 0)
         {

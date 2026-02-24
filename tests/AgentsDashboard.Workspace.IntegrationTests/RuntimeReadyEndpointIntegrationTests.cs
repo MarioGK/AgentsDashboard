@@ -10,7 +10,7 @@ public sealed class RuntimeReadyEndpointIntegrationTests
         var baseUrl = Environment.GetEnvironmentVariable("BASE_URL");
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            await Assert.That(true).IsTrue();
+            await Assert.That(baseUrl).IsNull();
             return;
         }
 

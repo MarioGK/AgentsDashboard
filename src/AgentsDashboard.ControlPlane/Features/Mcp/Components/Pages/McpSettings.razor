@@ -357,12 +357,12 @@
 
             if (!result.IsValid)
             {
-                Snackbar.Add("System MCP JSON is invalid. Fix errors before saving.", Severity.Error);
+                Snackbar.AddImportant("System MCP JSON is invalid. Fix errors before saving.", Severity.Error);
                 return;
             }
 
             _savedSettingsJson = _settingsJson;
-            Snackbar.Add("System MCP settings saved.", Severity.Success);
+            Snackbar.AddImportant("System MCP settings saved.", Severity.Success);
         }
         finally
         {
@@ -374,7 +374,7 @@
     {
         var result = McpJson.ValidateAndFormat(_settingsJson);
         _settingsValidation = result;
-        Snackbar.Add(
+        Snackbar.AddImportant(
             result.IsValid ? "System MCP JSON is valid." : "System MCP JSON has validation errors.",
             result.IsValid ? Severity.Success : Severity.Warning);
     }
@@ -405,12 +405,12 @@
 
             if (!result.IsValid)
             {
-                Snackbar.Add("MCP settings file JSON is invalid.", Severity.Error);
+                Snackbar.AddImportant("MCP settings file JSON is invalid.", Severity.Error);
                 return;
             }
 
             _savedFileJson = _fileJson;
-            Snackbar.Add("MCP settings file saved.", Severity.Success);
+            Snackbar.AddImportant("MCP settings file saved.", Severity.Success);
         }
         finally
         {
@@ -422,7 +422,7 @@
     {
         var result = McpJson.ValidateAndFormat(_fileJson);
         _fileValidation = result;
-        Snackbar.Add(
+        Snackbar.AddImportant(
             result.IsValid ? "MCP settings file JSON is valid." : "MCP settings file JSON has validation errors.",
             result.IsValid ? Severity.Success : Severity.Warning);
     }
@@ -440,12 +440,12 @@
         if (!result.IsValid)
         {
             _fileValidation = result;
-            Snackbar.Add("Unable to sync from file. File JSON is invalid.", Severity.Error);
+            Snackbar.AddImportant("Unable to sync from file. File JSON is invalid.", Severity.Error);
             return;
         }
 
         await LoadSystemJsonAsync();
-        Snackbar.Add("Synced file JSON into system settings.", Severity.Success);
+        Snackbar.AddImportant("Synced file JSON into system settings.", Severity.Success);
     }
 
     private async Task SyncSettingsToFileAsync()
@@ -454,12 +454,12 @@
         if (!result.IsValid)
         {
             _settingsValidation = result;
-            Snackbar.Add("Unable to sync settings to file. Settings JSON is invalid.", Severity.Error);
+            Snackbar.AddImportant("Unable to sync settings to file. Settings JSON is invalid.", Severity.Error);
             return;
         }
 
         await LoadFileJsonAsync();
-        Snackbar.Add("Synced system settings JSON into file.", Severity.Success);
+        Snackbar.AddImportant("Synced system settings JSON into file.", Severity.Success);
     }
 
     private async Task SearchCatalogAsync()
@@ -482,7 +482,7 @@
     {
         if (_selectedSources.Count == 0)
         {
-            Snackbar.Add("Select at least one registry before searching.", Severity.Warning);
+            Snackbar.AddImportant("Select at least one registry before searching.", Severity.Warning);
             return;
         }
 
@@ -502,7 +502,7 @@
 
             if (showNotification)
             {
-                Snackbar.Add(
+                Snackbar.AddImportant(
                     _catalogResults.Count == 0
                         ? "No MCP servers matched the search."
                         : $"Loaded {_catalogResults.Count} MCP servers.",
@@ -511,7 +511,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Catalog search failed: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Catalog search failed: {ex.Message}", Severity.Error);
         }
         finally
         {

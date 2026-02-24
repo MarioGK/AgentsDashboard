@@ -247,6 +247,52 @@ public sealed class RuntimeStore(
             LastInactiveSeconds: lastInactiveSeconds);
     }
 
+    public async Task<TaskRuntimeEventCheckpointDocument?> GetTaskRuntimeEventCheckpointAsync(string runtimeId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId))
+        {
+            return null;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        return await db.TaskRuntimeEventCheckpoints.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.RuntimeId == runtimeId, cancellationToken);
+    }
+
+    public async Task<TaskRuntimeEventCheckpointDocument> UpsertTaskRuntimeEventCheckpointAsync(
+        string runtimeId,
+        long lastDeliveryId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId))
+        {
+            throw new ArgumentException("Runtime id is required.", nameof(runtimeId));
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var normalizedRuntimeId = runtimeId.Trim();
+        var checkpoint = await db.TaskRuntimeEventCheckpoints
+            .FirstOrDefaultAsync(x => x.RuntimeId == normalizedRuntimeId, cancellationToken);
+        if (checkpoint is null)
+        {
+            checkpoint = new TaskRuntimeEventCheckpointDocument
+            {
+                Id = normalizedRuntimeId,
+                RuntimeId = normalizedRuntimeId,
+                LastDeliveryId = Math.Max(0, lastDeliveryId),
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+            db.TaskRuntimeEventCheckpoints.Add(checkpoint);
+            await db.SaveChangesAsync(cancellationToken);
+            return checkpoint;
+        }
+
+        checkpoint.LastDeliveryId = Math.Max(checkpoint.LastDeliveryId, lastDeliveryId);
+        checkpoint.UpdatedAtUtc = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+        return checkpoint;
+    }
+
 
     public async Task<bool> TryAcquireLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken)
     {

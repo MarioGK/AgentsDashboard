@@ -302,7 +302,7 @@
                                 var message = string.IsNullOrWhiteSpace(notification.Body)
                                     ? notification.Title
                                     : $"{notification.Title}: {notification.Body}";
-                                Snackbar.Add(message, MapSnackbarSeverity(notification.Severity));
+                                Snackbar.AddImportant(message, MapSnackbarSeverity(notification.Severity));
                             }
 
                             StateHasChanged();

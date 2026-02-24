@@ -4,6 +4,7 @@ public sealed class TaskRuntimeOptions
 {
     public const string SectionName = "TaskRuntime";
     public const string DefaultArtifactStoragePath = "data/artifacts";
+    public const string DefaultLiteDbPath = "data/litedb/taskruntime.db";
     public const string DefaultWorkspacesRootPath = "/workspaces/repos";
 
     public string TaskRuntimeId { get; set; } = Environment.MachineName;
@@ -35,6 +36,8 @@ public sealed class TaskRuntimeOptions
     ];
     public int DefaultTimeoutSeconds { get; set; } = 600;
     public string ArtifactStoragePath { get; set; } = DefaultArtifactStoragePath;
+    public string LiteDbPath { get; set; } = DefaultLiteDbPath;
+    public int EventOutboxMaxEntries { get; set; } = 50000;
     public int CommandDefaultTimeoutSeconds { get; set; } = 600;
     public int CommandMaxTimeoutSeconds { get; set; } = 3600;
     public int CommandMaxOutputBytes { get; set; } = 4_194_304;

@@ -122,7 +122,7 @@
                 var updated = await Store.UpdatePromptSkillAsync(_editingSkillId, update, CancellationToken.None);
                 if (updated is null)
                 {
-                    Snackbar.Add("Skill not found.", Severity.Warning);
+                    Snackbar.AddImportant("Skill not found.", Severity.Warning);
                     return;
                 }
             }
@@ -140,15 +140,15 @@
 
             CancelEdit();
             await LoadAsync();
-            Snackbar.Add("Skill saved.", Severity.Success);
+            Snackbar.AddImportant("Skill saved.", Severity.Success);
         }
         catch (ArgumentException ex)
         {
-            Snackbar.Add(ex.Message, Severity.Warning);
+            Snackbar.AddImportant(ex.Message, Severity.Warning);
         }
         catch (InvalidOperationException ex)
         {
-            Snackbar.Add(ex.Message, Severity.Warning);
+            Snackbar.AddImportant(ex.Message, Severity.Warning);
         }
     }
 
@@ -177,7 +177,7 @@
         var deleted = await Store.DeletePromptSkillAsync(skill.Id, CancellationToken.None);
         if (!deleted)
         {
-            Snackbar.Add("Skill not found.", Severity.Warning);
+            Snackbar.AddImportant("Skill not found.", Severity.Warning);
             return;
         }
 
@@ -187,7 +187,7 @@
         }
 
         await LoadAsync();
-        Snackbar.Add("Skill deleted.", Severity.Success);
+        Snackbar.AddImportant("Skill deleted.", Severity.Success, importantSuccess: true);
     }
 
     private static string NormalizeTrigger(string trigger)

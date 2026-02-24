@@ -4,6 +4,24 @@
     gap: 0.55rem;
 }
 
+.workspace-thread-queue-panel {
+    border: 1px solid rgba(125, 188, 255, 0.32);
+    background: rgba(13, 26, 40, 0.7);
+    border-radius: 12px;
+    padding: 0.6rem 0.7rem;
+}
+
+.workspace-thread-queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.workspace-thread-queue-item {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .workspace-thread-composer-actions {
     justify-content: flex-end;
 }

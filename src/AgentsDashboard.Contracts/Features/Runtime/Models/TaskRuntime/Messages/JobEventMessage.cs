@@ -59,4 +59,7 @@ public sealed record JobEventMessage
 
     [Key(17)]
     public string? ContentType { get; init; }
+
+    [Key(18)]
+    public long DeliveryId { get; init; }
 }

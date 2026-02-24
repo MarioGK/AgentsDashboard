@@ -255,6 +255,169 @@ public sealed class RunStore(
         return promptEntry;
     }
 
+    public async Task<WorkspacePromptEntryDocument?> UpdateWorkspacePromptEntryContentAsync(
+        string promptEntryId,
+        string newContent,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(promptEntryId))
+        {
+            return null;
+        }
+
+        var normalizedContent = newContent?.Trim() ?? string.Empty;
+        if (normalizedContent.Length == 0)
+        {
+            return null;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var promptEntry = await db.WorkspacePromptEntries.FirstOrDefaultAsync(x => x.Id == promptEntryId, cancellationToken);
+        if (promptEntry is null)
+        {
+            return null;
+        }
+
+        promptEntry.Content = normalizedContent;
+        await db.SaveChangesAsync(cancellationToken);
+        return promptEntry;
+    }
+
+    public async Task<int> DeleteWorkspacePromptEntriesAsync(IReadOnlyList<string> promptEntryIds, CancellationToken cancellationToken)
+    {
+        if (promptEntryIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var normalizedPromptEntryIds = promptEntryIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (normalizedPromptEntryIds.Count == 0)
+        {
+            return 0;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var deleted = await db.WorkspacePromptEntries.DeleteWhereAsync(x => normalizedPromptEntryIds.Contains(x.Id), cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        return deleted;
+    }
+
+    public async Task<List<WorkspaceQueuedMessageDocument>> ListWorkspaceQueuedMessagesAsync(string taskId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return [];
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        return await db.WorkspaceQueuedMessages.AsNoTracking()
+            .Where(x => x.TaskId == taskId)
+            .OrderBy(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Order)
+            .ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<string>> ListTaskIdsWithQueuedMessagesAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        return await db.WorkspaceQueuedMessages.AsNoTracking()
+            .Where(x => x.TaskId != string.Empty)
+            .GroupBy(x => x.TaskId)
+            .OrderBy(group => group.Min(x => x.CreatedAtUtc))
+            .Select(group => group.Key)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<WorkspaceQueuedMessageDocument> AppendWorkspaceQueuedMessageAsync(
+        WorkspaceQueuedMessageDocument queuedMessage,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(queuedMessage.TaskId))
+        {
+            throw new ArgumentException("TaskId is required.", nameof(queuedMessage.TaskId));
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var normalizedTaskId = queuedMessage.TaskId.Trim();
+        var normalizedContent = queuedMessage.Content?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(queuedMessage.Id))
+        {
+            queuedMessage.Id = Guid.NewGuid().ToString("N");
+        }
+
+        if (queuedMessage.CreatedAtUtc == default)
+        {
+            queuedMessage.CreatedAtUtc = DateTime.UtcNow;
+        }
+
+        queuedMessage.TaskId = normalizedTaskId;
+        queuedMessage.Content = normalizedContent;
+        queuedMessage.ImagePayloadJson = queuedMessage.ImagePayloadJson?.Trim() ?? string.Empty;
+        queuedMessage.RepositoryId = queuedMessage.RepositoryId?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(queuedMessage.RepositoryId))
+        {
+            queuedMessage.RepositoryId = await db.Tasks.AsNoTracking()
+                .Where(x => x.Id == normalizedTaskId)
+                .Select(x => x.RepositoryId)
+                .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+        }
+
+        if (queuedMessage.Order <= 0)
+        {
+            var existingOrders = await db.WorkspaceQueuedMessages.AsNoTracking()
+                .Where(x => x.TaskId == normalizedTaskId)
+                .Select(x => x.Order)
+                .ToListAsync(cancellationToken);
+            var maxOrder = existingOrders.Count == 0 ? 0 : existingOrders.Max();
+            queuedMessage.Order = maxOrder + 1;
+        }
+
+        db.WorkspaceQueuedMessages.Add(queuedMessage);
+        await db.SaveChangesAsync(cancellationToken);
+        return queuedMessage;
+    }
+
+    public async Task<int> DeleteWorkspaceQueuedMessagesAsync(IReadOnlyList<string> queuedMessageIds, CancellationToken cancellationToken)
+    {
+        if (queuedMessageIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var normalizedQueuedMessageIds = queuedMessageIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (normalizedQueuedMessageIds.Count == 0)
+        {
+            return 0;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var deleted = await db.WorkspaceQueuedMessages.DeleteWhereAsync(x => normalizedQueuedMessageIds.Contains(x.Id), cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        return deleted;
+    }
+
+    public async Task<int> DeleteWorkspaceQueuedMessagesByTaskAsync(string taskId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return 0;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        var deleted = await db.WorkspaceQueuedMessages.DeleteWhereAsync(x => x.TaskId == taskId, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        return deleted;
+    }
+
     public async Task<RunQuestionRequestDocument?> UpsertRunQuestionRequestAsync(RunQuestionRequestDocument questionRequest, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(questionRequest.RunId) ||
@@ -637,6 +800,17 @@ public sealed class RunStore(
         return await db.Runs.AsNoTracking().Where(x => x.State == state).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
     }
 
+    public async Task<List<string>> ListTaskIdsWithQueuedRunsAsync(CancellationToken cancellationToken)
+    {
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        return await db.Runs.AsNoTracking()
+            .Where(x => x.State == RunState.Queued && x.TaskId != string.Empty)
+            .GroupBy(x => x.TaskId)
+            .OrderBy(group => group.Min(x => x.CreatedAtUtc))
+            .Select(group => group.Key)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<List<string>> ListAllRunIdsAsync(CancellationToken cancellationToken)
     {
         await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
@@ -755,6 +929,40 @@ public sealed class RunStore(
         }
         await db.SaveChangesAsync(cancellationToken);
         return run;
+    }
+
+    public async Task<int> DeleteRunsCascadeAsync(IReadOnlyList<string> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var normalizedRunIds = runIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (normalizedRunIds.Count == 0)
+        {
+            return 0;
+        }
+
+        await using var db = await liteDbScopeFactory.CreateAsync(cancellationToken);
+        _ = await db.RunEvents.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.RunStructuredEvents.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.RunDiffSnapshots.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.RunToolProjections.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.RunQuestionRequests.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.WorkspacePromptEntries.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.RunAiSummaries.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.SemanticChunks.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.RunInstructionStacks.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        _ = await db.RunShareBundles.DeleteWhereAsync(x => normalizedRunIds.Contains(x.RunId), cancellationToken);
+        var deletedRuns = await db.Runs.DeleteWhereAsync(x => normalizedRunIds.Contains(x.Id), cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+
+        await DeleteStoredArtifactsByRunIdsAsync(normalizedRunIds, cancellationToken);
+        return deletedRuns;
     }
 
     public async Task<RunDocument?> MarkRunPendingApprovalAsync(string runId, CancellationToken cancellationToken)
@@ -2073,6 +2281,37 @@ public sealed class RunStore(
         return dot / (Math.Sqrt(queryNorm) * Math.Sqrt(candidateNorm));
     }
 
+    private Task DeleteStoredArtifactsByRunIdsAsync(IReadOnlyList<string> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        return liteDbExecutor.ExecuteAsync(
+            db =>
+            {
+                var metadataCollection = db.GetCollection<RunArtifactDocument>("run_artifacts");
+                metadataCollection.EnsureIndex(x => x.RunId);
+
+                foreach (var runId in runIds.Where(x => !string.IsNullOrWhiteSpace(x)))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var artifacts = metadataCollection.Find(x => x.RunId == runId).ToList();
+                    foreach (var artifact in artifacts)
+                    {
+                        if (!string.IsNullOrWhiteSpace(artifact.FileStorageId) && db.FileStorage.Exists(artifact.FileStorageId))
+                        {
+                            db.FileStorage.Delete(artifact.FileStorageId);
+                        }
+
+                        metadataCollection.Delete(artifact.Id);
+                    }
+                }
+            },
+            cancellationToken);
+    }
 
     private static string NormalizeArtifactFileName(string fileName)
     {

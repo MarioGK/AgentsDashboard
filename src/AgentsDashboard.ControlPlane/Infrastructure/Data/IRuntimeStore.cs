@@ -9,6 +9,8 @@ public interface IRuntimeStore
     Task<List<TaskRuntimeDocument>> ListTaskRuntimesAsync(CancellationToken cancellationToken);
     Task<TaskRuntimeDocument> UpsertTaskRuntimeStateAsync(TaskRuntimeStateUpdate update, CancellationToken cancellationToken);
     Task<TaskRuntimeTelemetrySnapshot> GetTaskRuntimeTelemetryAsync(CancellationToken cancellationToken);
+    Task<TaskRuntimeEventCheckpointDocument?> GetTaskRuntimeEventCheckpointAsync(string runtimeId, CancellationToken cancellationToken);
+    Task<TaskRuntimeEventCheckpointDocument> UpsertTaskRuntimeEventCheckpointAsync(string runtimeId, long lastDeliveryId, CancellationToken cancellationToken);
 
     Task<bool> TryAcquireLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken);
     Task<bool> RenewLeaseAsync(string leaseName, string ownerId, TimeSpan ttl, CancellationToken cancellationToken);

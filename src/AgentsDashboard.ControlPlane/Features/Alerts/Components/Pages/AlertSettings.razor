@@ -152,7 +152,7 @@
         {
             await Store.CreateAlertRuleAsync(newRule, CancellationToken.None);
             await LoadAsync();
-            Snackbar.Add("Alert rule created", Severity.Success);
+            Snackbar.AddImportant("Alert rule created", Severity.Success);
         }
     }
 
@@ -172,7 +172,7 @@
         {
             await Store.UpdateAlertRuleAsync(rule.Id, updatedRule, CancellationToken.None);
             await LoadAsync();
-            Snackbar.Add("Alert rule updated", Severity.Success);
+            Snackbar.AddImportant("Alert rule updated", Severity.Success);
         }
     }
 
@@ -187,7 +187,7 @@
         {
             await Store.DeleteAlertRuleAsync(ruleId, CancellationToken.None);
             await LoadAsync();
-            Snackbar.Add("Alert rule deleted", Severity.Success);
+            Snackbar.AddImportant("Alert rule deleted", Severity.Success, importantSuccess: true);
         }
     }
 

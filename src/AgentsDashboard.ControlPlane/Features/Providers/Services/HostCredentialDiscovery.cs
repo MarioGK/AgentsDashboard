@@ -46,14 +46,24 @@ public static class HostCredentialDiscovery
             return Directory.Exists(configuredFullPath) ? configuredFullPath : null;
         }
 
+        var homeFromEnvironment = Environment.GetEnvironmentVariable("HOME");
+        if (!string.IsNullOrWhiteSpace(homeFromEnvironment))
+        {
+            var defaultSshDirectory = Path.Combine(homeFromEnvironment, ".ssh");
+            if (Directory.Exists(defaultSshDirectory))
+            {
+                return defaultSshDirectory;
+            }
+        }
+
         var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (string.IsNullOrWhiteSpace(userHome))
         {
             return null;
         }
 
-        var defaultSshDirectory = Path.Combine(userHome, ".ssh");
-        return Directory.Exists(defaultSshDirectory) ? defaultSshDirectory : null;
+        var fallbackSshDirectory = Path.Combine(userHome, ".ssh");
+        return Directory.Exists(fallbackSshDirectory) ? fallbackSshDirectory : null;
     }
 
     public static string? TryGetHostSshAgentSocketPath(string? configuredPath)

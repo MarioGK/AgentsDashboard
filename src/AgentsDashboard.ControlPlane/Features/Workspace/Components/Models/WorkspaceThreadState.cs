@@ -11,4 +11,6 @@ public sealed record WorkspaceThreadState(
     bool IsSelected,
     bool HasUnread,
     DateTime LastActivityUtc,
-    string LatestRunHint);
+    string LatestRunHint,
+    bool IsPending = false,
+    string PendingStatusText = "");

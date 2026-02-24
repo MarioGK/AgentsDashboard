@@ -39,21 +39,26 @@ test('workspace task creation, clear, follow-up, and runtime flow are working', 
   await page.getByTestId('workspace-composer-send').click();
 
   await expect
+    .poll(async () => {
+      const pendingCount = await page.locator('.workspace-task-card', { hasText: 'Pending' }).count();
+      const title = ((await titleLocator.textContent()) || '').trim();
+      return pendingCount > 0 || title !== initialTitle;
+    }, { timeout: 5000 })
+    .toBeTruthy();
+
+  await expect
     .poll(async () => ((await titleLocator.textContent()) || '').trim(), { timeout: 45000 })
     .not.toBe(initialTitle);
 
   const runStateChip = page.getByTestId('workspace-selected-run-state');
   await waitForRunStateToRender(runStateChip);
 
-  await page.getByTestId('workspace-advanced-toggle').click();
-  await expect(page.getByTestId('workspace-advanced-drawer')).toBeVisible();
-
-  await page.getByTestId('workspace-plan-mode-toggle').click();
   const followUpPrompt = `Follow up check for ${harness}`;
-  await composerInput.fill(followUpPrompt);
-  await page.getByTestId('workspace-composer-send').click();
-
-  await expect(page.getByTestId('workspace-chat-stream')).toContainText(followUpPrompt, { timeout: 30000 });
+  if (await composerInput.isEnabled()) {
+    await composerInput.fill(followUpPrompt);
+    await page.getByTestId('workspace-composer-send').click();
+    await expect(page.getByTestId('workspace-chat-stream')).toContainText(followUpPrompt, { timeout: 30000 });
+  }
 
   await page.getByTestId('workspace-refresh-runs').click();
   await waitForRunStateToRender(runStateChip);

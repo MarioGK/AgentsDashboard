@@ -10,7 +10,7 @@ public sealed class WorkspaceLeftRailTests
     [Test]
     public async Task LeftRailActionsInvokeExpectedCallbacksAsync()
     {
-        using var context = WorkspaceBunitTestContext.Create();
+        await using var context = WorkspaceBunitTestContext.Create();
 
         var toggled = 0;
         var newTask = 0;
@@ -47,7 +47,7 @@ public sealed class WorkspaceLeftRailTests
                 LatestRunHint: "Queued")
         };
 
-        var component = context.RenderComponent<WorkspaceLeftRail>(parameters => parameters
+        var component = context.Render<WorkspaceLeftRail>(parameters => parameters
             .Add(p => p.IsCollapsed, false)
             .Add(p => p.RepositoryFilter, "all")
             .Add(p => p.TaskFilter, "all")
@@ -76,12 +76,12 @@ public sealed class WorkspaceLeftRailTests
     [Test]
     public async Task FilterCallbacksReceiveSelectedValuesAsync()
     {
-        using var context = WorkspaceBunitTestContext.Create();
+        await using var context = WorkspaceBunitTestContext.Create();
 
         var repositoryFilter = string.Empty;
         var taskFilter = string.Empty;
 
-        var component = context.RenderComponent<WorkspaceLeftRail>(parameters => parameters
+        var component = context.Render<WorkspaceLeftRail>(parameters => parameters
             .Add(p => p.IsCollapsed, false)
             .Add(p => p.RepositoryFilter, "all")
             .Add(p => p.TaskFilter, "all")
@@ -94,13 +94,47 @@ public sealed class WorkspaceLeftRailTests
         var selects = component.FindComponents<MudSelect<string>>();
         await Assert.That(selects.Count).IsEqualTo(2);
 
-        await selects[0].Instance.ValueChanged.InvokeAsync("attention");
-        await selects[1].Instance.ValueChanged.InvokeAsync("failed");
+        await component.InvokeAsync(async () => await selects[0].Instance.ValueChanged.InvokeAsync("attention"));
+        await component.InvokeAsync(async () => await selects[1].Instance.ValueChanged.InvokeAsync("failed"));
 
         await Assert.That(repositoryFilter).IsEqualTo("attention");
         await Assert.That(taskFilter).IsEqualTo("failed");
 
         var newTaskButton = component.Find("[data-testid='workspace-new-task']");
         await Assert.That(newTaskButton.HasAttribute("disabled")).IsTrue();
+    }
+
+    [Test]
+    public async Task PendingThreadHidesDeleteActionAsync()
+    {
+        await using var context = WorkspaceBunitTestContext.Create();
+
+        var pendingThreads = new List<WorkspaceThreadState>
+        {
+            new(
+                TaskId: "pending-task-1",
+                Title: "Pending Task",
+                Harness: "codex",
+                LatestStateLabel: "Queued",
+                LatestStateColor: Color.Info,
+                IsSelected: true,
+                HasUnread: false,
+                LastActivityUtc: DateTime.UtcNow,
+                LatestRunHint: "Pending",
+                IsPending: true,
+                PendingStatusText: "Creating task...")
+        };
+
+        var component = context.Render<WorkspaceLeftRail>(parameters => parameters
+            .Add(p => p.IsCollapsed, false)
+            .Add(p => p.RepositoryFilter, "all")
+            .Add(p => p.TaskFilter, "all")
+            .Add(p => p.NewTaskDisabled, false)
+            .Add(p => p.RepositoryGroups, Array.Empty<WorkspaceRepositoryGroup>())
+            .Add(p => p.Threads, pendingThreads));
+
+        await Assert.That(component.Markup.Contains("Pending", StringComparison.Ordinal)).IsTrue();
+        var deleteButtons = component.FindAll("[data-testid='workspace-task-delete-pending-task-1']");
+        await Assert.That(deleteButtons.Count).IsEqualTo(0);
     }
 }

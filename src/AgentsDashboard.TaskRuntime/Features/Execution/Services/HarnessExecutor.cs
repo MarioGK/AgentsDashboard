@@ -292,7 +292,7 @@ public sealed partial class HarnessExecutor(
 
             if (workspaceContext is not null)
             {
-                await FinalizeWorkspaceAfterRunAsync(request, workspaceContext, envelope, gitCommandOptions, cancellationToken);
+                await FinalizeWorkspaceAfterRunAsync(request, workspaceContext, envelope, workspaceContext.GitCommandOptions, cancellationToken);
             }
 
             IHarnessAdapter? adapter = null;
@@ -510,13 +510,18 @@ public sealed partial class HarnessExecutor(
         Directory.CreateDirectory(repositoryPath);
         Directory.CreateDirectory(tasksPath);
 
-        await EnsureWorkspaceReadyAsync(gitCommandOptions.CloneUrl, workspacePath, mainBranch, gitCommandOptions, cancellationToken);
+        var effectiveGitCommandOptions = await EnsureWorkspaceReadyAsync(
+            gitCommandOptions.CloneUrl,
+            workspacePath,
+            mainBranch,
+            gitCommandOptions,
+            cancellationToken);
 
-        var headBeforeRun = await GetHeadCommitAsync(workspacePath, gitCommandOptions, cancellationToken);
-        return new WorkspaceContext(workspacePath, mainBranch, headBeforeRun);
+        var headBeforeRun = await GetHeadCommitAsync(workspacePath, effectiveGitCommandOptions, cancellationToken);
+        return new WorkspaceContext(workspacePath, mainBranch, headBeforeRun, effectiveGitCommandOptions);
     }
 
-    private async Task EnsureWorkspaceReadyAsync(
+    private async Task<GitCommandOptions> EnsureWorkspaceReadyAsync(
         string cloneUrl,
         string workspacePath,
         string mainBranch,
@@ -524,6 +529,7 @@ public sealed partial class HarnessExecutor(
         CancellationToken cancellationToken)
     {
         var gitDirectory = Path.Combine(workspacePath, ".git");
+        var effectiveGitCommandOptions = gitCommandOptions;
         if (!Directory.Exists(gitDirectory))
         {
             if (Directory.Exists(workspacePath))
@@ -531,42 +537,102 @@ public sealed partial class HarnessExecutor(
                 Directory.Delete(workspacePath, true);
             }
 
-            var cloneResult = await ExecuteGitAsync(["clone", cloneUrl, workspacePath], gitCommandOptions, cancellationToken);
-            if (cloneResult.ExitCode != 0)
-            {
-                throw new InvalidOperationException(BuildGitFailureMessage("clone task workspace", cloneResult));
-            }
+            effectiveGitCommandOptions = await ExecuteCloneWithFallbackAsync(
+                cloneUrl,
+                workspacePath,
+                gitCommandOptions,
+                cancellationToken);
         }
 
         await ExecuteGitOrThrowInPathAsync(
             workspacePath,
-            ["remote", "set-url", "origin", cloneUrl],
+            ["remote", "set-url", "origin", effectiveGitCommandOptions.CloneUrl],
             "set workspace origin URL",
-            gitCommandOptions,
+            effectiveGitCommandOptions,
             cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
             workspacePath,
             ["fetch", "--prune", "origin"],
             "fetch workspace origin",
-            gitCommandOptions,
+            effectiveGitCommandOptions,
             cancellationToken);
 
-        await EnsureMainBranchCheckedOutAsync(workspacePath, mainBranch, gitCommandOptions, cancellationToken);
+        await EnsureMainBranchCheckedOutAsync(workspacePath, mainBranch, effectiveGitCommandOptions, cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
             workspacePath,
             ["reset", "--hard", $"origin/{mainBranch}"],
             "reset workspace to origin main branch",
-            gitCommandOptions,
+            effectiveGitCommandOptions,
             cancellationToken);
 
         await ExecuteGitOrThrowInPathAsync(
             workspacePath,
             ["clean", "-fd"],
             "clean workspace",
-            gitCommandOptions,
+            effectiveGitCommandOptions,
             cancellationToken);
+
+        return effectiveGitCommandOptions;
+    }
+
+    private async Task<GitCommandOptions> ExecuteCloneWithFallbackAsync(
+        string cloneUrl,
+        string workspacePath,
+        GitCommandOptions gitCommandOptions,
+        CancellationToken cancellationToken)
+    {
+        var fallbackCloneOptions = GetHttpsFallbackOptions(cloneUrl, gitCommandOptions);
+        var cloneOptions = new List<GitCommandOptions>
+        {
+            gitCommandOptions
+        };
+        if (fallbackCloneOptions is not null)
+        {
+            cloneOptions.Add(fallbackCloneOptions);
+        }
+
+        for (var attemptIndex = 0; attemptIndex < cloneOptions.Count; attemptIndex++)
+        {
+            var attempt = cloneOptions[attemptIndex];
+            var cloneResult = await ExecuteGitAsync(["clone", attempt.CloneUrl, workspacePath], attempt, cancellationToken);
+            if (cloneResult.ExitCode == 0)
+            {
+                return attempt;
+            }
+
+            var failureMessage = BuildGitCloneFailureMessage(
+                "clone task workspace",
+                cloneResult,
+                attempt.CloneUrl,
+                attempt.EnvironmentVariables);
+
+            if (attemptIndex + 1 < cloneOptions.Count)
+            {
+                logger.LogWarning(
+                    "Workspace clone attempt failed, retrying with HTTPS fallback {@Data}",
+                    new
+                    {
+                        Attempt = attemptIndex + 1,
+                        TotalAttempts = cloneOptions.Count,
+                        CloneUrl = attempt.CloneUrl,
+                        RepositoryPath = workspacePath,
+                        Failure = failureMessage,
+                    });
+
+                if (Directory.Exists(workspacePath))
+                {
+                    Directory.Delete(workspacePath, true);
+                }
+
+                continue;
+            }
+
+            throw new InvalidOperationException($"clone task workspace failed after {attemptIndex + 1} attempts. Last attempt: {failureMessage}");
+        }
+
+        throw new InvalidOperationException("Workspace clone failed without producing a git result.");
     }
 
     private async Task FinalizeWorkspaceAfterRunAsync(
@@ -725,11 +791,12 @@ public sealed partial class HarnessExecutor(
     private static GitCommandOptions ResolveGitCommandOptions(
         string cloneUrl,
         IReadOnlyDictionary<string, string>? environmentVars,
-        IReadOnlyDictionary<string, string> runtimeEnvironment)
+        IReadOnlyDictionary<string, string> runtimeEnvironment,
+        bool forceHttpsFallback = false)
     {
         var githubToken = ResolveEnvValue(environmentVars, "GITHUB_TOKEN")
             ?? ResolveEnvValue(environmentVars, "GH_TOKEN");
-        var hasSshCredentials = HasSshCredentialsAvailable(environmentVars, runtimeEnvironment);
+        var hasSshCredentials = !forceHttpsFallback && HasSshCredentialsAvailable(environmentVars, runtimeEnvironment);
         var resolvedCloneUrl = ResolveCloneUrlForGitHubToken(cloneUrl, githubToken, hasSshCredentials);
 
         var argumentPrefix = new List<string>();
@@ -750,7 +817,81 @@ public sealed partial class HarnessExecutor(
         return new GitCommandOptions(
             string.IsNullOrWhiteSpace(resolvedCloneUrl) ? cloneUrl : resolvedCloneUrl,
             argumentPrefix,
-            environment);
+            environment,
+            githubToken,
+            hasSshCredentials);
+    }
+
+    private static GitCommandOptions? GetHttpsFallbackOptions(
+        string cloneUrl,
+        GitCommandOptions gitCommandOptions)
+    {
+        if (string.IsNullOrWhiteSpace(gitCommandOptions.GitHubToken))
+        {
+            return null;
+        }
+
+        if (!IsGitHubSshCloneUrl(cloneUrl))
+        {
+            return null;
+        }
+
+        var fallbackRequestEnvironment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["GITHUB_TOKEN"] = gitCommandOptions.GitHubToken,
+        };
+
+        var httpsOptions = ResolveGitCommandOptions(
+            cloneUrl,
+            fallbackRequestEnvironment,
+            gitCommandOptions.EnvironmentVariables,
+            forceHttpsFallback: true);
+        if (string.Equals(httpsOptions.CloneUrl, gitCommandOptions.CloneUrl, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return httpsOptions;
+    }
+
+    private static string BuildGitCloneFailureMessage(
+        string operation,
+        GitCommandResult result,
+        string cloneUrl,
+        IReadOnlyDictionary<string, string> runtimeEnvironment)
+    {
+        return $"{BuildGitFailureMessage(operation, result)} | {BuildGitAuthContext(cloneUrl, runtimeEnvironment)}";
+    }
+
+    private static string BuildGitAuthContext(string cloneUrl, IReadOnlyDictionary<string, string> runtimeEnvironment)
+    {
+        var hasSshAvailabilityFlag = string.Equals(
+            ResolveEnvValue(runtimeEnvironment, "AGENTSDASHBOARD_WORKER_SSH_AVAILABLE"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+
+        var sshAuthSock = ResolveEnvValue(runtimeEnvironment, "SSH_AUTH_SOCK") ?? string.Empty;
+        var hasSshAuthSock = !string.IsNullOrWhiteSpace(sshAuthSock) && Path.Exists(sshAuthSock);
+
+        var home = ResolveEnvValue(runtimeEnvironment, "HOME") ?? "<unset>";
+        var homeResolved = !string.IsNullOrWhiteSpace(home);
+        var sshDirectory = homeResolved ? Path.Combine(home, ".ssh") : "<unset>";
+        var hasSshDirectory = homeResolved && Directory.Exists(sshDirectory);
+        var hasKnownPrivateKey = homeResolved && HasPotentialSshCredentials(sshDirectory);
+        var hasSshCredentials = HasSshCredentialsAvailable(null, runtimeEnvironment);
+
+        var selectedScheme = Uri.TryCreate(cloneUrl, UriKind.Absolute, out var uri)
+            ? uri.Scheme
+            : "invalid";
+
+        return
+            $"gitAuthMode={(hasSshCredentials ? "ssh" : "https")}" +
+            $", cloneScheme={selectedScheme}" +
+            $", sshAvailabilityFlag={hasSshAvailabilityFlag.ToString().ToLowerInvariant()}" +
+            $", sshAuthSockPresent={hasSshAuthSock.ToString().ToLowerInvariant()}" +
+            $", sshDirectoryExists={hasSshDirectory.ToString().ToLowerInvariant()}" +
+            $", sshPrivateKeyCandidateFound={hasKnownPrivateKey.ToString().ToLowerInvariant()}" +
+            $", home={home}";
     }
 
     private static IReadOnlyDictionary<string, string> CaptureRuntimeGitEnvironment()
@@ -789,9 +930,9 @@ public sealed partial class HarnessExecutor(
         IReadOnlyDictionary<string, string> runtimeEnvironment)
     {
         var sshAvailabilityFlag = ResolveEnvValue(runtimeEnvironment, "AGENTSDASHBOARD_WORKER_SSH_AVAILABLE");
-        if (string.Equals(sshAvailabilityFlag, "true", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(sshAvailabilityFlag, "false", StringComparison.OrdinalIgnoreCase))
         {
-            return true;
+            return false;
         }
 
         var sshAuthSock = ResolveEnvValue(runtimeEnvironment, "SSH_AUTH_SOCK")
@@ -811,14 +952,95 @@ public sealed partial class HarnessExecutor(
         try
         {
             var sshDirectory = Path.Combine(home, ".ssh");
-            if (!Directory.Exists(sshDirectory))
+            return HasPotentialSshCredentials(sshDirectory);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool HasPotentialSshCredentials(string sshDirectory)
+    {
+        if (!Directory.Exists(sshDirectory))
+        {
+            return false;
+        }
+
+        try
+        {
+            return Directory
+                .EnumerateFiles(sshDirectory, "*", SearchOption.TopDirectoryOnly)
+                .Any(IsPotentialPrivateKeyFile);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsPotentialPrivateKeyFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(path);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        var normalizedName = fileName.ToLowerInvariant();
+        if (normalizedName.EndsWith(".pub", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (normalizedName is "known_hosts" or "known_hosts.old" or "config" or "authorized_keys" or "authorized_keys2" or "ssh_config")
+        {
+            return false;
+        }
+
+        if (normalizedName.StartsWith("id_", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var extension = Path.GetExtension(normalizedName);
+        if (extension is ".pem" or ".key" or ".ppk")
+        {
+            return true;
+        }
+
+        return HasPrivateKeyMarker(path);
+    }
+
+    private static bool HasPrivateKeyMarker(string path)
+    {
+        const int maxChars = 4096;
+
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+
+            var buffer = new char[maxChars];
+            var charsRead = reader.Read(buffer, 0, buffer.Length);
+            if (charsRead <= 0)
             {
                 return false;
             }
 
-            return Directory
-                .EnumerateFiles(sshDirectory, "id_*", SearchOption.TopDirectoryOnly)
-                .Any(path => !path.EndsWith(".pub", StringComparison.OrdinalIgnoreCase));
+            var sample = new string(buffer, 0, charsRead);
+            return sample.Contains("BEGIN OPENSSH PRIVATE KEY", StringComparison.OrdinalIgnoreCase) ||
+                   sample.Contains("BEGIN RSA PRIVATE KEY", StringComparison.OrdinalIgnoreCase) ||
+                   sample.Contains("BEGIN DSA PRIVATE KEY", StringComparison.OrdinalIgnoreCase) ||
+                   sample.Contains("BEGIN ECDSA PRIVATE KEY", StringComparison.OrdinalIgnoreCase) ||
+                   sample.Contains("BEGIN EC PRIVATE KEY", StringComparison.OrdinalIgnoreCase) ||
+                   sample.Contains("BEGIN PRIVATE KEY", StringComparison.OrdinalIgnoreCase) ||
+                   sample.Contains("BEGIN ENCRYPTED PRIVATE KEY", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
@@ -846,7 +1068,7 @@ public sealed partial class HarnessExecutor(
         }
 
         var normalizedCloneUrl = cloneUrl.Trim();
-        if (string.IsNullOrWhiteSpace(githubToken) || hasSshCredentials)
+        if (hasSshCredentials)
         {
             return normalizedCloneUrl;
         }
@@ -864,6 +1086,22 @@ public sealed partial class HarnessExecutor(
         }
 
         return normalizedCloneUrl;
+    }
+
+    private static bool IsGitHubSshCloneUrl(string cloneUrl)
+    {
+        if (string.IsNullOrWhiteSpace(cloneUrl))
+        {
+            return false;
+        }
+
+        var normalizedCloneUrl = cloneUrl.Trim();
+        if (normalizedCloneUrl.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return normalizedCloneUrl.StartsWith("ssh://git@github.com/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsGitHubHttpsUrl(string url)

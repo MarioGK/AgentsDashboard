@@ -21,6 +21,13 @@ public interface IWorkspaceService
         WorkspacePromptSubmissionRequest request,
         CancellationToken cancellationToken);
 
+    Task<WorkspaceQueueDrainResult> DrainQueuedMessagesAsync(
+        string taskId,
+        bool force,
+        CancellationToken cancellationToken);
+
+    Task<int> DrainQueuedMessagesForAllTasksAsync(CancellationToken cancellationToken);
+
     Task<WorkspaceQuestionAnswersSubmissionResult> SubmitQuestionAnswersAsync(
         string repositoryId,
         WorkspaceQuestionAnswersSubmissionRequest request,
@@ -72,6 +79,12 @@ public sealed record WorkspacePromptSubmissionResult(
     bool DispatchAccepted,
     string Message,
     TaskDocument? Task,
+    RunDocument? Run);
+
+public sealed record WorkspaceQueueDrainResult(
+    bool Success,
+    bool Drained,
+    string Message,
     RunDocument? Run);
 
 public sealed record WorkspaceQuestionAnswerInput(
@@ -126,6 +139,7 @@ public sealed class WorkspaceService(
     ];
 
     private static readonly TimeSpan s_summaryRefreshCooldown = TimeSpan.FromSeconds(45);
+    private const string QueuedMessageJoinSeparator = "\n\n--- queued message ---\n\n";
 
     private readonly ConcurrentDictionary<string, SummaryRefreshState> _summaryRefreshStates =
         new(StringComparer.OrdinalIgnoreCase);
@@ -428,6 +442,112 @@ public sealed class WorkspaceService(
                 : $"Run {run.Id} created and queued.",
             Task: task,
             Run: run);
+    }
+
+    public async Task<WorkspaceQueueDrainResult> DrainQueuedMessagesAsync(
+        string taskId,
+        bool force,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+        {
+            return new WorkspaceQueueDrainResult(false, false, "Task id is required.", null);
+        }
+
+        var queuedMessages = await runStore.ListWorkspaceQueuedMessagesAsync(taskId, cancellationToken);
+        if (queuedMessages.Count == 0)
+        {
+            return new WorkspaceQueueDrainResult(true, false, "No queued messages.", null);
+        }
+
+        var activeRuns = await runStore.CountActiveRunsByTaskAsync(taskId, cancellationToken);
+        if (!force && activeRuns > 0)
+        {
+            return new WorkspaceQueueDrainResult(true, false, "Task still has an active run.", null);
+        }
+
+        var task = await taskStore.GetTaskAsync(taskId, cancellationToken);
+        if (task is null)
+        {
+            return new WorkspaceQueueDrainResult(false, false, "Task not found.", null);
+        }
+
+        var combinedMessage = BuildCombinedQueuedMessageText(queuedMessages);
+        var combinedImages = BuildCombinedQueuedImages(queuedMessages);
+        if (string.IsNullOrWhiteSpace(combinedMessage) && combinedImages.Count == 0)
+        {
+            _ = await runStore.DeleteWorkspaceQueuedMessagesAsync(
+                queuedMessages.Select(x => x.Id).ToList(),
+                cancellationToken);
+            return new WorkspaceQueueDrainResult(true, false, "Dropped empty queued message payloads.", null);
+        }
+        var promptSuffix = $"Workspace instruction:\n{combinedMessage}";
+
+        HarnessExecutionMode? modeOverride = null;
+        foreach (var queuedMessage in queuedMessages)
+        {
+            if (queuedMessage.ModeOverride.HasValue)
+            {
+                modeOverride = queuedMessage.ModeOverride;
+                break;
+            }
+        }
+
+        var submission = await SubmitPromptAsync(
+            task.RepositoryId,
+            new WorkspacePromptSubmissionRequest(
+                Prompt: AppendPromptSuffix(task.Prompt, promptSuffix),
+                TaskId: task.Id,
+                Harness: task.Harness,
+                Command: task.Command,
+                ForceNewRun: true,
+                UserMessage: combinedMessage,
+                ModeOverride: modeOverride,
+                Images: combinedImages,
+                PreferNativeMultimodal: true,
+                SessionProfileId: null),
+            cancellationToken);
+
+        if (!submission.Success)
+        {
+            return new WorkspaceQueueDrainResult(false, false, submission.Message, submission.Run);
+        }
+
+        _ = await runStore.DeleteWorkspaceQueuedMessagesAsync(
+            queuedMessages.Select(x => x.Id).ToList(),
+            cancellationToken);
+
+        return new WorkspaceQueueDrainResult(
+            Success: true,
+            Drained: true,
+            Message: submission.Message,
+            Run: submission.Run);
+    }
+
+    public async Task<int> DrainQueuedMessagesForAllTasksAsync(CancellationToken cancellationToken)
+    {
+        var taskIds = await runStore.ListTaskIdsWithQueuedMessagesAsync(cancellationToken);
+        if (taskIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var drainedCount = 0;
+        foreach (var taskId in taskIds)
+        {
+            if (string.IsNullOrWhiteSpace(taskId))
+            {
+                continue;
+            }
+
+            var result = await DrainQueuedMessagesAsync(taskId, force: false, cancellationToken);
+            if (result.Drained)
+            {
+                drainedCount++;
+            }
+        }
+
+        return drainedCount;
     }
 
     public async Task<WorkspaceQuestionAnswersSubmissionResult> SubmitQuestionAnswersAsync(
@@ -1192,6 +1312,62 @@ public sealed class WorkspaceService(
         }
 
         return $"{prompt.TrimEnd()}\n\n{suffix.Trim()}";
+    }
+
+    private static string BuildCombinedQueuedMessageText(IReadOnlyList<WorkspaceQueuedMessageDocument> queuedMessages)
+    {
+        var segments = new List<string>();
+        for (var index = 0; index < queuedMessages.Count; index++)
+        {
+            var queuedMessage = queuedMessages[index];
+            var normalizedContent = queuedMessage.Content?.Trim() ?? string.Empty;
+            if (normalizedContent.Length > 0)
+            {
+                segments.Add(normalizedContent);
+                continue;
+            }
+
+            if (queuedMessage.HasImages)
+            {
+                segments.Add($"Use attached images from queued message {index + 1} as context.");
+            }
+        }
+
+        return string.Join(QueuedMessageJoinSeparator, segments);
+    }
+
+    private static List<WorkspaceImageInput> BuildCombinedQueuedImages(IReadOnlyList<WorkspaceQueuedMessageDocument> queuedMessages)
+    {
+        var images = new List<WorkspaceImageInput>();
+        foreach (var queuedMessage in queuedMessages)
+        {
+            var payloadImages = DeserializeQueuedImagePayload(queuedMessage.ImagePayloadJson);
+            if (payloadImages.Count == 0)
+            {
+                continue;
+            }
+
+            images.AddRange(payloadImages);
+        }
+
+        return images;
+    }
+
+    private static IReadOnlyList<WorkspaceImageInput> DeserializeQueuedImagePayload(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<WorkspaceImageInput>>(payload) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     private static string BuildQuestionAnswerPrompt(

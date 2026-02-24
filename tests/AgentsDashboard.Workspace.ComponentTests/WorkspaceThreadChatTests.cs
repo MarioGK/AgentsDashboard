@@ -10,7 +10,7 @@ public sealed class WorkspaceThreadChatTests
     [Test]
     public async Task HeaderActionsAndPlanModeCallbacksAreInvokedAsync()
     {
-        using var context = WorkspaceBunitTestContext.Create();
+        await using var context = WorkspaceBunitTestContext.Create();
 
         var refreshSummaryCalls = 0;
         var refreshRunsCalls = 0;
@@ -21,7 +21,7 @@ public sealed class WorkspaceThreadChatTests
         RenderFragment contextPanel = builder => builder.AddContent(0, "context-panel");
         RenderFragment composer = builder => builder.AddContent(0, "composer");
 
-        var component = context.RenderComponent<WorkspaceThreadChat>(parameters => parameters
+        var component = context.Render<WorkspaceThreadChat>(parameters => parameters
             .Add(p => p.TaskName, "Task Header")
             .Add(p => p.Harness, "codex")
             .Add(p => p.TaskStateLabel, "Queued up")

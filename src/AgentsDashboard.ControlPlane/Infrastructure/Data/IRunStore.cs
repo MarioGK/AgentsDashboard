@@ -19,6 +19,13 @@ public interface IRunStore
     Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptHistoryAsync(string taskId, int limit, CancellationToken cancellationToken);
     Task<List<WorkspacePromptEntryDocument>> ListWorkspacePromptEntriesForEmbeddingAsync(string taskId, CancellationToken cancellationToken);
     Task<WorkspacePromptEntryDocument> AppendWorkspacePromptEntryAsync(WorkspacePromptEntryDocument promptEntry, CancellationToken cancellationToken);
+    Task<WorkspacePromptEntryDocument?> UpdateWorkspacePromptEntryContentAsync(string promptEntryId, string newContent, CancellationToken cancellationToken);
+    Task<int> DeleteWorkspacePromptEntriesAsync(IReadOnlyList<string> promptEntryIds, CancellationToken cancellationToken);
+    Task<List<WorkspaceQueuedMessageDocument>> ListWorkspaceQueuedMessagesAsync(string taskId, CancellationToken cancellationToken);
+    Task<List<string>> ListTaskIdsWithQueuedMessagesAsync(CancellationToken cancellationToken);
+    Task<WorkspaceQueuedMessageDocument> AppendWorkspaceQueuedMessageAsync(WorkspaceQueuedMessageDocument queuedMessage, CancellationToken cancellationToken);
+    Task<int> DeleteWorkspaceQueuedMessagesAsync(IReadOnlyList<string> queuedMessageIds, CancellationToken cancellationToken);
+    Task<int> DeleteWorkspaceQueuedMessagesByTaskAsync(string taskId, CancellationToken cancellationToken);
     Task<RunQuestionRequestDocument?> UpsertRunQuestionRequestAsync(RunQuestionRequestDocument questionRequest, CancellationToken cancellationToken);
     Task<List<RunQuestionRequestDocument>> ListPendingRunQuestionRequestsAsync(string taskId, string runId, CancellationToken cancellationToken);
     Task<RunQuestionRequestDocument?> GetRunQuestionRequestAsync(string questionRequestId, CancellationToken cancellationToken);
@@ -35,6 +42,7 @@ public interface IRunStore
 
     Task<RunDocument?> GetRunAsync(string runId, CancellationToken cancellationToken);
     Task<List<RunDocument>> ListRunsByStateAsync(RunState state, CancellationToken cancellationToken);
+    Task<List<string>> ListTaskIdsWithQueuedRunsAsync(CancellationToken cancellationToken);
     Task<List<string>> ListAllRunIdsAsync(CancellationToken cancellationToken);
     Task<long> CountRunsByStateAsync(RunState state, CancellationToken cancellationToken);
     Task<long> CountActiveRunsAsync(CancellationToken cancellationToken);
@@ -50,6 +58,7 @@ public interface IRunStore
     Task<RunDocument?> MarkRunCompletedAsync(string runId, bool succeeded, string summary, string outputJson, CancellationToken cancellationToken, string? failureClass = null, string? prUrl = null);
     Task<RunDocument?> MarkRunCancelledAsync(string runId, CancellationToken cancellationToken);
     Task<RunDocument?> MarkRunObsoleteAsync(string runId, CancellationToken cancellationToken);
+    Task<int> DeleteRunsCascadeAsync(IReadOnlyList<string> runIds, CancellationToken cancellationToken);
     Task<RunDocument?> MarkRunPendingApprovalAsync(string runId, CancellationToken cancellationToken);
     Task<RunDocument?> ApproveRunAsync(string runId, CancellationToken cancellationToken);
     Task<RunDocument?> RejectRunAsync(string runId, CancellationToken cancellationToken);

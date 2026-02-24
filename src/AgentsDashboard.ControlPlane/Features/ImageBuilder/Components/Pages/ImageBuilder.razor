@@ -559,7 +559,7 @@ CMD [""/bin/bash""]"
 
         if (string.IsNullOrWhiteSpace(_dockerfileContent) || string.IsNullOrWhiteSpace(_imageTag))
         {
-            Snackbar.Add("Please provide both Dockerfile content and image tag", Severity.Warning);
+            Snackbar.AddImportant("Please provide both Dockerfile content and image tag", Severity.Warning);
             return;
         }
 
@@ -582,17 +582,17 @@ CMD [""/bin/bash""]"
 
             if (_buildResult.Success)
             {
-                Snackbar.Add($"Successfully built image: {_buildResult.ImageId}", Severity.Success);
+                Snackbar.AddImportant($"Successfully built image: {_buildResult.ImageId}", Severity.Success);
                 await RefreshImagesAsync();
             }
             else
             {
-                Snackbar.Add("Build failed. Check logs for details.", Severity.Error);
+                Snackbar.AddImportant("Build failed. Check logs for details.", Severity.Error);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Build error: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Build error: {ex.Message}", Severity.Error);
             _buildLogs.Add($"Exception: {ex.Message}");
         }
         finally
@@ -611,7 +611,7 @@ CMD [""/bin/bash""]"
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to refresh images: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to refresh images: {ex.Message}", Severity.Error);
         }
     }
 
@@ -622,17 +622,17 @@ CMD [""/bin/bash""]"
             var deleted = await ImageBuilderService.DeleteImageAsync(tag, CancellationToken.None);
             if (deleted)
             {
-                Snackbar.Add($"Deleted image: {tag}", Severity.Success);
+                Snackbar.AddImportant($"Deleted image: {tag}", Severity.Success, importantSuccess: true);
                 await RefreshImagesAsync();
             }
             else
             {
-                Snackbar.Add($"Failed to delete image: {tag}", Severity.Error);
+                Snackbar.AddImportant($"Failed to delete image: {tag}", Severity.Error);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error deleting image: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Error deleting image: {ex.Message}", Severity.Error);
         }
     }
 
@@ -648,12 +648,12 @@ CMD [""/bin/bash""]"
                 await _dockerfileEditor.SetValue(_dockerfileContent);
             await UpdateDependencyMatrixAsync();
             _aiError = null;
-            Snackbar.Add("Dockerfile generated from template! Review and customize as needed.", Severity.Info);
+            Snackbar.AddImportant("Dockerfile generated from template! Review and customize as needed.", Severity.Info);
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to generate Dockerfile: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Failed to generate Dockerfile: {ex.Message}", Severity.Error);
         }
     }
 
@@ -661,7 +661,7 @@ CMD [""/bin/bash""]"
     {
         if (string.IsNullOrWhiteSpace(_aiDescription))
         {
-            Snackbar.Add("Please describe your container requirements", Severity.Warning);
+            Snackbar.AddImportant("Please describe your container requirements", Severity.Warning);
             return;
         }
 
@@ -679,13 +679,13 @@ CMD [""/bin/bash""]"
             var requestVersion = Interlocked.Increment(ref _aiGenerationRequestVersion);
             var description = _aiDescription;
             QueueDockerfileAiRefinement(requestVersion, description);
-            Snackbar.Add("Template dockerfile generated immediately. Refining with glm-5 in background.", Severity.Info);
+            Snackbar.AddImportant("Template dockerfile generated immediately. Refining with glm-5 in background.", Severity.Info);
             StateHasChanged();
         }
         catch (Exception ex)
         {
             _aiError = ex.Message;
-            Snackbar.Add($"AI generation error: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"AI generation error: {ex.Message}", Severity.Error);
             _isAiGenerating = false;
             StateHasChanged();
         }
@@ -739,7 +739,7 @@ CMD [""/bin/bash""]"
                     if (_dockerfileEditor is not null)
                         await _dockerfileEditor.SetValue(_dockerfileContent);
                     await UpdateDependencyMatrixAsync();
-                    Snackbar.Add("Dockerfile refined by glm-5.", Severity.Success);
+                    Snackbar.AddImportant("Dockerfile refined by glm-5.", Severity.Success);
                 }
                 else
                 {
@@ -774,7 +774,7 @@ CMD [""/bin/bash""]"
 
         if (string.IsNullOrWhiteSpace(_dockerfileContent))
         {
-            Snackbar.Add("Please provide a Dockerfile before hardening.", Severity.Warning);
+            Snackbar.AddImportant("Please provide a Dockerfile before hardening.", Severity.Warning);
             return;
         }
 
@@ -792,11 +792,11 @@ CMD [""/bin/bash""]"
             }
 
             await UpdateDependencyMatrixAsync();
-            Snackbar.Add("Applied hardening pass. Review non-root user, workspace permissions, and healthcheck additions.", Severity.Success);
+            Snackbar.AddImportant("Applied hardening pass. Review non-root user, workspace permissions, and healthcheck additions.", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Hardening pass failed: {ex.Message}", Severity.Error);
+            Snackbar.AddImportant($"Hardening pass failed: {ex.Message}", Severity.Error);
         }
         finally
         {

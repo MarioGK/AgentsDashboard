@@ -9,7 +9,7 @@ public sealed class TaskPromptComposerTests
     [Test]
     public async Task ClearButtonClearsComposerValueAndImagesAsync()
     {
-        using var context = WorkspaceBunitTestContext.Create();
+        await using var context = WorkspaceBunitTestContext.Create();
 
         var currentValue = "Implement the workspace flow.";
         IReadOnlyList<WorkspaceImageInput> currentImages =
@@ -23,7 +23,7 @@ public sealed class TaskPromptComposerTests
         ];
         var submitCount = 0;
 
-        var component = context.RenderComponent<TaskPromptComposer>(parameters => parameters
+        var component = context.Render<TaskPromptComposer>(parameters => parameters
             .Add(p => p.InputId, "workspace-composer-input-fixed")
             .Add(p => p.Value, currentValue)
             .Add(p => p.Images, currentImages)
@@ -37,7 +37,7 @@ public sealed class TaskPromptComposerTests
         await Assert.That(currentValue).IsEqualTo(string.Empty);
         await Assert.That(currentImages.Count).IsEqualTo(0);
 
-        component.SetParametersAndRender(parameters => parameters
+        component.Render(parameters => parameters
             .Add(p => p.InputId, "workspace-composer-input-fixed")
             .Add(p => p.Value, currentValue)
             .Add(p => p.Images, currentImages)
@@ -54,9 +54,9 @@ public sealed class TaskPromptComposerTests
     [Test]
     public async Task SubmitButtonTracksComposerStateAsync()
     {
-        using var context = WorkspaceBunitTestContext.Create();
+        await using var context = WorkspaceBunitTestContext.Create();
 
-        var component = context.RenderComponent<TaskPromptComposer>(parameters => parameters
+        var component = context.Render<TaskPromptComposer>(parameters => parameters
             .Add(p => p.InputId, "workspace-composer-input-fixed")
             .Add(p => p.Value, string.Empty)
             .Add(p => p.Images, Array.Empty<WorkspaceImageInput>())
@@ -66,7 +66,7 @@ public sealed class TaskPromptComposerTests
         var submitButton = component.Find("[data-testid='workspace-composer-send']");
         await Assert.That(submitButton.HasAttribute("disabled")).IsTrue();
 
-        component.SetParametersAndRender(parameters => parameters
+        component.Render(parameters => parameters
             .Add(p => p.InputId, "workspace-composer-input-fixed")
             .Add(p => p.Value, "Run a quick check")
             .Add(p => p.Images, Array.Empty<WorkspaceImageInput>())

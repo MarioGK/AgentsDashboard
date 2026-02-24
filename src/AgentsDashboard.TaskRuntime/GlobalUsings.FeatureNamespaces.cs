@@ -18,5 +18,6 @@ global using AgentsDashboard.TaskRuntime.Features.Mcp.Services;
 global using AgentsDashboard.TaskRuntime.Features.RuntimeApi.MagicOnion;
 global using AgentsDashboard.TaskRuntime.Infrastructure;
 global using AgentsDashboard.TaskRuntime.Infrastructure.Configuration;
+global using AgentsDashboard.TaskRuntime.Infrastructure.Data;
 global using AgentsDashboard.TaskRuntime.Infrastructure.Extensions;
 global using AgentsDashboard.TaskRuntime.Infrastructure.Extensions.Logging;

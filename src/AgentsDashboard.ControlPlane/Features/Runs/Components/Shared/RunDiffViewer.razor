@@ -326,11 +326,11 @@ else
         try
         {
             await JS.InvokeVoidAsync("navigator.clipboard.writeText", text ?? string.Empty);
-            Snackbar.Add(successMessage, Severity.Success);
+            Snackbar.AddImportant(successMessage, Severity.Success);
         }
         catch
         {
-            Snackbar.Add("Clipboard write failed.", Severity.Warning);
+            Snackbar.AddImportant("Clipboard write failed.", Severity.Warning);
         }
     }
 

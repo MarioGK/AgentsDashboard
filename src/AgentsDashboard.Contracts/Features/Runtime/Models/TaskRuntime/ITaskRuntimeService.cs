@@ -1,4 +1,5 @@
 using MagicOnion;
+using AgentsDashboard.Contracts.Features.Runtime.Models.TaskRuntime.Messages;
 
 namespace AgentsDashboard.Contracts.Features.Runtime.Models.TaskRuntime;
 
@@ -14,4 +15,7 @@ public interface ITaskRuntimeService : IService<ITaskRuntimeService>
     UnaryResult<CreateRuntimeFileResult> CreateRuntimeFileAsync(CreateRuntimeFileRequest request);
     UnaryResult<ReadRuntimeFileResult> ReadRuntimeFileAsync(ReadRuntimeFileRequest request);
     UnaryResult<DeleteRuntimeFileResult> DeleteRuntimeFileAsync(DeleteRuntimeFileRequest request);
+    UnaryResult<ReadEventBacklogResult> ReadEventBacklogAsync(ReadEventBacklogRequest request);
+    UnaryResult<RuntimeQueueSnapshotResult> GetRuntimeQueueSnapshotAsync(GetRuntimeQueueSnapshotRequest request);
+    UnaryResult<RunExecutionSnapshotResult> GetRunExecutionSnapshotAsync(GetRunExecutionSnapshotRequest request);
 }
