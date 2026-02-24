@@ -67,6 +67,7 @@ builder.Services.AddHostedService<TaskRuntimeEventBroadcastService>();
 builder.Services.AddSingleton<TaskRuntimeArtifactStreamService>();
 builder.Services.AddSingleton<WorkspacePathGuard>();
 builder.Services.AddSingleton<TaskRuntimeFileSystemService>();
+builder.Services.AddSingleton<TaskRuntimeRepositoryGitService>();
 builder.Services.AddSingleton<TaskRuntimeCommandService>();
 builder.Services.AddSingleton<SecretRedactor>();
 builder.Services.AddSingleton<McpRuntimeBootstrapService>();

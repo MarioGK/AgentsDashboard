@@ -13,6 +13,7 @@ public sealed class TaskRuntimeService(
     TaskRuntimeOptions options,
     TaskRuntimeCommandService commandService,
     TaskRuntimeFileSystemService fileSystemService,
+    TaskRuntimeRepositoryGitService repositoryGitService,
     ILogger<TaskRuntimeService> logger)
     : ServiceBase<ITaskRuntimeService>, ITaskRuntimeService
 {
@@ -88,6 +89,16 @@ public sealed class TaskRuntimeService(
             ErrorMessage = null,
             CheckedAt = DateTimeOffset.UtcNow,
         });
+    }
+
+    public async UnaryResult<RepositoryWorkspaceResult> EnsureRepositoryWorkspaceAsync(EnsureRepositoryWorkspaceRequest request)
+    {
+        return await repositoryGitService.EnsureRepositoryWorkspaceAsync(request, CancellationToken.None);
+    }
+
+    public async UnaryResult<RepositoryWorkspaceResult> RefreshRepositoryWorkspaceAsync(RefreshRepositoryWorkspaceRequest request)
+    {
+        return await repositoryGitService.RefreshRepositoryWorkspaceAsync(request, CancellationToken.None);
     }
 
     public async UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request)

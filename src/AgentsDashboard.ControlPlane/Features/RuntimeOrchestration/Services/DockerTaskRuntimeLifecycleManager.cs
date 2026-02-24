@@ -43,6 +43,10 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
     private const string WorkerGitConfigDirectoryPath = "/home/agent/.config/git";
     private const string WorkerCodexDirectoryPath = "/home/agent/.codex";
     private const string WorkerOpenCodeDirectoryPath = "/home/agent/.config/opencode";
+    private const string WorkerHostSshPassthroughModeEnvironmentKey = "AGENTSDASHBOARD_HOST_SSH_PASSTHROUGH_MODE";
+    private const string HostSshPassthroughModeAuto = "auto";
+    private const string HostSshPassthroughModeOff = "off";
+    private const string HostSshPassthroughModeRequired = "required";
     private static readonly TimeSpan EventHubProbeTimeout = TimeSpan.FromSeconds(2);
     private const int MaxOrphanContainerPrunesPerTick = 16;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
@@ -71,6 +75,8 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
     private readonly ConcurrentDictionary<string, TaskRuntimeStateEntry> _workers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, string> _taskRepositoryCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _imageAcquireLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTime> _imageResolutionCacheUntilUtc = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, string> _imageResolutionSources = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTime> _imageFailureCooldownUntilUtc = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly SemaphoreSlim _spawnLock = new(1, 1);
@@ -738,8 +744,8 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 codexApiKey = openAiApiKey;
 
             var gitSshMode = NormalizeGitSshCommandMode(runtime.GitSshCommandMode);
-            var (credentialBinds, credentialEnvironment, sshDirectoryMounted, sshAgentMounted, gitHubCredentialSourceAvailable) = ResolveWorkerSshPassthrough(runtime, gitSshMode);
-            if (runtime.EnableHostSshPassthrough)
+            var (credentialBinds, credentialEnvironment, sshDirectoryMounted, sshAgentMounted, gitHubCredentialSourceAvailable, hostSshPassthroughEnabled, hostSshPassthroughMode) = ResolveWorkerSshPassthrough(runtime, gitSshMode);
+            if (!hostSshPassthroughEnabled && !string.Equals(hostSshPassthroughMode, HostSshPassthroughModeOff, StringComparison.OrdinalIgnoreCase))
             {
                 var missingRequirements = new List<string>();
                 if (!sshDirectoryMounted)
@@ -760,12 +766,12 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 if (missingRequirements.Count > 0)
                 {
                     var requirementsText = string.Join(", ", missingRequirements);
-                    logger.LogError(
-                        "Worker credential passthrough requirements not met {@Data}",
+                    logger.LogWarning(
+                        "Worker credential passthrough requested but unavailable {@Data}",
                         new
                         {
                             workerId,
-                            runtime.EnableHostSshPassthrough,
+                            HostSshPassthroughMode = hostSshPassthroughMode,
                             sshDirectoryMounted,
                             sshAgentMounted,
                             gitHubCredentialSourceAvailable,
@@ -775,8 +781,6 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                             runtime.HostSshAgentSocketPath,
                             GitSshMode = gitSshMode
                         });
-                    throw new InvalidOperationException(
-                        $"Unable to start task runtime '{workerId}': missing required host credential passthrough: {requirementsText}.");
                 }
             }
 
@@ -785,7 +789,8 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 new
                 {
                     workerId,
-                    runtime.EnableHostSshPassthrough,
+                    HostSshPassthroughEnabled = hostSshPassthroughEnabled,
+                    HostSshPassthroughMode = hostSshPassthroughMode,
                     sshDirectoryMounted,
                     sshAgentMounted,
                     gitHubCredentialSourceAvailable,
@@ -1335,6 +1340,27 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         IProgress<BackgroundWorkSnapshot>? progress = null,
         bool forceRefresh = false)
     {
+        var now = DateTime.UtcNow;
+        var imageCacheTtl = TimeSpan.FromMinutes(Math.Max(1, runtime.TaskRuntimeImageCacheTtlMinutes));
+        if (!forceRefresh &&
+            _imageResolutionCacheUntilUtc.TryGetValue(imageReference, out var cacheUntilUtc) &&
+            cacheUntilUtc > now &&
+            _imageResolutionSources.TryGetValue(imageReference, out var cachedSource))
+        {
+            if (await ImageExistsLocallyAsync(imageReference, cancellationToken))
+            {
+                logger.LogDebug("Task runtime image {Image} resolution skipped due cache; source={Source}.", imageReference, cachedSource);
+                ReportTaskRuntimeImageProgress(
+                    progress,
+                    $"Task runtime image {imageReference} was already resolved successfully from {cachedSource}.",
+                    percentComplete: 100);
+                return new ImageResolutionResult(true, cachedSource);
+            }
+
+            _imageResolutionCacheUntilUtc.TryRemove(imageReference, out _);
+            _imageResolutionSources.TryRemove(imageReference, out _);
+        }
+
         var localImageExists = await ImageExistsLocallyAsync(imageReference, cancellationToken);
         if (localImageExists && !forceRefresh)
         {
@@ -1342,6 +1368,8 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 progress,
                 $"Task runtime image {imageReference} is already present locally.",
                 percentComplete: 100);
+            _imageResolutionCacheUntilUtc[imageReference] = now.Add(imageCacheTtl);
+            _imageResolutionSources[imageReference] = "local";
             return new ImageResolutionResult(true, "local");
         }
 
@@ -1371,6 +1399,8 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                         progress,
                         $"Task runtime image {imageReference} became available locally.",
                         percentComplete: 100);
+                    _imageResolutionCacheUntilUtc[imageReference] = DateTime.UtcNow.Add(imageCacheTtl);
+                    _imageResolutionSources[imageReference] = "local";
                     return new ImageResolutionResult(true, "local");
                 }
             }
@@ -1400,6 +1430,8 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                         $"Task runtime image resolution failed for {imageReference}; using existing local image.",
                         percentComplete: 100,
                         state: BackgroundWorkState.Succeeded);
+                    _imageResolutionCacheUntilUtc[imageReference] = DateTime.UtcNow.Add(imageCacheTtl);
+                    _imageResolutionSources[imageReference] = "local-fallback";
                     return new ImageResolutionResult(true, "local-fallback");
                 }
 
@@ -1407,13 +1439,17 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 ReportTaskRuntimeImageProgress(
                     progress,
                     $"Task runtime image resolution failed for {imageReference}.",
-                    state: BackgroundWorkState.Failed,
-                    errorCode: "image_resolution_failed",
-                    errorMessage: $"Task runtime image resolution failed for {imageReference}.");
+                state: BackgroundWorkState.Failed,
+                errorCode: "image_resolution_failed",
+                errorMessage: $"Task runtime image resolution failed for {imageReference}.");
+                _imageResolutionCacheUntilUtc.TryRemove(imageReference, out _);
+                _imageResolutionSources.TryRemove(imageReference, out _);
                 return resolved;
             }
 
             _imageFailureCooldownUntilUtc.TryRemove(imageReference, out _);
+            _imageResolutionCacheUntilUtc[imageReference] = DateTime.UtcNow.Add(imageCacheTtl);
+            _imageResolutionSources[imageReference] = resolved.Source;
             ReportTaskRuntimeImageProgress(
                 progress,
                 $"Task runtime image {imageReference} resolved from {resolved.Source}.",
@@ -1514,6 +1550,10 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 return new ImageResolutionResult(true, "pull");
             }
 
+            logger.LogInformation(
+                "Pull of {Image} was not possible under policy {Policy}; falling back to image build.",
+                imageReference,
+                taskRuntimeImagePolicy);
             return await BuildWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
                 ? new ImageResolutionResult(true, "build")
                 : UnavailableImageResolution;
@@ -1526,6 +1566,10 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 return new ImageResolutionResult(true, "build");
             }
 
+            logger.LogInformation(
+                "Build of {Image} was not possible under policy {Policy}; falling back to registry pull.",
+                imageReference,
+                taskRuntimeImagePolicy);
             return await PullWorkerContainerImageAsync(imageReference, runtime, progress, cancellationToken)
                 ? new ImageResolutionResult(true, "pull")
                 : UnavailableImageResolution;
@@ -1658,7 +1702,11 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             return false;
         }
 
-        foreach (var buildContext in ResolveTaskRuntimeBuildContextCandidates(dockerfilePath, runtime).Distinct(StringComparer.OrdinalIgnoreCase))
+        var buildContextCandidates = ResolveTaskRuntimeBuildContextCandidates(dockerfilePath, runtime)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var buildContext in buildContextCandidates)
         {
             if (!Directory.Exists(buildContext))
             {
@@ -1702,6 +1750,17 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             }
         }
 
+        logger.LogWarning(
+            "No valid task runtime build context found for {Image} with dockerfile {Dockerfile}. Candidates checked: {Candidates}",
+            imageReference,
+            dockerfilePath,
+            string.Join(", ", buildContextCandidates));
+        ReportTaskRuntimeImageProgress(
+            progress,
+            $"No valid task runtime build context found for {imageReference}.",
+            state: BackgroundWorkState.Failed,
+            errorCode: "build_context_missing",
+            errorMessage: $"No valid task runtime build context found for {imageReference}.");
         return false;
     }
 
@@ -2546,18 +2605,19 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         return string.Equals(runningInContainer, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static (List<string> AdditionalBinds, List<string> AdditionalEnvironment, bool SshDirectoryMounted, bool SshAgentMounted, bool GitHubCredentialSourceAvailable)
+    private static (List<string> AdditionalBinds, List<string> AdditionalEnvironment, bool SshDirectoryMounted, bool SshAgentMounted, bool GitHubCredentialSourceAvailable, bool PassthroughEnabled, string PassthroughMode)
         ResolveWorkerSshPassthrough(OrchestratorRuntimeSettings runtime, string gitSshMode)
     {
         var additionalBinds = new List<string>();
         var additionalEnvironment = new List<string>();
 
-        if (!runtime.EnableHostSshPassthrough)
+        var passthroughMode = ResolveHostSshPassthroughMode(runtime);
+        if (string.Equals(passthroughMode, HostSshPassthroughModeOff, StringComparison.OrdinalIgnoreCase))
         {
             additionalEnvironment.Add("AGENTSDASHBOARD_WORKER_SSH_AVAILABLE=false");
             additionalEnvironment.Add("AGENTSDASHBOARD_WORKER_GITHUB_CREDENTIALS_AVAILABLE=false");
             additionalEnvironment.Add($"AGENTSDASHBOARD_GIT_SSH_MODE={gitSshMode}");
-            return (additionalBinds, additionalEnvironment, false, false, false);
+            return (additionalBinds, additionalEnvironment, false, false, false, false, passthroughMode);
         }
 
         var sshDirectory = HostCredentialDiscovery.TryGetHostSshDirectory(runtime.HostSshDirectory);
@@ -2603,12 +2663,39 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             hostNetrcAvailable ||
             hostGhConfigAvailable;
 
+        var hasHostSshMechanism = sshDirectoryMounted || sshAgentMounted;
+        var passthroughEnabled = passthroughMode == HostSshPassthroughModeRequired
+            ? sshDirectoryMounted && sshAgentMounted && gitHubCredentialSourceAvailable
+            : hasHostSshMechanism || gitHubCredentialSourceAvailable;
+
         additionalEnvironment.Add($"GIT_SSH_COMMAND={BuildGitSshCommand(gitSshMode)}");
-        additionalEnvironment.Add($"AGENTSDASHBOARD_WORKER_SSH_AVAILABLE={(sshDirectoryMounted || sshAgentMounted).ToString().ToLowerInvariant()}");
+        additionalEnvironment.Add($"AGENTSDASHBOARD_WORKER_SSH_AVAILABLE={hasHostSshMechanism.ToString().ToLowerInvariant()}");
         additionalEnvironment.Add($"AGENTSDASHBOARD_WORKER_GITHUB_CREDENTIALS_AVAILABLE={gitHubCredentialSourceAvailable.ToString().ToLowerInvariant()}");
         additionalEnvironment.Add($"AGENTSDASHBOARD_GIT_SSH_MODE={gitSshMode}");
 
-        return (additionalBinds, additionalEnvironment, sshDirectoryMounted, sshAgentMounted, gitHubCredentialSourceAvailable);
+        return (additionalBinds, additionalEnvironment, sshDirectoryMounted, sshAgentMounted, gitHubCredentialSourceAvailable, passthroughEnabled, passthroughMode);
+    }
+
+    private static string ResolveHostSshPassthroughMode(OrchestratorRuntimeSettings runtime)
+    {
+        if (!runtime.EnableHostSshPassthrough)
+        {
+            return HostSshPassthroughModeOff;
+        }
+
+        var configuredMode = Environment.GetEnvironmentVariable(WorkerHostSshPassthroughModeEnvironmentKey);
+        if (string.IsNullOrWhiteSpace(configuredMode))
+        {
+            return HostSshPassthroughModeAuto;
+        }
+
+        return configuredMode.Trim().ToLowerInvariant() switch
+        {
+            "off" or "disabled" or "disable" or "false" or "0" => HostSshPassthroughModeOff,
+            "required" or "strict" => HostSshPassthroughModeRequired,
+            "auto" or "on" or "enabled" or "enable" or "true" or "1" => HostSshPassthroughModeAuto,
+            _ => HostSshPassthroughModeAuto,
+        };
     }
 
     private static void AddReadOnlyBindIfPathExists(List<string> additionalBinds, string sourcePath, string targetPath)

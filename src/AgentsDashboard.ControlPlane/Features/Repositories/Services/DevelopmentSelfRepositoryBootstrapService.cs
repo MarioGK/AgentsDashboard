@@ -137,8 +137,26 @@ public sealed class DevelopmentSelfRepositoryBootstrapService(
                 ErrorCode: null,
                 ErrorMessage: null));
 
-            var status = await gitWorkspace.RefreshStatusAsync(repository, githubToken: null, fetchRemote: false, cancellationToken);
-            await store.UpdateRepositoryGitStateAsync(repository.Id, status, cancellationToken);
+            var workspace = await gitWorkspace.RefreshStatusAsync(repository, githubToken: null, fetchRemote: false, cancellationToken);
+            if (!string.Equals(repository.GitUrl, workspace.EffectiveGitUrl, StringComparison.Ordinal) ||
+                !string.Equals(repository.LocalPath, workspace.WorkspacePath, StringComparison.Ordinal))
+            {
+                var updatedRepository = await store.UpdateRepositoryAsync(
+                    repository.Id,
+                    new UpdateRepositoryRequest(
+                        repository.Name,
+                        workspace.EffectiveGitUrl,
+                        workspace.WorkspacePath,
+                        repository.DefaultBranch),
+                    cancellationToken);
+
+                if (updatedRepository is not null)
+                {
+                    repository = updatedRepository;
+                }
+            }
+
+            await store.UpdateRepositoryGitStateAsync(repository.Id, workspace.GitStatus, cancellationToken);
         }
         catch (Exception ex)
         {

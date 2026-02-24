@@ -88,8 +88,21 @@ public sealed class RepositoryGitRefreshService(
             try
             {
                 var githubToken = await TryGetGithubTokenAsync(repository.Id, cancellationToken);
-                var gitStatus = await gitWorkspaceService.RefreshStatusAsync(repository, githubToken, fetchRemote: true, cancellationToken);
-                await store.UpdateRepositoryGitStateAsync(repository.Id, gitStatus, cancellationToken);
+                var workspace = await gitWorkspaceService.RefreshStatusAsync(repository, githubToken, fetchRemote: true, cancellationToken);
+                if (!string.Equals(repository.GitUrl, workspace.EffectiveGitUrl, StringComparison.Ordinal) ||
+                    !string.Equals(repository.LocalPath, workspace.WorkspacePath, StringComparison.Ordinal))
+                {
+                    await store.UpdateRepositoryAsync(
+                        repository.Id,
+                        new UpdateRepositoryRequest(
+                            repository.Name,
+                            workspace.EffectiveGitUrl,
+                            workspace.WorkspacePath,
+                            repository.DefaultBranch),
+                        cancellationToken);
+                }
+
+                await store.UpdateRepositoryGitStateAsync(repository.Id, workspace.GitStatus, cancellationToken);
             }
             catch (Exception ex)
             {

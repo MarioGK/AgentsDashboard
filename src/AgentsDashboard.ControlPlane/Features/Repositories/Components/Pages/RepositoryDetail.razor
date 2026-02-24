@@ -886,8 +886,28 @@ else
         try
         {
             var githubToken = await TryGetGithubTokenAsync(_repository.Id);
-            var gitStatus = await GitWorkspace.RefreshStatusAsync(_repository, githubToken, fetchRemote: true, CancellationToken.None);
-            _repository = await RepositoryStore.UpdateRepositoryGitStateAsync(_repository.Id, gitStatus, CancellationToken.None);
+            var workspace = await GitWorkspace.RefreshStatusAsync(_repository, githubToken, fetchRemote: true, CancellationToken.None);
+
+            if (!string.Equals(_repository.GitUrl, workspace.EffectiveGitUrl, StringComparison.Ordinal) ||
+                !string.Equals(_repository.LocalPath, workspace.WorkspacePath, StringComparison.Ordinal))
+            {
+                _repository = await RepositoryStore.UpdateRepositoryAsync(
+                    _repository.Id,
+                    new UpdateRepositoryRequest(
+                        _repository.Name,
+                        workspace.EffectiveGitUrl,
+                        workspace.WorkspacePath,
+                        _repository.DefaultBranch),
+                    CancellationToken.None);
+            }
+
+            if (_repository is null)
+            {
+                _repository = await RepositoryStore.GetRepositoryAsync(RepositoryId, CancellationToken.None);
+                return;
+            }
+
+            _repository = await RepositoryStore.UpdateRepositoryGitStateAsync(_repository.Id, workspace.GitStatus, CancellationToken.None);
             if (_repository is null)
             {
                 _repository = await RepositoryStore.GetRepositoryAsync(RepositoryId, CancellationToken.None);

@@ -548,6 +548,7 @@ public sealed partial class HarnessExecutor(
             effectiveGitCommandOptions = await ExecuteCloneWithFallbackAsync(
                 normalizedCloneUrl,
                 workspacePath,
+                mainBranch,
                 normalizedGitCommandOptions,
                 cancellationToken);
         }
@@ -588,59 +589,186 @@ public sealed partial class HarnessExecutor(
     private async Task<GitCommandOptions> ExecuteCloneWithFallbackAsync(
         string cloneUrl,
         string workspacePath,
+        string mainBranch,
         GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
-        var fallbackCloneOptions = GetHttpsFallbackOptions(cloneUrl, gitCommandOptions);
-        var cloneOptions = new List<GitCommandOptions>
+        if (!TryParseGitHubRepoSlug(cloneUrl, out var repositorySlug))
         {
-            gitCommandOptions
-        };
-        if (fallbackCloneOptions is not null)
-        {
-            cloneOptions.Add(fallbackCloneOptions);
-        }
-
-        for (var attemptIndex = 0; attemptIndex < cloneOptions.Count; attemptIndex++)
-        {
-            var attempt = cloneOptions[attemptIndex];
-            var cloneResult = await ExecuteGitAsync(["clone", attempt.CloneUrl, workspacePath], attempt, cancellationToken);
-            if (cloneResult.ExitCode == 0)
+            var directCloneResult = await ExecuteGitAsync(["clone", gitCommandOptions.CloneUrl, workspacePath], gitCommandOptions, cancellationToken);
+            if (directCloneResult.ExitCode == 0)
             {
-                return attempt;
+                return gitCommandOptions;
             }
 
-            var failureMessage = BuildGitCloneFailureMessage(
+            var directFailureMessage = BuildGitCloneFailureMessage(
                 "clone task workspace",
-                cloneResult,
-                attempt.CloneUrl,
-                attempt.EnvironmentVariables);
-
-            if (attemptIndex + 1 < cloneOptions.Count)
-            {
-                logger.LogWarning(
-                    "Workspace clone attempt failed, retrying with HTTPS fallback {@Data}",
-                    new
-                    {
-                        Attempt = attemptIndex + 1,
-                        TotalAttempts = cloneOptions.Count,
-                        CloneUrl = attempt.CloneUrl,
-                        RepositoryPath = workspacePath,
-                        Failure = failureMessage,
-                    });
-
-                if (Directory.Exists(workspacePath))
-                {
-                    Directory.Delete(workspacePath, true);
-                }
-
-                continue;
-            }
-
-            throw new InvalidOperationException($"clone task workspace failed after {attemptIndex + 1} attempts. Last attempt: {failureMessage}");
+                directCloneResult,
+                gitCommandOptions.CloneUrl,
+                gitCommandOptions.EnvironmentVariables);
+            throw new InvalidOperationException($"clone task workspace failed. Last attempt: {directFailureMessage}");
         }
 
-        throw new InvalidOperationException("Workspace clone failed without producing a git result.");
+        var requestEnvironment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(gitCommandOptions.GitHubToken))
+        {
+            requestEnvironment["GITHUB_TOKEN"] = gitCommandOptions.GitHubToken;
+        }
+
+        var sshCloneOptions = ResolveGitCommandOptions(
+            BuildGitHubSshCloneUrl(repositorySlug),
+            requestEnvironment,
+            gitCommandOptions.EnvironmentVariables,
+            forceOriginalCloneUrl: true);
+        var sshCloneResult = await ExecuteGitAsync(["clone", sshCloneOptions.CloneUrl, workspacePath], sshCloneOptions, cancellationToken);
+        if (sshCloneResult.ExitCode == 0)
+        {
+            return sshCloneOptions;
+        }
+
+        var sshFailureMessage = BuildGitCloneFailureMessage(
+            "clone task workspace",
+            sshCloneResult,
+            sshCloneOptions.CloneUrl,
+            sshCloneOptions.EnvironmentVariables);
+        logger.LogWarning(
+            "Workspace clone over SSH failed, retrying with gh CLI {@Data}",
+            new
+            {
+                CloneUrl = sshCloneOptions.CloneUrl,
+                RepositoryPath = workspacePath,
+                Failure = sshFailureMessage,
+            });
+
+        if (Directory.Exists(workspacePath))
+        {
+            Directory.Delete(workspacePath, true);
+        }
+
+        var ghCloneResult = await ExecuteGhCloneAsync(repositorySlug, workspacePath, mainBranch, gitCommandOptions, cancellationToken);
+        if (ghCloneResult.ExitCode == 0)
+        {
+            var ghOriginResult = await ExecuteGitInPathAsync(workspacePath, ["remote", "get-url", "origin"], gitCommandOptions, cancellationToken);
+            var ghCloneUrl = ghOriginResult.ExitCode == 0 && !string.IsNullOrWhiteSpace(ghOriginResult.StandardOutput)
+                ? ghOriginResult.StandardOutput.Trim()
+                : BuildGitHubSshCloneUrl(repositorySlug);
+
+            return ResolveGitCommandOptions(
+                ghCloneUrl,
+                requestEnvironment,
+                gitCommandOptions.EnvironmentVariables);
+        }
+
+        var ghFailureMessage = BuildGitCloneFailureMessage(
+            "clone task workspace with gh",
+            ghCloneResult,
+            BuildGitHubSshCloneUrl(repositorySlug),
+            gitCommandOptions.EnvironmentVariables);
+        logger.LogWarning(
+            "Workspace clone with gh failed, retrying with HTTPS fallback {@Data}",
+            new
+            {
+                CloneUrl = BuildGitHubSshCloneUrl(repositorySlug),
+                RepositoryPath = workspacePath,
+                Failure = ghFailureMessage,
+            });
+
+        if (Directory.Exists(workspacePath))
+        {
+            Directory.Delete(workspacePath, true);
+        }
+
+        var httpsCloneOptions = GetHttpsFallbackOptions(cloneUrl, gitCommandOptions);
+        var httpsCloneResult = await ExecuteGitAsync(["clone", httpsCloneOptions.CloneUrl, workspacePath], httpsCloneOptions, cancellationToken);
+        if (httpsCloneResult.ExitCode == 0)
+        {
+            return httpsCloneOptions;
+        }
+
+        var httpsFailureMessage = BuildGitCloneFailureMessage(
+            "clone task workspace",
+            httpsCloneResult,
+            httpsCloneOptions.CloneUrl,
+            httpsCloneOptions.EnvironmentVariables);
+
+        throw new InvalidOperationException(
+            $"clone task workspace failed after SSH, gh CLI, and HTTPS attempts. ssh={sshFailureMessage}; gh={ghFailureMessage}; https={httpsFailureMessage}");
+    }
+
+    private async Task<GitCommandResult> ExecuteGhCloneAsync(
+        string repositorySlug,
+        string workspacePath,
+        string branch,
+        GitCommandOptions gitCommandOptions,
+        CancellationToken cancellationToken)
+    {
+        var arguments = new List<string>
+        {
+            "repo",
+            "clone",
+            repositorySlug,
+            workspacePath,
+        };
+
+        if (!string.IsNullOrWhiteSpace(branch))
+        {
+            arguments.Add("--");
+            arguments.Add("--branch");
+            arguments.Add(branch);
+        }
+
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "gh",
+                WorkingDirectory = Directory.GetCurrentDirectory(),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            }
+        };
+
+        process.StartInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+
+        foreach (var (key, value) in gitCommandOptions.EnvironmentVariables)
+        {
+            process.StartInfo.Environment[key] = value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(gitCommandOptions.GitHubToken))
+        {
+            process.StartInfo.Environment["GH_TOKEN"] = gitCommandOptions.GitHubToken;
+            process.StartInfo.Environment["GITHUB_TOKEN"] = gitCommandOptions.GitHubToken;
+        }
+
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        if (!process.Start())
+        {
+            return new GitCommandResult(-1, string.Empty, "Failed to start gh process.");
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKillProcess(process);
+            throw;
+        }
+
+        return new GitCommandResult(
+            process.ExitCode,
+            await stdoutTask,
+            await stderrTask);
     }
 
     private async Task FinalizeWorkspaceAfterRunAsync(
@@ -800,12 +928,15 @@ public sealed partial class HarnessExecutor(
         string cloneUrl,
         IReadOnlyDictionary<string, string>? environmentVars,
         IReadOnlyDictionary<string, string> runtimeEnvironment,
-        bool forceHttpsFallback = false)
+        bool forceHttpsFallback = false,
+        bool forceOriginalCloneUrl = false)
     {
         var githubToken = ResolveEnvValue(environmentVars, "GITHUB_TOKEN")
             ?? ResolveEnvValue(environmentVars, "GH_TOKEN");
         var hasSshCredentials = !forceHttpsFallback && HasSshCredentialsAvailable(environmentVars, runtimeEnvironment);
-        var resolvedCloneUrl = ResolveCloneUrlForGitHubToken(cloneUrl, githubToken, hasSshCredentials);
+        var resolvedCloneUrl = forceOriginalCloneUrl
+            ? cloneUrl
+            : ResolveCloneUrlForGitHubToken(cloneUrl, githubToken, hasSshCredentials);
 
         var argumentPrefix = new List<string>();
         if (!string.IsNullOrWhiteSpace(githubToken) && IsGitHubHttpsUrl(resolvedCloneUrl))
@@ -830,36 +961,87 @@ public sealed partial class HarnessExecutor(
             hasSshCredentials);
     }
 
-    private static GitCommandOptions? GetHttpsFallbackOptions(
+    private static GitCommandOptions GetHttpsFallbackOptions(
         string cloneUrl,
         GitCommandOptions gitCommandOptions)
     {
-        if (string.IsNullOrWhiteSpace(gitCommandOptions.GitHubToken))
+        if (!TryParseGitHubRepoSlug(cloneUrl, out var repositorySlug))
         {
-            return null;
+            return gitCommandOptions;
         }
 
-        if (!IsGitHubSshCloneUrl(cloneUrl))
+        var fallbackRequestEnvironment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(gitCommandOptions.GitHubToken))
         {
-            return null;
+            fallbackRequestEnvironment["GITHUB_TOKEN"] = gitCommandOptions.GitHubToken;
         }
 
-        var fallbackRequestEnvironment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["GITHUB_TOKEN"] = gitCommandOptions.GitHubToken,
-        };
-
-        var httpsOptions = ResolveGitCommandOptions(
-            cloneUrl,
+        return ResolveGitCommandOptions(
+            BuildGitHubHttpsCloneUrl(repositorySlug),
             fallbackRequestEnvironment,
             gitCommandOptions.EnvironmentVariables,
             forceHttpsFallback: true);
-        if (string.Equals(httpsOptions.CloneUrl, gitCommandOptions.CloneUrl, StringComparison.Ordinal))
+    }
+
+    private static bool TryParseGitHubRepoSlug(string cloneUrl, out string repositorySlug)
+    {
+        repositorySlug = string.Empty;
+        if (string.IsNullOrWhiteSpace(cloneUrl))
         {
-            return null;
+            return false;
         }
 
-        return httpsOptions;
+        var normalizedCloneUrl = cloneUrl.Trim();
+        if (normalizedCloneUrl.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedCloneUrl = normalizedCloneUrl["git@github.com:".Length..];
+        }
+        else if (normalizedCloneUrl.StartsWith("ssh://git@github.com/", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedCloneUrl = normalizedCloneUrl["ssh://git@github.com/".Length..];
+        }
+        else if (normalizedCloneUrl.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedCloneUrl = normalizedCloneUrl["https://github.com/".Length..];
+        }
+        else if (normalizedCloneUrl.StartsWith("http://github.com/", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedCloneUrl = normalizedCloneUrl["http://github.com/".Length..];
+        }
+        else if (Uri.TryCreate(normalizedCloneUrl, UriKind.Absolute, out var absoluteUri) &&
+                 string.Equals(absoluteUri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedCloneUrl = absoluteUri.AbsolutePath.Trim('/');
+        }
+        else
+        {
+            return false;
+        }
+
+        if (normalizedCloneUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedCloneUrl = normalizedCloneUrl[..^4];
+        }
+
+        var parts = normalizedCloneUrl
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 2)
+        {
+            return false;
+        }
+
+        repositorySlug = $"{parts[0]}/{parts[1]}";
+        return true;
+    }
+
+    private static string BuildGitHubSshCloneUrl(string repositorySlug)
+    {
+        return $"git@github.com:{repositorySlug}.git";
+    }
+
+    private static string BuildGitHubHttpsCloneUrl(string repositorySlug)
+    {
+        return $"https://github.com/{repositorySlug}.git";
     }
 
     private static string BuildGitCloneFailureMessage(
@@ -1175,22 +1357,6 @@ public sealed partial class HarnessExecutor(
         }
 
         return normalizedCloneUrl;
-    }
-
-    private static bool IsGitHubSshCloneUrl(string cloneUrl)
-    {
-        if (string.IsNullOrWhiteSpace(cloneUrl))
-        {
-            return false;
-        }
-
-        var normalizedCloneUrl = cloneUrl.Trim();
-        if (normalizedCloneUrl.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return normalizedCloneUrl.StartsWith("ssh://git@github.com/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsGitHubHttpsUrl(string url)

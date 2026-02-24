@@ -4,12 +4,10 @@
 @rendermode InteractiveServer
 @inject IRepositoryStore Store
 @inject IGitWorkspaceService GitWorkspace
-@inject IHostFileExplorerService FileExplorer
 @inject SecretCryptoService Crypto
 @inject NavigationManager Nav
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
-@using System.IO
 
 
 @namespace AgentsDashboard.ControlPlane.Components.Pages
@@ -78,16 +76,12 @@
 
         <MudGrid Class="mt-2">
             <MudItem xs="12" md="8">
-                <SettingsHintedField ContainerClass="" Hint="Absolute filesystem path where repository will be cloned or refreshed.">
+                <SettingsHintedField ContainerClass="" Hint="Optional hint used to derive deterministic runtime workspace path when no repository id exists yet.">
                     <MudTextField @bind-Value="_newRepositoryLocalPath"
-                                  Label="Local Folder"
-                                  Placeholder="/absolute/path"
-                                  Required="true"
+                                  Label="Workspace Key Hint (optional)"
+                                  Placeholder="optional-stable-key"
                                   data-testid="repo-create-local-path" />
                 </SettingsHintedField>
-            </MudItem>
-            <MudItem xs="12" md="4" Class="d-flex align-center">
-                <MudButton Variant="Variant.Outlined" Color="Color.Info" OnClick="OpenFolderDialogAsync" Class="mr-2">Browse</MudButton>
             </MudItem>
         </MudGrid>
         <MudGrid Class="mt-2">
@@ -138,49 +132,6 @@
     </MudTable>
 </MudStack>
 
-<MudDialog @bind-Visible="_folderDialogOpen" Options="_folderDialogOptions">
-    <DialogContent>
-        <MudStack Spacing="2">
-            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                <MudText Typo="Typo.h6">Folder Explorer</MudText>
-                <MudText Typo="Typo.caption">@_browserPath</MudText>
-            </MudStack>
-
-            <MudStack Row Spacing="1">
-                <MudButton Variant="Variant.Text" OnClick="NavigateUpAsync">Up</MudButton>
-                <MudButton Variant="Variant.Text" OnClick="LoadDirectoriesAsync">Refresh</MudButton>
-            </MudStack>
-
-            <MudGrid>
-                <MudItem xs="12" md="8">
-                    <MudTextField @bind-Value="_newFolderName" Label="Create Folder" Placeholder="folder-name" />
-                </MudItem>
-                <MudItem xs="12" md="4" Class="d-flex align-center">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="CreateFolderAsync">Create Folder</MudButton>
-                </MudItem>
-            </MudGrid>
-
-            @if (_directories.Count == 0)
-            {
-                <MudText Typo="Typo.caption">No subfolders in current path.</MudText>
-            }
-            else
-            {
-                <MudChipSet T="string">
-                    @foreach (var dir in _directories)
-                    {
-                        <MudChip T="string" OnClick="() => EnterDirectoryAsync(dir.FullPath)">@dir.Name</MudChip>
-                    }
-                </MudChipSet>
-            }
-        </MudStack>
-    </DialogContent>
-    <DialogActions>
-        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="CloseFolderDialog">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="UseCurrentFolderAndClose">Use This Folder</MudButton>
-    </DialogActions>
-</MudDialog>
-
 @code {
     private readonly List<RepositoryDocument> _repositories = [];
 
@@ -190,12 +141,6 @@
     private string _newRepositoryDefaultBranch = "main";
     private string _newRepositoryGithubToken = string.Empty;
     private bool _isCreating;
-
-    private string _browserPath = Path.GetPathRoot(System.Environment.CurrentDirectory) ?? "/";
-    private readonly List<HostDirectoryEntry> _directories = [];
-    private string _newFolderName = string.Empty;
-    private bool _folderDialogOpen;
-    private readonly DialogOptions _folderDialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
 
     protected override async Task OnInitializedAsync()
     {
@@ -210,17 +155,16 @@
         }
 
         if (string.IsNullOrWhiteSpace(_newRepositoryName) ||
-            string.IsNullOrWhiteSpace(_newRepositoryGitUrl) ||
-            string.IsNullOrWhiteSpace(_newRepositoryLocalPath))
+            string.IsNullOrWhiteSpace(_newRepositoryGitUrl))
         {
-            Snackbar.AddImportant("Repository name, git URL, and local folder are required.", Severity.Warning);
+            Snackbar.AddImportant("Repository name and git URL are required.", Severity.Warning);
             return;
         }
 
         try
         {
             _isCreating = true;
-            var gitStatus = await GitWorkspace.EnsureWorkspaceAsync(
+            var workspace = await GitWorkspace.EnsureWorkspaceAsync(
                 _newRepositoryGitUrl.Trim(),
                 _newRepositoryLocalPath.Trim(),
                 string.IsNullOrWhiteSpace(_newRepositoryDefaultBranch) ? "main" : _newRepositoryDefaultBranch.Trim(),
@@ -231,8 +175,8 @@
             var created = await Store.CreateRepositoryAsync(
                 new CreateRepositoryRequest(
                     _newRepositoryName.Trim(),
-                    _newRepositoryGitUrl.Trim(),
-                    _newRepositoryLocalPath.Trim(),
+                    workspace.EffectiveGitUrl,
+                    workspace.WorkspacePath,
                     string.IsNullOrWhiteSpace(_newRepositoryDefaultBranch) ? "main" : _newRepositoryDefaultBranch.Trim()),
                 CancellationToken.None);
 
@@ -241,7 +185,7 @@
                 await Store.UpsertProviderSecretAsync(created.Id, "github", Crypto.Encrypt(_newRepositoryGithubToken.Trim()), CancellationToken.None);
             }
 
-            await Store.UpdateRepositoryGitStateAsync(created.Id, gitStatus, CancellationToken.None);
+            await Store.UpdateRepositoryGitStateAsync(created.Id, workspace.GitStatus, CancellationToken.None);
 
             _newRepositoryName = string.Empty;
             _newRepositoryGitUrl = string.Empty;
@@ -273,8 +217,21 @@
         try
         {
             var githubToken = await TryGetGithubTokenAsync(repository.Id);
-            var gitStatus = await GitWorkspace.RefreshStatusAsync(repository, githubToken, fetchRemote, CancellationToken.None);
-            await Store.UpdateRepositoryGitStateAsync(repository.Id, gitStatus, CancellationToken.None);
+            var workspace = await GitWorkspace.RefreshStatusAsync(repository, githubToken, fetchRemote, CancellationToken.None);
+            if (!string.Equals(repository.GitUrl, workspace.EffectiveGitUrl, StringComparison.Ordinal) ||
+                !string.Equals(repository.LocalPath, workspace.WorkspacePath, StringComparison.Ordinal))
+            {
+                await Store.UpdateRepositoryAsync(
+                    repository.Id,
+                    new UpdateRepositoryRequest(
+                        repository.Name,
+                        workspace.EffectiveGitUrl,
+                        workspace.WorkspacePath,
+                        repository.DefaultBranch),
+                    CancellationToken.None);
+            }
+
+            await Store.UpdateRepositoryGitStateAsync(repository.Id, workspace.GitStatus, CancellationToken.None);
             await LoadAsync();
         }
         catch (Exception ex)
@@ -313,99 +270,6 @@
         {
             await Store.DeleteRepositoryAsync(repo.Id, CancellationToken.None);
             await LoadAsync();
-        }
-    }
-
-    private async Task LoadDirectoriesAsync()
-    {
-        try
-        {
-            _directories.Clear();
-            _directories.AddRange(await FileExplorer.ListDirectoriesAsync(_browserPath, CancellationToken.None));
-        }
-        catch (Exception ex)
-        {
-            Snackbar.AddImportant($"Browse failed: {ex.Message}", Severity.Warning);
-        }
-    }
-
-    private async Task OpenFolderDialogAsync()
-    {
-        var localPath = _newRepositoryLocalPath.Trim();
-        if (!string.IsNullOrWhiteSpace(localPath) && Path.IsPathRooted(localPath))
-        {
-            var resolved = Path.GetFullPath(localPath);
-            if (Directory.Exists(resolved))
-            {
-                _browserPath = resolved;
-            }
-            else
-            {
-                var parent = Directory.GetParent(resolved)?.FullName;
-                if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
-                {
-                    _browserPath = parent;
-                }
-            }
-        }
-
-        _newFolderName = string.Empty;
-        await LoadDirectoriesAsync();
-        _folderDialogOpen = true;
-    }
-
-    private async Task NavigateUpAsync()
-    {
-        try
-        {
-            var current = Path.GetFullPath(_browserPath);
-            var parent = Directory.GetParent(current)?.FullName;
-            if (!string.IsNullOrWhiteSpace(parent))
-            {
-                _browserPath = parent;
-                await LoadDirectoriesAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.AddImportant($"Cannot navigate up: {ex.Message}", Severity.Warning);
-        }
-    }
-
-    private async Task EnterDirectoryAsync(string path)
-    {
-        _browserPath = path;
-        await LoadDirectoriesAsync();
-    }
-
-    private void UseCurrentFolderAndClose()
-    {
-        _newRepositoryLocalPath = _browserPath;
-        _folderDialogOpen = false;
-    }
-
-    private void CloseFolderDialog()
-    {
-        _folderDialogOpen = false;
-    }
-
-    private async Task CreateFolderAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_newFolderName))
-        {
-            return;
-        }
-
-        try
-        {
-            var created = await FileExplorer.CreateDirectoryAsync(_browserPath, _newFolderName.Trim(), CancellationToken.None);
-            _browserPath = created;
-            _newFolderName = string.Empty;
-            await LoadDirectoriesAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.AddImportant($"Create folder failed: {ex.Message}", Severity.Warning);
         }
     }
 }

@@ -15,6 +15,7 @@ global using AgentsDashboard.TaskRuntime.Features.HarnessAdapters.Adapters;
 global using AgentsDashboard.TaskRuntime.Features.HarnessRuntimes.Services;
 global using AgentsDashboard.TaskRuntime.Features.Health.Services;
 global using AgentsDashboard.TaskRuntime.Features.Mcp.Services;
+global using AgentsDashboard.TaskRuntime.Features.Repositories.Services;
 global using AgentsDashboard.TaskRuntime.Features.RuntimeApi.MagicOnion;
 global using AgentsDashboard.TaskRuntime.Infrastructure;
 global using AgentsDashboard.TaskRuntime.Infrastructure.Configuration;

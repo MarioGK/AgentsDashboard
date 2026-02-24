@@ -83,6 +83,7 @@ internal static class ControlPlaneServiceCollectionExtensions
         services.AddHostedService<AlertingService>();
         services.AddSingleton<TaskRuntimeCommandGateway>();
         services.AddSingleton<TaskRuntimeFileSystemGateway>();
+        services.AddSingleton<TaskRuntimeRepositoryGitGateway>();
         return services;
     }
 

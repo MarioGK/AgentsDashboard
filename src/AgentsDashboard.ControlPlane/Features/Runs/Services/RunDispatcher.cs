@@ -217,11 +217,15 @@ public sealed class RunDispatcher(
             ApplyHarnessModelOverride(task.Harness, envVars, modelOverride);
         }
 
+        TryApplyHostGitHubTokenFallback(envVars, secretsDict);
+
         ApplyHarnessModeEnvironment(task.Harness, run.ExecutionMode, envVars);
 
         if (IsGitHubCloneUrl(normalizedCloneUrl) && !HasGitHubCredentials(envVars))
         {
-            logger.LogWarning("No GitHub token is configured for run {RunId}; GitHub authentication may fail", run.Id);
+            logger.LogWarning(
+                "No GitHub token is available for run {RunId}; set repository secret 'github' or environment GH_TOKEN/GITHUB_TOKEN for private GitHub clone reliability.",
+                run.Id);
         }
 
         var artifactPatterns = task.ArtifactPatterns.Count > 0
@@ -672,6 +676,42 @@ public sealed class RunDispatcher(
                 SetSecret(envVars, secrets, $"SECRET_{normalized.ToUpperInvariant().Replace('-', '_')}", value);
                 break;
         }
+    }
+
+    private static bool TryApplyHostGitHubTokenFallback(
+        Dictionary<string, string> envVars,
+        Dictionary<string, string> secrets)
+    {
+        if (HasGitHubCredentials(envVars))
+        {
+            return false;
+        }
+
+        var ghToken = Environment.GetEnvironmentVariable("GH_TOKEN")?.Trim();
+        var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN")?.Trim();
+        if (string.IsNullOrWhiteSpace(ghToken) && string.IsNullOrWhiteSpace(githubToken))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(ghToken))
+        {
+            ghToken = githubToken;
+        }
+
+        if (string.IsNullOrWhiteSpace(githubToken))
+        {
+            githubToken = ghToken;
+        }
+
+        if (string.IsNullOrWhiteSpace(ghToken) || string.IsNullOrWhiteSpace(githubToken))
+        {
+            return false;
+        }
+
+        SetSecret(envVars, secrets, "GH_TOKEN", ghToken);
+        SetSecret(envVars, secrets, "GITHUB_TOKEN", githubToken);
+        return true;
     }
 
     private static void SetSecret(

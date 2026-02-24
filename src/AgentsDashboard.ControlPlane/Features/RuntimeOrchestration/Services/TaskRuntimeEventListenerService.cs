@@ -37,20 +37,25 @@ public sealed class TaskRuntimeEventListenerService(
     private readonly ConcurrentDictionary<string, long> _artifactRunByteTotals = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _backlogReplayInFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _runtimeEventCheckpoints = new(StringComparer.OrdinalIgnoreCase);
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private bool _isStopping;
     private readonly IRunStructuredViewService _runStructuredViewService = runStructuredViewService ?? NullRunStructuredViewService.Instance;
     private static readonly ITaskRuntimeEventReceiver s_eventHubProbeReceiver = new EventHubProbeReceiver();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _shutdownCts.Token);
+        var loopToken = loopCts.Token;
+
+        while (!loopToken.IsCancellationRequested)
         {
             try
             {
-                await SyncConnectionsAsync(stoppingToken);
-                await runtimeStore.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TaskRuntimeTtl, stoppingToken);
-                await ReplayConnectedRuntimeBacklogsAsync(stoppingToken);
+                await SyncConnectionsAsync(loopToken);
+                await runtimeStore.MarkStaleTaskRuntimeRegistrationsOfflineAsync(TaskRuntimeTtl, loopToken);
+                await ReplayConnectedRuntimeBacklogsAsync(loopToken);
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (loopToken.IsCancellationRequested)
             {
                 break;
             }
@@ -59,7 +64,7 @@ public sealed class TaskRuntimeEventListenerService(
                 logger.LogError(ex, "Worker event listener synchronization failed");
             }
 
-            await Task.Delay(PollInterval, stoppingToken);
+            await Task.Delay(PollInterval, loopToken);
         }
     }
 
@@ -107,19 +112,26 @@ public sealed class TaskRuntimeEventListenerService(
     private async Task RunConnectionLoopAsync(TaskRuntimeHubConnection connection, CancellationToken cancellationToken)
     {
         var reconnectDelay = TimeSpan.FromSeconds(1);
+        using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
+        var loopToken = loopCts.Token;
 
-        while (!cancellationToken.IsCancellationRequested)
+        while (!loopToken.IsCancellationRequested)
         {
             try
             {
-                var endpoint = await ResolveWorkerEventHubEndpointAsync(connection.TaskRuntimeId, connection.Endpoint, cancellationToken);
+                if (!IsCurrentConnection(connection))
+                {
+                    break;
+                }
+
+                var endpoint = await ResolveWorkerEventHubEndpointAsync(connection.TaskRuntimeId, connection.Endpoint, loopToken);
                 if (endpoint is null)
                 {
                     RecordWorkerEventHubConnectionFailure(
                         connection.TaskRuntimeId,
                         connection.Endpoint,
                         "Worker event hub is not yet accepting streaming connections.");
-                    await Task.Delay(reconnectDelay, cancellationToken);
+                    await Task.Delay(reconnectDelay, loopToken);
                     reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
                     continue;
                 }
@@ -129,11 +141,11 @@ public sealed class TaskRuntimeEventListenerService(
                     connection.Endpoint = endpoint;
                 }
 
-                await TryReplayRuntimeBacklogAsync(connection.TaskRuntimeId, connection.Endpoint, cancellationToken);
+                await TryReplayRuntimeBacklogAsync(connection, loopToken);
 
                 logger.LogInformation("Connecting worker event hub for {TaskRuntimeId} at {Endpoint}", connection.TaskRuntimeId, connection.Endpoint);
                 var receiver = new RuntimeScopedEventReceiver(connection.TaskRuntimeId, this);
-                var hub = await clientFactory.ConnectEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, receiver, cancellationToken);
+                var hub = await clientFactory.ConnectEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, receiver, loopToken);
                 connection.SetHub(hub);
                 _connectionFailures.TryRemove(connection.TaskRuntimeId, out _);
                 reconnectDelay = TimeSpan.FromSeconds(1);
@@ -143,14 +155,19 @@ public sealed class TaskRuntimeEventListenerService(
 
                 logger.LogWarning("Worker event hub disconnected for {TaskRuntimeId}", connection.TaskRuntimeId);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (loopToken.IsCancellationRequested)
             {
                 break;
             }
             catch (Exception ex)
             {
+                if (loopToken.IsCancellationRequested || !IsCurrentConnection(connection))
+                {
+                    break;
+                }
+
                 RecordWorkerEventHubConnectionFailure(connection.TaskRuntimeId, connection.Endpoint, ex.Message.ReplaceLineEndings(" "), ex);
-                await Task.Delay(reconnectDelay, cancellationToken);
+                await Task.Delay(reconnectDelay, loopToken);
                 reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
             }
             finally
@@ -672,30 +689,47 @@ public sealed class TaskRuntimeEventListenerService(
         foreach (var connection in connections)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await TryReplayRuntimeBacklogAsync(connection.TaskRuntimeId, connection.Endpoint, cancellationToken);
+            await TryReplayRuntimeBacklogAsync(connection, cancellationToken);
         }
     }
 
-    private async Task TryReplayRuntimeBacklogAsync(string runtimeId, string endpoint, CancellationToken cancellationToken)
+    private async Task TryReplayRuntimeBacklogAsync(TaskRuntimeHubConnection connection, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(runtimeId) ||
-            string.IsNullOrWhiteSpace(endpoint))
+        if (connection is null ||
+            string.IsNullOrWhiteSpace(connection.TaskRuntimeId) ||
+            string.IsNullOrWhiteSpace(connection.Endpoint))
         {
             return;
         }
 
-        if (!_backlogReplayInFlight.TryAdd(runtimeId, 0))
+        if (!_backlogReplayInFlight.TryAdd(connection.TaskRuntimeId, 0))
         {
             return;
         }
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            connection.Cancellation.Token,
+            _shutdownCts.Token);
+        var replayToken = linkedCts.Token;
 
         try
         {
-            var cursor = await GetRuntimeEventCheckpointAsync(runtimeId, cancellationToken);
-            while (!cancellationToken.IsCancellationRequested)
+            if (!await IsEventHubReachableAsync(connection.TaskRuntimeId, connection.Endpoint, replayToken))
             {
-                var client = clientFactory.CreateTaskRuntimeService(runtimeId, endpoint);
-                var backlog = await client.WithCancellationToken(cancellationToken).ReadEventBacklogAsync(new ReadEventBacklogRequest
+                return;
+            }
+
+            var cursor = await GetRuntimeEventCheckpointAsync(connection.TaskRuntimeId, replayToken);
+            while (!replayToken.IsCancellationRequested)
+            {
+                if (!IsCurrentConnection(connection))
+                {
+                    return;
+                }
+
+                var client = clientFactory.CreateTaskRuntimeService(connection.TaskRuntimeId, connection.Endpoint);
+                var backlog = await client.WithCancellationToken(replayToken).ReadEventBacklogAsync(new ReadEventBacklogRequest
                 {
                     AfterDeliveryId = cursor,
                     MaxEvents = 500
@@ -705,10 +739,13 @@ public sealed class TaskRuntimeEventListenerService(
                 {
                     if (!string.IsNullOrWhiteSpace(backlog.ErrorMessage))
                     {
-                        logger.LogDebug(
-                            "Runtime backlog replay failed for {TaskRuntimeId}: {ErrorMessage}",
-                            runtimeId,
-                            backlog.ErrorMessage);
+                        if (!ShouldSuppressReplayFailure(connection.TaskRuntimeId))
+                        {
+                            logger.LogDebug(
+                                "Runtime backlog replay failed for {TaskRuntimeId}: {ErrorMessage}",
+                                connection.TaskRuntimeId,
+                                backlog.ErrorMessage);
+                        }
                     }
 
                     break;
@@ -721,7 +758,7 @@ public sealed class TaskRuntimeEventListenerService(
 
                 foreach (var replayEvent in backlog.Events.OrderBy(x => x.DeliveryId))
                 {
-                    await HandleJobEventAsync(runtimeId, replayEvent);
+                    await HandleJobEventAsync(connection.TaskRuntimeId, replayEvent);
                     cursor = Math.Max(cursor, replayEvent.DeliveryId);
                 }
 
@@ -731,17 +768,48 @@ public sealed class TaskRuntimeEventListenerService(
                 }
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (replayToken.IsCancellationRequested)
         {
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Runtime backlog replay cycle failed for {TaskRuntimeId}", runtimeId);
+            if (ShouldSuppressReplayFailure(connection.TaskRuntimeId))
+            {
+                return;
+            }
+
+            logger.LogDebug(ex, "Runtime backlog replay cycle failed for {TaskRuntimeId}", connection.TaskRuntimeId);
         }
         finally
         {
-            _backlogReplayInFlight.TryRemove(runtimeId, out _);
+            _backlogReplayInFlight.TryRemove(connection.TaskRuntimeId, out _);
         }
+    }
+
+    private bool IsCurrentConnection(TaskRuntimeHubConnection connection)
+    {
+        if (connection is null || string.IsNullOrWhiteSpace(connection.TaskRuntimeId))
+        {
+            return false;
+        }
+
+        return _connections.TryGetValue(connection.TaskRuntimeId, out var current)
+            && ReferenceEquals(current, connection);
+    }
+
+    private bool ShouldSuppressReplayFailure(string runtimeId)
+    {
+        if (_isStopping || _shutdownCts.IsCancellationRequested)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(runtimeId))
+        {
+            return true;
+        }
+
+        return !_connections.ContainsKey(runtimeId);
     }
 
     private async Task<bool> ShouldProcessDeliveryAsync(string runtimeId, long deliveryId)
@@ -1218,6 +1286,9 @@ public sealed class TaskRuntimeEventListenerService(
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
+        _isStopping = true;
+        _shutdownCts.Cancel();
+
         var knownTaskRuntimeIds = _connections.Keys.ToList();
         foreach (var runtimeId in knownTaskRuntimeIds)
         {
