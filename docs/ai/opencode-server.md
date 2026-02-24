@@ -38,6 +38,7 @@ ControlPlane and TaskRuntime communication stays on MagicOnion contracts.
 
 - `OPENCODE_API_KEY`
 - provider-specific credentials passed through ControlPlane secret mapping
+- `GH_TOKEN` / `GITHUB_TOKEN` when GitHub token auth is needed
 
 ### Server connection
 
@@ -56,6 +57,8 @@ ControlPlane and TaskRuntime communication stays on MagicOnion contracts.
 - `OPENCODE_MODEL` or `HARNESS_MODEL`
 - `OPENCODE_PROVIDER`
 - `OPENCODE_MODE`/`HARNESS_MODE`/`TASK_MODE`/`RUN_MODE`
+- Host credential passthrough mounts these targets in worker containers: `/home/agent/.ssh`, `/home/agent/.gitconfig`, `/home/agent/.git-credentials`, `/home/agent/.netrc`, `/home/agent/.config/gh`, `/home/agent/.config/git`, `/home/agent/.config/opencode`, `/home/agent/.codex`.
+- When host SSH passthrough is enabled, runtime startup now fails if required SSH/token credential sources are missing.
 
 ## Failure Modes
 

@@ -41,6 +41,7 @@ Rules:
 7. Use pinned base image tags, never latest.
 8. WORKDIR must be /workspace.
 9. Default CMD should be an interactive shell.
+10. Create credential mount targets under /home/agent: .ssh, .gitconfig, .git-credentials, .netrc, .config/gh, .config/git, .config/opencode, .codex.
 
 Output only Dockerfile content.
 """,

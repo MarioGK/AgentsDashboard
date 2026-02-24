@@ -110,6 +110,30 @@ public sealed class RunDispatcher(
             return false;
         }
 
+        var defaultBranch = string.IsNullOrWhiteSpace(repository.DefaultBranch) ? "main" : repository.DefaultBranch;
+
+        if (!TryNormalizeCloneUrl(repository.GitUrl, out var normalizedCloneUrl, out var cloneUrlError))
+        {
+            logger.LogWarning(
+                "Rejecting run {RunId}: repository URL is invalid ({Reason})",
+                run.Id,
+                cloneUrlError);
+
+            var failed = await runStore.MarkRunCompletedAsync(
+                run.Id,
+                succeeded: false,
+                summary: "Dispatch failed: invalid repository URL",
+                outputJson: "{}",
+                cancellationToken,
+                failureClass: "InvalidRepositoryUrl");
+            if (failed is not null)
+            {
+                await publisher.PublishStatusAsync(failed, cancellationToken);
+            }
+
+            return false;
+        }
+
         var taskParallelSlots = task.ConcurrencyLimit > 0
             ? task.ConcurrencyLimit
             : Math.Max(1, runtime.DefaultTaskParallelRuns);
@@ -128,8 +152,6 @@ public sealed class RunDispatcher(
 
         var selectedWorker = await workerLifecycleManager.GetTaskRuntimeAsync(workerLease.TaskRuntimeId, cancellationToken);
 
-        var defaultBranch = string.IsNullOrWhiteSpace(repository.DefaultBranch) ? "main" : repository.DefaultBranch;
-
         try
         {
             await taskStore.UpdateTaskGitMetadataAsync(
@@ -147,12 +169,12 @@ public sealed class RunDispatcher(
 
         var envVars = new Dictionary<string, string>
         {
-            ["GIT_URL"] = repository.GitUrl,
+            ["GIT_URL"] = normalizedCloneUrl,
             ["DEFAULT_BRANCH"] = defaultBranch,
             ["AUTO_CREATE_PR"] = "false",
             ["HARNESS_NAME"] = task.Harness,
             ["HARNESS_MODE"] = run.ExecutionMode.ToString().ToLowerInvariant(),
-            ["GH_REPO"] = ParseGitHubRepoSlug(repository.GitUrl),
+            ["GH_REPO"] = ParseGitHubRepoSlug(normalizedCloneUrl),
         };
 
         var secrets = await repositoryStore.ListProviderSecretsAsync(repository.Id, cancellationToken);
@@ -197,6 +219,11 @@ public sealed class RunDispatcher(
 
         ApplyHarnessModeEnvironment(task.Harness, run.ExecutionMode, envVars);
 
+        if (IsGitHubCloneUrl(normalizedCloneUrl) && !HasGitHubCredentials(envVars))
+        {
+            logger.LogWarning("No GitHub token is configured for run {RunId}; GitHub authentication may fail", run.Id);
+        }
+
         var artifactPatterns = task.ArtifactPatterns.Count > 0
             ? task.ArtifactPatterns.ToList()
             : null;
@@ -212,7 +239,7 @@ public sealed class RunDispatcher(
             TaskId = task.Id,
             HarnessType = task.Harness,
             ImageTag = $"harness-{task.Harness.ToLowerInvariant()}:latest",
-            CloneUrl = repository.GitUrl,
+            CloneUrl = normalizedCloneUrl,
             Branch = repository.DefaultBranch,
             WorkingDirectory = null,
             Instruction = layeredPrompt,
@@ -765,7 +792,7 @@ public sealed class RunDispatcher(
 
     private static void SetIfMissing(IDictionary<string, string> envVars, string key, string value)
     {
-        var existingKey = FindKeyIgnoreCase(envVars, key);
+        var existingKey = FindKeyIgnoreCase(envVars.Keys, key);
         if (existingKey is not null)
         {
             return;
@@ -774,9 +801,9 @@ public sealed class RunDispatcher(
         envVars[key] = value;
     }
 
-    private static string? FindKeyIgnoreCase(IDictionary<string, string> envVars, string key)
+    private static string? FindKeyIgnoreCase(IEnumerable<string> envKeys, string key)
     {
-        foreach (var existingKey in envVars.Keys)
+        foreach (var existingKey in envKeys)
         {
             if (string.Equals(existingKey, key, StringComparison.OrdinalIgnoreCase))
             {
@@ -802,5 +829,124 @@ public sealed class RunDispatcher(
             normalized = normalized[..^4];
 
         return normalized.Trim('/');
+    }
+
+    private static bool TryNormalizeCloneUrl(string? gitUrl, out string normalizedUrl, out string reason)
+    {
+        normalizedUrl = string.Empty;
+        reason = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(gitUrl))
+        {
+            reason = "Repository URL is missing";
+            return false;
+        }
+
+        var trimmed = gitUrl.Trim();
+        if (IsScpStyleGitUrl(trimmed) || IsSupportedUrl(trimmed))
+        {
+            normalizedUrl = trimmed;
+            return true;
+        }
+
+        reason = "Repository URL is not a supported clone URL format";
+        return false;
+    }
+
+    private static bool IsSupportedUrl(string gitUrl)
+    {
+        if (string.IsNullOrWhiteSpace(gitUrl))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(gitUrl, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (!uri.IsWellFormedOriginalString())
+        {
+            return false;
+        }
+
+        return string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, Uri.UriSchemeSsh, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, "git", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, "git+ssh", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsScpStyleGitUrl(string gitUrl)
+    {
+        if (string.IsNullOrWhiteSpace(gitUrl))
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(gitUrl, UriKind.Absolute, out _))
+        {
+            return false;
+        }
+
+        if (gitUrl.Contains(' '))
+        {
+            return false;
+        }
+
+        var atIndex = gitUrl.IndexOf('@', StringComparison.Ordinal);
+        if (atIndex <= 0)
+        {
+            return false;
+        }
+
+        var colonIndex = gitUrl.IndexOf(':', StringComparison.Ordinal);
+        if (colonIndex <= atIndex)
+        {
+            return false;
+        }
+
+        var host = gitUrl[(atIndex + 1)..colonIndex];
+        return !string.IsNullOrWhiteSpace(host) && !host.Contains('/');
+    }
+
+    private static bool IsGitHubCloneUrl(string gitUrl)
+    {
+        if (string.IsNullOrWhiteSpace(gitUrl))
+        {
+            return false;
+        }
+
+        if (IsScpStyleGitUrl(gitUrl))
+        {
+            var atIndex = gitUrl.IndexOf('@', StringComparison.Ordinal);
+            var colonIndex = gitUrl.IndexOf(':', StringComparison.Ordinal);
+            if (atIndex < 0 || colonIndex <= atIndex)
+            {
+                return false;
+            }
+
+            var host = gitUrl[(atIndex + 1)..colonIndex];
+            return string.Equals(host, "github.com", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!Uri.TryCreate(gitUrl, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        return string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasGitHubCredentials(IReadOnlyDictionary<string, string> envVars)
+    {
+        var ghTokenKey = FindKeyIgnoreCase(envVars.Keys, "GH_TOKEN");
+        if (!string.IsNullOrWhiteSpace(ghTokenKey) && !string.IsNullOrWhiteSpace(envVars[ghTokenKey]))
+        {
+            return true;
+        }
+
+        var githubTokenKey = FindKeyIgnoreCase(envVars.Keys, "GITHUB_TOKEN");
+        return !string.IsNullOrWhiteSpace(githubTokenKey) && !string.IsNullOrWhiteSpace(envVars[githubTokenKey]);
     }
 }

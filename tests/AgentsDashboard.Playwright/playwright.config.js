@@ -15,6 +15,19 @@ module.exports = defineConfig({
   use: {
     baseURL,
     ignoreHTTPSErrors: true,
+    launchOptions: {
+      args: [
+        '--disable-background-networking',
+        '--disable-component-update',
+        '--disable-domain-reliability',
+        '--disable-features=GCMChannelStatusService,MediaRouter,OptimizationHints',
+        '--disable-sync',
+        '--disable-vulkan',
+        '--metrics-recording-only',
+        '--no-first-run',
+        '--use-gl=swiftshader'
+      ]
+    },
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
     screenshot: 'only-on-failure'

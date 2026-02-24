@@ -36,6 +36,13 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
     private const string WorkerHomePath = "/home/agent";
     private const string WorkerSshDirectoryPath = "/home/agent/.ssh";
     private const string WorkerSshAgentSocketPath = "/ssh-agent.sock";
+    private const string WorkerGitConfigPath = "/home/agent/.gitconfig";
+    private const string WorkerGitCredentialsPath = "/home/agent/.git-credentials";
+    private const string WorkerNetrcPath = "/home/agent/.netrc";
+    private const string WorkerGhConfigDirectoryPath = "/home/agent/.config/gh";
+    private const string WorkerGitConfigDirectoryPath = "/home/agent/.config/git";
+    private const string WorkerCodexDirectoryPath = "/home/agent/.codex";
+    private const string WorkerOpenCodeDirectoryPath = "/home/agent/.config/opencode";
     private static readonly TimeSpan EventHubProbeTimeout = TimeSpan.FromSeconds(2);
     private const int MaxOrphanContainerPrunesPerTick = 16;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
@@ -731,35 +738,62 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 codexApiKey = openAiApiKey;
 
             var gitSshMode = NormalizeGitSshCommandMode(runtime.GitSshCommandMode);
-            var (sshBinds, sshEnvironment, sshDirectoryMounted, sshAgentMounted) = ResolveWorkerSshPassthrough(runtime, gitSshMode);
-            if (runtime.EnableHostSshPassthrough && (!sshDirectoryMounted || !sshAgentMounted))
+            var (credentialBinds, credentialEnvironment, sshDirectoryMounted, sshAgentMounted, gitHubCredentialSourceAvailable) = ResolveWorkerSshPassthrough(runtime, gitSshMode);
+            if (runtime.EnableHostSshPassthrough)
             {
-                logger.LogWarning(
-                    "Worker SSH passthrough is incomplete {@Data}",
-                    new
-                    {
-                        workerId,
-                        runtime.EnableHostSshPassthrough,
-                        sshDirectoryMounted,
-                        sshAgentMounted,
-                        runtime.HostSshDirectory,
-                        runtime.HostSshAgentSocketPath,
-                        GitSshMode = gitSshMode
-                    });
+                var missingRequirements = new List<string>();
+                if (!sshDirectoryMounted)
+                {
+                    missingRequirements.Add("host SSH directory");
+                }
+
+                if (!sshAgentMounted)
+                {
+                    missingRequirements.Add("SSH agent socket");
+                }
+
+                if (!gitHubCredentialSourceAvailable)
+                {
+                    missingRequirements.Add("GitHub credential source");
+                }
+
+                if (missingRequirements.Count > 0)
+                {
+                    var requirementsText = string.Join(", ", missingRequirements);
+                    logger.LogError(
+                        "Worker credential passthrough requirements not met {@Data}",
+                        new
+                        {
+                            workerId,
+                            runtime.EnableHostSshPassthrough,
+                            sshDirectoryMounted,
+                            sshAgentMounted,
+                            gitHubCredentialSourceAvailable,
+                            CredentialBindCount = credentialBinds.Count,
+                            MissingRequirements = requirementsText,
+                            runtime.HostSshDirectory,
+                            runtime.HostSshAgentSocketPath,
+                            GitSshMode = gitSshMode
+                        });
+                    throw new InvalidOperationException(
+                        $"Unable to start task runtime '{workerId}': missing required host credential passthrough: {requirementsText}.");
+                }
             }
 
             logger.LogInformation(
-                "Worker SSH passthrough resolved {@Data}",
+                "Worker credential passthrough resolved {@Data}",
                 new
                 {
                     workerId,
                     runtime.EnableHostSshPassthrough,
                     sshDirectoryMounted,
                     sshAgentMounted,
+                    gitHubCredentialSourceAvailable,
+                    CredentialBindCount = credentialBinds.Count,
                     GitSshMode = gitSshMode
                 });
 
-            var workerEnvironment = BuildWorkerEnvironment(workerId, maxSlots, codexApiKey, openAiApiKey, sshEnvironment);
+            var workerEnvironment = BuildWorkerEnvironment(workerId, maxSlots, codexApiKey, openAiApiKey, credentialEnvironment);
             var connectivityMode = ResolveConnectivityMode(runtime);
             var useHostPort = connectivityMode == TaskRuntimeConnectivityMode.HostPortOnly ||
                               (connectivityMode == TaskRuntimeConnectivityMode.AutoDetect && !IsRunningInsideContainer());
@@ -782,7 +816,7 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 ExposedPorts = useHostPort
                     ? new Dictionary<string, EmptyStruct> { ["5201/tcp"] = default }
                     : null,
-                HostConfig = BuildHostConfig(runtime, useHostPort, workerId, taskId, sshBinds),
+                HostConfig = BuildHostConfig(runtime, useHostPort, workerId, taskId, credentialBinds),
                 NetworkingConfig = new NetworkingConfig
                 {
                     EndpointsConfig = new Dictionary<string, EndpointSettings>
@@ -2352,12 +2386,26 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         string? openAiApiKey,
         IReadOnlyList<string> additionalEnvironment)
     {
+        var ghToken = Environment.GetEnvironmentVariable("GH_TOKEN");
+        var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        if (string.IsNullOrWhiteSpace(ghToken))
+        {
+            ghToken = githubToken;
+        }
+
+        if (string.IsNullOrWhiteSpace(githubToken))
+        {
+            githubToken = ghToken;
+        }
+
         var environment = new List<string>
         {
             $"TaskRuntime__TaskRuntimeId={workerId}",
             $"TaskRuntime__MaxSlots={Math.Clamp(maxSlots, 1, 64)}",
             $"CODEX_API_KEY={codexApiKey ?? string.Empty}",
             $"OPENAI_API_KEY={openAiApiKey ?? string.Empty}",
+            $"GH_TOKEN={ghToken ?? string.Empty}",
+            $"GITHUB_TOKEN={githubToken ?? string.Empty}",
             $"OPENCODE_API_KEY={Environment.GetEnvironmentVariable("OPENCODE_API_KEY") ?? string.Empty}",
             $"ANTHROPIC_API_KEY={Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? string.Empty}",
             $"Z_AI_API_KEY={Environment.GetEnvironmentVariable("Z_AI_API_KEY") ?? string.Empty}",
@@ -2498,7 +2546,7 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         return string.Equals(runningInContainer, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static (List<string> AdditionalBinds, List<string> AdditionalEnvironment, bool SshDirectoryMounted, bool SshAgentMounted)
+    private static (List<string> AdditionalBinds, List<string> AdditionalEnvironment, bool SshDirectoryMounted, bool SshAgentMounted, bool GitHubCredentialSourceAvailable)
         ResolveWorkerSshPassthrough(OrchestratorRuntimeSettings runtime, string gitSshMode)
     {
         var additionalBinds = new List<string>();
@@ -2507,14 +2555,18 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
         if (!runtime.EnableHostSshPassthrough)
         {
             additionalEnvironment.Add("AGENTSDASHBOARD_WORKER_SSH_AVAILABLE=false");
+            additionalEnvironment.Add("AGENTSDASHBOARD_WORKER_GITHUB_CREDENTIALS_AVAILABLE=false");
             additionalEnvironment.Add($"AGENTSDASHBOARD_GIT_SSH_MODE={gitSshMode}");
-            return (additionalBinds, additionalEnvironment, false, false);
+            return (additionalBinds, additionalEnvironment, false, false, false);
         }
 
         var sshDirectory = HostCredentialDiscovery.TryGetHostSshDirectory(runtime.HostSshDirectory);
         var agentSocketPath = HostCredentialDiscovery.TryGetHostSshAgentSocketPath(runtime.HostSshAgentSocketPath);
         var sshDirectoryMounted = !string.IsNullOrWhiteSpace(sshDirectory);
         var sshAgentMounted = !string.IsNullOrWhiteSpace(agentSocketPath);
+        var hostGitCredentialsAvailable = false;
+        var hostNetrcAvailable = false;
+        var hostGhConfigAvailable = false;
 
         if (sshDirectoryMounted)
         {
@@ -2527,11 +2579,63 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             additionalEnvironment.Add($"SSH_AUTH_SOCK={WorkerSshAgentSocketPath}");
         }
 
+        var hostHomeDirectory = HostCredentialDiscovery.TryGetHostHomeDirectory();
+        if (!string.IsNullOrWhiteSpace(hostHomeDirectory))
+        {
+            hostGitCredentialsAvailable = PathExists(Path.Combine(hostHomeDirectory, ".git-credentials"));
+            hostNetrcAvailable = PathExists(Path.Combine(hostHomeDirectory, ".netrc"));
+            hostGhConfigAvailable = PathExists(Path.Combine(hostHomeDirectory, ".config", "gh"));
+            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".gitconfig"), WorkerGitConfigPath);
+            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".git-credentials"), WorkerGitCredentialsPath);
+            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".netrc"), WorkerNetrcPath);
+            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".config", "gh"), WorkerGhConfigDirectoryPath);
+            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".config", "git"), WorkerGitConfigDirectoryPath);
+            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".codex"), WorkerCodexDirectoryPath);
+            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".config", "opencode"), WorkerOpenCodeDirectoryPath);
+        }
+
+        var ghToken = Environment.GetEnvironmentVariable("GH_TOKEN");
+        var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        var gitHubCredentialSourceAvailable =
+            !string.IsNullOrWhiteSpace(ghToken) ||
+            !string.IsNullOrWhiteSpace(githubToken) ||
+            hostGitCredentialsAvailable ||
+            hostNetrcAvailable ||
+            hostGhConfigAvailable;
+
         additionalEnvironment.Add($"GIT_SSH_COMMAND={BuildGitSshCommand(gitSshMode)}");
         additionalEnvironment.Add($"AGENTSDASHBOARD_WORKER_SSH_AVAILABLE={(sshDirectoryMounted || sshAgentMounted).ToString().ToLowerInvariant()}");
+        additionalEnvironment.Add($"AGENTSDASHBOARD_WORKER_GITHUB_CREDENTIALS_AVAILABLE={gitHubCredentialSourceAvailable.ToString().ToLowerInvariant()}");
         additionalEnvironment.Add($"AGENTSDASHBOARD_GIT_SSH_MODE={gitSshMode}");
 
-        return (additionalBinds, additionalEnvironment, sshDirectoryMounted, sshAgentMounted);
+        return (additionalBinds, additionalEnvironment, sshDirectoryMounted, sshAgentMounted, gitHubCredentialSourceAvailable);
+    }
+
+    private static void AddReadOnlyBindIfPathExists(List<string> additionalBinds, string sourcePath, string targetPath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(targetPath))
+        {
+            return;
+        }
+
+        var normalizedSourcePath = Path.GetFullPath(sourcePath.Trim());
+        if (!File.Exists(normalizedSourcePath) && !Directory.Exists(normalizedSourcePath))
+        {
+            return;
+        }
+
+        additionalBinds.Add($"{normalizedSourcePath}:{targetPath}:ro");
+    }
+
+    private static bool PathExists(string candidatePath)
+    {
+        if (string.IsNullOrWhiteSpace(candidatePath))
+        {
+            return false;
+        }
+
+        var normalizedCandidatePath = Path.GetFullPath(candidatePath.Trim());
+        return File.Exists(normalizedCandidatePath) || Directory.Exists(normalizedCandidatePath);
     }
 
     private static string NormalizeGitSshCommandMode(string? configuredMode)

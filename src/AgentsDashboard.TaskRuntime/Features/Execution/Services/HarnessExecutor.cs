@@ -497,10 +497,11 @@ public sealed partial class HarnessExecutor(
         GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(gitCommandOptions.CloneUrl))
+        if (!TryNormalizeCloneUrl(gitCommandOptions.CloneUrl, out var normalizedCloneUrl, out var cloneUrlError))
         {
-            throw new InvalidOperationException("Clone URL is required for workspace preparation.");
+            throw new InvalidOperationException(cloneUrlError);
         }
+        var normalizedGitCommandOptions = gitCommandOptions with { CloneUrl = normalizedCloneUrl };
 
         var repositoryPath = Path.Combine(options.Value.WorkspacesRootPath, ToPathSegment(request.RepositoryId));
         var tasksPath = Path.Combine(repositoryPath, "tasks");
@@ -511,10 +512,10 @@ public sealed partial class HarnessExecutor(
         Directory.CreateDirectory(tasksPath);
 
         var effectiveGitCommandOptions = await EnsureWorkspaceReadyAsync(
-            gitCommandOptions.CloneUrl,
+            normalizedGitCommandOptions.CloneUrl,
             workspacePath,
             mainBranch,
-            gitCommandOptions,
+            normalizedGitCommandOptions,
             cancellationToken);
 
         var headBeforeRun = await GetHeadCommitAsync(workspacePath, effectiveGitCommandOptions, cancellationToken);
@@ -528,8 +529,15 @@ public sealed partial class HarnessExecutor(
         GitCommandOptions gitCommandOptions,
         CancellationToken cancellationToken)
     {
+        if (!TryNormalizeCloneUrl(cloneUrl, out var normalizedCloneUrl, out var cloneUrlError))
+        {
+            throw new InvalidOperationException(cloneUrlError);
+        }
+
+        var normalizedGitCommandOptions = gitCommandOptions with { CloneUrl = normalizedCloneUrl };
+
         var gitDirectory = Path.Combine(workspacePath, ".git");
-        var effectiveGitCommandOptions = gitCommandOptions;
+        var effectiveGitCommandOptions = normalizedGitCommandOptions;
         if (!Directory.Exists(gitDirectory))
         {
             if (Directory.Exists(workspacePath))
@@ -538,9 +546,9 @@ public sealed partial class HarnessExecutor(
             }
 
             effectiveGitCommandOptions = await ExecuteCloneWithFallbackAsync(
-                cloneUrl,
+                normalizedCloneUrl,
                 workspacePath,
-                gitCommandOptions,
+                normalizedGitCommandOptions,
                 cancellationToken);
         }
 
@@ -882,7 +890,9 @@ public sealed partial class HarnessExecutor(
 
         var selectedScheme = Uri.TryCreate(cloneUrl, UriKind.Absolute, out var uri)
             ? uri.Scheme
-            : "invalid";
+            : IsScpStyleCloneUrl(cloneUrl)
+                ? "ssh"
+                : "invalid";
 
         return
             $"gitAuthMode={(hasSshCredentials ? "ssh" : "https")}" +
@@ -1058,6 +1068,85 @@ public sealed partial class HarnessExecutor(
         {
             destination[key] = value;
         }
+    }
+
+    private static bool TryNormalizeCloneUrl(string? cloneUrl, out string normalizedCloneUrl, out string error)
+    {
+        normalizedCloneUrl = string.Empty;
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(cloneUrl))
+        {
+            error = "Clone URL is required for workspace preparation.";
+            return false;
+        }
+
+        var trimmed = cloneUrl.Trim();
+        if (IsScpStyleCloneUrl(trimmed) || IsSupportedCloneUrl(trimmed))
+        {
+            normalizedCloneUrl = trimmed;
+            return true;
+        }
+
+        error = $"Unsupported clone URL format: {cloneUrl}";
+        return false;
+    }
+
+    private static bool IsSupportedCloneUrl(string cloneUrl)
+    {
+        if (string.IsNullOrWhiteSpace(cloneUrl))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(cloneUrl, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (!uri.IsWellFormedOriginalString() || string.IsNullOrWhiteSpace(uri.Host))
+        {
+            return false;
+        }
+
+        return string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, Uri.UriSchemeSsh, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, "git", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, "git+ssh", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsScpStyleCloneUrl(string cloneUrl)
+    {
+        if (string.IsNullOrWhiteSpace(cloneUrl))
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(cloneUrl, UriKind.Absolute, out _))
+        {
+            return false;
+        }
+
+        if (cloneUrl.Contains(' '))
+        {
+            return false;
+        }
+
+        var atIndex = cloneUrl.IndexOf('@', StringComparison.Ordinal);
+        if (atIndex <= 0)
+        {
+            return false;
+        }
+
+        var colonIndex = cloneUrl.IndexOf(':', StringComparison.Ordinal);
+        if (colonIndex <= atIndex)
+        {
+            return false;
+        }
+
+        var host = cloneUrl[(atIndex + 1)..colonIndex];
+        return !string.IsNullOrWhiteSpace(host) && !host.Contains('/');
     }
 
     private static string ResolveCloneUrlForGitHubToken(string cloneUrl, string? githubToken, bool hasSshCredentials)

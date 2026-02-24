@@ -16,7 +16,15 @@ USER root
 RUN npm install -g openai && echo "OpenAI SDK installed successfully"
 RUN npm install -g @openai/codex 2>/dev/null || echo "Codex CLI not yet available, using API fallback"
 RUN mkdir -p /home/agent/.config \
-    && chown -R agent:agent /home/agent/.config
+    /home/agent/.config/gh \
+    /home/agent/.config/git \
+    /home/agent/.config/opencode \
+    /home/agent/.ssh \
+    /home/agent/.codex \
+    && touch /home/agent/.gitconfig /home/agent/.git-credentials /home/agent/.netrc \
+    && chmod 700 /home/agent/.ssh \
+    && chmod 600 /home/agent/.gitconfig /home/agent/.git-credentials /home/agent/.netrc \
+    && chown -R agent:agent /home/agent
 
 COPY --chmod=755 <<'EOF' /usr/local/bin/codex
 #!/bin/bash

@@ -19,7 +19,13 @@ ARG TARGETARCH
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git gh openssh-client ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /app/data
+    && mkdir -p /app/data \
+    /home/agent/.ssh \
+    /home/agent/.config/gh \
+    /home/agent/.config/git \
+    /home/agent/.config/opencode \
+    /home/agent/.codex \
+    && touch /home/agent/.gitconfig /home/agent/.git-credentials /home/agent/.netrc
 
 EXPOSE 5201
 ENTRYPOINT ["dotnet", "AgentsDashboard.TaskRuntime.dll"]

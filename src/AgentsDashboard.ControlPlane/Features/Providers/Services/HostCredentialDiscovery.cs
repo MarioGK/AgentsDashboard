@@ -38,21 +38,15 @@ public static class HostCredentialDiscovery
         }
     }
 
-    public static string? TryGetHostSshDirectory(string? configuredPath)
+    public static string? TryGetHostHomeDirectory()
     {
-        if (!string.IsNullOrWhiteSpace(configuredPath))
-        {
-            var configuredFullPath = Path.GetFullPath(configuredPath.Trim());
-            return Directory.Exists(configuredFullPath) ? configuredFullPath : null;
-        }
-
         var homeFromEnvironment = Environment.GetEnvironmentVariable("HOME");
         if (!string.IsNullOrWhiteSpace(homeFromEnvironment))
         {
-            var defaultSshDirectory = Path.Combine(homeFromEnvironment, ".ssh");
-            if (Directory.Exists(defaultSshDirectory))
+            var normalizedHome = Path.GetFullPath(homeFromEnvironment.Trim());
+            if (Directory.Exists(normalizedHome))
             {
-                return defaultSshDirectory;
+                return normalizedHome;
             }
         }
 
@@ -62,7 +56,25 @@ public static class HostCredentialDiscovery
             return null;
         }
 
-        var fallbackSshDirectory = Path.Combine(userHome, ".ssh");
+        var normalizedFallbackHome = Path.GetFullPath(userHome.Trim());
+        return Directory.Exists(normalizedFallbackHome) ? normalizedFallbackHome : null;
+    }
+
+    public static string? TryGetHostSshDirectory(string? configuredPath)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            var configuredFullPath = Path.GetFullPath(configuredPath.Trim());
+            return Directory.Exists(configuredFullPath) ? configuredFullPath : null;
+        }
+
+        var hostHome = TryGetHostHomeDirectory();
+        if (string.IsNullOrWhiteSpace(hostHome))
+        {
+            return null;
+        }
+
+        var fallbackSshDirectory = Path.Combine(hostHome, ".ssh");
         return Directory.Exists(fallbackSshDirectory) ? fallbackSshDirectory : null;
     }
 

@@ -203,7 +203,9 @@ public class ImageBuilderService(
         sb.AppendLine();
 
         sb.AppendLine("RUN mkdir -p /workspace /artifacts \\");
-        sb.AppendLine("    && chown -R agent:agent /workspace /artifacts");
+        sb.AppendLine("    /home/agent/.ssh /home/agent/.codex /home/agent/.config/gh /home/agent/.config/git /home/agent/.config/opencode \\");
+        sb.AppendLine("    && touch /home/agent/.gitconfig /home/agent/.git-credentials /home/agent/.netrc \\");
+        sb.AppendLine("    && chown -R agent:agent /workspace /artifacts /home/agent");
         sb.AppendLine();
 
         sb.AppendLine("USER agent");
@@ -395,7 +397,7 @@ public class ImageBuilderService(
                 hardened,
                 [
                     "RUN if id agent >/dev/null 2>&1; then :; elif command -v useradd >/dev/null 2>&1; then useradd -m -s /bin/bash -u 1000 agent; elif command -v adduser >/dev/null 2>&1; then adduser -D -u 1000 -s /bin/sh agent; fi",
-                    "RUN mkdir -p /workspace /artifacts && chown -R 1000:1000 /workspace /artifacts /home/agent",
+                    "RUN mkdir -p /workspace /artifacts /home/agent/.ssh /home/agent/.codex /home/agent/.config/gh /home/agent/.config/git /home/agent/.config/opencode && touch /home/agent/.gitconfig /home/agent/.git-credentials /home/agent/.netrc && chown -R 1000:1000 /workspace /artifacts /home/agent",
                     "USER agent",
                     "WORKDIR /workspace"
                 ]);

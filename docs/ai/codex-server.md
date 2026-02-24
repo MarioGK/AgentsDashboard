@@ -31,6 +31,7 @@ Task dispatch/control flow remains ControlPlane -> MagicOnion -> TaskRuntime.
 
 - `CODEX_API_KEY`
 - `OPENAI_API_KEY` (mirrored when applicable by ControlPlane secret mapping)
+- `GH_TOKEN` / `GITHUB_TOKEN` when GitHub token auth is needed
 
 ### Runtime behavior
 
@@ -40,6 +41,8 @@ Task dispatch/control flow remains ControlPlane -> MagicOnion -> TaskRuntime.
 - `HARNESS_MODE`/`TASK_MODE`/`RUN_MODE` (`default`, `plan`, `review`)
 - `CODEX_MAX_TOKENS` or `HARNESS_MAX_TOKENS`
 - `CODEX_SERVER_*` variables are not used by the runtime launcher in this implementation.
+- Host credential passthrough mounts these targets in worker containers: `/home/agent/.ssh`, `/home/agent/.gitconfig`, `/home/agent/.git-credentials`, `/home/agent/.netrc`, `/home/agent/.config/gh`, `/home/agent/.config/git`, `/home/agent/.config/opencode`, `/home/agent/.codex`.
+- When host SSH passthrough is enabled, runtime startup now fails if required SSH/token credential sources are missing.
 
 ## Failure Modes
 
