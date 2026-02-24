@@ -29,6 +29,17 @@ public sealed class TaskRuntimeService(
             };
         }
 
+        if (queue.IsTracked(request.RunId))
+        {
+            logger.LogInformation("Ignoring duplicate dispatch for run {RunId}", request.RunId);
+            return new DispatchJobResult
+            {
+                Success = true,
+                ErrorMessage = null,
+                DispatchedAt = DateTimeOffset.UtcNow,
+            };
+        }
+
         if (!queue.CanAcceptJob())
         {
             return new DispatchJobResult
@@ -39,7 +50,17 @@ public sealed class TaskRuntimeService(
             };
         }
 
-        await queue.EnqueueAsync(new QueuedJob { Request = request }, CancellationToken.None);
+        var enqueued = await queue.EnqueueAsync(new QueuedJob { Request = request }, CancellationToken.None);
+        if (!enqueued)
+        {
+            logger.LogInformation("Ignoring duplicate dispatch detected during enqueue for run {RunId}", request.RunId);
+            return new DispatchJobResult
+            {
+                Success = true,
+                ErrorMessage = null,
+                DispatchedAt = DateTimeOffset.UtcNow,
+            };
+        }
 
         logger.LogInformation("Accepted run {RunId} using harness {Harness}", request.RunId, request.HarnessType);
 
@@ -87,6 +108,17 @@ public sealed class TaskRuntimeService(
         {
             Success = true,
             ErrorMessage = null,
+            CheckedAt = DateTimeOffset.UtcNow,
+        });
+    }
+
+    public UnaryResult<RuntimeReadinessResult> GetRuntimeReadinessAsync()
+    {
+        return UnaryResult.FromResult(new RuntimeReadinessResult
+        {
+            Success = true,
+            ErrorMessage = null,
+            AcceptingStreamingConnections = true,
             CheckedAt = DateTimeOffset.UtcNow,
         });
     }

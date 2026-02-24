@@ -1,65 +1,83 @@
 const { test, expect } = require('@playwright/test');
 const {
   resolveHarness,
-  createWorkspaceFixture,
-  createRepositoryFromSettings,
+  resolveWorkspaceRepositoryName,
+  createAgentsDashboardTaskPrompt,
+  expectedFileMarkers,
+  ensureRepositoryExists,
   openRepositorySettings,
   setRepositoryDefaultsHarness,
   goToWorkspace,
   ensureRuntimeReady,
-  waitForRunStateToRender
+  waitForRunStateToRender,
+  waitForRunTerminalState,
+  assertRunSucceeded,
+  assertNoErrorSignals,
+  extractChatText,
+  assertNoErrorSnackbars
 } = require('../helpers/workspace-helpers');
 
-test('workspace task creation, clear, follow-up, and runtime flow are working', async ({ page, request }, testInfo) => {
+test('workspace task lists repository files without errors', async ({ page, request }, testInfo) => {
   const harness = resolveHarness(testInfo.project.name);
-  const fixture = await createWorkspaceFixture(testInfo);
+  const repositoryName = resolveWorkspaceRepositoryName();
+  const ignoredSnackbarPatterns = [/Git refresh failed:/i];
 
   await ensureRuntimeReady(request);
-  await createRepositoryFromSettings(page, fixture);
-  await openRepositorySettings(page, fixture.repositoryName);
+  await ensureRepositoryExists(page, repositoryName);
+  await openRepositorySettings(page, repositoryName);
   await setRepositoryDefaultsHarness(page, harness);
+  await assertNoErrorSnackbars(page, ignoredSnackbarPatterns);
 
-  await goToWorkspace(page, fixture.repositoryName);
+  await goToWorkspace(page, repositoryName);
   await page.getByTestId('workspace-new-task').click();
 
-  const titleLocator = page.getByTestId('workspace-task-title');
-  const initialTitle = ((await titleLocator.textContent()) || '').trim();
   const composerInput = page.getByTestId('workspace-composer-input');
+  await expect(composerInput).toBeVisible({ timeout: 45000 });
+  await expect(composerInput).toBeEnabled({ timeout: 45000 });
 
-  await composerInput.fill(`Validate workspace clear behavior for ${harness}.`);
-  await page.getByTestId('workspace-composer-file-input').setInputFiles(fixture.imagePath);
-  await expect(page.locator('.workspace-composer-file-chip')).toHaveCount(1);
-
-  await page.getByTestId('workspace-composer-clear').click();
-  await expect(composerInput).toHaveValue('');
-  await expect(page.locator('.workspace-composer-file-chip')).toHaveCount(0);
-
-  const taskPrompt = `Create and run a workspace task using ${harness}.`;
+  const taskPrompt = createAgentsDashboardTaskPrompt();
   await composerInput.fill(taskPrompt);
   await page.getByTestId('workspace-composer-send').click();
-
-  await expect
-    .poll(async () => {
-      const pendingCount = await page.locator('.workspace-task-card', { hasText: 'Pending' }).count();
-      const title = ((await titleLocator.textContent()) || '').trim();
-      return pendingCount > 0 || title !== initialTitle;
-    }, { timeout: 5000 })
-    .toBeTruthy();
-
-  await expect
-    .poll(async () => ((await titleLocator.textContent()) || '').trim(), { timeout: 45000 })
-    .not.toBe(initialTitle);
+  await assertNoErrorSnackbars(page, ignoredSnackbarPatterns);
 
   const runStateChip = page.getByTestId('workspace-selected-run-state');
   await waitForRunStateToRender(runStateChip);
 
-  const followUpPrompt = `Follow up check for ${harness}`;
-  if (await composerInput.isEnabled()) {
-    await composerInput.fill(followUpPrompt);
-    await page.getByTestId('workspace-composer-send').click();
-    await expect(page.getByTestId('workspace-chat-stream')).toContainText(followUpPrompt, { timeout: 30000 });
-  }
+  let finalState = await waitForRunTerminalState(runStateChip);
+  assertRunSucceeded(finalState);
 
   await page.getByTestId('workspace-refresh-runs').click();
-  await waitForRunStateToRender(runStateChip);
+  finalState = await waitForRunTerminalState(runStateChip);
+  assertRunSucceeded(finalState);
+
+  await expect
+    .poll(async () => {
+      const text = await extractChatText(page);
+      return text.length;
+    }, { timeout: 120000 })
+    .toBeGreaterThanOrEqual(100);
+
+  const chatText = await extractChatText(page);
+  assertNoErrorSignals(chatText);
+  await assertNoErrorSnackbars(page, ignoredSnackbarPatterns);
+
+  const markers = expectedFileMarkers();
+  const matchedMarkers = markers.filter((marker) =>
+    chatText.toLowerCase().includes(marker.toLowerCase())
+  );
+
+  if (matchedMarkers.length < 3) {
+    const missingMarkers = markers.filter((marker) => !matchedMarkers.includes(marker));
+    const chatPreview = chatText.slice(0, 1000);
+
+    throw new Error(
+      [
+        'Expected file list output did not include enough repository markers.',
+        `Final state: ${finalState}`,
+        `Matched markers (${matchedMarkers.length}): ${matchedMarkers.join(', ') || 'none'}`,
+        `Missing markers: ${missingMarkers.join(', ')}`,
+        `Chat preview: ${chatPreview}`
+      ].join('\n')
+    );
+  }
 });

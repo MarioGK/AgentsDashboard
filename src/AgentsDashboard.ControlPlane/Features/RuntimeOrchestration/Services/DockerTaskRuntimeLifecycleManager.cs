@@ -41,8 +41,6 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
     private const string WorkerNetrcPath = "/home/agent/.netrc";
     private const string WorkerGhConfigDirectoryPath = "/home/agent/.config/gh";
     private const string WorkerGitConfigDirectoryPath = "/home/agent/.config/git";
-    private const string WorkerCodexDirectoryPath = "/home/agent/.codex";
-    private const string WorkerOpenCodeDirectoryPath = "/home/agent/.config/opencode";
     private const string WorkerHostSshPassthroughModeEnvironmentKey = "AGENTSDASHBOARD_HOST_SSH_PASSTHROUGH_MODE";
     private const string HostSshPassthroughModeAuto = "auto";
     private const string HostSshPassthroughModeOff = "off";
@@ -346,8 +344,9 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 clearInactiveAfterUtc: true);
         }
 
+        var restartTimeout = TimeSpan.FromSeconds(Math.Max(15, runtime.ContainerStartTimeoutSeconds + 10));
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(5, runtime.ContainerStartTimeoutSeconds)));
+        timeoutCts.CancelAfter(restartTimeout);
 
         try
         {
@@ -356,11 +355,24 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                 new ContainerRestartParameters(),
                 timeoutCts.Token);
 
-            await RefreshWorkersAsync(runtime, cancellationToken);
-            var ready = await WaitForWorkerReadyAsync(runtimeId, runtime, cancellationToken);
+            await RefreshWorkersAsync(runtime, timeoutCts.Token);
+            var ready = await WaitForWorkerReadyAsync(runtimeId, runtime, timeoutCts.Token);
             return ready is not null;
         }
         catch (DockerContainerNotFoundException)
+        {
+            return false;
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                ex,
+                "Timed out while restarting worker {TaskRuntimeId} after {TimeoutSeconds}s",
+                runtimeId,
+                restartTimeout.TotalSeconds);
+            return false;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             return false;
         }
@@ -2240,6 +2252,10 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
                         clearInactiveAfterUtc: true);
                     return state.ToRuntime();
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch
                 {
                 }
@@ -2650,8 +2666,6 @@ public sealed partial class DockerTaskRuntimeLifecycleManager(
             AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".netrc"), WorkerNetrcPath);
             AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".config", "gh"), WorkerGhConfigDirectoryPath);
             AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".config", "git"), WorkerGitConfigDirectoryPath);
-            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".codex"), WorkerCodexDirectoryPath);
-            AddReadOnlyBindIfPathExists(additionalBinds, Path.Combine(hostHomeDirectory, ".config", "opencode"), WorkerOpenCodeDirectoryPath);
         }
 
         var ghToken = Environment.GetEnvironmentVariable("GH_TOKEN");

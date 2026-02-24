@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using Grpc.Core;
 
 
 
@@ -23,6 +24,7 @@ public sealed class TaskRuntimeEventListenerService(
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan TaskRuntimeTtl = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan EventHubProbeTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan RuntimeReadinessProbeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan DiffPublishThrottle = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan ToolPublishThrottle = TimeSpan.FromMilliseconds(125);
     private const int EventHubFailureWarnThreshold = 3;
@@ -139,6 +141,17 @@ public sealed class TaskRuntimeEventListenerService(
                 if (!string.Equals(endpoint, connection.Endpoint, StringComparison.OrdinalIgnoreCase))
                 {
                     connection.Endpoint = endpoint;
+                }
+
+                if (!await IsRuntimeReadyForEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, loopToken))
+                {
+                    RecordWorkerEventHubConnectionFailure(
+                        connection.TaskRuntimeId,
+                        connection.Endpoint,
+                        "Worker runtime is not yet ready for streaming connections.");
+                    await Task.Delay(reconnectDelay, loopToken);
+                    reconnectDelay = TimeSpan.FromMilliseconds(Math.Min(reconnectDelay.TotalMilliseconds * 2, 30000));
+                    continue;
                 }
 
                 await TryReplayRuntimeBacklogAsync(connection, loopToken);
@@ -268,6 +281,56 @@ public sealed class TaskRuntimeEventListenerService(
         catch (OperationCanceledException)
         {
             return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<bool> IsRuntimeReadyForEventHubAsync(string runtimeId, string endpoint, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId) || string.IsNullOrWhiteSpace(endpoint))
+        {
+            return false;
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(RuntimeReadinessProbeTimeout);
+        try
+        {
+            var client = clientFactory.CreateTaskRuntimeService(runtimeId, endpoint);
+            var readiness = await client.WithCancellationToken(timeout.Token).GetRuntimeReadinessAsync();
+            if (!readiness.Success)
+            {
+                logger.LogDebug(
+                    "Runtime readiness check failed for {TaskRuntimeId}: {ErrorMessage}",
+                    runtimeId,
+                    readiness.ErrorMessage ?? "not ready");
+                return false;
+            }
+
+            if (!readiness.AcceptingStreamingConnections)
+            {
+                logger.LogDebug(
+                    "Runtime {TaskRuntimeId} is not accepting streaming connections yet.",
+                    runtimeId);
+                return false;
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Unimplemented)
+        {
+            logger.LogDebug(
+                ex,
+                "Runtime {TaskRuntimeId} does not support readiness probe; falling back to event hub probe.",
+                runtimeId);
+            return await IsEventHubReachableAsync(runtimeId, endpoint, cancellationToken);
         }
         catch
         {
@@ -715,7 +778,7 @@ public sealed class TaskRuntimeEventListenerService(
 
         try
         {
-            if (!await IsEventHubReachableAsync(connection.TaskRuntimeId, connection.Endpoint, replayToken))
+            if (!await IsRuntimeReadyForEventHubAsync(connection.TaskRuntimeId, connection.Endpoint, replayToken))
             {
                 return;
             }

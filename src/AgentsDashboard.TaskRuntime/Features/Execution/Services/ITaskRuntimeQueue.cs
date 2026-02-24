@@ -7,8 +7,9 @@ public interface ITaskRuntimeQueue
     int MaxSlots { get; }
     int ActiveSlots { get; }
     IReadOnlyCollection<string> ActiveRunIds { get; }
+    bool IsTracked(string runId);
     bool CanAcceptJob();
-    ValueTask EnqueueAsync(QueuedJob job, CancellationToken cancellationToken);
+    ValueTask<bool> EnqueueAsync(QueuedJob job, CancellationToken cancellationToken);
     IAsyncEnumerable<QueuedJob> ReadAllAsync(CancellationToken cancellationToken);
     bool Cancel(string runId);
     void MarkCompleted(string runId);

@@ -26,13 +26,42 @@ public sealed class TaskRuntimeQueue : ITaskRuntimeQueue
 
     public IReadOnlyCollection<string> ActiveRunIds => _activeJobs.Keys.ToList();
 
+    public bool IsTracked(string runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return false;
+        }
+
+        return _activeJobs.ContainsKey(runId.Trim());
+    }
+
     public bool CanAcceptJob() => ActiveSlots < _maxSlots;
 
-    public async ValueTask EnqueueAsync(QueuedJob job, CancellationToken cancellationToken)
+    public async ValueTask<bool> EnqueueAsync(QueuedJob job, CancellationToken cancellationToken)
     {
-        await _runLedgerStore.UpsertQueuedAsync(job.Request, cancellationToken);
-        _activeJobs[job.Request.RunId] = job;
-        await _channel.Writer.WriteAsync(job, cancellationToken);
+        var runId = job.Request.RunId?.Trim();
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return false;
+        }
+
+        if (!_activeJobs.TryAdd(runId, job))
+        {
+            return false;
+        }
+
+        try
+        {
+            await _runLedgerStore.UpsertQueuedAsync(job.Request, cancellationToken);
+            await _channel.Writer.WriteAsync(job, cancellationToken);
+            return true;
+        }
+        catch
+        {
+            _activeJobs.TryRemove(runId, out _);
+            throw;
+        }
     }
 
     public IAsyncEnumerable<QueuedJob> ReadAllAsync(CancellationToken cancellationToken)
@@ -74,8 +103,10 @@ public sealed class TaskRuntimeQueue : ITaskRuntimeQueue
             }
 
             var queuedJob = new QueuedJob { Request = request };
-            _activeJobs[request.RunId] = queuedJob;
-            _channel.Writer.TryWrite(queuedJob);
+            if (_activeJobs.TryAdd(request.RunId, queuedJob))
+            {
+                _channel.Writer.TryWrite(queuedJob);
+            }
         }
     }
 }

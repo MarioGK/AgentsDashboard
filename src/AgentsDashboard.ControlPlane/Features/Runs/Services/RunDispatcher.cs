@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.Concurrent;
 
 
 using AgentsDashboard.ControlPlane;
@@ -22,6 +23,7 @@ public sealed class RunDispatcher(
     IOrchestratorRuntimeSettingsProvider? runtimeSettingsProvider = null)
 {
     private const int TaskRunWindowLimit = 500;
+    private readonly ConcurrentDictionary<string, byte> _missingGitHubTokenWarnings = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<bool> DispatchAsync(
         RepositoryDocument repository,
@@ -221,7 +223,7 @@ public sealed class RunDispatcher(
 
         ApplyHarnessModeEnvironment(task.Harness, run.ExecutionMode, envVars);
 
-        if (IsGitHubCloneUrl(normalizedCloneUrl) && !HasGitHubCredentials(envVars))
+        if (IsGitHubCloneUrl(normalizedCloneUrl) && !HasGitHubCredentials(envVars) && ShouldLogMissingGitHubTokenWarning(run.Id))
         {
             logger.LogWarning(
                 "No GitHub token is available for run {RunId}; set repository secret 'github' or environment GH_TOKEN/GITHUB_TOKEN for private GitHub clone reliability.",
@@ -988,5 +990,15 @@ public sealed class RunDispatcher(
 
         var githubTokenKey = FindKeyIgnoreCase(envVars.Keys, "GITHUB_TOKEN");
         return !string.IsNullOrWhiteSpace(githubTokenKey) && !string.IsNullOrWhiteSpace(envVars[githubTokenKey]);
+    }
+
+    private bool ShouldLogMissingGitHubTokenWarning(string runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return true;
+        }
+
+        return _missingGitHubTokenWarnings.TryAdd(runId, 0);
     }
 }

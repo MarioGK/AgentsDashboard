@@ -17,7 +17,10 @@ COPY --from=build /app/publish .
 ARG TARGETARCH
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git gh openssh-client ca-certificates \
+    && apt-get install -y --no-install-recommends git gh openssh-client ca-certificates curl jq nodejs npm golang-go ripgrep fzf \
+    && npm install -g @openai/codex \
+    && GOBIN=/usr/local/bin go install github.com/opencode-ai/opencode@latest \
+    && chmod +x /usr/local/bin/opencode \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/data \
     /home/agent/.ssh \

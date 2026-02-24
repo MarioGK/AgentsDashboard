@@ -8,6 +8,7 @@ public interface ITaskRuntimeService : IService<ITaskRuntimeService>
     UnaryResult<DispatchJobResult> DispatchJobAsync(DispatchJobRequest request);
     UnaryResult<StopJobResult> StopJobAsync(StopJobRequest request);
     UnaryResult<HealthCheckResult> CheckHealthAsync();
+    UnaryResult<RuntimeReadinessResult> GetRuntimeReadinessAsync();
     UnaryResult<RepositoryWorkspaceResult> EnsureRepositoryWorkspaceAsync(EnsureRepositoryWorkspaceRequest request);
     UnaryResult<RepositoryWorkspaceResult> RefreshRepositoryWorkspaceAsync(RefreshRepositoryWorkspaceRequest request);
     UnaryResult<StartRuntimeCommandResult> StartCommandAsync(StartRuntimeCommandRequest request);

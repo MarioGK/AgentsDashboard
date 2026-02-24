@@ -560,12 +560,58 @@ public sealed partial class HarnessExecutor(
             effectiveGitCommandOptions,
             cancellationToken);
 
-        await ExecuteGitOrThrowInPathAsync(
+        var fetchResult = await ExecuteGitInPathAsync(
             workspacePath,
             ["fetch", "--prune", "origin"],
-            "fetch workspace origin",
             effectiveGitCommandOptions,
             cancellationToken);
+        if (fetchResult.ExitCode != 0)
+        {
+            if (!TryParseGitHubRepoSlug(normalizedCloneUrl, out _))
+            {
+                throw new InvalidOperationException(BuildGitFailureMessage("fetch workspace origin", fetchResult));
+            }
+
+            var fetchFailureMessage = BuildGitCloneFailureMessage(
+                "fetch workspace origin",
+                fetchResult,
+                effectiveGitCommandOptions.CloneUrl,
+                effectiveGitCommandOptions.EnvironmentVariables);
+            logger.LogWarning(
+                "Workspace fetch failed, rebuilding workspace with clone fallback {@Data}",
+                new
+                {
+                    CloneUrl = effectiveGitCommandOptions.CloneUrl,
+                    RepositoryPath = workspacePath,
+                    Failure = fetchFailureMessage,
+                });
+
+            if (Directory.Exists(workspacePath))
+            {
+                Directory.Delete(workspacePath, true);
+            }
+
+            effectiveGitCommandOptions = await ExecuteCloneWithFallbackAsync(
+                normalizedCloneUrl,
+                workspacePath,
+                mainBranch,
+                normalizedGitCommandOptions,
+                cancellationToken);
+
+            await ExecuteGitOrThrowInPathAsync(
+                workspacePath,
+                ["remote", "set-url", "origin", effectiveGitCommandOptions.CloneUrl],
+                "set workspace origin URL",
+                effectiveGitCommandOptions,
+                cancellationToken);
+
+            await ExecuteGitOrThrowInPathAsync(
+                workspacePath,
+                ["fetch", "--prune", "origin"],
+                "fetch workspace origin",
+                effectiveGitCommandOptions,
+                cancellationToken);
+        }
 
         await EnsureMainBranchCheckedOutAsync(workspacePath, mainBranch, effectiveGitCommandOptions, cancellationToken);
 
